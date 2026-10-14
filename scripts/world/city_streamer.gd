@@ -30,6 +30,9 @@ const LEVEL_PRIORITY: Array[float] = [0.0, 400.0, 1500.0]
 @export var load_distances: Array[float] = [700.0, 1500.0, 30000.0]
 ## Loaded tiles are kept until this far past their distance, so they don't flicker.
 @export var unload_margin := 300.0
+## Near tiles (with collision and walking lanes) also load within this
+## distance of each extra focus.
+@export var extra_focus_radius := 350.0
 @export var max_requests := 6
 ## Time per frame spent turning downloaded tiles into meshes.
 @export var build_budget_msec := 6.0
@@ -37,6 +40,10 @@ const LEVEL_PRIORITY: Array[float] = [0.0, 400.0, 1500.0]
 @export var ground_material: Material
 
 var loaded_counts: Array[int] = [0, 0, 0]
+## World positions that need the ground loaded around them besides the
+## camera's: other players' heroes on the host, so thugs near them have
+## streets to stand on.
+var extra_foci: Array[Vector3] = []
 ## Time the last tile took to turn into meshes and collision, in milliseconds.
 var last_build_msec := 0.0
 
@@ -172,12 +179,20 @@ func _update_wanted_tiles() -> void:
 			# A tile is wanted when its parent is near (or itself, at the top level).
 			var anchor: Tile = tile.parent if tile.parent else tile
 			var distance := Vector2(anchor.distance_to(focus.x, focus.z), height).length()
+			var extra := _extra_focus_distance(tile) if level == LEVEL_NEAR else INF
 			if tile.node == null:
-				if distance < limit and not tile.pending and tile.failures < MAX_ATTEMPTS:
-					_queue.append([tile.distance_to(focus.x, focus.z) + LEVEL_PRIORITY[level], tile])
-			elif distance > limit + unload_margin:
+				if (distance < limit or extra < extra_focus_radius) and not tile.pending and tile.failures < MAX_ATTEMPTS:
+					_queue.append([minf(tile.distance_to(focus.x, focus.z), extra) + LEVEL_PRIORITY[level], tile])
+			elif distance > limit + unload_margin and extra > extra_focus_radius + unload_margin:
 				_unload(tile)
 	_queue.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+
+
+func _extra_focus_distance(tile: Tile) -> float:
+	var nearest := INF
+	for focus in extra_foci:
+		nearest = minf(nearest, tile.distance_to(focus.x, focus.z))
+	return nearest
 
 
 func _refresh_visibility() -> void:

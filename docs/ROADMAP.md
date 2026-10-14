@@ -5,17 +5,19 @@ City, surrounded by ocean like a GTA map, where players fly, web-swing,
 super-speed and super-jump around the city and fight thugs on the street.
 
 **Platform:** Godot 4.7 web export (Compatibility renderer, WebGL 2). Every
-feature has to run in a browser; see "Constraints" below.
+feature has to run in a browser; see "Constraints" below. Mac and Windows
+versions come last (step 8).
 
 | Step | What | Status |
 |------|------|--------|
 | 1 | Manhattan you can fly around | Done (`fd47a17`) |
 | 2 | Hero with superpowers | Done (`fd9c7ff`) |
 | 3 | Street fights | Done (`ba5e606`) |
-| 4 | All five boroughs and bridges | Done |
-| 5 | Co-op multiplayer | Planned |
+| 4 | All five boroughs and bridges | Done (`bfa80ab`) |
+| 5 | Co-op multiplayer | Done; public hosting still to do |
 | 6 | Realism from open data | Planned |
-| 7 | Overpasses and missing bridges | Planned (last) |
+| 7 | Overpasses and missing bridges | Planned |
+| 8 | Mac and Windows versions | Planned (last) |
 
 ## 1. Manhattan you can fly around (done)
 
@@ -77,17 +79,34 @@ peer can drive one later. Nearby tiles get collision.
 - **Known gaps (step 7):** overpasses on land stay at street level, and a
   few bridges are missing from the data.
 
-## 5. Co-op multiplayer (planned)
+## 5. Co-op multiplayer (done; public hosting still to do)
 
-- Peer-to-peer over WebRTC (built into Godot web builds). One player's
-  browser hosts: it runs the thugs and decides every hit (all hits already go
-  through `Combat`), and each player moves their own hero.
-- Needs a tiny matchmaking ("signaling") service to introduce players, e.g. a
-  free-tier serverless function, and ideally a relay (TURN) fallback for
-  players whose networks block direct connections.
-- Positions are sent in world coordinates, since every player has their own
-  floating origin.
-- Aimed at small groups (about 2–8 players).
+- **Joining:** press M for the co-op menu. "Host a game" gives a 4-letter
+  room code and an invite link (`?join=CODE`); friends join with either.
+  Players who join start next to the host's hero. Up to 8 players.
+- **Connections:** browsers connect directly over WebRTC, every player to the
+  host (Godot relays between the others). A small signaling server
+  (`tools/signaling`, Node.js) only introduces players by room code; game
+  traffic never goes through it. It also hands out the STUN/TURN servers to
+  use (`ICE_SERVERS`), so a relay can be added without rebuilding the game.
+- **Who runs what:** each player moves their own hero and sends its state 20
+  times a second; other games show a copy, drawn a moment in the past so it
+  moves smoothly. The host runs every thug and spawns gangs near every
+  player, loading the streets around each player's hero so thugs there have
+  ground to stand on. It tells each player about thugs within 400 m.
+- **Hits:** a player's punch on a thug shows at once on their screen and is
+  reported to the host, which applies it and tells everyone else. Thugs
+  punching another player's hero are sent to that player. Pedestrians stay
+  local to each player but run from fights anywhere.
+- **Positions** go between games in world coordinates, since each player has
+  their own floating origin.
+- **Tested:** `tests/coop_test.tscn` runs a host and a second game over ENet
+  (desktop has no WebRTC) and checks positions, thugs showing up and fighting
+  both ways, and players far apart. Two headless Chrome instances also
+  connected over WebRTC through the signaling server.
+- **Still to do:** host the game, its tiles and the signaling server publicly
+  (with `wss://`), and add a TURN relay for players whose networks block
+  direct connections. If the host leaves, the game ends for everyone.
 
 ## 6. Realism from open data (planned)
 
@@ -120,12 +139,13 @@ DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
 for background decoding, and quality presets for weaker laptops.
 
 **Decisions to make before step 6:**
-- Browser only, or also a high-end desktop build (Godot's Forward+ renderer
-  has ambient occlusion, reflections and volumetric fog that WebGL lacks).
+- Whether the Mac and Windows versions (step 8) get extra looks from
+  Godot's Forward+ renderer (ambient occlusion, reflections, volumetric fog,
+  which WebGL lacks), or match the browser exactly.
 - Budget for landmark models (buy/commission vs. free and self-made).
 - How large the browser download may grow.
 
-## 7. Overpasses and missing bridges (planned, last)
+## 7. Overpasses and missing bridges (planned)
 
 Comes after step 6 because it needs step 6's real ground heights.
 
@@ -146,9 +166,34 @@ Comes after step 6 because it needs step 6's real ground heights.
 - **Tower positions:** place suspension towers where they really stand
   instead of centering them over the water (the Throgs Neck is off today).
 
+## 8. Mac and Windows versions (planned, last)
+
+Downloadable versions of the game for Windows and macOS, alongside the
+browser version. Godot exports both from the same project; the export
+templates for both are already installed.
+
+- **Builds:** export presets for Windows (64-bit) and macOS (one app for
+  Apple Silicon and Intel), made by a build script like the web one. Desktop
+  versions can drop browser limits: multi-threaded tile loading and more
+  detail drawn further out.
+- **Renderer:** keep the Compatibility renderer so all three look the same,
+  or use Forward+ on desktop for better lighting (decided before step 6).
+- **City tiles:** either ship them with the download (about 550 MB; the game
+  already loads tiles from a `tiles` folder next to the executable), or
+  stream them from the same server as the web version so the download stays
+  small. Streaming also keeps every version on the same city data.
+- **Co-op with browser players:** desktop Godot has no built-in WebRTC, so
+  add the official WebRTC plugin (webrtc-native GDExtension) for Windows and
+  macOS; then desktop and browser players can join the same games.
+- **Signing:** macOS apps need an Apple Developer account ($99/year) for
+  signing and notarization, or Macs warn that the app can't be checked; a Mac
+  is also needed to test the macOS build. Windows builds run unsigned, but
+  SmartScreen warns about them until they're signed with a code-signing
+  certificate.
+
 ## Constraints
 
-- **Browser only, WebGL 2.** Godot web builds use the Compatibility renderer;
+- **Browser first, WebGL 2.** Godot web builds use the Compatibility renderer;
   official WebGPU support doesn't exist yet. Lighting gotchas we've measured:
   use AgX tonemapping, give meshes real normals, write shader colors in sRGB.
 - **Single-threaded by default.** Tile decoding happens on the main thread
@@ -164,9 +209,13 @@ Comes after step 6 because it needs step 6's real ground heights.
   Prepared geometry is cached in `data/cache`; delete it after changing
   `prepare.py` or re-downloading.
 - Web build: `tools/build_web.ps1` (add `-Serve` to play at
-  http://localhost:8060).
+  http://localhost:8060; it also runs the co-op signaling server on port
+  8070, after `npm install` in `tools/signaling`).
 - Tests (headless): `godot --headless --path . res://tests/hero_moves_test.tscn`,
-  `res://tests/combat_test.tscn` and `res://tests/streaming_test.tscn`.
+  `res://tests/combat_test.tscn`, `res://tests/streaming_test.tscn` and
+  `res://tests/coop_test.tscn`.
 - Launch options (URL or `-- --name=value` on desktop): `?cam=x,y,z,yaw,pitch`
   free camera, `?spawn=x,y,z,yaw` hero start, `?stats` console stats,
-  `?peds=N`, `?gangs=N`, `?demo` / `?demo=fight` scripted tours for videos.
+  `?peds=N`, `?gangs=N`, `?demo` / `?demo=fight` scripted tours for videos,
+  `?host` / `?join=CODE` co-op, `?signal=wss://...` signaling server
+  (default: the page's host, port 8070).

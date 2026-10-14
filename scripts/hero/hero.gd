@@ -4,8 +4,9 @@ extends CharacterBody3D
 ##
 ## Movement modes are child HeroMode nodes (OnFoot, Flight, Swing, Melee, Dive,
 ## KnockedOut); the active one drives `velocity` from `input` each physics tick.
-## Everything another player would need to see (mode, velocity, facing, web
-## anchor, health) is plain state, so it can be synced over the network later.
+## Everything another player needs to see (mode, velocity, facing, web anchor,
+## health) is plain state. In co-op, other players' heroes are copies whose
+## state PlayerSync sets from the network instead (`remote_id` is set).
 
 signal mode_changed(mode_name: StringName)
 ## Emitted on touching down, with the downward speed just before impact.
@@ -37,6 +38,10 @@ var health := MAX_HEALTH
 var hurt_time := 0.0
 ## Set by a dive attack: the next landing slams, however slow it is.
 var slam_pending := false
+## For a copy of another player's hero: that player's number (0 for our own).
+var remote_id := 0
+## For a copy: whether that player's hero is on the ground.
+var remote_grounded := false
 
 # Input edges for this tick, worked out from `input`.
 var jump_pressed := false
@@ -54,6 +59,7 @@ var _regen_delay := 0.0
 
 func _ready() -> void:
 	add_to_group("floating")
+	Combat.register_hero(self)
 	WorldOrigin.shifted.connect(_on_origin_shifted)
 	for child in get_children():
 		if child is HeroMode:
@@ -63,9 +69,13 @@ func _ready() -> void:
 	_prev_position = global_position
 
 
+func _exit_tree() -> void:
+	Combat.unregister_hero(self)
+
+
 func _physics_process(delta: float) -> void:
 	_prev_position = global_position
-	if frozen:
+	if frozen or is_remote():
 		return
 	jump_pressed = input.jump_held and not _prev_jump
 	web_pressed = input.web_held and not _prev_web
@@ -97,12 +107,17 @@ func _physics_process(delta: float) -> void:
 	_was_on_floor = on_floor
 
 
-func set_mode(mode_name: StringName) -> void:
+## Switches movement mode. Copies of other players' heroes skip the modes' own
+## setup (`run_hooks` false): they only show the mode.
+func set_mode(mode_name: StringName, run_hooks := true) -> void:
+	if mode and mode.name == mode_name and not run_hooks:
+		return
 	var previous: StringName = mode.name if mode else &""
-	if mode:
+	if mode and run_hooks:
 		mode.exit()
 	mode = _modes[mode_name]
-	mode.enter(previous)
+	if run_hooks:
+		mode.enter(previous)
 	mode_changed.emit(mode_name)
 
 
@@ -118,6 +133,15 @@ func get_visual_position() -> Vector3:
 
 func world_position() -> Vector3:
 	return WorldOrigin.to_world(global_position)
+
+
+func is_remote() -> bool:
+	return remote_id != 0
+
+
+## On the ground (works for copies of other players' heroes too).
+func grounded() -> bool:
+	return remote_grounded if is_remote() else is_on_floor()
 
 
 func horizontal_speed() -> float:

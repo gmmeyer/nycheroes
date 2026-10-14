@@ -1,5 +1,6 @@
 # Exports the web build to build/web and copies the city tiles next to it.
 # Usage: tools\build_web.ps1 [-Serve] [-Port 8060]
+# -Serve also runs the co-op signaling server (tools/signaling, needs Node.js).
 # Set $env:GODOT to use a different Godot executable.
 param([switch]$Serve, [int]$Port = 8060)
 $ErrorActionPreference = "Stop"
@@ -24,6 +25,16 @@ $global:LASTEXITCODE = 0
 Write-Host "Web build ready in $out"
 
 if ($Serve) {
-    Write-Host "Serving at http://localhost:$Port"
-    python -m http.server $Port --bind 127.0.0.1 --directory $out
+    # The co-op signaling server runs alongside (port 8070), so hosting works locally.
+    $signaling = Join-Path $root "tools\signaling"
+    if (-not (Test-Path (Join-Path $signaling "node_modules"))) {
+        npm install --prefix $signaling --no-fund --no-audit | Out-Null
+    }
+    $server = Start-Process node -ArgumentList "server.mjs" -WorkingDirectory $signaling -NoNewWindow -PassThru
+    Write-Host "Serving at http://localhost:$Port (co-op signaling on port 8070)"
+    try {
+        python -m http.server $Port --bind 127.0.0.1 --directory $out
+    } finally {
+        Stop-Process -Id $server.Id -ErrorAction SilentlyContinue
+    }
 }

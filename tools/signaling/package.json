@@ -1,0 +1,15 @@
+{
+  "name": "nyc-hero-signaling",
+  "private": true,
+  "description": "Signaling server that introduces co-op players to each other (see server.mjs)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

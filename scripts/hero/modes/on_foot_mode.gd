@@ -129,7 +129,7 @@ func _ram(horizontal: Vector3, delta: float) -> void:
 	_scare_cooldown -= delta
 	if _scare_cooldown <= 0.0:
 		_scare_cooldown = 0.3
-		Combat.danger.emit(hero.world_position(), 14.0)
+		Combat.raise_danger(hero.world_position(), 14.0)
 
 
 ## Starts a jump as if jump had just been pressed on the ground: a tap jumps,

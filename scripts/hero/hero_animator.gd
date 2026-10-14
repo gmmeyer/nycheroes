@@ -32,6 +32,14 @@ func _ready() -> void:
 	_yaw = hero.facing
 
 
+## Repaints the suit (co-op players each get their own color).
+func set_colors(suit: Color, trim: Color) -> void:
+	suit_color = suit
+	trim_color = trim
+	if is_node_ready():
+		_paint(find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D)
+
+
 ## World position of the hand that shoots webs.
 func hand_position() -> Vector3:
 	return _hand.global_position
@@ -66,7 +74,7 @@ func _target_up() -> Vector3:
 			return Vector3.UP.lerp((anchor - hero.global_position).normalized(), 0.8).normalized()
 		_:
 			var speed := hero.horizontal_speed()
-			if hero.is_on_floor() and speed > 12.0:
+			if hero.grounded() and speed > 12.0:
 				# Lean into super speed.
 				var forward := Vector3(hero.velocity.x, 0.0, hero.velocity.z) / speed
 				return Vector3.UP.lerp(forward, clampf((speed - 12.0) / 60.0, 0.0, 0.35)).normalized()
@@ -104,7 +112,7 @@ func _choose_animation() -> Array:
 		return [&"Swim_Fwd", 1.0] if speed > 1.0 else [&"Swim_Idle", 1.0]
 	if hero.hurt_time > 0.0:
 		return [&"Hit_Chest", 1.0]
-	if not hero.is_on_floor():
+	if not hero.grounded():
 		return [&"Jump", 1.0]
 	if (on_foot.charging and on_foot.charge > 0.0) or (_land_timer > 0.0 and _hard_landing):
 		return [&"Crouch_Idle", 1.0]
