@@ -7,7 +7,7 @@ are feature code 2300). Only bridges that cross water and have land at both
 ends are built, which also leaves out bridges to New Jersey and Nassau County
 (ocean in this world). Heights of the major bridges are rounded public figures.
 
-build(land) returns, per LOD level, the bridge triangles bucketed by tile:
+build(land, terrain, sizes) returns, per LOD level, the bridge triangles bucketed by tile:
 {level: {(i, j): (pos, uv, uv2, front)}} in Godot world space.
 """
 
@@ -15,7 +15,7 @@ import numpy as np
 import shapely
 from shapely.geometry import shape
 
-from common import (GROUND_ROAD, LAND_Y, STRUCTURE_CABLE, STRUCTURE_CONCRETE, STRUCTURE_STONE,
+from common import (GROUND_ROAD, STRUCTURE_CABLE, STRUCTURE_CONCRETE, STRUCTURE_STONE,
                     MeshBuilder, lines_of, load_features, polygons_of, project, triangles_of)
 
 BRIDGE_CODE = "2300"
@@ -55,8 +55,9 @@ WATER_FOOTING_Y = -8.0
 ALL_LEVELS = ("lod0", "lod1", "lod2")
 
 
-def build(land, level_sizes: dict) -> dict:
-    """Bridge triangles for every level, bucketed by tile of that level's size."""
+def build(land, terrain, level_sizes: dict) -> dict:
+    """Bridge triangles for every level, bucketed by tile of that level's size.
+    `terrain` is a terrain.Terrain (ground and water heights)."""
     shapely.prepare(land)
     features = [f for f in load_features("transport_structures")
                 if str(f["properties"].get("feat_code")) == BRIDGE_CODE
@@ -68,7 +69,7 @@ def build(land, level_sizes: dict) -> dict:
     for feat, geom in zip(features, geoms):
         name = feat["properties"].get("name") or "NO NAME"
         for poly in polygons_of(geom, min_area=50.0):
-            if _build_bridge(shapely.orient_polygons(poly), name, land, builders):
+            if _build_bridge(shapely.orient_polygons(poly), name, land, terrain, builders):
                 built.append(name)
     named = sorted({n for n in built if n != "NO NAME"})
     print(f"  bridges: {len(built)} decks ({len(named)} named: {', '.join(named)})", flush=True)
@@ -96,7 +97,7 @@ def _bucket(builder: MeshBuilder, size: float) -> dict:
     return out
 
 
-def _build_bridge(poly, name: str, land, builders: dict) -> bool:
+def _build_bridge(poly, name: str, land, terrain, builders: dict) -> bool:
     water = shapely.difference(poly, land)
     if water.area < MIN_WATER_AREA:
         return False  # an overpass over land; those stay at street level for now
@@ -129,7 +130,9 @@ def _build_bridge(poly, name: str, land, builders: dict) -> bool:
 
     style, clearance, tower_top, main_span_length = MAJOR_BRIDGES.get(
         name, ("girder", float(np.clip(6.0 + 0.03 * span_length, 6.0, 20.0)), 0.0, 0.0))
-    deck_top = max(clearance, LAND_Y + 1.0)
+    # Clearance is over the water, which inland can be well above sea level.
+    water_level = max(0.0, float(terrain.raw(shapely.get_coordinates(shapely.point_on_surface(main_span)))[0]))
+    deck_top = water_level + clearance
 
     def deck_y(points: np.ndarray) -> np.ndarray:
         y = np.full(len(points), deck_top)
@@ -140,7 +143,8 @@ def _build_bridge(poly, name: str, land, builders: dict) -> bool:
             inside = shapely.dwithin(part, geoms, 0.5)
             if inside.any():
                 t = np.clip(shapely.distance(geoms[inside], water) / reach, 0.0, 1.0)
-                y[inside] = LAND_Y + (deck_top - LAND_Y) * (1.0 - t * t * (3.0 - 2.0 * t))
+                street = terrain.height(points[inside])
+                y[inside] = street + (np.maximum(deck_top, street + 1.0) - street) * (1.0 - t * t * (3.0 - 2.0 * t))
         return y
 
     _add_deck(poly, deck_y, builders)
@@ -149,7 +153,7 @@ def _build_bridge(poly, name: str, land, builders: dict) -> bool:
         main_span_length = min(main_span_length, span_length * MAX_SPAN_OF_WATER)
         _add_suspension(poly, span_center, span_u, span_width, main_span_length, deck_y, deck_top, tower_top,
                         style.startswith("stone"), builders)
-    _add_columns(poly, center, u, v, width, s_range, main_span if suspended else None, deck_y, land, builders)
+    _add_columns(poly, center, u, v, width, s_range, main_span if suspended else None, deck_y, land, terrain, builders)
     return True
 
 
@@ -263,7 +267,7 @@ def _reach_on_deck(poly, center, u, start, direction, limit) -> float:
     return float(steps[off[0] - 1]) if len(off) and off[0] > 0 else (0.0 if len(off) else float(steps[-1]))
 
 
-def _add_columns(poly, center, u, v, width, s_range, suspended, deck_y, land, builders) -> None:
+def _add_columns(poly, center, u, v, width, s_range, suspended, deck_y, land, terrain, builders) -> None:
     """Columns under the deck every COLUMN_SPACING along it, except under a
     suspended span (`suspended`, a shape or None)."""
     s_min, s_max = s_range
@@ -281,9 +285,10 @@ def _add_columns(poly, center, u, v, width, s_range, suspended, deck_y, land, bu
             if suspended is not None and shapely.covers(suspended, point):
                 continue  # the suspension span hangs from its cables
             top = float(deck_y(base[None, :])[0]) - DECK_THICKNESS
+            street = float(terrain.height(base[None, :])[0])
             on_land = shapely.covers(land, point)
-            bottom = LAND_Y - 1.0 if on_land else WATER_FOOTING_Y
-            if top - max(bottom, LAND_Y) < 3.0:
+            bottom = street - 1.0 if on_land else WATER_FOOTING_Y
+            if top - max(bottom, street) < 3.0:
                 continue
             _add_box(base, u, half, half, bottom, top, STRUCTURE_CONCRETE, ("lod0", "lod1"), builders)
 

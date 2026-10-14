@@ -83,6 +83,7 @@ directional_shadow_max_distance = 1500.0
 script = ExtResource("1_city")
 building_material = SubResource("ShaderMaterial_building")
 ground_material = SubResource("ShaderMaterial_ground")
+water_material = SubResource("ShaderMaterial_ocean")
 
 [node name="Ocean" type="MeshInstance3D" parent="."]
 cast_shadow = 0

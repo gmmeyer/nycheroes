@@ -36,7 +36,7 @@ extends HeroMode
 @export var swim_speed := 5.0
 @export var swim_super_speed := 25.0
 @export var water_jump_speed := 16.0
-## Height the hero's feet float at (water surface is 0).
+## How far below the water's surface the hero's feet float.
 @export var float_height := -1.2
 
 ## True while jump is held on the ground; charge goes 0..1 once it's a super jump.
@@ -187,7 +187,7 @@ func _swim(delta: float) -> void:
 	var horizontal := Vector3(hero.velocity.x, 0.0, hero.velocity.z).move_toward(wish * top_speed, 30.0 * delta)
 
 	# Bob back up to the surface, and leap out with jump.
-	var rise := (float_height - hero.global_position.y) * 4.0
+	var rise := (hero.water_level + float_height - hero.global_position.y) * 4.0
 	var vertical := lerpf(hero.velocity.y, rise, 1.0 - exp(-6.0 * delta))
 	if hero.jump_pressed:
 		vertical = water_jump_speed

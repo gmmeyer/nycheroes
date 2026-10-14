@@ -11,6 +11,7 @@ const THUG_SCENE := preload("res://scenes/npc/thug.tscn")
 
 var _world: Node
 var _hero: Hero
+var _city: CityStreamer
 var _steps: Array[Dictionary] = []
 var _index := -1
 var _time := 0.0
@@ -24,6 +25,7 @@ func _ready() -> void:
 	_world.get_node("PlayerInput").process_mode = Node.PROCESS_MODE_DISABLED
 	_world.get_node("Encounters").process_mode = Node.PROCESS_MODE_DISABLED
 	_hero = _world.get_node("Hero")
+	_city = _world.get_node("City")
 	process_physics_priority = -20
 	_steps = [
 		_step("wait for the ground", 20.0, Callable(), func() -> bool: return not _hero.frozen),
@@ -99,6 +101,10 @@ func _spawn_gang(world_center: Vector3, count: int) -> void:
 		var thug: Thug = THUG_SCENE.instantiate()
 		add_child(thug)
 		var spot := world_center + Vector3(AVENUE.z, 0.0, -AVENUE.x) * (k - (count - 1) * 0.5) * 1.6
+		spot.y = _hero.world_position().y  # the same street as the hero
+		var ground := _city.ground_height_at(spot, 6.0)
+		if not is_nan(ground):
+			spot.y = ground
 		thug.global_position = WorldOrigin.to_local(spot) + Vector3.UP * 0.2
 		thug.setup(_hero, k, TAU * k / count)
 		_gang.append(thug)
@@ -113,7 +119,11 @@ func _corpse_hips_world() -> Vector3:
 	return Vector3.ZERO
 
 
+## Moves the hero to a world position, standing on the ground there if there is any.
 func _teleport(world_position: Vector3) -> void:
+	var ground := _city.ground_height_at(world_position)
+	if not is_nan(ground):
+		world_position.y = ground + 0.05
 	_hero.global_position = WorldOrigin.to_local(world_position)
 	_hero.velocity = Vector3.ZERO
 

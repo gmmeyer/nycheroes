@@ -15,6 +15,9 @@ const UPDATE_INTERVAL := 0.5
 const MAX_SPAWN_ALTITUDE := 150.0
 ## Spacing between gang members along the sidewalk.
 const SPACING := 1.6
+## Gang members are placed on the ground found within this far above or
+## below where they're asked to go (streets slope).
+const GROUND_SEARCH := 6.0
 ## Players hear about thugs within this distance of their hero, and stop
 ## hearing about them past FORGET_RANGE.
 const SHARE_RANGE := 400.0
@@ -91,6 +94,9 @@ func spawn_gang(world_center: Vector3, count: int, direction: Vector3, target: H
 	var gang: Array[Thug] = []
 	for k in count:
 		var spot := world_center + direction * (k - (count - 1) * 0.5) * SPACING
+		var ground := city.ground_height_at(spot, GROUND_SEARCH)
+		if ground > spot.y - GROUND_SEARCH:
+			spot.y = ground
 		var thug: Thug = THUG_SCENE.instantiate()
 		thug.net_id = _next_id
 		_next_id += 1
@@ -123,7 +129,8 @@ func _spawn_near(target: Hero) -> void:
 	var cooldown: float = _cooldowns.get(key, 2.0) - UPDATE_INTERVAL
 	_cooldowns[key] = cooldown
 	var center := target.world_position()
-	if cooldown > 0.0 or target.frozen or center.y >= MAX_SPAWN_ALTITUDE or _gangs_near(center) >= max_gangs:
+	var above_street := center.y - city.ground_height_at(center, 0.5)
+	if cooldown > 0.0 or target.frozen or not above_street < MAX_SPAWN_ALTITUDE or _gangs_near(center) >= max_gangs:
 		return
 	if _spawn_gang_near(target, center):
 		_cooldowns[key] = respawn_delay

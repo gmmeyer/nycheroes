@@ -1,5 +1,6 @@
-"""Turn the raw GeoJSON downloads (fetch_data.py) into cleaned, projected
-geometry for build_tiles.py, cached as pickles in data/cache/.
+"""Turn the raw downloads (fetch_data.py) into cleaned, projected data for
+build_tiles.py, cached in data/cache/: geometry as pickles, and the ground
+height grid (terrain.py).
 
 build_tiles.py runs this automatically when the cache is missing; delete the
 cache files after re-downloading to rebuild them.
@@ -14,6 +15,7 @@ import numpy as np
 import shapely
 from shapely.geometry import shape
 
+import terrain
 from common import (CACHE_DIR, FEET, facade_style, load_features, polygons_of, project)
 
 DEFAULT_HEIGHT = 9.0
@@ -33,6 +35,12 @@ MARSH_CODE = "2640"
 BEACH_CODE = "2650"
 # Planimetric hydrography structures: piers.
 PIER_CODES = {"2800"}
+# Inland water whose surface is higher than this above sea level gets its own
+# water surface (the game's ocean plane is at sea level).
+RAISED_WATER_MIN = 2.0
+# Water with less spread than this between its high and low points is a lake
+# with one level; more, and it's a creek that runs downhill.
+FLAT_WATER_SPREAD = 0.6
 
 
 def prepare_buildings() -> dict:
@@ -88,7 +96,42 @@ def prepare_ground() -> dict:
     }
 
 
-PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground}
+def prepare_water() -> dict:
+    """Inland water above sea level: reservoirs, lakes, ponds and creeks inside
+    the shoreline. Each gets a level (meters above sea level), or NaN for
+    creeks, whose surface follows the ground model downhill."""
+    load_terrain()
+    heights = terrain.Terrain()
+    water = _union(load_features("hydrography"), LAKE_CODES | WATERWAY_CODES)
+    inland = polygons_of(shapely.intersection(water, _union(load_features("boroughs"))), min_area=50.0)
+    geoms, levels = [], []
+    for poly in inland:
+        # Away from the banks, where the model blends in the land around.
+        inner = shapely.buffer(poly, -6.0)
+        if inner.is_empty:
+            inner = poly
+        min_e, min_n, max_e, max_n = inner.bounds
+        e, n = np.meshgrid(np.arange(min_e, max_e, 10.0), np.arange(min_n, max_n, 10.0))
+        points = shapely.points(e.ravel(), n.ravel())
+        points = points[shapely.contains(inner, points)]
+        if len(points) == 0:
+            points = shapely.point_on_surface([poly])
+        h = heights.raw(shapely.get_coordinates(points))
+        level = float(np.median(h))
+        if level < RAISED_WATER_MIN:
+            continue
+        geoms.append(poly)
+        levels.append(level if np.percentile(h, 90) - np.percentile(h, 10) < FLAT_WATER_SPREAD else np.nan)
+    return {"geoms": np.array(geoms, dtype=object), "level": np.array(levels)}
+
+
+def load_terrain() -> None:
+    """Builds the ground height grid if it's missing."""
+    if not terrain.GRID_PATH.exists():
+        terrain.prepare(load("ground")["land"].bounds)
+
+
+PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": prepare_water}
 
 
 def load(name: str) -> dict:
@@ -111,3 +154,4 @@ def load(name: str) -> dict:
 if __name__ == "__main__":
     for dataset in PREPARERS:
         load(dataset)
+    load_terrain()

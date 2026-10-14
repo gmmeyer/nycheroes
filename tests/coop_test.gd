@@ -9,7 +9,7 @@ extends Node
 
 const PORT := 8071
 ## Across the city from the host: the Bronx, by Yankee Stadium (world meters).
-const FAR_SPOT := Vector3(4998.0, 40.0, -7700.0)
+const FAR_SPOT := Vector3(4998.0, 150.0, -7700.0)
 ## How close a hero copy must be to where its player says the hero is (m).
 const POSITION_TOLERANCE := 0.5
 

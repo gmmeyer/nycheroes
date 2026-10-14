@@ -16,8 +16,10 @@ signal hurt(damage: float)
 const GRAVITY := 30.0
 const MAX_FALL_SPEED := 95.0
 const WORLD_LAYER := 1
-## Below this height the hero is in the water (sea level is 0, land is 2 m up).
+## This far below the water's surface, the hero is in the water.
 const WATER_LINE := -0.6
+## How far above and below the hero to look for a raised lake's surface.
+const WATER_PROBE := 4.0
 const MAX_HEALTH := 100.0
 ## Health comes back after this long without being hit.
 const REGEN_DELAY := 4.0
@@ -42,6 +44,10 @@ var slam_pending := false
 var remote_id := 0
 ## For a copy: whether that player's hero is on the ground.
 var remote_grounded := false
+## For a copy: whether that player's hero is in the water.
+var remote_in_water := false
+## Height of the water surface around the hero: a raised lake's, or sea level (0).
+var water_level := 0.0
 
 # Input edges for this tick, worked out from `input`.
 var jump_pressed := false
@@ -77,6 +83,7 @@ func _physics_process(delta: float) -> void:
 	_prev_position = global_position
 	if frozen or is_remote():
 		return
+	water_level = _find_water_level()
 	jump_pressed = input.jump_held and not _prev_jump
 	web_pressed = input.web_held and not _prev_web
 	attack_pressed = input.attack_held and not _prev_attack
@@ -153,7 +160,7 @@ func forward() -> Vector3:
 
 
 func is_in_water() -> bool:
-	return global_position.y < WATER_LINE
+	return remote_in_water if is_remote() else global_position.y < water_level + WATER_LINE
 
 
 func can_be_attacked() -> bool:
@@ -178,6 +185,14 @@ func take_hit(damage: float, push: Vector3) -> void:
 	hurt.emit(damage)
 	if health <= 0.0:
 		set_mode(&"KnockedOut")
+
+
+## The surface of a raised lake just above or below the hero, else sea level.
+func _find_water_level() -> float:
+	var query := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * WATER_PROBE,
+		global_position + Vector3.DOWN * WATER_PROBE, CityStreamer.WATER_LAYER)
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.position.y if hit else 0.0
 
 
 ## A hard landing: the faster the fall, the wider the blast.

@@ -11,6 +11,8 @@ Tile file (zstd-compressed, little-endian):
   indices u32.
 Mesh surfaces are triangle lists. The lanes surface is instead a set of polylines
 (points along the sidewalks, LANE_BREAK between polylines); its normals and uvs are zero.
+The water surface is inland water above sea level (lakes, reservoirs, creeks);
+sea-level water is the game's ocean plane.
 """
 
 import json
@@ -34,15 +36,17 @@ PROJECTION = (
     f"+proj=tmerc +lat_0={ORIGIN_LAT} +lon_0={ORIGIN_LON} +k=1 +x_0=0 +y_0=0 "
     "+ellps=WGS84 +units=m +no_defs"
 )
-LAND_Y = 2.0  # ground height above sea level; the map is flat for now
+# Land never sits lower than this above sea level (waterfronts, piers).
+LAND_MIN = 1.5
 SEAWALL_BOTTOM_Y = -6.0
 FEET = 0.3048
 
-FORMAT_VERSION = 4
+FORMAT_VERSION = 5
 SURFACE_BUILDINGS = 0
 SURFACE_GROUND = 1
 SURFACE_LANES = 2
 SURFACE_STRUCTURES = 3
+SURFACE_WATER = 4
 LANE_BREAK = 0xFFFFFFFF
 
 # Ground and structure kinds, stored in uv2.x and read by shaders/ground.gdshader.
@@ -137,17 +141,22 @@ class MeshBuilder:
     """Collects flat-shaded triangles, then fixes winding and merges shared vertices."""
 
     def __init__(self):
-        self.pos, self.uv, self.uv2, self.front = [], [], [], []
+        self.pos, self.uv, self.uv2, self.front, self.normals = [], [], [], [], []
 
-    def add(self, pos, uv, uv2, front):
-        """pos (T,3,3), uv (T,3,2), uv2 (2,) or (T,3,2), front (T,3) or (3,): unit outward normal."""
+    def add(self, pos, uv, uv2, front, normals=None):
+        """pos (T,3,3), uv (T,3,2), uv2 (2,) or (T,3,2), front (T,3) or (3,): unit
+        outward normal. Shading uses `front` unless per-vertex `normals` (T,3,3)
+        are given (for smooth surfaces)."""
         count = len(pos)
         if count == 0:
             return
+        front = np.broadcast_to(np.asarray(front, np.float64), (count, 3))
         self.pos.append(np.asarray(pos, np.float64))
         self.uv.append(np.asarray(uv, np.float64))
         self.uv2.append(np.broadcast_to(np.asarray(uv2, np.float64), (count, 3, 2)))
-        self.front.append(np.broadcast_to(np.asarray(front, np.float64), (count, 3)))
+        self.front.append(front)
+        self.normals.append(np.repeat(front[:, None, :], 3, axis=1) if normals is None
+                            else np.asarray(normals, np.float64).reshape(count, 3, 3))
 
     def add_flat(self, polygons, y, uv2):
         """Upward-facing triangulated polygons at height y."""
@@ -159,11 +168,27 @@ class MeshBuilder:
             uv = np.stack([en[..., 0], -en[..., 1]], axis=-1)
             self.add(pos, uv, uv2, (0.0, 1.0, 0.0))
 
-    def add_walls(self, ring_coords, bottom_y, top_y, uv2, ground_y=LAND_Y):
+    def add_draped(self, polygons, cell, height, uv2, normal=None):
+        """Upward-facing polygons laid over the ground: cut along a `cell`-meter
+        grid so they bend with it, at height(en) for (N, 2) east/north points.
+        normal(en) gives smooth per-vertex normals (Godot space); without it
+        they face straight up."""
+        tris = [t for t in (triangles_of(poly) for poly in polygons) if t is not None]
+        if not tris:
+            return
+        tris = split_triangles(np.concatenate(tris), cell)
+        en = tris.reshape(-1, 2)
+        y = np.asarray(height(en), np.float64)
+        pos = np.column_stack([en[:, 0], y, -en[:, 1]]).reshape(-1, 3, 3)
+        uv = np.stack([tris[..., 0], -tris[..., 1]], axis=-1)
+        normals = None if normal is None else normal(en).reshape(-1, 3, 3)
+        self.add(pos, uv, uv2, (0.0, 1.0, 0.0), normals)
+
+    def add_walls(self, ring_coords, bottom_y, top_y, uv2, ground_y=0.0):
         """Vertical walls along a line; the outward side is right of travel.
 
         bottom_y/top_y are scalars or per-point arrays. uv = (meters along the
-        line, meters above ground).
+        line, meters above ground_y).
         """
         pts = np.asarray(ring_coords)[:, :2]
         bottom = np.broadcast_to(np.asarray(bottom_y, np.float64), len(pts))
@@ -200,20 +225,22 @@ class MeshBuilder:
         uv = np.concatenate(self.uv)
         uv2 = np.concatenate(self.uv2)
         front = np.concatenate(self.front)
+        normals = np.concatenate(self.normals)
 
         normal = np.cross(pos[:, 1] - pos[:, 0], pos[:, 2] - pos[:, 0])
         area = np.linalg.norm(normal, axis=1)
         keep = area > 1e-6
-        pos, uv, uv2, front, normal = pos[keep], uv[keep], uv2[keep], front[keep], normal[keep]
+        pos, uv, uv2, front, normals, normal = pos[keep], uv[keep], uv2[keep], front[keep], normals[keep], normal[keep]
         # Godot treats clockwise triangles as front-facing, so a triangle whose
         # counter-clockwise normal points outward gets its winding reversed.
         flip = (normal * front).sum(axis=1) > 0
-        for arr in (pos, uv, uv2):
+        for arr in (pos, uv, uv2, normals):
             arr[flip] = arr[flip][:, [0, 2, 1]]
 
-        normals = np.repeat(front[:, None, :], 3, axis=1)
+        # Rounded (1 mm positions, 0.001 normals) so the files compress well.
         verts = np.concatenate(
-            [pos.reshape(-1, 3), normals.reshape(-1, 3), uv.reshape(-1, 2), uv2.reshape(-1, 2)], axis=1
+            [np.round(pos.reshape(-1, 3), 3), np.round(normals.reshape(-1, 3), 3),
+             np.round(uv.reshape(-1, 2), 3), uv2.reshape(-1, 2)], axis=1
         ).astype(np.float32)
         unique, inverse = np.unique(verts, axis=0, return_inverse=True)
         return unique[:, 0:3], unique[:, 3:6], unique[:, 6:8], unique[:, 8:10], inverse.reshape(-1).astype(np.uint32)
@@ -229,6 +256,31 @@ def triangles_of(poly):
     if len(coords) == 0:
         return None
     return coords.reshape(-1, 4, 2)[:, :3]
+
+
+def split_triangles(tris: np.ndarray, cell: float) -> np.ndarray:
+    """Cuts (T, 3, 2) triangles along a `cell`-meter grid wherever they cross
+    it, so no piece spans more than one grid cell. Neighbors are cut at the
+    same points, so a surface bent along the grid has no cracks."""
+    lows = np.floor(tris.min(axis=1) / cell).astype(np.int64)
+    highs = np.floor((tris.max(axis=1) - 1e-6) / cell).astype(np.int64)
+    single = (lows == highs).all(axis=1)
+    if single.all():
+        return tris
+    many = np.flatnonzero(~single)
+    span = highs[many] - lows[many] + 1
+    counts = span[:, 0] * span[:, 1]
+    owner = np.repeat(np.arange(len(many)), counts)
+    k = np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)
+    cx = lows[many][owner, 0] + k % span[owner, 0]
+    cy = lows[many][owner, 1] + k // span[owner, 0]
+    rings = tris[many][owner]
+    triangles = shapely.polygons(np.concatenate([rings, rings[:, :1]], axis=1))
+    cells = shapely.box(cx * cell, cy * cell, (cx + 1) * cell, (cy + 1) * cell)
+    pieces = shapely.intersection(triangles, cells)
+    pieces = pieces[(shapely.get_type_id(pieces) == 3) & (shapely.area(pieces) > 1e-6)]
+    cut = shapely.get_coordinates(shapely.constrained_delaunay_triangles(pieces)).reshape(-1, 4, 2)[:, :3]
+    return np.concatenate([tris[single], cut])
 
 
 def encode_tile(surfaces: list[tuple[int, tuple]]) -> bytes:

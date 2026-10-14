@@ -4,12 +4,14 @@ Reads the prepared data (prepare.py, which reads fetch_data.py's downloads)
 and writes data/tiles/nyc/:
   manifest.json        levels and tiles, read by scripts/world/city_streamer.gd
   lod0/<i>_<j>.nyct    500 m tiles, full detail: buildings, streets, sidewalks,
-                       parks, walking lanes, bridges (with collision in game)
+                       parks, raised lakes, walking lanes, bridges (with
+                       collision in game)
   lod1/<i>_<j>.nyct    1 km tiles: buildings under 20 m merged into blocks,
                        taller ones simplified; simplified ground
   lod2/<i>_<j>.nyct    4 km tiles: everything under 60 m merged into blocks by
                        height band, skyscrapers simplified, ground without streets
 The game shows a tile's children instead of the tile once they've all loaded.
+The ground follows the real terrain (terrain.py); buildings stand on it.
 
 Tile (i, j) of size T covers x in [i*T, (i+1)*T) and z in [j*T, (j+1)*T) in
 Godot space (+X east, +Z south, origin at Times Square); its vertices are
@@ -35,25 +37,27 @@ from shapely.geometry import Polygon
 import bridges
 import prepare
 from common import (CACHE_DIR, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT, GROUND_ROAD,
-                    GROUND_SAND, GROUND_SEAWALL, LAND_Y, LANE_BREAK, ORIGIN_LAT, ORIGIN_LON, PROJECTION,
+                    GROUND_SAND, GROUND_SEAWALL, LANE_BREAK, ORIGIN_LAT, ORIGIN_LON, PROJECTION,
                     SEAWALL_BOTTOM_Y, STYLE_BRICK, STYLE_POSTWAR, SURFACE_BUILDINGS, SURFACE_GROUND,
-                    SURFACE_LANES, SURFACE_STRUCTURES, TILES_DIR, MeshBuilder, encode_tile, lines_of,
-                    polygons_of, tile_box, tile_range, to_godot)
+                    SURFACE_LANES, SURFACE_STRUCTURES, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile,
+                    lines_of, polygons_of, tile_box, tile_range, to_godot)
+from terrain import Terrain
 
 REGION = "nyc"
 OUT_DIR = TILES_DIR / REGION
 
+# ground_cell: the ground bends with the terrain at least this often (meters).
 LEVELS = {
     "lod0": {"size": 500.0, "building_tolerance": 0.3, "ground_tolerance": 0.2, "keep_holes": True,
-             "min_area": 4.0, "roads": True, "min_ground_area": 0.5},
+             "min_area": 4.0, "roads": True, "min_ground_area": 0.5, "ground_cell": 20.0},
     "lod1": {"size": 1000.0, "building_tolerance": 3.0, "ground_tolerance": 2.5, "keep_holes": False,
-             "min_area": 60.0, "roads": True, "min_ground_area": 20.0,
+             "min_area": 60.0, "roads": True, "min_ground_area": 20.0, "ground_cell": 40.0,
              # Buildings lower than `individual_from` are merged into blocks, one
              # per height band (min height, max height, block height).
              "blocks": {"individual_from": 20.0, "bands": ((0.0, 12.0, 8.0), (12.0, 20.0, 15.0)),
                         "merge_gap": 1.5, "tolerance": 3.0, "min_area": 150.0}},
     "lod2": {"size": 4000.0, "building_tolerance": 6.0, "ground_tolerance": 15.0, "keep_holes": False,
-             "min_area": 300.0, "roads": False, "min_ground_area": 5000.0,
+             "min_area": 300.0, "roads": False, "min_ground_area": 5000.0, "ground_cell": 160.0,
              "blocks": {"individual_from": 60.0,
                         "bands": ((0.0, 12.0, 8.0), (12.0, 30.0, 18.0), (30.0, 60.0, 40.0)),
                         "merge_gap": 3.0, "tolerance": 10.0, "min_area": 1000.0}},
@@ -63,6 +67,14 @@ LEVELS = {
 LANE_OFFSET = 2.5  # meters in from the curb
 LANE_WALL_GAP = 0.8  # keep this far from building walls
 MIN_LANE_LENGTH = 10.0
+LANE_STEP = 10.0  # points along a lane at least this often, to follow the terrain
+
+# Raised lakes: the bed sits this far below the surface, and their shore walls
+# reach a little below the bed.
+LAKE_DEPTH = 2.5
+SHORE_WALL_DEPTH = 4.5
+# How far either side of a shoreline to look for the water's level (meters).
+SHORE_PROBE = 4.0
 
 _W = {}  # per-worker data, filled by _init_worker
 
@@ -75,11 +87,13 @@ def main() -> None:
 
     buildings = prepare.load("buildings")
     ground = prepare.load("ground")
+    prepare.load("water")
+    prepare.load_terrain()
     print(f"{len(buildings['geoms']):,} buildings", flush=True)
 
     bridge_path = CACHE_DIR / "bridges.pkl"
     print("building bridges...", flush=True)
-    bridge_buckets = bridges.build(ground["land"], {level: s["size"] for level, s in LEVELS.items()})
+    bridge_buckets = bridges.build(ground["land"], Terrain(), {level: s["size"] for level, s in LEVELS.items()})
     with open(bridge_path, "wb") as f:
         pickle.dump(bridge_buckets, f, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -126,7 +140,6 @@ def main() -> None:
     manifest = {
         "version": FORMAT_VERSION,
         "region": REGION,
-        "land_height": LAND_Y,
         "origin": {"lat": ORIGIN_LAT, "lon": ORIGIN_LON},
         "projection": PROJECTION,
         "bounds": {"min_x": min_e, "max_x": max_e, "min_z": -max_n, "max_z": -min_n},
@@ -173,6 +186,11 @@ def _init_worker() -> None:
     _W["coast"] = ground["land"].boundary
     _W["road_tree"] = shapely.STRtree(ground["roads"])
     _W["park_tree"] = shapely.STRtree(ground["parks"])
+    _W["terrain"] = Terrain()
+    _W["ground"] = {level: _W["terrain"].lattice(settings["ground_cell"]) for level, settings in LEVELS.items()}
+    _W["creeks"] = {level: _W["terrain"].lattice(settings["ground_cell"], raw=True) for level, settings in LEVELS.items()}
+    _W["water"] = prepare.load("water")
+    _W["water_tree"] = shapely.STRtree(_W["water"]["geoms"])
 
 
 def _build_tile(task):
@@ -182,7 +200,8 @@ def _build_tile(task):
     origin = (i * size, 0.0, j * size)
     bounds = tile_box(i, j, size)
 
-    building_mesh, ground_mesh, structure_mesh = MeshBuilder(), MeshBuilder(), MeshBuilder()
+    building_mesh, ground_mesh, structure_mesh, water_mesh = MeshBuilder(), MeshBuilder(), MeshBuilder(), MeshBuilder()
+    _W["level"] = level
     indices = _W["groups"][level].get((i, j), np.array([], dtype=np.int64))
     if settings.get("blocks"):
         _add_blocks(building_mesh, indices, settings)
@@ -190,6 +209,7 @@ def _build_tile(task):
         for index in indices:
             _add_building(building_mesh, index, settings)
     _add_ground(ground_mesh, bounds, settings)
+    _add_raised_water(water_mesh, ground_mesh, bounds, settings)
     bridge = _W["bridges"][level].get((i, j))
     if bridge:
         structure_mesh.add(*bridge)
@@ -197,7 +217,7 @@ def _build_tile(task):
     surfaces = []
     stats = {"vertices": 0, "triangles": 0}
     for kind, mesh in ((SURFACE_BUILDINGS, building_mesh), (SURFACE_GROUND, ground_mesh),
-                       (SURFACE_STRUCTURES, structure_mesh)):
+                       (SURFACE_STRUCTURES, structure_mesh), (SURFACE_WATER, water_mesh)):
         built = mesh.build(origin)
         if built is not None:
             surfaces.append((kind, built))
@@ -222,11 +242,14 @@ def _build_tile(task):
 
 
 def _add_prism(builder: MeshBuilder, poly, height: float, style: int, seed: float) -> None:
+    """A building standing on its lowest corner (heights are measured from
+    there); uphill, its walls run into the ground."""
     poly = shapely.orient_polygons(poly)
-    top = LAND_Y + height
+    ground = float(_W["ground"][_W["level"]].height(np.asarray(poly.exterior.coords)[:, :2]).min())
+    top = ground + height
     uv2 = (style, seed)
     for ring in (poly.exterior, *poly.interiors):
-        builder.add_walls(ring.coords, LAND_Y - 1.0, top, uv2)
+        builder.add_walls(ring.coords, ground - 1.0, top, uv2, ground_y=ground)
     builder.add_flat([poly], top, uv2)
 
 
@@ -274,16 +297,60 @@ def _add_ground(builder: MeshBuilder, bounds, settings: dict) -> None:
         # GEOS overlays occasionally fail on nearly-coincident edges; snapping
         # everything to a 1 cm grid first gets them through.
         layers = _ground_layers(bounds, settings, grid=0.01)
+    terrain = _W["ground"][_W["level"]]
+    cell = settings["ground_cell"]
     for kind, geom in layers:
         geom = shapely.simplify(geom, settings["ground_tolerance"], preserve_topology=True)
-        builder.add_flat(polygons_of(geom, min_area=settings["min_ground_area"]), LAND_Y, (kind, 0.0))
+        builder.add_draped(polygons_of(geom, min_area=settings["min_ground_area"]), cell, terrain.height,
+                           (kind, 0.0), terrain.normal)
 
+    # Walls where the land meets water: down into the sea, or into a raised
+    # lake's bed.
     coast_t = shapely.clip_by_rect(_W["coast"], *bounds.bounds)
     if coast_t.geom_type == "MultiLineString":
         coast_t = shapely.line_merge(coast_t)
     coast_t = shapely.simplify(coast_t, settings["ground_tolerance"])
     for line in lines_of(coast_t):
-        builder.add_walls(line.coords, SEAWALL_BOTTOM_Y, LAND_Y, (GROUND_SEAWALL, 0.0))
+        coords = np.asarray(shapely.segmentize(line, cell).coords)[:, :2]
+        builder.add_walls(coords, _shore_wall_bottom(coords), terrain.height(coords), (GROUND_SEAWALL, 0.0))
+
+
+def _shore_wall_bottom(coords: np.ndarray) -> np.ndarray:
+    """How deep a shore wall goes at each point of a shoreline: below the sea
+    floor line, or for a raised lake, a little below its bed. The water side
+    is whichever side of the shoreline is lower."""
+    ahead = np.vstack([coords[1:] - coords[:-1], coords[-1:] - coords[-2:-1]])
+    behind = np.vstack([coords[1:2] - coords[:1], coords[1:] - coords[:-1]])
+    tangent = ahead + behind
+    tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-9)
+    side = np.column_stack([-tangent[:, 1], tangent[:, 0]]) * SHORE_PROBE
+    terrain = _W["terrain"]
+    level = np.minimum(terrain.raw(coords + side), terrain.raw(coords - side))
+    raised = level > prepare.RAISED_WATER_MIN - 0.5
+    return np.where(raised, level - SHORE_WALL_DEPTH, SEAWALL_BOTTOM_Y)
+
+
+def _add_raised_water(water: MeshBuilder, ground: MeshBuilder, bounds, settings: dict) -> None:
+    """Lakes, reservoirs and creeks above sea level: a water surface (a flat
+    one for lakes, one that follows the terrain down for creeks) over a bed."""
+    w = _W["water"]
+    creeks = _W["creeks"][_W["level"]]
+    cell = settings["ground_cell"]
+    for k in _W["water_tree"].query(bounds, predicate="intersects"):
+        clipped = shapely.intersection(w["geoms"][k], bounds)
+        clipped = shapely.simplify(clipped, settings["ground_tolerance"], preserve_topology=True)
+        polys = polygons_of(clipped, min_area=settings["min_ground_area"])
+        if not polys:
+            continue
+        level = float(w["level"][k])
+        if np.isnan(level):
+            def surface(en):
+                return np.maximum(creeks.height(en), prepare.RAISED_WATER_MIN)
+            water.add_draped(polys, cell, surface, (0.0, 0.0))
+            ground.add_draped(polys, cell, lambda en: surface(en) - LAKE_DEPTH, (GROUND_MARSH, 0.0))
+        else:
+            water.add_flat(polys, level, (0.0, 0.0))
+            ground.add_flat(polys, level - LAKE_DEPTH, (GROUND_MARSH, 0.0))
 
 
 def _ground_layers(bounds, settings: dict, grid: float) -> list:
@@ -353,14 +420,14 @@ def _build_lanes(bounds, origin):
     for line in lines_of(shapely.line_merge(shapely.MultiLineString(lines))):
         if line.length < MIN_LANE_LENGTH:
             continue
-        coords = np.asarray(shapely.simplify(line, 0.5).coords)[:, :2]
+        coords = np.asarray(shapely.segmentize(shapely.simplify(line, 0.5), LANE_STEP).coords)[:, :2]
         start = len(points)
-        points.extend(to_godot(coords, LAND_Y) - np.asarray(origin))
+        points.extend(to_godot(coords, _W["ground"]["lod0"].height(coords)) - np.asarray(origin))
         indices.extend(range(start, start + len(coords)))
         indices.append(LANE_BREAK)
     if not points:
         return None
-    positions = np.asarray(points, dtype=np.float32)
+    positions = np.round(np.asarray(points), 2).astype(np.float32)
     zeros2 = np.zeros((len(positions), 2), dtype=np.float32)
     return positions, np.zeros_like(positions), zeros2, zeros2, np.asarray(indices, dtype=np.uint32)
 

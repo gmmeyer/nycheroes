@@ -1,14 +1,19 @@
+class_name Game
 extends Node3D
-## Sets up a play session: places the hero (?spawn=x,y,z,yaw), lets it move once
-## the ground under it has loaded, and toggles the free-fly debug camera with F1
-## (starting with ?cam=... also starts in the free camera). ?demo plays a
-## scripted tour of the powers instead of taking player input.
+## Sets up a play session: places the hero (?spawn=x,y,z,yaw; without one, on
+## the ground at Times Square), lets it move once the ground under it has
+## loaded, and toggles the free-fly debug camera with F1 (starting with
+## ?cam=... also starts in the free camera). ?demo plays a scripted tour of
+## the powers instead of taking player input.
 ##
 ## Co-op: M opens the co-op menu; ?host hosts a game and ?join=CODE joins one
 ## (invite links use it). Players who join start next to the host's hero.
 
-## Times Square, facing north up Broadway (world meters).
-const DEFAULT_SPAWN := Vector3(0.0, 3.0, 60.0)
+## Times Square, facing north up Broadway (world meters; dropped onto the ground).
+const DEFAULT_SPAWN := Vector3(0.0, 15.0, 0.0)
+## Physics ticks to wait for new collision to show up before giving up on
+## finding the ground (over open water there is none).
+const DROP_TRIES := 30
 
 @export var hero: Hero
 @export var hero_camera: ThirdPersonCamera
@@ -21,17 +26,19 @@ const DEFAULT_SPAWN := Vector3(0.0, 3.0, 60.0)
 @export var coop_panel: CoopPanel
 
 var _free_camera_on := false
+var _drop_to_ground := false
+var _drop_tries := 0
 
 
 func _ready() -> void:
 	var spawn := LaunchOptions.get_floats("spawn")
-	var spawn_point := Vector3(spawn[0], spawn[1], spawn[2]) if spawn.size() >= 3 else DEFAULT_SPAWN
-	hero.global_position = WorldOrigin.to_local(spawn_point)
-	if spawn.size() >= 4:
-		hero.facing = deg_to_rad(spawn[3])
-	hero_camera.yaw = hero.facing
+	var facing := deg_to_rad(spawn[3]) if spawn.size() >= 4 else hero.facing
+	if spawn.size() >= 3:
+		place_hero(Vector3(spawn[0], spawn[1], spawn[2]), facing)
+	else:
+		place_hero(DEFAULT_SPAWN, facing, true)
 	_set_free_camera(LaunchOptions.has("cam"))
-	players.placed_by_host.connect(_place_hero)
+	players.placed_by_host.connect(place_hero)
 	coop_panel.toggled.connect(func(_open: bool) -> void: _update_controls())
 	Net.state_changed.connect(_on_net_state_changed)
 	if LaunchOptions.has("demo"):
@@ -43,8 +50,31 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	if hero.frozen and city.has_collision_at(hero.world_position()):
-		hero.frozen = false
+	if not hero.frozen or not city.has_collision_at(hero.world_position()):
+		return
+	if _drop_to_ground:
+		var ground := city.ground_height_at(hero.world_position())
+		_drop_tries += 1
+		if is_nan(ground) and _drop_tries < DROP_TRIES:
+			return  # the tile's collision is still being set up
+		if not is_nan(ground):
+			hero.global_position.y = ground + 0.05
+		_drop_to_ground = false
+	hero.frozen = false
+
+
+## Moves our hero to a world position (the host does this when we join) and
+## holds it there until the ground has loaded. With `drop`, the height isn't
+## known: the hero then lands on whatever is below.
+func place_hero(world_position: Vector3, facing: float, drop := false) -> void:
+	hero.set_mode(&"OnFoot")
+	hero.global_position = WorldOrigin.to_local(world_position)
+	hero.velocity = Vector3.ZERO
+	hero.facing = facing
+	hero.frozen = true
+	hero_camera.yaw = facing
+	_drop_to_ground = drop
+	_drop_tries = 0
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -62,22 +92,12 @@ func _start_demo() -> void:
 	player_input.process_mode = Node.PROCESS_MODE_DISABLED
 	hud.visible = false
 	var director := DemoDirector.new()
+	director.game = self
 	director.hero = hero
 	director.camera = hero_camera
 	director.city = city
 	director.encounters = encounters
 	add_child(director)
-
-
-## Moves our hero to a world position (the host does this when we join) and
-## holds it there until the ground has loaded.
-func _place_hero(world_position: Vector3, facing: float) -> void:
-	hero.set_mode(&"OnFoot")
-	hero.global_position = WorldOrigin.to_local(world_position)
-	hero.velocity = Vector3.ZERO
-	hero.facing = facing
-	hero.frozen = true
-	hero_camera.yaw = facing
 
 
 func _on_net_state_changed() -> void:

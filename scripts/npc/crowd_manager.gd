@@ -40,7 +40,8 @@ func _process(delta: float) -> void:
 		if pedestrian.world_position.distance_to(center) > despawn_distance:
 			pedestrians.erase(pedestrian)
 			pedestrian.queue_free()
-	if hero.frozen or center.y > MAX_SPAWN_ALTITUDE or pedestrians.size() >= max_pedestrians:
+	var above_street := center.y - city.ground_height_at(center, 0.5)
+	if hero.frozen or not above_street <= MAX_SPAWN_ALTITUDE or pedestrians.size() >= max_pedestrians:
 		return
 	var lanes := city.lanes_near(center, spawn_range.y)
 	if lanes.is_empty():

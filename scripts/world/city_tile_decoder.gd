@@ -9,12 +9,14 @@ extends RefCounted
 ## sidewalks, separated by index 0xFFFFFFFF.
 
 const MAGIC := "NYCT"
-const VERSION := 4
+const VERSION := 5
 const SURFACE_BUILDINGS := 0
 const SURFACE_GROUND := 1
 const SURFACE_LANES := 2
 ## Bridges: decks, columns, towers and cables (drawn with the ground material).
 const SURFACE_STRUCTURES := 3
+## Lakes, reservoirs and creeks above sea level (sea-level water is the ocean plane).
+const SURFACE_WATER := 4
 ## 0xFFFFFFFF read as a signed 32-bit index.
 const LANE_BREAK := -1
 

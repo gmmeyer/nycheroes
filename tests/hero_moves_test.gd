@@ -9,8 +9,12 @@ const AVENUE := Vector3(0.485, 0.0, -0.875)
 const OPEN_AVENUE := Vector3(420.0, 3.0, -220.0)
 ## A spot in the Hudson River, west of Midtown (world meters).
 const HUDSON := Vector3(-2200.0, 5.0, 0.0)
+## The middle of the Central Park Reservoir, whose surface is 37 m above sea level.
+const RESERVOIR := Vector3(1981.0, 60.0, -3104.0)
 
+var _world: Game
 var _hero: Hero
+var _city: CityStreamer
 var _steps: Array[Dictionary] = []
 var _index := -1
 var _time := 0.0
@@ -18,13 +22,15 @@ var _stats := {}
 
 
 func _ready() -> void:
-	var world: Node = load("res://scenes/world.tscn").instantiate()
+	var world: Game = load("res://scenes/world.tscn").instantiate()
 	add_child(world)
+	_world = world
 	world.get_node("PlayerInput").process_mode = Node.PROCESS_MODE_DISABLED
 	# No pedestrians or thugs here: this test is about movement only.
 	world.get_node("Crowd").process_mode = Node.PROCESS_MODE_DISABLED
 	world.get_node("Encounters").process_mode = Node.PROCESS_MODE_DISABLED
 	_hero = world.get_node("Hero")
+	_city = world.get_node("City")
 	# Run before the hero each tick so the scripted input is used right away.
 	process_physics_priority = -20
 	_steps = [
@@ -68,6 +74,11 @@ func _ready() -> void:
 				_teleport(HUDSON)),
 		_step("swim", 2.0, func(i: HeroInput, _t: float) -> void: _move(i, Vector3.RIGHT)),
 		_step("jump out of the water", 1.5, func(i: HeroInput, t: float) -> void: i.jump_held = t < 0.1),
+		_step("drop into the Central Park Reservoir", 15.0, func(_i: HeroInput, t: float) -> void:
+			if t < 0.02:
+				_world.place_hero(RESERVOIR, 0.0, true),
+			func() -> bool: return _time > 4.0 and not _hero.frozen),
+		_step("swim in the reservoir", 2.0, func(i: HeroInput, _t: float) -> void: _move(i, Vector3.RIGHT)),
 	]
 
 
@@ -118,7 +129,11 @@ func _swing_input(input: HeroInput, _t: float) -> void:
 	input.web_held = true
 
 
+## Moves the hero to a world position, standing on the ground there if there is any.
 func _teleport(world_position: Vector3) -> void:
+	var ground := _city.ground_height_at(world_position)
+	if not is_nan(ground):
+		world_position.y = ground + 0.05
 	_hero.global_position = WorldOrigin.to_local(world_position)
 	_hero.velocity = Vector3.ZERO
 

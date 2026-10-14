@@ -14,8 +14,8 @@ versions come last (step 8).
 | 2 | Hero with superpowers | Done (`fd9c7ff`) |
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
-| 5 | Co-op multiplayer | Done; public hosting still to do |
-| 6 | Realism from open data | Planned |
+| 5 | Co-op multiplayer | Done (`c1e717a`); public hosting still to do |
+| 6 | Realism from open data | In progress (terrain done) |
 | 7 | Overpasses and missing bridges | Planned |
 | 8 | Mac and Windows versions | Planned (last) |
 
@@ -108,7 +108,7 @@ peer can drive one later. Nearby tiles get collision.
   (with `wss://`), and add a TURN relay for players whose networks block
   direct connections. If the host leaves, the game ends for everyone.
 
-## 6. Realism from open data (planned)
+## 6. Realism from open data (in progress)
 
 Chosen over Google's Photorealistic 3D Tiles, which can't run in our browser
 game without switching engines, cost money per player session, can't be
@@ -116,10 +116,9 @@ cached, and have unclear terms for game use.
 
 In order:
 
-1. **Real shape:** terrain from the NYC 1-foot elevation model; real roof
-   shapes and setbacks from TUM's open LoD2 model, merged with today's
-   footprints by building ID; curbs, medians and piers. (Bridges and
-   overpasses come in step 7.)
+1. **Real shape:** terrain (done, below); real roof shapes and setbacks from
+   TUM's open LoD2 model, merged with today's footprints by building ID;
+   curbs, medians and piers. (Bridges and overpasses come in step 7.)
 2. **Real view from above:** NY State aerial photos (2024/2025) draped on
    streets, parks and roofs. The license needs confirming first.
 3. **Real architecture:** styles chosen from city tax-lot data (PLUTO:
@@ -133,6 +132,26 @@ In order:
    reflections, night mode with lit windows and street lights.
 7. **Check against reality:** about 10 reference viewpoints compared side by
    side with real photos after each phase (`?cam=` start positions).
+
+**Terrain (done):**
+- Ground heights come from the USGS 3DEP 1/3 arc-second elevation model
+  (about 10 m, bare earth, 2 tiles, 660 MB), resampled onto a 5 m grid in
+  our map projection (`tools/citygen/terrain.py`). It's used instead of the
+  city's 1-foot model (3.3 GB, undocumented format), whose extra detail our
+  ground mesh can't show yet.
+- Streets, sidewalks and parks bend with the terrain every 20 m (40 m and
+  160 m in the coarser tiles). Heights in between are blended the same way
+  the mesh is, so sidewalk lanes and building bases sit exactly on it.
+- Buildings stand on their lowest corner; uphill, their walls run into the
+  ground. Bridges ramp down to the real street height at each end.
+- 904 lakes, reservoirs, ponds and creeks above sea level (Central Park
+  Reservoir at 37 m, Silver Lake at 69 m) get their own water surface over
+  a lake bed; creeks follow the terrain downhill. Heroes swim at whatever
+  level the water is.
+- The hero is dropped onto the ground at spawn; pedestrians and gangs spawn
+  only when the hero is near street level (not above it).
+- Cost: full-detail tiles grew from 420 to 600 MB in total (mid-detail 105
+  to 170 MB); the far tiles that load first barely changed (27 MB).
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
@@ -204,8 +223,9 @@ templates for both are already installed.
 
 ## Working on the project
 
-- Rebuild city data: `tools/citygen/fetch_data.py`, then `build_tiles.py`
-  (Python venv in `tools/citygen/.venv`, `requirements.txt` alongside).
+- Rebuild city data: `tools/citygen/fetch_data.py` (NYC Open Data and the
+  USGS elevation tiles), then `build_tiles.py` (Python venv in
+  `tools/citygen/.venv`, `requirements.txt` alongside).
   Prepared geometry is cached in `data/cache`; delete it after changing
   `prepare.py` or re-downloading.
 - Web build: `tools/build_web.ps1` (add `-Serve` to play at

@@ -7,10 +7,12 @@ extends Node
 
 ## Manhattan's avenues run about 29 degrees east of north.
 const AVENUE := Vector3(0.485, 0.0, -0.875)
-## 6th Avenue just north of Times Square, with clear street ahead (world meters).
-const START := Vector3(420.0, 3.0, -220.0)
+## 6th Avenue just north of Times Square, with clear street ahead (world
+## meters; dropped onto the street).
+const START := Vector3(420.0, 30.0, -220.0)
 const SETTLE_TIME := 1.0
 
+@export var game: Game
 @export var hero: Hero
 @export var camera: ThirdPersonCamera
 @export var city: CityStreamer
@@ -28,8 +30,7 @@ var _caption: Label
 
 func _ready() -> void:
 	process_physics_priority = -20  # before the hero reads its input
-	hero.global_position = WorldOrigin.to_local(START)
-	hero.facing = _avenue_yaw
+	game.place_hero(START, _avenue_yaw, true)
 	_yaw = _avenue_yaw + 2.4
 	camera.yaw = _yaw
 	camera.pitch = _pitch

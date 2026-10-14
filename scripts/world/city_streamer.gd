@@ -20,6 +20,9 @@ const UPDATE_INTERVAL := 0.25
 const MAX_ATTEMPTS := 3
 ## Physics layer 1, "world".
 const COLLISION_LAYER := 1
+## Physics layer 5, "water": raised lakes' surfaces, which nothing collides
+## with but heroes look for to know where the water is.
+const WATER_LAYER := 16
 ## Added to the camera distance when ordering downloads, so nearby detail
 ## arrives first and coarse tiles follow.
 const LEVEL_PRIORITY: Array[float] = [0.0, 400.0, 1500.0]
@@ -38,6 +41,7 @@ const LEVEL_PRIORITY: Array[float] = [0.0, 400.0, 1500.0]
 @export var build_budget_msec := 6.0
 @export var building_material: Material
 @export var ground_material: Material
+@export var water_material: Material
 
 var loaded_counts: Array[int] = [0, 0, 0]
 ## World positions that need the ground loaded around them besides the
@@ -127,6 +131,17 @@ func lanes_near(world_position: Vector3, radius: float) -> Array[PackedVector3Ar
 		if not tile.lanes.is_empty() and tile.distance_to(world_position.x, world_position.z) < radius:
 			found.append_array(tile.lanes)
 	return found
+
+
+## Height of the first surface (ground, roof or bridge) straight down from
+## `search_from` meters above a world position (from the sky by default), or
+## NAN if nothing there has loaded with collision yet.
+func ground_height_at(world_position: Vector3, search_from := INF) -> float:
+	var start_y := minf(world_position.y + search_from, WorldOrigin.CEILING + 50.0)
+	var top := WorldOrigin.to_local(Vector3(world_position.x, start_y, world_position.z))
+	var query := PhysicsRayQueryParameters3D.create(top, top + Vector3.DOWN * (start_y + 100.0), COLLISION_LAYER)
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.position.y if hit else NAN
 
 
 func _tile_at(level: int, world_position: Vector3) -> Tile:
@@ -296,6 +311,9 @@ func _build_tile_node(tile: Tile, bytes: PackedByteArray) -> Node3D:
 					lane[p] += node.position
 				tile.lanes.append(lane)
 			continue
+		if surface.kind == CityTileDecoder.SURFACE_WATER:
+			node.add_child(_water_node(surface.mesh, near))
+			continue
 		var is_buildings: bool = surface.kind == CityTileDecoder.SURFACE_BUILDINGS
 		var instance := MeshInstance3D.new()
 		instance.mesh = surface.mesh
@@ -309,6 +327,23 @@ func _build_tile_node(tile: Tile, bytes: PackedByteArray) -> Node3D:
 			shape.shape = surface.mesh.create_trimesh_shape()
 			body.add_child(shape)
 	return node
+
+
+## A raised lake's surface, which heroes can find (but not stand on) up close.
+func _water_node(mesh: ArrayMesh, near: bool) -> Node3D:
+	var instance := MeshInstance3D.new()
+	instance.mesh = mesh
+	instance.material_override = water_material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if near:
+		var body := StaticBody3D.new()
+		body.collision_layer = WATER_LAYER
+		body.collision_mask = 0
+		var shape := CollisionShape3D.new()
+		shape.shape = mesh.create_trimesh_shape()
+		body.add_child(shape)
+		instance.add_child(body)
+	return instance
 
 
 func _unload(tile: Tile) -> void:

@@ -99,6 +99,7 @@ coop_menu={
 3d_physics/layer_2="heroes"
 3d_physics/layer_3="npcs"
 3d_physics/layer_4="ragdolls"
+3d_physics/layer_5="water"
 
 [physics]
 
