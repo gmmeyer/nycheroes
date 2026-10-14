@@ -1,0 +1,61 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/hero/hero.gd" id="1_hero"]
+[ext_resource type="Script" path="res://scripts/hero/modes/on_foot_mode.gd" id="2_on_foot"]
+[ext_resource type="Script" path="res://scripts/hero/modes/flight_mode.gd" id="3_flight"]
+[ext_resource type="Script" path="res://scripts/hero/modes/swing_mode.gd" id="4_swing"]
+[ext_resource type="Script" path="res://scripts/hero/hero_animator.gd" id="5_animator"]
+[ext_resource type="PackedScene" path="res://assets/characters/mannequin/mannequin.glb" id="6_mannequin"]
+[ext_resource type="Script" path="res://scripts/hero/web_line.gd" id="7_web_line"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.35
+height = 1.8
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_web"]
+top_radius = 0.025
+bottom_radius = 0.025
+height = 1.0
+radial_segments = 4
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_web"]
+shading_mode = 0
+albedo_color = Color(0.95, 0.95, 0.95, 1)
+
+[node name="Hero" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+floor_snap_length = 0.5
+script = ExtResource("1_hero")
+
+[node name="Body" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="OnFoot" type="Node" parent="."]
+script = ExtResource("2_on_foot")
+
+[node name="Flight" type="Node" parent="."]
+script = ExtResource("3_flight")
+
+[node name="Swing" type="Node" parent="."]
+script = ExtResource("4_swing")
+
+[node name="Model" type="Node3D" parent="." node_paths=PackedStringArray("hero")]
+top_level = true
+script = ExtResource("5_animator")
+hero = NodePath("..")
+
+[node name="Character" parent="Model" instance=ExtResource("6_mannequin")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="WebLine" type="MeshInstance3D" parent="." node_paths=PackedStringArray("hero", "animator")]
+top_level = true
+visible = false
+cast_shadow = 0
+mesh = SubResource("CylinderMesh_web")
+material_override = SubResource("StandardMaterial3D_web")
+script = ExtResource("7_web_line")
+hero = NodePath("..")
+animator = NodePath("../Model")

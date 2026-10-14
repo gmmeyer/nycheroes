@@ -8,6 +8,10 @@
 [ext_resource type="Shader" path="res://shaders/ground.gdshader" id="6_ground"]
 [ext_resource type="Shader" path="res://shaders/ocean.gdshader" id="7_ocean"]
 [ext_resource type="Script" path="res://scripts/world/lighting_overrides.gd" id="8_lighting"]
+[ext_resource type="Script" path="res://scripts/game/game.gd" id="9_game"]
+[ext_resource type="PackedScene" path="res://scenes/hero/hero.tscn" id="10_hero"]
+[ext_resource type="Script" path="res://scripts/camera/third_person_camera.gd" id="11_hero_camera"]
+[ext_resource type="Script" path="res://scripts/hero/player_input.gd" id="12_player_input"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_sky"]
 sky_top_color = Color(0.3, 0.5, 0.78, 1)
@@ -42,7 +46,16 @@ shader = ExtResource("7_ocean")
 [sub_resource type="PlaneMesh" id="PlaneMesh_ocean"]
 size = Vector2(80000, 80000)
 
-[node name="World" type="Node3D"]
+[sub_resource type="SphereShape3D" id="SphereShape3D_camera"]
+radius = 0.25
+
+[node name="World" type="Node3D" node_paths=PackedStringArray("hero", "hero_camera", "free_camera", "player_input", "city")]
+script = ExtResource("9_game")
+hero = NodePath("Hero")
+hero_camera = NodePath("HeroCamera")
+free_camera = NodePath("FreeCamera")
+player_input = NodePath("PlayerInput")
+city = NodePath("City")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." node_paths=PackedStringArray("sun")]
 environment = SubResource("Environment_world")
@@ -67,7 +80,30 @@ mesh = SubResource("PlaneMesh_ocean")
 material_override = SubResource("ShaderMaterial_ocean")
 script = ExtResource("3_ocean")
 
-[node name="Camera" type="Camera3D" parent="."]
+[node name="Hero" parent="." instance=ExtResource("10_hero")]
+
+[node name="PlayerInput" type="Node" parent="." node_paths=PackedStringArray("hero", "camera_rig")]
+script = ExtResource("12_player_input")
+hero = NodePath("../Hero")
+camera_rig = NodePath("../HeroCamera")
+
+[node name="HeroCamera" type="Node3D" parent="." node_paths=PackedStringArray("target")]
+script = ExtResource("11_hero_camera")
+target = NodePath("../Hero")
+
+[node name="SpringArm" type="SpringArm3D" parent="HeroCamera"]
+collision_mask = 1
+shape = SubResource("SphereShape3D_camera")
+spring_length = 4.5
+margin = 0.2
+
+[node name="Camera" type="Camera3D" parent="HeroCamera/SpringArm"]
+current = true
+fov = 70.0
+near = 0.3
+far = 40000.0
+
+[node name="FreeCamera" type="Camera3D" parent="."]
 position = Vector3(-600, 350, 2600)
 rotation = Vector3(-0.21, -0.37, 0)
 fov = 70.0
@@ -77,7 +113,7 @@ script = ExtResource("2_camera")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
-[node name="DebugLabel" type="Label" parent="HUD" node_paths=PackedStringArray("city", "camera")]
+[node name="DebugLabel" type="Label" parent="HUD" node_paths=PackedStringArray("city", "hero", "free_camera")]
 offset_left = 12.0
 offset_top = 10.0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
@@ -85,4 +121,5 @@ theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 15
 script = ExtResource("4_hud")
 city = NodePath("../../City")
-camera = NodePath("../../Camera")
+hero = NodePath("../../Hero")
+free_camera = NodePath("../../FreeCamera")

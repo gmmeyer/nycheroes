@@ -23,9 +23,7 @@ var _pitch := 0.0
 
 func _ready() -> void:
 	add_to_group("floating")
-	WorldOrigin.focus = self
-	_yaw = rotation.y
-	_pitch = rotation.x
+	sync_rotation()
 	var pose := LaunchOptions.get_floats("cam")
 	if pose.size() >= 3:
 		global_position = WorldOrigin.to_local(Vector3(pose[0], pose[1], pose[2]))
@@ -33,6 +31,12 @@ func _ready() -> void:
 		_yaw = deg_to_rad(pose[3])
 		_pitch = deg_to_rad(pose[4])
 	_apply_rotation()
+
+
+## Picks up the current rotation, e.g. after the camera was moved from outside.
+func sync_rotation() -> void:
+	_yaw = rotation.y
+	_pitch = rotation.x
 
 
 func _unhandled_input(event: InputEvent) -> void:

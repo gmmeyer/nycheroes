@@ -4,7 +4,8 @@ extends Node3D
 ##
 ## Each tile has a full-detail version (lod0) loaded near the camera and a
 ## simplified one (lod1) loaded out to the horizon; lod1 is hidden while lod0
-## is present. Tiles are built by tools/citygen/build_tiles.py into
+## is present. Only lod0 tiles get collision. Tiles are built by
+## tools/citygen/build_tiles.py into
 ## data/tiles/<region>/. Web builds fetch them over HTTP from tiles/<region>/
 ## next to index.html (tools/build_web.ps1 copies them there).
 
@@ -15,6 +16,8 @@ const LOD_FAR := 1
 const LOD_NAMES: Array[String] = ["lod0", "lod1"]
 const UPDATE_INTERVAL := 0.25
 const MAX_ATTEMPTS := 3
+## Physics layer 1, "world".
+const COLLISION_LAYER := 1
 
 @export var region := "manhattan"
 @export var near_radius := 1200.0
@@ -29,8 +32,11 @@ const MAX_ATTEMPTS := 3
 
 var tile_size := 500.0
 var loaded_counts: Array[int] = [0, 0]
+## Time the last tile took to turn into meshes and collision, in milliseconds.
+var last_build_msec := 0.0
 
 var _tiles: Array[Tile] = []
+var _tiles_by_coord := {}  # Vector2i -> Tile
 var _queue: Array[Array] = []  # [priority, tile, lod], sorted
 var _ready_to_build: Array[Array] = []  # [tile, lod, bytes]
 var _in_flight := 0
@@ -84,6 +90,16 @@ func pending_count() -> int:
 	return _in_flight + _queue.size() + _ready_to_build.size()
 
 
+## True once the ground at this world position can be stood on: its tile has
+## loaded with collision, or there's no tile there at all (open water).
+func has_collision_at(world_position: Vector3) -> bool:
+	if _tiles.is_empty():
+		return false
+	var coord := Vector2i(floori(world_position.x / tile_size), floori(world_position.z / tile_size))
+	var tile: Tile = _tiles_by_coord.get(coord)
+	return tile == null or not tile.info.has(LOD_NAMES[LOD_NEAR]) or tile.nodes[LOD_NEAR] != null
+
+
 func _on_manifest_loaded(bytes: PackedByteArray) -> void:
 	var manifest = JSON.parse_string(bytes.get_string_from_utf8())
 	if typeof(manifest) != TYPE_DICTIONARY:
@@ -91,7 +107,9 @@ func _on_manifest_loaded(bytes: PackedByteArray) -> void:
 		return
 	tile_size = manifest.tile_size
 	for entry in manifest.tiles:
-		_tiles.append(Tile.new(entry))
+		var tile := Tile.new(entry)
+		_tiles.append(tile)
+		_tiles_by_coord[Vector2i(tile.i, tile.j)] = tile
 
 
 func _update_wanted_tiles() -> void:
@@ -152,7 +170,9 @@ func _build_ready_tiles() -> void:
 				push_error("Giving up on tile %s %d_%d" % [LOD_NAMES[lod], tile.i, tile.j])
 				tile.info.erase(LOD_NAMES[lod])
 			continue
+		var build_start := Time.get_ticks_usec()
 		var node := _build_tile_node(tile, lod, bytes)
+		last_build_msec = (Time.get_ticks_usec() - build_start) / 1000.0
 		add_child(node)
 		tile.nodes[lod] = node
 		loaded_counts[lod] += 1
@@ -170,6 +190,12 @@ func _build_tile_node(tile: Tile, lod: int, bytes: PackedByteArray) -> Node3D:
 	var node := Node3D.new()
 	node.name = "%s_%d_%d" % [LOD_NAMES[lod], tile.i, tile.j]
 	node.position = Vector3(tile.i * tile_size, 0.0, tile.j * tile_size)
+	var body: StaticBody3D = null
+	if lod == LOD_NEAR:
+		body = StaticBody3D.new()
+		body.collision_layer = COLLISION_LAYER
+		body.collision_mask = 0
+		node.add_child(body)
 	for surface in CityTileDecoder.decode(bytes, int(tile.info[LOD_NAMES[lod]].raw_bytes)):
 		var is_buildings: bool = surface.kind == CityTileDecoder.SURFACE_BUILDINGS
 		var instance := MeshInstance3D.new()
@@ -178,6 +204,10 @@ func _build_tile_node(tile: Tile, lod: int, bytes: PackedByteArray) -> Node3D:
 		if not (is_buildings and lod == LOD_NEAR):
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.add_child(instance)
+		if body:
+			var shape := CollisionShape3D.new()
+			shape.shape = surface.mesh.create_trimesh_shape()
+			body.add_child(shape)
 	return node
 
 

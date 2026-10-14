@@ -16,7 +16,8 @@ var offset := Vector3.ZERO
 var focus: Node3D
 
 
-func _process(_delta: float) -> void:
+## Runs before other physics so bodies are moved between ticks, not mid-step.
+func _physics_process(_delta: float) -> void:
 	if focus == null:
 		return
 	var p := focus.global_position
