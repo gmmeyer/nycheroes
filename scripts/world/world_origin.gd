@@ -11,6 +11,10 @@ signal shifted(delta: Vector3)
 const SHIFT_DISTANCE := 1500.0
 ## Shifts are whole multiples of this, so tile positions stay exact.
 const SHIFT_STEP := 500.0
+## Nobody goes higher than this, in meters above sea level (about twice the
+## height of One World Trade Center). Shifts are horizontal only, so a node's
+## local y is its altitude.
+const CEILING := 1000.0
 
 var offset := Vector3.ZERO
 var focus: Node3D

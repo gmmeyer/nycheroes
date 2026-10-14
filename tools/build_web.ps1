@@ -9,7 +9,7 @@ $godot = if ($env:GODOT) { $env:GODOT } else { "C:\Users\gmeyp\Downloads\Godot_v
 $out = Join-Path $root "build\web"
 $tiles = Join-Path $root "data\tiles"
 
-if (-not (Test-Path (Join-Path $tiles "manhattan\manifest.json"))) {
+if (-not (Test-Path (Join-Path $tiles "nyc\manifest.json"))) {
     throw "No city tiles found. Run tools\citygen\fetch_data.py and build_tiles.py first."
 }
 
@@ -17,9 +17,10 @@ New-Item -ItemType Directory -Force $out | Out-Null
 & $godot --headless --path $root --export-release "Web" "build/web/index.html"
 if ($LASTEXITCODE -ne 0) { throw "Godot export failed (exit code $LASTEXITCODE)" }
 
-$outTiles = Join-Path $out "tiles"
-if (Test-Path $outTiles) { Remove-Item -Recurse -Force $outTiles }
-Copy-Item -Recurse $tiles $outTiles
+# Mirror the tiles (copies only what changed; the full city is several hundred MB).
+robocopy $tiles (Join-Path $out "tiles") /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "Copying tiles failed (robocopy exit code $LASTEXITCODE)" }
+$global:LASTEXITCODE = 0
 Write-Host "Web build ready in $out"
 
 if ($Serve) {

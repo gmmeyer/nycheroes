@@ -5,7 +5,8 @@ extends Camera3D
 ## Click to look around (Esc releases the mouse), WASD to move, Space/E up,
 ## C/Q down, Shift for a speed boost, mouse wheel to change speed, arrow keys
 ## to turn. Ctrl is avoided because Ctrl+W closes the browser tab.
-## Start pose: ?cam=x,y,z,yaw,pitch (world meters, degrees).
+## Start pose: ?cam=x,y,z,yaw,pitch (world meters, degrees). Like everything
+## else, it stays below WorldOrigin.CEILING.
 
 @export var speed := 80.0
 @export var min_speed := 5.0
@@ -26,7 +27,7 @@ func _ready() -> void:
 	sync_rotation()
 	var pose := LaunchOptions.get_floats("cam")
 	if pose.size() >= 3:
-		global_position = WorldOrigin.to_local(Vector3(pose[0], pose[1], pose[2]))
+		global_position = WorldOrigin.to_local(Vector3(pose[0], minf(pose[1], WorldOrigin.CEILING), pose[2]))
 	if pose.size() >= 5:
 		_yaw = deg_to_rad(pose[3])
 		_pitch = deg_to_rad(pose[4])
@@ -69,6 +70,7 @@ func _process(delta: float) -> void:
 	if direction.length_squared() > 0.0:
 		current_speed = speed * (boost if Input.is_physical_key_pressed(KEY_SHIFT) else 1.0)
 		global_position += direction.normalized() * current_speed * delta
+		global_position.y = minf(global_position.y, WorldOrigin.CEILING)
 
 
 func _axis(positive: Key, negative: Key) -> float:

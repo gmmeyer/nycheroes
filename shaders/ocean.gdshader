@@ -1,11 +1,19 @@
 // Ocean surface: a few moving sine waves for the normal and a Fresnel sky tint.
 // Each wave fades out once it gets too small on screen, to avoid shimmer.
+// Toward the edge of the plane the ocean fades fully into the fog (which
+// matches the sky below the horizon), so the edge never shows.
 shader_type spatial;
 
 uniform vec3 deep_color : source_color = vec3(0.03, 0.13, 0.20);
 uniform vec3 sky_tint : source_color = vec3(0.55, 0.68, 0.82);
 // World position of the scene origin (WorldOrigin.offset), so waves don't jump on shifts.
 uniform vec2 origin_offset = vec2(0.0);
+// The environment's fog (set by ocean.gd, linear color), and the distance
+// range over which the ocean fades out completely.
+uniform vec3 fog_color = vec3(0.45, 0.55, 0.69);
+uniform float fog_density = 0.00005;
+uniform float fade_start = 24000.0;
+uniform float fade_end = 38000.0;
 
 varying vec2 world_xz;
 
@@ -37,4 +45,9 @@ void fragment() {
 	EMISSION = sky_tint * fresnel * 0.5;
 	ROUGHNESS = 0.06;
 	SPECULAR = 0.6;
+
+	// The same exponential fog the environment applies, plus the fade-out.
+	float distance = length(VERTEX);
+	float fog = 1.0 - exp(-distance * fog_density);
+	FOG = vec4(fog_color, max(fog, smoothstep(fade_start, fade_end, distance)));
 }

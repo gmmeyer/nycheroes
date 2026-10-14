@@ -45,8 +45,8 @@ func _process(delta: float) -> void:
 		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1e6]
 	var status := "%s  ·  %.0f m/s (%.0f km/h)  ·  altitude %.0f m  ·  %.5f, %.5f" % [
 		who, speed, speed * 3.6, world.y, lat, lon]
-	var tiles := "Tiles: %d near, %d far, %d loading  ·  last tile build %.1f ms" % [
-		city.loaded_counts[CityStreamer.LOD_NEAR], city.loaded_counts[CityStreamer.LOD_FAR],
+	var tiles := "Tiles: %d near, %d mid, %d far, %d loading  ·  last tile build %.1f ms" % [
+		city.loaded_counts[0], city.loaded_counts[1], city.loaded_counts[2],
 		city.pending_count(), city.last_build_msec]
 	var standing := Combat.thugs.filter(func(thug: Thug) -> bool: return not thug.is_down()).size()
 	var people := "Pedestrians %d  ·  thugs %d standing, %d down  ·  health %d" % [

@@ -47,7 +47,11 @@ func _ready() -> void:
 			i.aim = AVENUE
 			i.sprint_held = true),
 		_step("hover", 2.0, func(i: HeroInput, _t: float) -> void: i.aim = AVENUE),
-		_step("stop flying and fall", 12.0, func(i: HeroInput, t: float) -> void: i.fly_toggle_pressed = t < 0.02,
+		_step("boost up into the ceiling", 9.0, func(i: HeroInput, _t: float) -> void:
+			i.aim = AVENUE
+			i.vertical = 1.0
+			i.sprint_held = true),
+		_step("stop flying and fall", 20.0, func(i: HeroInput, t: float) -> void: i.fly_toggle_pressed = t < 0.02,
 			func() -> bool: return _time > 0.5 and _hero.is_on_floor()),
 		_step("back to the open avenue", 1.0, func(_i: HeroInput, t: float) -> void:
 			if t < 0.02:

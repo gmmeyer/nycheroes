@@ -9,10 +9,12 @@ extends RefCounted
 ## sidewalks, separated by index 0xFFFFFFFF.
 
 const MAGIC := "NYCT"
-const VERSION := 3
+const VERSION := 4
 const SURFACE_BUILDINGS := 0
 const SURFACE_GROUND := 1
 const SURFACE_LANES := 2
+## Bridges: decks, columns, towers and cables (drawn with the ground material).
+const SURFACE_STRUCTURES := 3
 ## 0xFFFFFFFF read as a signed 32-bit index.
 const LANE_BREAK := -1
 

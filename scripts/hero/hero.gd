@@ -83,6 +83,9 @@ func _physics_process(delta: float) -> void:
 	input.fly_toggle_pressed = false
 	if next != &"" and next != mode.name:
 		set_mode(next)
+	if global_position.y > WorldOrigin.CEILING:
+		global_position.y = WorldOrigin.CEILING
+		velocity.y = minf(velocity.y, 0.0)
 
 	var on_floor := is_on_floor()
 	if on_floor and not _was_on_floor:
