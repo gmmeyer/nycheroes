@@ -37,9 +37,9 @@ from shapely.geometry import Polygon
 import bridges
 import buildings3d
 import prepare
-from common import (CACHE_DIR, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT, GROUND_ROAD,
+from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT, GROUND_ROAD,
                     GROUND_SAND, GROUND_SEAWALL, LANE_BREAK, ORIGIN_LAT, ORIGIN_LON, PROJECTION, ROOF,
-                    SEAWALL_BOTTOM_Y, STYLE_BRICK, STYLE_POSTWAR, SURFACE_BUILDINGS, SURFACE_GROUND,
+                    SEAWALL_BOTTOM_Y, STRUCTURE_CONCRETE, STYLE_BRICK, STYLE_POSTWAR, SURFACE_BUILDINGS, SURFACE_GROUND,
                     SURFACE_LANES, SURFACE_STRUCTURES, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile,
                     lines_of, polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangulate_planar)
 from terrain import Terrain
@@ -50,10 +50,12 @@ OUT_DIR = TILES_DIR / REGION
 # ground_cell: the ground bends with the terrain at least this often (meters).
 # shapes_from: buildings at least this tall (meters) get their real shape
 # from the 3-D model instead of a footprint prism, where the model has one.
+# curbs: streets sit CURB_HEIGHT below the sidewalks, behind curbs (up close
+# only; from further away nobody can tell).
 LEVELS = {
     "lod0": {"size": 500.0, "building_tolerance": 0.3, "ground_tolerance": 0.2, "keep_holes": True,
              "min_area": 4.0, "roads": True, "min_ground_area": 0.5, "ground_cell": 20.0,
-             "shapes_from": 0.0},
+             "shapes_from": 0.0, "curbs": True},
     "lod1": {"size": 1000.0, "building_tolerance": 3.0, "ground_tolerance": 2.5, "keep_holes": False,
              "min_area": 60.0, "roads": True, "min_ground_area": 20.0, "ground_cell": 40.0,
              "shapes_from": 40.0,
@@ -74,6 +76,9 @@ LANE_OFFSET = 2.5  # meters in from the curb
 LANE_WALL_GAP = 0.8  # keep this far from building walls
 MIN_LANE_LENGTH = 10.0
 LANE_STEP = 10.0  # points along a lane at least this often, to follow the terrain
+
+# Gaps between road pieces narrower than twice this (meters) are filled.
+ROAD_GAP = 0.25
 
 # Raised lakes: the bed sits this far below the surface, and their shore walls
 # reach a little below the bed.
@@ -372,8 +377,13 @@ def _add_ground(builder: MeshBuilder, bounds, settings: dict) -> None:
     cell = settings["ground_cell"]
     for kind, geom in layers:
         geom = shapely.simplify(geom, settings["ground_tolerance"], preserve_topology=True)
-        builder.add_draped(polygons_of(geom, min_area=settings["min_ground_area"]), cell, terrain.height,
-                           (kind, 0.0), terrain.normal)
+        polys = polygons_of(geom, min_area=settings["min_ground_area"])
+        height = terrain.height
+        if kind == GROUND_ROAD and settings.get("curbs"):
+            def height(en):
+                return terrain.height(en) - CURB_HEIGHT
+            _add_curbs(builder, polys, bounds, cell, terrain)
+        builder.add_draped(polys, cell, height, (kind, 0.0), terrain.normal)
 
     # Walls where the land meets water: down into the sea, or into a raised
     # lake's bed.
@@ -384,6 +394,22 @@ def _add_ground(builder: MeshBuilder, bounds, settings: dict) -> None:
     for line in lines_of(coast_t):
         coords = np.asarray(shapely.segmentize(line, cell).coords)[:, :2]
         builder.add_walls(coords, _shore_wall_bottom(coords), terrain.height(coords), (GROUND_SEAWALL, 0.0))
+
+
+def _add_curbs(builder: MeshBuilder, roads: list, bounds, cell: float, terrain) -> None:
+    """Curb faces along every road edge (except where the tile cuts the road),
+    facing the road. Medians are left out of the road data, so they become
+    raised islands with curbs too."""
+    tile_edge = shapely.buffer(bounds.boundary, 0.01)
+    for poly in roads:
+        poly = shapely.orient_polygons(poly)
+        for ring in (poly.exterior, *poly.interiors):
+            # Reversed, the right side of travel (the wall's face) is the road.
+            edge = shapely.LineString(np.asarray(ring.coords)[::-1])
+            for line in lines_of(shapely.difference(edge, tile_edge)):
+                coords = np.asarray(shapely.segmentize(line, cell).coords)[:, :2]
+                top = terrain.height(coords)
+                builder.add_walls(coords, top - CURB_HEIGHT - 0.05, top, (STRUCTURE_CONCRETE, 0.0))
 
 
 def _shore_wall_bottom(coords: np.ndarray) -> np.ndarray:
@@ -444,7 +470,11 @@ def _ground_layers(bounds, settings: dict, grid: float) -> list:
     if settings["roads"]:
         nearby = g["roads"][_W["road_tree"].query(bounds)]
         if len(nearby):
-            roads_t = _polygonal(shapely.intersection(shapely.union_all(snap(nearby)), land_t))
+            roads_t = shapely.union_all(snap(nearby))
+            # Close hairline gaps between neighboring road pieces, which would
+            # otherwise get curbs across the street.
+            roads_t = shapely.buffer(shapely.buffer(roads_t, ROAD_GAP, join_style="mitre"), -ROAD_GAP, join_style="mitre")
+            roads_t = _polygonal(shapely.intersection(roads_t, land_t))
     parks_t = Polygon()
     nearby = g["parks"][_W["park_tree"].query(bounds)]
     if len(nearby):

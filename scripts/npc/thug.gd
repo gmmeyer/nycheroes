@@ -215,7 +215,9 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0.0
 	else:
 		velocity.y -= Hero.GRAVITY * delta
+	var intended := velocity
 	move_and_slide()
+	LedgeClimb.climb(self, intended, delta)
 	if state == State.IDLE or state == State.CHASE:
 		_animate_movement(horizontal.length())
 	_model.rotation.y = lerp_angle(_model.rotation.y, _facing, 1.0 - exp(-10.0 * delta))

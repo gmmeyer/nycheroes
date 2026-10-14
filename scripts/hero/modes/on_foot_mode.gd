@@ -71,7 +71,9 @@ func physics_update(delta: float) -> StringName:
 		_run(delta)
 	else:
 		_fall(delta)
+	var intended := hero.velocity
 	hero.move_and_slide()
+	LedgeClimb.climb(hero, intended, delta)  # curbs
 	return &""
 
 

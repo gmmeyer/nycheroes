@@ -80,6 +80,14 @@ func _ready() -> void:
 				_world.place_hero(RESERVOIR, 0.0, true),
 			func() -> bool: return _time > 4.0 and not _hero.frozen),
 		_step("swim in the reservoir", 2.0, func(i: HeroInput, _t: float) -> void: _move(i, Vector3.RIGHT)),
+		_step("back to the open avenue again", 15.0, func(_i: HeroInput, t: float) -> void:
+			if t < 0.02:
+				_world.place_hero(OPEN_AVENUE, 0.0, true),
+			func() -> bool: return _time > 1.0 and not _hero.frozen),
+		# The curb is a couple of meters ahead: 15 cm up onto the sidewalk.
+		_step("walk up the curb onto the sidewalk", 2.0, func(i: HeroInput, _t: float) -> void:
+			i.move = AVENUE * 0.4
+			i.stick = Vector2(0.0, -0.4)),
 	]
 
 

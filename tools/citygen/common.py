@@ -36,8 +36,11 @@ PROJECTION = (
     f"+proj=tmerc +lat_0={ORIGIN_LAT} +lon_0={ORIGIN_LON} +k=1 +x_0=0 +y_0=0 "
     "+ellps=WGS84 +units=m +no_defs"
 )
-# Land never sits lower than this above sea level (waterfronts, piers).
-LAND_MIN = 1.5
+# Land never sits lower than this above sea level: waterfronts and piers (the
+# pier data's median deck height is 2.1 m).
+LAND_MIN = 2.0
+# Streets sit this far below the sidewalks, behind a curb.
+CURB_HEIGHT = 0.15
 SEAWALL_BOTTOM_Y = -6.0
 FEET = 0.3048
 

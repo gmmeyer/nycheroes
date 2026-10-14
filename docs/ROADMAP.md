@@ -15,7 +15,7 @@ versions come last (step 8).
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public hosting still to do |
-| 6 | Realism from open data | In progress (terrain and building shapes done) |
+| 6 | Realism from open data | In progress (real shape done) |
 | 7 | Overpasses and missing bridges | Planned |
 | 8 | Mac and Windows versions | Planned (last) |
 
@@ -116,8 +116,8 @@ cached, and have unclear terms for game use.
 
 In order:
 
-1. **Real shape:** terrain and building shapes (done, below); curbs,
-   medians and piers. (Bridges and overpasses come in step 7.)
+1. **Real shape (done, below):** terrain, building shapes, curbs and
+   medians. (Bridges and overpasses come in step 7.)
 2. **Real view from above:** NY State aerial photos (2024/2025) draped on
    streets, parks and roofs. The license needs confirming first.
 3. **Real architecture:** styles chosen from city tax-lot data (PLUTO:
@@ -170,6 +170,19 @@ In order:
   Webs look in a wider fan, since walls high enough to swing from now often
   step back from the street.
 - Cost: full-detail tiles grew to 757 MB in total (mid 187 MB, far 29 MB).
+
+**Curbs and medians (done):**
+- Up close, streets sit 15 cm below the sidewalks behind concrete curbs.
+  Medians are left out of the city's road data, so they're raised islands
+  with curbs too (green where the parks data has them, like Park Avenue's).
+  Hairline gaps between road pieces are closed first so no curbs cross the
+  street.
+- Heroes and thugs step up curbs and other ledges up to 35 cm
+  (`scripts/util/ledge_climb.gd`); Godot's character controller alone
+  treats any step as a wall.
+- Waterfronts and piers sit at least 2 m above sea level (the pier data's
+  median deck height is 2.1 m).
+- Cost: full-detail tiles grew to 852 MB in total.
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build

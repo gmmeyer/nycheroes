@@ -67,6 +67,7 @@ func physics_update(delta: float) -> StringName:
 	var vertical := 0.0 if hero.is_on_floor() else hero.velocity.y - Hero.GRAVITY * delta
 	hero.velocity = Vector3(lunge.x, vertical, lunge.z)
 	hero.move_and_slide()
+	LedgeClimb.climb(hero, Vector3(lunge.x, vertical, lunge.z), delta)
 
 	if not _struck and _time >= punch.impact:
 		_struck = true

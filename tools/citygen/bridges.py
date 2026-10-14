@@ -15,7 +15,7 @@ import numpy as np
 import shapely
 from shapely.geometry import shape
 
-from common import (GROUND_ROAD, STRUCTURE_CABLE, STRUCTURE_CONCRETE, STRUCTURE_STONE,
+from common import (CURB_HEIGHT, GROUND_ROAD, STRUCTURE_CABLE, STRUCTURE_CONCRETE, STRUCTURE_STONE,
                     MeshBuilder, lines_of, load_features, polygons_of, project, triangles_of)
 
 BRIDGE_CODE = "2300"
@@ -143,7 +143,7 @@ def _build_bridge(poly, name: str, land, terrain, builders: dict) -> bool:
             inside = shapely.dwithin(part, geoms, 0.5)
             if inside.any():
                 t = np.clip(shapely.distance(geoms[inside], water) / reach, 0.0, 1.0)
-                street = terrain.height(points[inside])
+                street = terrain.height(points[inside]) - CURB_HEIGHT  # meet the road, not the sidewalk
                 y[inside] = street + (np.maximum(deck_top, street + 1.0) - street) * (1.0 - t * t * (3.0 - 2.0 * t))
         return y
 
