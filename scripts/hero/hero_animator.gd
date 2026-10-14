@@ -18,6 +18,7 @@ var _yaw := 0.0
 var _up := Vector3.UP
 var _land_timer := 0.0
 var _hard_landing := false
+var _punch_id := -1
 
 
 func _ready() -> void:
@@ -47,13 +48,13 @@ func _process(delta: float) -> void:
 	var pivot := hero.get_visual_position() + Vector3.UP * PIVOT_HEIGHT
 	global_transform = Transform3D(basis, pivot - basis * (Vector3.UP * PIVOT_HEIGHT))
 	var choice := _choose_animation()
-	_play(choice[0], choice[1])
+	_play(choice[0], choice[1], choice.size() > 2 and choice[2])
 
 
 ## Which way the body's head should point.
 func _target_up() -> Vector3:
 	match hero.mode.name:
-		&"Flight":
+		&"Flight", &"Dive":
 			var speed := hero.velocity.length()
 			if speed < 8.0:
 				return Vector3.UP
@@ -82,17 +83,27 @@ static func _tilt_to(up: Vector3) -> Basis:
 	return Basis(axis / sine, atan2(sine, up.y))
 
 
-## Returns [animation name, playback speed].
+## Returns [animation name, playback speed, restart from the beginning?].
 func _choose_animation() -> Array:
 	var speed := hero.horizontal_speed()
 	match hero.mode.name:
 		&"Flight":
 			return [&"Jump", 0.6] if hero.velocity.length() > 8.0 else [&"Idle", 0.6]
-		&"Swing":
+		&"Swing", &"Dive":
 			return [&"Jump", 1.0]
+		&"KnockedOut":
+			return [&"Death01", 1.0]
+		&"Melee":
+			var melee := hero.mode as MeleeMode
+			var punch := melee.current_punch()
+			var new_punch := melee.punch_id != _punch_id
+			_punch_id = melee.punch_id
+			return [punch.animation, punch.speed, new_punch]
 	var on_foot := hero.mode as OnFootMode
 	if hero.is_in_water():
 		return [&"Swim_Fwd", 1.0] if speed > 1.0 else [&"Swim_Idle", 1.0]
+	if hero.hurt_time > 0.0:
+		return [&"Hit_Chest", 1.0]
 	if not hero.is_on_floor():
 		return [&"Jump", 1.0]
 	if (on_foot.charging and on_foot.charge > 0.0) or (_land_timer > 0.0 and _hard_landing):
@@ -108,9 +119,12 @@ func _choose_animation() -> Array:
 	return [&"Sprint", clampf(speed / 8.0, 1.0, 3.5)]
 
 
-func _play(animation: StringName, speed_scale: float) -> void:
-	if _player.current_animation != animation:
-		_player.play(animation, BLEND_TIME)
+func _play(animation: StringName, speed_scale: float, restart := false) -> void:
+	# assigned_animation (not current_animation) so one-shots like Death01 hold their last frame.
+	if restart or _player.assigned_animation != animation:
+		_player.play(animation, 0.05 if restart else BLEND_TIME)
+		if restart:
+			_player.seek(0.0, true)
 	_player.speed_scale = speed_scale
 
 

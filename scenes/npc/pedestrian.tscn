@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/npc/pedestrian.gd" id="1_pedestrian"]
+[ext_resource type="PackedScene" path="res://assets/characters/mannequin/mannequin.glb" id="2_mannequin"]
+
+[node name="Pedestrian" type="Node3D"]
+script = ExtResource("1_pedestrian")
+
+[node name="Model" type="Node3D" parent="."]
+
+[node name="Character" parent="Model" instance=ExtResource("2_mannequin")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)

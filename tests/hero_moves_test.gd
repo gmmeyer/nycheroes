@@ -21,6 +21,9 @@ func _ready() -> void:
 	var world: Node = load("res://scenes/world.tscn").instantiate()
 	add_child(world)
 	world.get_node("PlayerInput").process_mode = Node.PROCESS_MODE_DISABLED
+	# No pedestrians or thugs here: this test is about movement only.
+	world.get_node("Crowd").process_mode = Node.PROCESS_MODE_DISABLED
+	world.get_node("Encounters").process_mode = Node.PROCESS_MODE_DISABLED
 	_hero = world.get_node("Hero")
 	# Run before the hero each tick so the scripted input is used right away.
 	process_physics_priority = -20

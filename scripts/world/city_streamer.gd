@@ -54,6 +54,8 @@ class Tile:
 	var nodes: Array[Node3D] = [null, null]
 	var pending: Array[bool] = [false, false]
 	var failures: Array[int] = [0, 0]
+	## Sidewalk walking lanes (world-space polylines), while lod0 is loaded.
+	var lanes: Array[PackedVector3Array] = []
 
 	func _init(entry: Dictionary) -> void:
 		i = int(entry.i)
@@ -98,6 +100,16 @@ func has_collision_at(world_position: Vector3) -> bool:
 	var coord := Vector2i(floori(world_position.x / tile_size), floori(world_position.z / tile_size))
 	var tile: Tile = _tiles_by_coord.get(coord)
 	return tile == null or not tile.info.has(LOD_NAMES[LOD_NEAR]) or tile.nodes[LOD_NEAR] != null
+
+
+## Sidewalk lanes (world-space polylines) of loaded tiles within `radius` of a
+## world position.
+func lanes_near(world_position: Vector3, radius: float) -> Array[PackedVector3Array]:
+	var found: Array[PackedVector3Array] = []
+	for tile in _tiles:
+		if not tile.lanes.is_empty() and _distance_to_tile(tile, world_position.x, world_position.z) < radius:
+			found.append_array(tile.lanes)
+	return found
 
 
 func _on_manifest_loaded(bytes: PackedByteArray) -> void:
@@ -197,6 +209,13 @@ func _build_tile_node(tile: Tile, lod: int, bytes: PackedByteArray) -> Node3D:
 		body.collision_mask = 0
 		node.add_child(body)
 	for surface in CityTileDecoder.decode(bytes, int(tile.info[LOD_NAMES[lod]].raw_bytes)):
+		if surface.kind == CityTileDecoder.SURFACE_LANES:
+			tile.lanes.clear()
+			for lane: PackedVector3Array in surface.lanes:
+				for p in lane.size():
+					lane[p] += node.position
+				tile.lanes.append(lane)
+			continue
 		var is_buildings: bool = surface.kind == CityTileDecoder.SURFACE_BUILDINGS
 		var instance := MeshInstance3D.new()
 		instance.mesh = surface.mesh
@@ -214,6 +233,8 @@ func _build_tile_node(tile: Tile, lod: int, bytes: PackedByteArray) -> Node3D:
 func _unload(tile: Tile, lod: int) -> void:
 	tile.nodes[lod].queue_free()
 	tile.nodes[lod] = null
+	if lod == LOD_NEAR:
+		tile.lanes.clear()
 	loaded_counts[lod] -= 1
 	_refresh_visibility(tile)
 

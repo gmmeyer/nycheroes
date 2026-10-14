@@ -12,6 +12,10 @@
 [ext_resource type="PackedScene" path="res://scenes/hero/hero.tscn" id="10_hero"]
 [ext_resource type="Script" path="res://scripts/camera/third_person_camera.gd" id="11_hero_camera"]
 [ext_resource type="Script" path="res://scripts/hero/player_input.gd" id="12_player_input"]
+[ext_resource type="Script" path="res://scripts/combat/combat_effects.gd" id="13_effects"]
+[ext_resource type="Script" path="res://scripts/npc/crowd_manager.gd" id="14_crowd"]
+[ext_resource type="Script" path="res://scripts/npc/encounter_director.gd" id="15_encounters"]
+[ext_resource type="Script" path="res://scripts/ui/game_hud.gd" id="16_game_hud"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_sky"]
 sky_top_color = Color(0.3, 0.5, 0.78, 1)
@@ -49,13 +53,15 @@ size = Vector2(80000, 80000)
 [sub_resource type="SphereShape3D" id="SphereShape3D_camera"]
 radius = 0.25
 
-[node name="World" type="Node3D" node_paths=PackedStringArray("hero", "hero_camera", "free_camera", "player_input", "city")]
+[node name="World" type="Node3D" node_paths=PackedStringArray("hero", "hero_camera", "free_camera", "player_input", "city", "encounters", "hud")]
 script = ExtResource("9_game")
 hero = NodePath("Hero")
 hero_camera = NodePath("HeroCamera")
 free_camera = NodePath("FreeCamera")
 player_input = NodePath("PlayerInput")
 city = NodePath("City")
+encounters = NodePath("Encounters")
+hud = NodePath("HUD")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." node_paths=PackedStringArray("sun")]
 environment = SubResource("Environment_world")
@@ -81,6 +87,19 @@ material_override = SubResource("ShaderMaterial_ocean")
 script = ExtResource("3_ocean")
 
 [node name="Hero" parent="." instance=ExtResource("10_hero")]
+
+[node name="Effects" type="Node3D" parent="."]
+script = ExtResource("13_effects")
+
+[node name="Crowd" type="Node3D" parent="." node_paths=PackedStringArray("city", "hero")]
+script = ExtResource("14_crowd")
+city = NodePath("../City")
+hero = NodePath("../Hero")
+
+[node name="Encounters" type="Node3D" parent="." node_paths=PackedStringArray("city", "hero")]
+script = ExtResource("15_encounters")
+city = NodePath("../City")
+hero = NodePath("../Hero")
 
 [node name="PlayerInput" type="Node" parent="." node_paths=PackedStringArray("hero", "camera_rig")]
 script = ExtResource("12_player_input")
@@ -112,6 +131,18 @@ far = 40000.0
 script = ExtResource("2_camera")
 
 [node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="GameHud" type="Control" parent="HUD" node_paths=PackedStringArray("hero", "encounters")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("16_game_hud")
+hero = NodePath("../../Hero")
+encounters = NodePath("../../Encounters")
 
 [node name="DebugLabel" type="Label" parent="HUD" node_paths=PackedStringArray("city", "hero", "free_camera")]
 offset_left = 12.0

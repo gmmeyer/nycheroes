@@ -8,7 +8,7 @@ const ORIGIN_LON := -73.9855
 const METERS_PER_DEGREE := 111320.0
 const REFRESH_INTERVAL := 0.25
 const LOG_INTERVAL := 2.0
-const HERO_HELP := "WASD move  ·  Space jump (hold: super jump)  ·  Shift super speed  ·  F fly (Space/C up/down)  ·  E / right mouse web swing  ·  F1 free camera"
+const HERO_HELP := "WASD move  ·  Left mouse punch (in the air: dive attack)  ·  Space jump (hold: super jump)  ·  Shift super speed  ·  F fly (Space/C up/down)  ·  E / right mouse web swing  ·  F1 free camera"
 const FREE_CAMERA_HELP := "Free camera: WASD move  ·  Space/C up/down  ·  Shift boost  ·  Wheel speed  ·  F1 back to hero"
 
 @export var city: CityStreamer
@@ -48,6 +48,10 @@ func _process(delta: float) -> void:
 	var tiles := "Tiles: %d near, %d far, %d loading  ·  last tile build %.1f ms" % [
 		city.loaded_counts[CityStreamer.LOD_NEAR], city.loaded_counts[CityStreamer.LOD_FAR],
 		city.pending_count(), city.last_build_msec]
+	var standing := Combat.thugs.filter(func(thug: Thug) -> bool: return not thug.is_down()).size()
+	var people := "Pedestrians %d  ·  thugs %d standing, %d down  ·  health %d" % [
+		get_tree().get_node_count_in_group("pedestrians"), standing, Combat.defeated_count, int(hero.health)]
+	tiles += "  ·  " + people
 	text = "\n".join([render, status, tiles, FREE_CAMERA_HELP if free else HERO_HELP])
 
 	if _log_stats:

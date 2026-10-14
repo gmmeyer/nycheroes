@@ -2,7 +2,7 @@
 
 Reads data/raw/*.geojson (written by fetch_data.py) and writes data/tiles/manhattan/:
   manifest.json        tile index and settings, read by scripts/world/city_streamer.gd
-  lod0/<i>_<j>.nyct    full detail: buildings, streets, sidewalks, parks
+  lod0/<i>_<j>.nyct    full detail: buildings, streets, sidewalks, parks, walking lanes
   lod1/<i>_<j>.nyct    simplified buildings and ground, for distant tiles
 
 Coordinates are Godot world space: meters, +X east, +Y up, +Z south, with the
@@ -14,6 +14,8 @@ Tile file (zstd-compressed, little-endian):
   surface_count x (u32 kind, u32 vertex_count, u32 index_count),
   then per surface: positions f32x3, normals f32x3, uv f32x2, uv2 f32x2 (all per vertex),
   indices u32.
+Mesh surfaces are triangle lists. The lanes surface is instead a set of polylines
+(points along the sidewalks, LANE_BREAK between polylines); its normals and uvs are zero.
 
 Usage: python build_tiles.py
 """
@@ -49,9 +51,16 @@ FEET = 0.3048
 DEFAULT_HEIGHT = 9.0
 MIN_HEIGHT = 2.5
 
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 SURFACE_BUILDINGS = 0
 SURFACE_GROUND = 1
+SURFACE_LANES = 2
+
+# Walking lanes for pedestrians: lines along every sidewalk.
+LANE_OFFSET = 2.5  # meters in from the curb
+LANE_WALL_GAP = 0.8  # keep this far from building walls
+MIN_LANE_LENGTH = 10.0
+LANE_BREAK = 0xFFFFFFFF
 
 # Ground kinds, stored in uv2.x and read by shaders/ground.gdshader.
 GROUND_PAVEMENT = 0
@@ -288,6 +297,54 @@ def build_ground(builder, tile_bounds, land, coast, roads, road_tree, parks, par
             builder.add_walls(line.coords, SEAWALL_BOTTOM_Y, LAND_Y, (GROUND_SEAWALL, 0.0))
 
 
+def build_lanes(tile_bounds, land, roads, road_tree, building_geoms, building_tree, origin):
+    """Walking lanes along every sidewalk in the tile, LANE_OFFSET in from the curb.
+
+    Returns the lanes surface (positions, normals, uv, uv2, indices), or None.
+    """
+    # Look a little past the tile so sidewalks along its edges still find their street.
+    area = shapely.buffer(tile_bounds, 4 * LANE_OFFSET, join_style="mitre")
+    nearby_roads = roads[road_tree.query(area)]
+    if not len(nearby_roads):
+        return None
+    roads_near = shapely.intersection(shapely.union_all(nearby_roads), land)
+    nearby_buildings = building_geoms[building_tree.query(area)]
+    sidewalks = shapely.difference(shapely.intersection(land, tile_bounds), roads_near)
+    if len(nearby_buildings):
+        sidewalks = shapely.difference(sidewalks, shapely.buffer(shapely.union_all(nearby_buildings), LANE_WALL_GAP))
+    lanes = shapely.intersection(shapely.buffer(roads_near, LANE_OFFSET).boundary, sidewalks)
+
+    lines = [line for line in lines_of(lanes) if line.length >= 1.0]
+    if not lines:
+        return None
+    points, indices = [], []
+    for line in lines_of(shapely.line_merge(shapely.MultiLineString(lines))):
+        if line.length < MIN_LANE_LENGTH:
+            continue
+        coords = np.asarray(shapely.simplify(line, 0.5).coords)[:, :2]
+        start = len(points)
+        points.extend(to_godot(coords, LAND_Y) - np.asarray(origin))
+        indices.extend(range(start, start + len(coords)))
+        indices.append(LANE_BREAK)
+    if not points:
+        return None
+    positions = np.asarray(points, dtype=np.float32)
+    zeros2 = np.zeros((len(positions), 2), dtype=np.float32)
+    return positions, np.zeros_like(positions), zeros2, zeros2, np.asarray(indices, dtype=np.uint32)
+
+
+def lines_of(geom) -> list:
+    """LineString parts of any geometry."""
+    if geom is None or geom.is_empty:
+        return []
+    if geom.geom_type == "LineString":
+        return [geom]
+    out = []
+    for part in shapely.get_parts(geom):
+        out.extend(lines_of(part) if part.geom_type != "LineString" else [part])
+    return out
+
+
 def add_building(builder, building, settings):
     geom = shapely.simplify(building["geom"], settings["building_tolerance"], preserve_topology=True)
     for poly in polygons_of(geom, settings["min_area"]):
@@ -310,6 +367,8 @@ def main() -> None:
     land, roads, parks = load_ground()
     coast = land.boundary
     road_tree, park_tree = shapely.STRtree(roads), shapely.STRtree(parks)
+    building_geoms = np.array([b["geom"] for b in buildings])
+    building_tree = shapely.STRtree(building_geoms)
 
     by_tile = defaultdict(list)
     for building in buildings:
@@ -351,6 +410,11 @@ def main() -> None:
                     totals[f"{lod}_triangles"] += len(built[-1]) // 3
             if not surfaces:
                 continue
+            if lod == "lod0":
+                lanes = build_lanes(tile_box(i, j), land, roads, road_tree, building_geoms, building_tree, origin)
+                if lanes is not None:
+                    surfaces.append((SURFACE_LANES, lanes))
+                    totals["lane_points"] += len(lanes[0])
             raw = encode_tile(surfaces)
             packed = zstd.compress(raw, level=12)
             (OUT_DIR / lod / f"{i}_{j}.nyct").write_bytes(packed)
@@ -378,6 +442,7 @@ def main() -> None:
     for lod in LODS:
         print(f"  {lod}: {totals[f'{lod}_bytes'] / 1e6:.1f} MB, "
               f"{totals[f'{lod}_vertices']:,} vertices, {totals[f'{lod}_triangles']:,} triangles")
+    print(f"  walking lanes: {totals['lane_points']:,} points")
 
 
 if __name__ == "__main__":

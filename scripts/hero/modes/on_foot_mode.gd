@@ -27,6 +27,11 @@ extends HeroMode
 ## Grace period for jumping just after running off a ledge.
 @export var coyote_time := 0.12
 
+@export_group("Super speed ram")
+## Running faster than this bowls over any thug in the way.
+@export var ram_speed := 25.0
+@export var ram_radius := 1.8
+
 @export_group("Swimming")
 @export var swim_speed := 5.0
 @export var swim_super_speed := 25.0
@@ -41,17 +46,22 @@ var charge := 0.0
 var _hold_time := 0.0
 var _air_time := 0.0
 var _web_cooldown := 0.0
+var _scare_cooldown := 0.0
+var _jump_handed_over := false
 
 
 func enter(_previous: StringName) -> void:
 	hero.motion_mode = CharacterBody3D.MOTION_MODE_GROUNDED
-	charging = false
+	charging = _jump_handed_over
 	charge = 0.0
+	_jump_handed_over = false
 
 
 func physics_update(delta: float) -> StringName:
 	if hero.input.fly_toggle_pressed:
 		return &"Flight"
+	if hero.attack_pressed and hero.hurt_time <= 0.0 and not hero.is_in_water():
+		return &"Melee" if hero.is_on_floor() else &"Dive"
 	if _wants_web(delta) and (hero.get_mode(&"Swing") as SwingMode).try_attach():
 		return &"Swing"
 
@@ -81,6 +91,8 @@ func _run(delta: float) -> void:
 	var horizontal := Vector3(hero.velocity.x, 0.0, hero.velocity.z)
 	var speed := horizontal.length()
 	var wish := input.move.limit_length(1.0)
+	if hero.hurt_time > 0.0:
+		wish = Vector3.ZERO  # staggered by a hit
 
 	if charging and charge > 0.0:
 		# Crouched for a super jump: plant the feet.
@@ -103,6 +115,30 @@ func _run(delta: float) -> void:
 
 	hero.velocity = Vector3(horizontal.x, 0.0, horizontal.z)
 	_update_jump(delta)
+	_ram(horizontal, delta)
+
+
+## At super speed, thugs in the way get bowled over and bystanders scatter.
+func _ram(horizontal: Vector3, delta: float) -> void:
+	var speed := horizontal.length()
+	if speed < ram_speed:
+		return
+	var direction := horizontal / speed
+	var center := hero.global_position + direction * 0.8 + Vector3.UP
+	Combat.strike(center, ram_radius, 100.0, direction * speed * 0.7 + Vector3.UP * speed * 0.35, true)
+	_scare_cooldown -= delta
+	if _scare_cooldown <= 0.0:
+		_scare_cooldown = 0.3
+		Combat.danger.emit(hero.world_position(), 14.0)
+
+
+## Starts a jump as if jump had just been pressed on the ground: a tap jumps,
+## holding charges a super jump. Other modes call this to hand a jump press
+## over just before switching to OnFoot.
+func begin_jump() -> void:
+	charging = true
+	_hold_time = 0.0
+	_jump_handed_over = true
 
 
 func _update_jump(delta: float) -> void:

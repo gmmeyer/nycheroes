@@ -23,7 +23,11 @@ func _physics_process(_delta: float) -> void:
 	var p := focus.global_position
 	if Vector2(p.x, p.z).length() < SHIFT_DISTANCE:
 		return
-	var delta := Vector3(snappedf(p.x, SHIFT_STEP), 0.0, snappedf(p.z, SHIFT_STEP))
+	shift(Vector3(snappedf(p.x, SHIFT_STEP), 0.0, snappedf(p.z, SHIFT_STEP)))
+
+
+## Moves the scene origin by `delta`: everything floating moves back by it.
+func shift(delta: Vector3) -> void:
 	offset += delta
 	for node in get_tree().get_nodes_in_group("floating"):
 		(node as Node3D).global_position -= delta

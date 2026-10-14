@@ -23,6 +23,8 @@ func physics_update(delta: float) -> StringName:
 	var input := hero.input
 	if input.fly_toggle_pressed:
 		return &"OnFoot"
+	if hero.attack_pressed:
+		return &"Dive"
 
 	var forward := input.aim
 	var right := forward.cross(Vector3.UP).normalized()

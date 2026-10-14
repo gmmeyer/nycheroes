@@ -26,6 +26,7 @@ var _shake := 0.0
 func _ready() -> void:
 	spring_arm.add_excluded_object(target.get_rid())
 	target.landed.connect(_on_target_landed)
+	Combat.impact.connect(_on_impact)
 
 
 ## Unit vector the camera looks along (without shake or shoulder offset).
@@ -72,4 +73,9 @@ func _process(delta: float) -> void:
 
 func _on_target_landed(impact_speed: float) -> void:
 	if impact_speed > HeroAnimator.HARD_LANDING_SPEED:
-		_shake = clampf(impact_speed / 150.0, 0.0, 0.5)
+		_shake = maxf(_shake, clampf(impact_speed / 150.0, 0.0, 0.5))
+
+
+func _on_impact(at: Vector3, strength: float) -> void:
+	var falloff := clampf(1.0 - at.distance_to(global_position) / 60.0, 0.0, 1.0)
+	_shake = maxf(_shake, strength * 0.4 * falloff)

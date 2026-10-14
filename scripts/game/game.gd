@@ -1,7 +1,8 @@
 extends Node3D
 ## Sets up a play session: places the hero (?spawn=x,y,z,yaw), lets it move once
 ## the ground under it has loaded, and toggles the free-fly debug camera with F1
-## (starting with ?cam=... also starts in the free camera).
+## (starting with ?cam=... also starts in the free camera). ?demo plays a
+## scripted tour of the powers instead of taking player input.
 
 ## Times Square, facing north up Broadway (world meters).
 const DEFAULT_SPAWN := Vector3(0.0, 3.0, 60.0)
@@ -11,6 +12,8 @@ const DEFAULT_SPAWN := Vector3(0.0, 3.0, 60.0)
 @export var free_camera: FreeFlyCamera
 @export var player_input: PlayerInput
 @export var city: CityStreamer
+@export var encounters: EncounterDirector
+@export var hud: CanvasLayer
 
 var _free_camera_on := false
 
@@ -23,6 +26,8 @@ func _ready() -> void:
 		hero.facing = deg_to_rad(spawn[3])
 	hero_camera.yaw = hero.facing
 	_set_free_camera(LaunchOptions.has("cam"))
+	if LaunchOptions.has("demo"):
+		_start_demo()
 
 
 func _physics_process(_delta: float) -> void:
@@ -36,6 +41,17 @@ func _unhandled_input(event: InputEvent) -> void:
 			free_camera.global_transform = hero_camera.camera.global_transform
 			free_camera.sync_rotation()
 		_set_free_camera(not _free_camera_on)
+
+
+func _start_demo() -> void:
+	player_input.process_mode = Node.PROCESS_MODE_DISABLED
+	hud.visible = false
+	var director := DemoDirector.new()
+	director.hero = hero
+	director.camera = hero_camera
+	director.city = city
+	director.encounters = encounters
+	add_child(director)
 
 
 func _set_free_camera(on: bool) -> void:

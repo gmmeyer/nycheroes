@@ -7,6 +7,9 @@
 [ext_resource type="Script" path="res://scripts/hero/hero_animator.gd" id="5_animator"]
 [ext_resource type="PackedScene" path="res://assets/characters/mannequin/mannequin.glb" id="6_mannequin"]
 [ext_resource type="Script" path="res://scripts/hero/web_line.gd" id="7_web_line"]
+[ext_resource type="Script" path="res://scripts/hero/modes/melee_mode.gd" id="8_melee"]
+[ext_resource type="Script" path="res://scripts/hero/modes/dive_mode.gd" id="9_dive"]
+[ext_resource type="Script" path="res://scripts/hero/modes/knocked_out_mode.gd" id="10_knocked_out"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
 radius = 0.35
@@ -41,6 +44,15 @@ script = ExtResource("3_flight")
 
 [node name="Swing" type="Node" parent="."]
 script = ExtResource("4_swing")
+
+[node name="Melee" type="Node" parent="."]
+script = ExtResource("8_melee")
+
+[node name="Dive" type="Node" parent="."]
+script = ExtResource("9_dive")
+
+[node name="KnockedOut" type="Node" parent="."]
+script = ExtResource("10_knocked_out")
 
 [node name="Model" type="Node3D" parent="." node_paths=PackedStringArray("hero")]
 top_level = true

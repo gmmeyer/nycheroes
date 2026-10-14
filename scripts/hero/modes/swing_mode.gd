@@ -102,6 +102,8 @@ func physics_update(delta: float) -> StringName:
 	var input := hero.input
 	if input.fly_toggle_pressed:
 		return &"Flight"
+	if hero.attack_pressed:
+		return &"Dive"
 	if not input.web_held:
 		_release()
 		return &"OnFoot"
