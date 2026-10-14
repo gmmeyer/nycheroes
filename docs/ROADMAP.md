@@ -15,7 +15,7 @@ versions come last (step 8).
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public hosting still to do |
-| 6 | Realism from open data | In progress (terrain done) |
+| 6 | Realism from open data | In progress (terrain and building shapes done) |
 | 7 | Overpasses and missing bridges | Planned |
 | 8 | Mac and Windows versions | Planned (last) |
 
@@ -116,9 +116,8 @@ cached, and have unclear terms for game use.
 
 In order:
 
-1. **Real shape:** terrain (done, below); real roof shapes and setbacks from
-   TUM's open LoD2 model, merged with today's footprints by building ID;
-   curbs, medians and piers. (Bridges and overpasses come in step 7.)
+1. **Real shape:** terrain and building shapes (done, below); curbs,
+   medians and piers. (Bridges and overpasses come in step 7.)
 2. **Real view from above:** NY State aerial photos (2024/2025) draped on
    streets, parks and roofs. The license needs confirming first.
 3. **Real architecture:** styles chosen from city tax-lot data (PLUTO:
@@ -152,6 +151,25 @@ In order:
   only when the hero is near street level (not above it).
 - Cost: full-detail tiles grew from 420 to 600 MB in total (mid-detail 105
   to 170 MB); the far tiles that load first barely changed (27 MB).
+
+**Building shapes (done):**
+- From the city's own 3-D Building Model (Office of Technology and
+  Innovation, LoD2 CityGML, 0.9 GB zip), the source TUM's model was built
+  from. `tools/citygen/buildings3d.py` reads it straight from the zip and
+  keeps the 308,000 buildings whose roofs aren't one flat level: setbacks,
+  towers and spires (the Empire State Building's tiers and mast, the
+  Chrysler Building's crown).
+- They replace the footprint prisms by building ID (BIN) where the model
+  still matches today's building (outline and height): about 295,000 do.
+  Newer buildings keep their prisms. Some model surfaces face the wrong way;
+  roofs are turned up and walls toward open air.
+- The model is massing only: roofs are flat levels, not pitched.
+- Mid-detail tiles use real shapes for buildings 40 m and taller, far tiles
+  for 120 m and taller (the skyline).
+- Roofs are marked in the tiles (so sloped ones aren't drawn with windows).
+  Webs look in a wider fan, since walls high enough to swing from now often
+  step back from the street.
+- Cost: full-detail tiles grew to 757 MB in total (mid 187 MB, far 29 MB).
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build

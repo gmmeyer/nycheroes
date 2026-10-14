@@ -60,11 +60,13 @@ STRUCTURE_CONCRETE = 6
 STRUCTURE_CABLE = 7
 STRUCTURE_STONE = 8
 
-# Facade styles, stored in uv2.x and read by shaders/building.gdshader.
+# Facade styles, stored in uv2.x and read by shaders/building.gdshader. Roof
+# surfaces add ROOF to their building's style.
 STYLE_BRICK = 0
 STYLE_PREWAR = 1
 STYLE_POSTWAR = 2
 STYLE_GLASS = 3
+ROOF = 4
 
 _to_local = Transformer.from_crs("EPSG:4326", PROJECTION, always_xy=True)
 
@@ -256,6 +258,49 @@ def triangles_of(poly):
     if len(coords) == 0:
         return None
     return coords.reshape(-1, 4, 2)[:, :3]
+
+
+def triangulate_planar(rings: list) -> np.ndarray | None:
+    """Triangles (T, 3, 3) of a flat polygon in 3-D: rings[0] is the outline,
+    any others are holes; each ring is (N, 3) points without a closing point."""
+    outline = rings[0]
+    if len(rings) == 1 and len(outline) == 3:
+        return outline[None]
+    normal = polygon_normal(outline)
+    if not normal.any():
+        return None
+    if len(rings) == 1 and len(outline) == 4:
+        return outline[[[0, 1, 2], [0, 2, 3]]]
+    # Flatten onto the two axes the polygon faces least, triangulate, then
+    # put the dropped axis back from the polygon's plane.
+    drop = int(np.argmax(np.abs(normal)))
+    keep = [axis for axis in range(3) if axis != drop]
+    try:
+        flat = shapely.Polygon(outline[:, keep], [ring[:, keep] for ring in rings[1:]])
+        tris = shapely.get_coordinates(shapely.constrained_delaunay_triangles(flat)).reshape(-1, 4, 2)[:, :3]
+    except (shapely.errors.GEOSException, ValueError):
+        return None
+    if len(tris) == 0:
+        return None
+    plane = normal @ outline[0]
+    out = np.empty(tris.shape[:2] + (3,))
+    out[..., keep[0]] = tris[..., 0]
+    out[..., keep[1]] = tris[..., 1]
+    out[..., drop] = (plane - normal[keep[0]] * tris[..., 0] - normal[keep[1]] * tris[..., 1]) / normal[drop]
+    return out
+
+
+def polygon_normal(ring: np.ndarray) -> np.ndarray:
+    """Unit normal of a 3-D ring by Newell's method (zero if degenerate);
+    it faces the side the ring runs counter-clockwise around."""
+    nxt = np.roll(ring, -1, axis=0)
+    normal = np.array([
+        ((ring[:, 1] - nxt[:, 1]) * (ring[:, 2] + nxt[:, 2])).sum(),
+        ((ring[:, 2] - nxt[:, 2]) * (ring[:, 0] + nxt[:, 0])).sum(),
+        ((ring[:, 0] - nxt[:, 0]) * (ring[:, 1] + nxt[:, 1])).sum(),
+    ])
+    length = np.linalg.norm(normal)
+    return normal / length if length > 1e-9 else np.zeros(3)
 
 
 def split_triangles(tris: np.ndarray, cell: float) -> np.ndarray:

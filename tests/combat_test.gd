@@ -28,7 +28,8 @@ func _ready() -> void:
 	_city = _world.get_node("City")
 	process_physics_priority = -20
 	_steps = [
-		_step("wait for the ground", 20.0, Callable(), func() -> bool: return not _hero.frozen),
+		_step("wait for the city to load", 30.0, Callable(), func() -> bool:
+			return not _hero.frozen and _city.pending_count() == 0),
 		_step("thugs walk up and attack", 6.0, func(_i: HeroInput, t: float) -> void:
 			if t == 0.0:
 				_teleport(OPEN_AVENUE)

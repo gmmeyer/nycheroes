@@ -34,7 +34,8 @@ func _ready() -> void:
 	# Run before the hero each tick so the scripted input is used right away.
 	process_physics_priority = -20
 	_steps = [
-		_step("wait for the ground to load", 20.0, Callable(), func() -> bool: return not _hero.frozen),
+		_step("wait for the city to load", 30.0, Callable(), func() -> bool:
+			return not _hero.frozen and _city.pending_count() == 0),
 		_step("go to an open avenue", 1.0, func(_i: HeroInput, t: float) -> void:
 			if t < 0.02:
 				_teleport(OPEN_AVENUE)),

@@ -46,8 +46,10 @@ func try_attach() -> bool:
 	var hand := hero.global_position + Vector3.UP * HAND_HEIGHT
 	var forward := _swing_direction()
 	var best_score := -INF
-	for elevation: float in [55.0, 40.0, 70.0]:
-		for side: float in [0.0, -25.0, 25.0]:
+	# A wide fan: real buildings step back as they rise, so walls high enough
+	# to swing from are often off to the side.
+	for elevation: float in [55.0, 40.0, 70.0, 30.0]:
+		for side: float in [0.0, -25.0, 25.0, -45.0, 45.0]:
 			var flat := forward.rotated(Vector3.UP, deg_to_rad(side))
 			var direction := flat * cos(deg_to_rad(elevation)) + Vector3.UP * sin(deg_to_rad(elevation))
 			var query := PhysicsRayQueryParameters3D.create(hand, hand + direction * max_web_length, Hero.WORLD_LAYER)

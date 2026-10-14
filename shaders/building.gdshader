@@ -1,10 +1,9 @@
 // Buildings from tools/citygen/build_tiles.py.
-// UV:  walls = (meters along the footprint, meters above the ground); roofs = world x/z.
+// UV:  walls = (meters along the wall, meters above the ground); roofs = world x/z.
 // UV2: x = facade style (0 brick, 1 prewar stone, 2 postwar concrete, 3 glass),
+//      plus 4 on roofs (which may slope, so the normal can't tell);
 //      y = per-building random seed in [0, 1).
 shader_type spatial;
-
-varying float roof;
 
 uniform vec3 roof_color : source_color = vec3(0.36, 0.36, 0.37);
 uniform vec3 window_color : source_color = vec3(0.09, 0.12, 0.17);
@@ -31,15 +30,12 @@ vec3 wall_color(int style, float seed) {
 	return srgb(mix(vec3(0.30, 0.42, 0.50), vec3(0.46, 0.53, 0.58), fract(seed * 3.9)));
 }
 
-void vertex() {
-	roof = step(0.7, NORMAL.y);
-}
-
 void fragment() {
-	int style = int(UV2.x + 0.5);
+	int marked_style = int(UV2.x + 0.5);
+	int style = marked_style % 4;
 	float seed = UV2.y;
 
-	if (roof > 0.5) {
+	if (marked_style >= 4) {
 		ALBEDO = roof_color * mix(0.75, 1.15, fract(seed * 17.3));
 		ROUGHNESS = 0.95;
 		SPECULAR = 0.1;

@@ -1,6 +1,7 @@
 """Download the raw data used to build the city tiles (all five boroughs): NYC
-Open Data vector datasets, cached as GeoJSON in data/raw/, and the USGS
-ground elevation model, cached as GeoTIFFs in data/raw/elevation/. Delete a
+Open Data vector datasets, cached as GeoJSON in data/raw/; the USGS ground
+elevation model, cached as GeoTIFFs in data/raw/elevation/; and the city's
+3-D Building Model (CityGML, 0.9 GB zip) in data/raw/buildings3d/. Delete a
 file to re-download it.
 
 Usage: python fetch_data.py
@@ -57,6 +58,11 @@ ELEVATION_URL = "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TI
 ELEVATION_TILES = ["n41w074", "n41w075"]
 ELEVATION_DIR = RAW_DIR / "elevation"
 
+# Real building shapes: NYC 3-D Building Model (Office of Technology and
+# Innovation, dataset tnru-abg2), LoD2 CityGML in 20 delivery areas.
+BUILDING_MODEL_URL = "https://s-media.nyc.gov/agencies/oti/DA_WISE_GML.zip"
+BUILDING_MODEL_PATH = RAW_DIR / "buildings3d" / "DA_WISE_GML.zip"
+
 
 def fetch_page(dataset_id: str, params: dict) -> dict:
     url = f"{API}/{dataset_id}.geojson?{urllib.parse.urlencode(params)}"
@@ -96,17 +102,16 @@ def fetch_dataset(name: str, dataset_id: str, params: dict) -> None:
     tmp_path.replace(out_path)
 
 
-def fetch_elevation(tile: str) -> None:
-    out_path = ELEVATION_DIR / f"USGS_13_{tile}.tif"
+def fetch_file(label: str, url: str, out_path: Path) -> None:
     if out_path.exists():
-        print(f"elevation {tile}: cached at {out_path}")
+        print(f"{label}: cached at {out_path}")
         return
-    ELEVATION_DIR.mkdir(parents=True, exist_ok=True)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = out_path.with_suffix(".tmp")
-    request = urllib.request.Request(ELEVATION_URL.format(tile=tile), headers={"User-Agent": "new-game-citygen/1.0"})
+    request = urllib.request.Request(url, headers={"User-Agent": "new-game-citygen/1.0"})
     for attempt in range(6):
         try:
-            print(f"elevation {tile}: downloading...", flush=True)
+            print(f"{label}: downloading...", flush=True)
             with urllib.request.urlopen(request, timeout=300) as response, open(tmp_path, "wb") as f:
                 shutil.copyfileobj(response, f, length=1 << 20)
             break
@@ -122,7 +127,8 @@ def main() -> None:
     for name, (dataset_id, params) in DATASETS.items():
         fetch_dataset(name, dataset_id, params)
     for tile in ELEVATION_TILES:
-        fetch_elevation(tile)
+        fetch_file(f"elevation {tile}", ELEVATION_URL.format(tile=tile), ELEVATION_DIR / f"USGS_13_{tile}.tif")
+    fetch_file("3-D building model", BUILDING_MODEL_URL, BUILDING_MODEL_PATH)
 
 
 if __name__ == "__main__":

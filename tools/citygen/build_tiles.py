@@ -35,29 +35,35 @@ import shapely
 from shapely.geometry import Polygon
 
 import bridges
+import buildings3d
 import prepare
 from common import (CACHE_DIR, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT, GROUND_ROAD,
-                    GROUND_SAND, GROUND_SEAWALL, LANE_BREAK, ORIGIN_LAT, ORIGIN_LON, PROJECTION,
+                    GROUND_SAND, GROUND_SEAWALL, LANE_BREAK, ORIGIN_LAT, ORIGIN_LON, PROJECTION, ROOF,
                     SEAWALL_BOTTOM_Y, STYLE_BRICK, STYLE_POSTWAR, SURFACE_BUILDINGS, SURFACE_GROUND,
                     SURFACE_LANES, SURFACE_STRUCTURES, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile,
-                    lines_of, polygons_of, tile_box, tile_range, to_godot)
+                    lines_of, polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangulate_planar)
 from terrain import Terrain
 
 REGION = "nyc"
 OUT_DIR = TILES_DIR / REGION
 
 # ground_cell: the ground bends with the terrain at least this often (meters).
+# shapes_from: buildings at least this tall (meters) get their real shape
+# from the 3-D model instead of a footprint prism, where the model has one.
 LEVELS = {
     "lod0": {"size": 500.0, "building_tolerance": 0.3, "ground_tolerance": 0.2, "keep_holes": True,
-             "min_area": 4.0, "roads": True, "min_ground_area": 0.5, "ground_cell": 20.0},
+             "min_area": 4.0, "roads": True, "min_ground_area": 0.5, "ground_cell": 20.0,
+             "shapes_from": 0.0},
     "lod1": {"size": 1000.0, "building_tolerance": 3.0, "ground_tolerance": 2.5, "keep_holes": False,
              "min_area": 60.0, "roads": True, "min_ground_area": 20.0, "ground_cell": 40.0,
+             "shapes_from": 40.0,
              # Buildings lower than `individual_from` are merged into blocks, one
              # per height band (min height, max height, block height).
              "blocks": {"individual_from": 20.0, "bands": ((0.0, 12.0, 8.0), (12.0, 20.0, 15.0)),
                         "merge_gap": 1.5, "tolerance": 3.0, "min_area": 150.0}},
     "lod2": {"size": 4000.0, "building_tolerance": 6.0, "ground_tolerance": 15.0, "keep_holes": False,
              "min_area": 300.0, "roads": False, "min_ground_area": 5000.0, "ground_cell": 160.0,
+             "shapes_from": 120.0,
              "blocks": {"individual_from": 60.0,
                         "bands": ((0.0, 12.0, 8.0), (12.0, 30.0, 18.0), (30.0, 60.0, 40.0)),
                         "merge_gap": 3.0, "tolerance": 10.0, "min_area": 1000.0}},
@@ -76,6 +82,13 @@ SHORE_WALL_DEPTH = 4.5
 # How far either side of a shoreline to look for the water's level (meters).
 SHORE_PROBE = 4.0
 
+# Real building shapes (buildings3d.py) replace a footprint prism only when
+# the model still matches today's building: outlines overlapping at least
+# this much (intersection over union of their convex hulls), and heights
+# within the larger of these.
+SHAPE_MIN_OVERLAP = 0.6
+SHAPE_HEIGHT_TOLERANCE = (6.0, 0.25)  # meters, fraction of the height
+
 _W = {}  # per-worker data, filled by _init_worker
 
 
@@ -89,6 +102,7 @@ def main() -> None:
     ground = prepare.load("ground")
     prepare.load("water")
     prepare.load_terrain()
+    buildings3d.load()
     print(f"{len(buildings['geoms']):,} buildings", flush=True)
 
     bridge_path = CACHE_DIR / "bridges.pkl"
@@ -190,6 +204,7 @@ def _init_worker() -> None:
     _W["ground"] = {level: _W["terrain"].lattice(settings["ground_cell"]) for level, settings in LEVELS.items()}
     _W["creeks"] = {level: _W["terrain"].lattice(settings["ground_cell"], raw=True) for level, settings in LEVELS.items()}
     _W["water"] = prepare.load("water")
+    _W["shapes"] = buildings3d.load()
     _W["water_tree"] = shapely.STRtree(_W["water"]["geoms"])
 
 
@@ -245,21 +260,77 @@ def _add_prism(builder: MeshBuilder, poly, height: float, style: int, seed: floa
     """A building standing on its lowest corner (heights are measured from
     there); uphill, its walls run into the ground."""
     poly = shapely.orient_polygons(poly)
-    ground = float(_W["ground"][_W["level"]].height(np.asarray(poly.exterior.coords)[:, :2]).min())
+    ground = _footprint_ground(poly)
     top = ground + height
-    uv2 = (style, seed)
     for ring in (poly.exterior, *poly.interiors):
-        builder.add_walls(ring.coords, ground - 1.0, top, uv2, ground_y=ground)
-    builder.add_flat([poly], top, uv2)
+        builder.add_walls(ring.coords, ground - 1.0, top, (style, seed), ground_y=ground)
+    builder.add_flat([poly], top, (style + ROOF, seed))
+
+
+def _footprint_ground(geom) -> float:
+    """Where a building stands: the ground at its lowest corner."""
+    ring = shapely.get_coordinates(shapely.get_exterior_ring(shapely.get_parts(geom)))
+    return float(_W["ground"][_W["level"]].height(ring).min())
 
 
 def _add_building(builder: MeshBuilder, index: int, settings: dict) -> None:
     b = _W["b"]
+    height = float(b["height"][index])
+    shape = _W["shapes"].get(int(b["bin"][index])) if height >= settings["shapes_from"] else None
+    if shape is not None and _shape_matches(shape, b["geoms"][index], height):
+        _add_shape(builder, shape, _footprint_ground(b["geoms"][index]), int(b["style"][index]),
+                   float(b["seed"][index]))
+        return
     geom = shapely.simplify(b["geoms"][index], settings["building_tolerance"], preserve_topology=True)
     for poly in polygons_of(geom, settings["min_area"]):
         if not settings["keep_holes"]:
             poly = Polygon(poly.exterior)
         _add_prism(builder, poly, float(b["height"][index]), int(b["style"][index]), float(b["seed"][index]))
+
+
+def _shape_matches(shape, footprint, height: float) -> bool:
+    """Whether the 3-D model's building is still today's (see SHAPE_MIN_OVERLAP)."""
+    vertices, _, _, _, model_ground = shape
+    model_hull = shapely.convex_hull(shapely.multipoints(vertices[:, :2]))
+    hull = shapely.convex_hull(footprint)
+    union = shapely.area(shapely.union(model_hull, hull))
+    if union <= 0.0 or shapely.area(shapely.intersection(model_hull, hull)) / union < SHAPE_MIN_OVERLAP:
+        return False
+    model_height = float(vertices[:, 2].max() - model_ground)
+    meters, fraction = SHAPE_HEIGHT_TOLERANCE
+    return abs(model_height - height) <= max(meters, fraction * height)
+
+
+def _add_shape(builder: MeshBuilder, shape, ground: float, style: int, seed: float) -> None:
+    """A building from the 3-D model, moved to stand on our ground at `ground`.
+    Walls get facade coordinates (meters along the wall, meters above the
+    ground); roofs are marked as roofs."""
+    vertices, offsets, ring_polygon, kinds, model_ground = shape
+    points = vertices.astype(np.float64)
+    points[:, 2] += ground - float(model_ground)
+    # Sink the walls' feet a meter into the ground, like the prisms.
+    points[points[:, 2] <= ground + 0.05, 2] -= 1.0
+    starts = np.searchsorted(ring_polygon, np.arange(len(kinds)))
+    ends = np.append(starts[1:], len(ring_polygon))
+    for polygon, kind in enumerate(kinds):
+        rings = [points[offsets[r]:offsets[r + 1]] for r in range(starts[polygon], ends[polygon])]
+        tris = triangulate_planar(rings)
+        if tris is None:
+            continue
+        normal = polygon_normal(rings[0])
+        if kind == buildings3d.ROOF:
+            if normal[2] < 0.0:
+                normal = -normal
+            uv = np.stack([tris[..., 0], -tris[..., 1]], axis=-1)
+            uv2 = (style + ROOF, seed)
+        else:
+            along = np.array([-normal[1], normal[0]])
+            length = np.linalg.norm(along)
+            along = along / length if length > 1e-6 else np.array([1.0, 0.0])
+            uv = np.stack([tris[..., 0] * along[0] + tris[..., 1] * along[1], tris[..., 2] - ground], axis=-1)
+            uv2 = (style, seed)
+        pos = np.stack([tris[..., 0], tris[..., 2], -tris[..., 1]], axis=-1)
+        builder.add(pos, uv, uv2, (normal[0], normal[2], -normal[1]))
 
 
 def _add_blocks(builder: MeshBuilder, indices: np.ndarray, settings: dict) -> None:
