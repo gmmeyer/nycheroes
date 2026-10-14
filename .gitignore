@@ -1,0 +1,11 @@
+# Godot
+.godot/
+build/
+
+# City data: raw downloads and generated tiles (rebuild with tools/citygen)
+data/raw/
+data/tiles/
+
+# Python
+__pycache__/
+.venv/

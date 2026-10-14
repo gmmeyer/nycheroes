@@ -1,0 +1,2 @@
+# Godot writes LF line endings; keep them on every platform.
+* text=auto eol=lf
