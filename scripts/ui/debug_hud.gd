@@ -46,9 +46,9 @@ func _process(delta: float) -> void:
 		int(Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1e6)]
 	var status := "%s  ·  %.0f m/s (%.0f km/h)  ·  altitude %.0f m  ·  %.5f, %.5f" % [
 		who, speed, speed * 3.6, world.y, lat, lon]
-	var tiles := "Tiles: %d near, %d mid, %d far, %d loading  ·  last tile build %.1f ms  ·  %d photos (last %.0f ms)" % [
+	var tiles := "Tiles: %d near, %d mid, %d far, %d loading  ·  %d props  ·  last tile build %.1f ms  ·  %d photos (last %.0f ms)" % [
 		city.loaded_counts[0], city.loaded_counts[1], city.loaded_counts[2],
-		city.pending_count(), city.last_build_msec, city.photo_count, city.last_photo_msec]
+		city.pending_count(), city.prop_count, city.last_build_msec, city.photo_count, city.last_photo_msec]
 	var standing := Combat.thugs.filter(func(thug: Thug) -> bool: return not thug.is_down()).size()
 	var people := "Pedestrians %d  ·  thugs %d standing, %d down  ·  health %d" % [
 		get_tree().get_node_count_in_group("pedestrians"), standing, Combat.defeated_count, int(hero.health)]

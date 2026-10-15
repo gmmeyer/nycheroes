@@ -17,6 +17,9 @@ lines below wherever a license asks for one (the aerial photos do).
   hydrography, piers and bridge structures:** NYC Open Data (datasets
   5zhs-2jue, gthc-hcne, enfh-gkve, i36f-5ih7, pjs3-c3z5, 6hbv-tek4,
   r9cu-9r7b).
+- **Street trees, street centerlines and land cover:** NYC Parks Forestry
+  Tree Points (hn5i-inap), the Citywide Street Centerline (CSCL, inkn-q76z)
+  and the 2017 LiDAR land cover map (he6d-2qns), via NYC Open Data.
 - **Ground elevation:** USGS 3D Elevation Program, 1/3 arc-second DEM
   (public domain, U.S. Government work).
 

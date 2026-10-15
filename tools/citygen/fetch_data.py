@@ -2,8 +2,9 @@
 Open Data vector datasets, cached as GeoJSON in data/raw/; tables (the tax
 lot database PLUTO, and which tax lot each building is on) as JSON in
 data/raw/; the USGS ground elevation model, cached as GeoTIFFs in
-data/raw/elevation/; and the city's 3-D Building Model (CityGML, 0.9 GB zip)
-in data/raw/buildings3d/. Delete a file to re-download it.
+data/raw/elevation/; the city's 3-D Building Model (CityGML, 0.9 GB zip)
+in data/raw/buildings3d/; and the 2017 land cover map (ERDAS Imagine, 1.3 GB
+zip) in data/raw/landcover/, unpacked except for its full-resolution layer. Delete a file to re-download it.
 
 Usage: python fetch_data.py
 """
@@ -13,6 +14,7 @@ import shutil
 import time
 import urllib.parse
 import urllib.request
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,6 +51,16 @@ DATASETS = {
         "5zhs-2jue",  # Building Footprints
         {"$select": "the_geom,bin,base_bbl,height_roof,ground_elevation,construction_year,feature_code"},
     ),
+    "trees": (
+        "hn5i-inap",  # Forestry Tree Points: the Parks Department's street tree inventory, living trees
+        {"$select": "geometry,dbh,genusspecies",
+         "$where": "tpstructure='Full' AND (tpcondition IS NULL OR tpcondition!='Dead')"},
+    ),
+    "centerline": (
+        "inkn-q76z",  # Centerline (CSCL): street centerlines with lanes and traffic direction
+        {"$select": "the_geom,physicalid,rw_type,status,trafdir,from_level_code,to_level_code,"
+                    "streetwidth,number_travel_lanes,number_park_lanes,bike_lane"},
+    ),
 }
 
 
@@ -63,6 +75,14 @@ ELEVATION_DIR = RAW_DIR / "elevation"
 # Innovation, dataset tnru-abg2), LoD2 CityGML in 20 delivery areas.
 BUILDING_MODEL_URL = "https://s-media.nyc.gov/agencies/oti/DA_WISE_GML.zip"
 BUILDING_MODEL_PATH = RAW_DIR / "buildings3d" / "DA_WISE_GML.zip"
+
+# What covers the ground, from the 2017 LiDAR: tree canopy, grass, bare soil,
+# water, buildings, roads, other paved, railroads (dataset he6d-2qns, 6-inch
+# pixels, in a 1.3 GB zip). landcover.py reads its reduced-resolution layers,
+# so the full-resolution one (the .ige file, 98 GB unpacked) stays zipped.
+LAND_COVER_URL = ("https://data.cityofnewyork.us/api/views/he6d-2qns/files/"
+                  "64c49dc7-c17f-43db-a4e3-669a28f73234?download=true&filename=Land_Cover.zip")
+LAND_COVER_PATH = RAW_DIR / "landcover" / "Land_Cover.zip"
 
 
 # Tables without geometry, as JSON rows.
@@ -176,6 +196,18 @@ def main() -> None:
     for tile in ELEVATION_TILES:
         fetch_file(f"elevation {tile}", ELEVATION_URL.format(tile=tile), ELEVATION_DIR / f"USGS_13_{tile}.tif")
     fetch_file("3-D building model", BUILDING_MODEL_URL, BUILDING_MODEL_PATH)
+    fetch_file("land cover", LAND_COVER_URL, LAND_COVER_PATH)
+    unpack_land_cover()
+
+
+def unpack_land_cover() -> None:
+    with zipfile.ZipFile(LAND_COVER_PATH) as z:
+        for name in z.namelist():
+            target = LAND_COVER_PATH.parent / name
+            if name.endswith((".ige", "/")) or target.exists():
+                continue
+            print(f"land cover: unpacking {name}", flush=True)
+            z.extract(name, LAND_COVER_PATH.parent)
 
 
 if __name__ == "__main__":

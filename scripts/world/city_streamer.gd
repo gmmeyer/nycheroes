@@ -2,7 +2,8 @@ class_name CityStreamer
 extends Node3D
 ## Streams the city around the camera from a three-level tile tree, built by
 ## tools/citygen/build_tiles.py into data/tiles/<region>/:
-##   lod0: 500 m tiles, full detail, with collision and walking lanes
+##   lod0: 500 m tiles, full detail, with collision, walking lanes, road
+##         markings, trees and rooftop water towers
 ##   lod1: 1 km tiles, simplified
 ##   lod2: 4 km tiles, coarse, out to the horizon
 ## A level's tiles load when their parent tile is near the camera. A tile is
@@ -12,12 +13,18 @@ extends Node3D
 ## Web builds fetch tiles over HTTP from tiles/<region>/ next to index.html
 ## (tools/build_web.ps1 copies them there).
 ## Buildings and ground are drawn by their own shaders (stylized facades from
-## the tiles' per-building data). For comparison, ?aerial=1 on the page URL
-## (--aerial=1 on desktop) drapes the city's aerial photos over the ground and
-## roofs of tiles marked "aerial" in the manifest (aerial/<level>/<i>_<j>.jpg,
-## fetched once the tile is built; web builds need tools/build_web.ps1 -Aerial);
-## ?aerial_shadow=0.75&aerial_brightness=0.7 tune their look (see
-## shaders/aerial.gdshaderinc).
+## the tiles' per-building data), and so are road markings; trees and water
+## towers are a few MultiMeshes per tile (CityProps). The manifest's citywide
+## tree canopy map (how much of each 8 m square is under trees) loads once at
+## the start; the ground shader paints woods from it on parks and yards, out
+## past where tree props draw. For comparison,
+## ?aerial=1 on the page URL (--aerial=1 on desktop) drapes the city's aerial
+## photos over the ground and roofs of tiles marked "aerial" in the manifest
+## (aerial/<level>/<i>_<j>.jpg, fetched once the tile is built; web builds
+## need tools/build_web.ps1 -Aerial); ?aerial_shadow=0.75&aerial_brightness=0.7
+## tune their look (see shaders/aerial.gdshaderinc). ?tree_shadows=0 leaves
+## out trees' shadows, for slower machines (they're about a third of what
+## trees cost).
 
 signal initial_load_finished(seconds: float)
 
@@ -35,6 +42,9 @@ const WATER_LAYER := 16
 const LEVEL_PRIORITY: Array[float] = [0.0, 400.0, 1500.0]
 ## Added on top for a tile's aerial photo, so geometry nearby comes first.
 const PHOTO_PRIORITY := 300.0
+## Road markings stop drawing once their tile's center is this far from the
+## camera (m); shaders/markings.gdshader fades the paint out before that.
+const MARKINGS_RANGE := 1100.0
 
 ## Where a loaded tile's aerial photo is: NONE if it has none (or photos are
 ## off), WANTED until it's requested, then LOADING, then SHOWN or FAILED.
@@ -60,6 +70,12 @@ const PHOTO_OPTIONS := {"aerial_shadow": "aerial_shadow_softening", "aerial_brig
 @export var building_material: Material
 @export var ground_material: Material
 @export var water_material: Material
+## Road paint (shaders/markings.gdshader).
+@export var markings_material: Material
+## Trees (all kinds) and rooftop water towers (shaders/tree.gdshader and
+## water_tower.gdshader).
+@export var tree_material: Material
+@export var water_tower_material: Material
 
 var loaded_counts: Array[int] = [0, 0, 0]
 ## World positions that need the ground loaded around them besides the
@@ -68,10 +84,14 @@ var loaded_counts: Array[int] = [0, 0, 0]
 var extra_foci: Array[Vector3] = []
 ## Time the last tile took to turn into meshes and collision, in milliseconds.
 var last_build_msec := 0.0
+## Trees and water towers in loaded near tiles.
+var prop_count := 0
 ## Loaded tiles that are showing their aerial photo.
 var photo_count := 0
 ## Time the last aerial photo took to decode and upload, in milliseconds.
 var last_photo_msec := 0.0
+## Whether the tree canopy map has loaded and gone to the ground material.
+var canopy_loaded := false
 
 var _levels: Array[Dictionary] = []  # {name, size, tiles: Array[Tile], by_coord: {Vector2i: Tile}}
 var _queue: Array[Array] = []  # [priority, tile, is_photo], sorted
@@ -79,6 +99,7 @@ var _ready_to_build: Array[Array] = []  # [tile, bytes]
 var _ready_photos: Array[Array] = []  # [tile, node instance id, bytes]
 var _photos_enabled := false
 var _merged_building_material: ShaderMaterial
+var _props: CityProps
 var _in_flight := 0
 var _base_url := ""  # web only
 var _idle_requests: Array[HTTPRequest] = []
@@ -100,6 +121,8 @@ class Tile:
 	var children: Array[Tile] = []
 	## Sidewalk walking lanes (world-space polylines), lod0 only, while loaded.
 	var lanes: Array[PackedVector3Array] = []
+	## Trees and water towers, lod0 only, while loaded.
+	var prop_count := 0
 	## The aerial photo's state for the current node.
 	var photo := Photo.NONE
 
@@ -120,6 +143,8 @@ func _ready() -> void:
 	if building_material is ShaderMaterial:
 		_merged_building_material = building_material.duplicate()
 		_merged_building_material.set_shader_parameter("merged_blocks", true)
+	_props = CityProps.new(tree_material, water_tower_material)
+	_props.tree_shadows = LaunchOptions.get_string("tree_shadows", "1") != "0"
 	if OS.has_feature("web"):
 		var page_dir := str(JavaScriptBridge.eval("location.href.split(/[?#]/)[0].replace(/[^/]*$/, '')"))
 		_base_url = page_dir + "tiles/%s/" % region
@@ -211,6 +236,9 @@ func _on_manifest_loaded(bytes: PackedByteArray) -> void:
 			by_coord[Vector2i(tile.i, tile.j)] = tile
 		_levels.append({"name": data.name, "size": size, "tiles": tiles, "by_coord": by_coord,
 			"aerial_margin": float(data.get("aerial_margin", 0.0))})
+	if manifest.has("canopy"):
+		_in_flight += 1
+		_load_file(manifest.canopy.file, _on_canopy_loaded.bind(manifest.canopy))
 	# Link each tile to the tile one level up that contains it.
 	for level in range(_levels.size() - 1):
 		var ratio := int(round(_levels[level + 1]["size"] / _levels[level]["size"]))
@@ -379,6 +407,20 @@ func _build_tile_node(tile: Tile, bytes: PackedByteArray) -> Node3D:
 		if surface.kind == CityTileDecoder.SURFACE_WATER:
 			node.add_child(_water_node(surface.mesh, near))
 			continue
+		if surface.kind == CityTileDecoder.SURFACE_PROPS:
+			tile.prop_count = _props.add_to(node, surface)
+			prop_count += tile.prop_count
+			continue
+		if surface.kind == CityTileDecoder.SURFACE_MARKINGS:
+			# Paint on the road, without collision or shadows.
+			var markings := MeshInstance3D.new()
+			markings.name = "Markings"
+			markings.mesh = surface.mesh
+			markings.material_override = markings_material
+			markings.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			markings.visibility_range_end = MARKINGS_RANGE
+			node.add_child(markings)
+			continue
 		var is_buildings: bool = surface.kind == CityTileDecoder.SURFACE_BUILDINGS
 		var instance := MeshInstance3D.new()
 		instance.mesh = surface.mesh
@@ -392,6 +434,27 @@ func _build_tile_node(tile: Tile, bytes: PackedByteArray) -> Node3D:
 			shape.shape = surface.mesh.create_trimesh_shape()
 			body.add_child(shape)
 	return node
+
+
+## Gives the ground material the tree canopy map: a grayscale PNG, how much
+## of each `pixel`-meter square is under trees, north up, its top-left corner
+## at world (min_x, min_z). Ground UVs are world x/z, so the shader samples it
+## straight from them. Decoding it takes a while (once, while the city loads).
+func _on_canopy_loaded(bytes: PackedByteArray, info: Dictionary) -> void:
+	_in_flight -= 1
+	var start := Time.get_ticks_usec()
+	var image := Image.new()
+	if bytes.is_empty() or image.load_png_from_buffer(bytes) != OK:
+		push_warning("Couldn't load the tree canopy map; parks will be plain.")
+		return
+	# Coverage, not color: one linear channel, mipmapped for the far ground.
+	image.convert(Image.FORMAT_R8)
+	image.generate_mipmaps()
+	var size := Vector2(image.get_width(), image.get_height()) * float(info.pixel)
+	ground_material.set_shader_parameter("canopy", ImageTexture.create_from_image(image))
+	ground_material.set_shader_parameter("canopy_rect", Vector4(float(info.min_x), float(info.min_z), size.x, size.y))
+	canopy_loaded = true
+	print("[city] canopy map %dx%d decoded in %.0f ms" % [image.get_width(), image.get_height(), (Time.get_ticks_usec() - start) / 1000.0])
 
 
 ## Drapes a downloaded aerial photo ([tile, node instance id, bytes]) over its
@@ -466,6 +529,8 @@ func _unload(tile: Tile) -> void:
 	tile.node.queue_free()
 	tile.node = null
 	tile.lanes.clear()
+	prop_count -= tile.prop_count
+	tile.prop_count = 0
 	loaded_counts[tile.level] -= 1
 	if tile.photo == Photo.SHOWN:
 		photo_count -= 1

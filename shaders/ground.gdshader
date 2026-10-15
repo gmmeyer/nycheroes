@@ -7,6 +7,10 @@
 //        9 yard (back yards, gardens, lawns around homes).
 //        Bridge deck tops are road.
 // UV: world x/z on flat ground; (meters along, meters up) on walls.
+// Parks, yards and marshes under trees (the citywide canopy map, see
+// CityStreamer) read as woods seen from above: dark, mottled crown clumps,
+// strongest past where the tree props draw, so wooded parks don't end where
+// the near tiles do; up close, just the trees' shade.
 // Lighting is the shared toon model (toon.gdshaderinc).
 // With an aerial photo (?aerial=1), the flat ground kinds (pavement, road,
 // park, sand, marsh) show it; built things (seawalls, concrete, cables,
@@ -46,6 +50,23 @@ uniform vec3 concrete_color : source_color = vec3(0.77, 0.75, 0.70);
 uniform vec3 cable_color : source_color = vec3(0.80, 0.82, 0.85);
 uniform vec3 stone_color : source_color = vec3(0.76, 0.68, 0.53);
 uniform vec3 yard_color : source_color = vec3(0.42, 0.56, 0.30);
+// The tree canopy map: how much of each square is under trees (0..1, a
+// single channel, not a color), and the world x/z rectangle it covers
+// (left, top, width, height in meters), set by CityStreamer once it loads.
+uniform sampler2D canopy : hint_default_black, filter_linear_mipmap, repeat_disable;
+uniform vec4 canopy_rect = vec4(0.0, 0.0, 1.0, 1.0);
+// Woods seen from above: crown tops and the gaps between them, in the
+// trees' greens (shaders/tree.gdshader), darker than their lit side since
+// flat ground takes the sun full on where crowns turn half away from it.
+uniform vec3 woods_light : source_color = vec3(0.25, 0.42, 0.15);
+uniform vec3 woods_dark : source_color = vec3(0.11, 0.22, 0.09);
+// Crowns' size in the woods pattern (m).
+uniform float woods_crown = 9.0;
+// From these distances (m) woods go from the trees' shade on the grass to
+// the full woods pattern; the tree props shrink away between 650 and 850.
+uniform vec2 woods_distance = vec2(450.0, 800.0);
+// How much darker (and a touch cooler) the grass in the trees' shade is, up close.
+uniform float woods_shade : hint_range(0.0, 1.0) = 0.25;
 // Sidewalk flags: size (m) and the street grid's angle (Manhattan's grid
 // runs 29 degrees east of true north), so the joints line up with the curbs.
 uniform float paving_size = 1.5;
@@ -136,6 +157,25 @@ vec3 flat_ground(int kind, vec2 p, vec2 footprint, vec3 color) {
 	return color;
 }
 
+// Parks, yards and marshes under trees: shade up close, woods seen from
+// above further away. `cover` is the canopy map's 0..1 here.
+vec3 woods(vec3 color, vec2 p, float pixel, float cover, float distance_to_camera) {
+	float amount = smoothstep(0.1, 0.7, cover);
+	if (amount <= 0.0) {
+		return color;
+	}
+	// Crown clumps with soft edges, a few big tone swings like the trees',
+	// all calming to their average once crowns are a few pixels.
+	float detail = visible(woods_crown, pixel);
+	float n = value_noise(p / woods_crown) * 0.65 + value_noise(p / (woods_crown * 0.4) + 17.0) * 0.35;
+	float crowns = mix(0.55, smoothstep(0.4, 0.62, n), detail);
+	vec3 top = woods_light * mix(vec3(0.9, 0.93, 1.05), vec3(1.12, 1.08, 0.9), value_noise(p / 60.0 + 5.0));
+	vec3 woods_color = mix(woods_dark, top, crowns);
+	vec3 shaded = color * (1.0 - woods_shade) * vec3(0.9, 1.0, 1.02);
+	float far = smoothstep(woods_distance.x, woods_distance.y, distance_to_camera);
+	return mix(mix(color, shaded, amount), woods_color, amount * far);
+}
+
 vec3 wall_surface(int kind, vec2 p, vec2 footprint, vec3 color) {
 	if (kind == SEAWALL) {
 		return color * (1.0 - 0.3 * block_joints(p, footprint, vec2(1.4, 0.7), 0.03));
@@ -160,12 +200,17 @@ void fragment() {
 	vec2 footprint = max(fwidth(UV), vec2(1e-4));
 	vec3 world_normal = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	vec3 photo = aerial_albedo(aerial_uv);
+	// Sampled here, outside any branch, so its mipmaps get good derivatives.
+	float cover = texture(canopy, (UV - canopy_rect.xy) / canopy_rect.zw).r;
 
 	// Broad, soft variation so large areas don't look flat.
 	float variation = value_noise(UV * 0.04) * 0.6 + value_noise(UV * 0.31) * 0.4;
 	vec3 color = base_color(kind) * mix(0.92, 1.06, variation);
 	if (world_normal.y > 0.7) {
 		color = flat_ground(kind, UV, footprint, color);
+		if (kind == PARK || kind == YARD || kind == MARSH) {
+			color = woods(color, UV, max(footprint.x, footprint.y), cover, length(VERTEX));
+		}
 	} else {
 		color = wall_surface(kind, UV, footprint, color);
 	}

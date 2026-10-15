@@ -5,7 +5,8 @@ and writes data/tiles/nyc/:
   manifest.json        levels and tiles, read by scripts/world/city_streamer.gd
   lod0/<i>_<j>.nyct    500 m tiles, full detail: buildings, streets, sidewalks,
                        parks, raised lakes, walking lanes, bridges (with
-                       collision in game)
+                       collision in game), paint on the streets (markings.py),
+                       trees and water towers (props.py)
   lod1/<i>_<j>.nyct    1 km tiles: buildings under 20 m merged into blocks,
                        taller ones simplified; simplified ground
   lod2/<i>_<j>.nyct    4 km tiles: everything under 60 m merged into blocks by
@@ -37,12 +38,16 @@ from shapely.geometry import Polygon
 import bridges
 import buildings3d
 import facades
+import landcover
+import markings
 import prepare
-from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_YARD, GROUND_PARK, GROUND_PAVEMENT, GROUND_ROAD,
-                    GROUND_SAND, GROUND_SEAWALL, LANE_BREAK, ORIGIN_LAT, ORIGIN_LON, PROJECTION,
-                    SEAWALL_BOTTOM_Y, STRUCTURE_CONCRETE, SURFACE_BUILDINGS, SURFACE_GROUND,
-                    SURFACE_LANES, SURFACE_STRUCTURES, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile,
-                    lines_of, polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangulate_planar)
+import props
+from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT,
+                    GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_YARD, LANE_BREAK, MARKING_LIFT, ORIGIN_LAT,
+                    ORIGIN_LON, PROJECTION, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y, STRUCTURE_CONCRETE,
+                    SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
+                    SURFACE_STRUCTURES, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
+                    polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangulate_planar)
 from terrain import Terrain
 
 REGION = "nyc"
@@ -109,6 +114,18 @@ SHAPE_HEIGHT_TOLERANCE = (6.0, 0.25)  # meters, fraction of the height
 FRONT_PROBES = (6.0, 15.0)
 FRONT_REACH = 4.0
 
+# Paint can come from street centerlines this far outside a tile.
+MARKING_REACH = 30.0
+# Street trees standing in the road (the inventory and the road outlines
+# disagree by a meter or two) move this far onto the sidewalk, unless they'd
+# have to move further than TREE_MAX_MOVE (then they're left out).
+TREE_CURB_GAP = 0.8
+TREE_MAX_MOVE = 4.0
+# Canopy trees keep this far from street trees (which already stand for the
+# canopy over sidewalks) and judge how wooded it is within CANOPY_REACH.
+CANOPY_CLEARANCE = 4.5
+CANOPY_REACH = 6.0
+
 _W = {}  # per-worker data, filled by _init_worker
 
 
@@ -122,7 +139,10 @@ def main() -> None:
     ground = prepare.load("ground")
     prepare.load("water")
     prepare.load("facades")
+    prepare.load("trees")
+    prepare.load("centerline")
     prepare.load_terrain()
+    prepare.load_landcover()
     buildings3d.load()
     print(f"{len(buildings['geoms']):,} buildings", flush=True)
 
@@ -168,11 +188,13 @@ def main() -> None:
                 entries[level].append(entry)
                 for key in ("bytes", "vertices", "triangles"):
                     totals[f"{level}_{key}"] += entry.pop(key)
-                totals["lane_points"] += entry.pop("lane_points", 0)
+                for key in ("lane_points", "props", "trees", "water_towers"):
+                    totals[key] += entry.pop(key, 0)
             if n % 250 == 0 or n == len(tasks):
                 print(f"  {n:,}/{len(tasks):,} tiles ({time.time() - started:.0f} s)", flush=True)
 
     min_e, min_n, max_e, max_n = prepare.load("ground")["land"].bounds
+    canopy = landcover.write_canopy_map(OUT_DIR / "canopy.png")
     manifest = {
         "version": FORMAT_VERSION,
         "region": REGION,
@@ -181,6 +203,8 @@ def main() -> None:
         "origin": {"lat": ORIGIN_LAT, "lon": ORIGIN_LON},
         "projection": PROJECTION,
         "bounds": {"min_x": min_e, "max_x": max_e, "min_z": -max_n, "max_z": -min_n},
+        # How much of each 8 m square is tree canopy, citywide (landcover.py).
+        "canopy": canopy,
         "levels": [
             {"name": level, "tile_size": s["size"],
              "tiles": sorted(entries[level], key=lambda e: (e["i"], e["j"]))}
@@ -194,6 +218,7 @@ def main() -> None:
         print(f"  {level}: {len(entries[level]):,} tiles, {totals[f'{level}_bytes'] / 1e6:.1f} MB, "
               f"{totals[f'{level}_vertices']:,} vertices, {totals[f'{level}_triangles']:,} triangles")
     print(f"  walking lanes: {totals['lane_points']:,} points")
+    print(f"  props: {totals['trees']:,} trees, {totals['water_towers']:,} water towers")
     if failed:
         print(f"  {len(failed)} tiles FAILED and are missing: {failed}")
         raise SystemExit(1)
@@ -232,6 +257,15 @@ def _init_worker() -> None:
     _W["facades"] = prepare.load("facades")
     _W["building_index_tree"] = shapely.STRtree(buildings["geoms"])
     _W["water_tree"] = shapely.STRtree(_W["water"]["geoms"])
+    _W["centerline"] = prepare.load("centerline")
+    _W["centerline_tree"] = shapely.STRtree(_W["centerline"]["lines"])
+    trees = prepare.load("trees")
+    _W["trees"] = trees
+    groups = defaultdict(list)
+    for index, key in enumerate(_anchor_tiles(trees["en"], LEVELS["lod0"]["size"])):
+        groups[key].append(index)
+    _W["tree_groups"] = {key: np.array(value) for key, value in groups.items()}
+    _W["landcover"] = landcover.LandCover()
 
 
 def _build_tile(task):
@@ -276,6 +310,17 @@ def _build_tile(task):
         if lanes is not None:
             surfaces.append((SURFACE_LANES, lanes))
             stats["lane_points"] = len(lanes[0])
+        marking_mesh = MeshBuilder()
+        _add_markings(marking_mesh, bounds)
+        built = marking_mesh.build(origin, decimals=2)
+        if built is not None:
+            surfaces.append((SURFACE_MARKINGS, built))
+            stats["vertices"] += len(built[0])
+            stats["triangles"] += len(built[-1]) // 3
+        prop_surface, counts = _build_props(i, j, bounds, indices, origin)
+        if prop_surface is not None:
+            surfaces.append((SURFACE_PROPS, prop_surface))
+            stats.update(counts)
 
     raw = encode_tile(surfaces)
     packed = zstd.compress(raw, level=12)
@@ -586,6 +631,167 @@ def _polygonal(geom):
     points, which make later overlays fail), as a MultiPolygon or empty Polygon."""
     parts = polygons_of(geom, min_area=0.0)
     return shapely.MultiPolygon(parts) if parts else Polygon()
+
+
+def _add_markings(builder: MeshBuilder, bounds) -> None:
+    """Paint on the tile's streets (markings.py), draped over the road."""
+    segments = _W["centerline_tree"].query(shapely.buffer(bounds, MARKING_REACH, join_style="mitre"))
+    if not len(segments) or _W["streets"].is_empty:
+        return
+    terrain = _W["ground"]["lod0"]
+
+    def height(en):
+        return terrain.height(en) - CURB_HEIGHT + MARKING_LIFT
+    halves = [[0, 1, 2], [0, 2, 3]]
+    for kind, (quads, uv, check) in markings.quads(_W["centerline"], segments, bounds.bounds, _W["streets"]).items():
+        ok = ~check
+        ok[check] = markings.keep(quads[check], _W["streets"])
+        triangles = quads[ok][:, halves].reshape(-1, 3, 2)
+        builder.add_draped_triangles(triangles, LEVELS["lod0"]["ground_cell"], height, (kind, 0.0),
+                                     uv=uv[ok][:, halves].reshape(-1, 3, 2))
+
+
+def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
+    """The tile's props surface (see common.py) and counts, or (None, {})."""
+    street = _street_trees(i, j)
+    canopy = _canopy_trees(i, j, bounds, street["en"])
+    towers = _water_towers(indices)
+    parts = [street, canopy, towers]
+    en = np.concatenate([p["en"] for p in parts])
+    if len(en) == 0:
+        return None, {}
+    trees = len(street["en"]) + len(canopy["en"])
+    y = np.concatenate([_W["ground"]["lod0"].height(en[:trees]), towers["y"]])
+    seed = np.concatenate([p["seed"] for p in parts])
+    yaw = props.location_seed(en * 3.7) * (2 * np.pi)
+    positions = np.round(to_godot(en, y) - np.asarray(origin), 2).astype(np.float32)
+    normals = np.column_stack([np.concatenate([p["height"] for p in parts]),
+                               np.concatenate([p["width"] for p in parts]), yaw])
+    uv = np.column_stack([np.concatenate([p["tone"] for p in parts]), np.concatenate([p["trunk"] for p in parts])])
+    kinds = np.concatenate([p["type"] for p in parts])
+    uv2 = np.column_stack([kinds, np.minimum(np.round(seed, 3), 0.999)])
+    order = np.argsort(kinds, kind="stable")  # grouped by type, for the game
+    surface = (positions[order], np.round(normals, 2).astype(np.float32)[order],
+               np.round(uv, 2).astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
+    return surface, {"props": len(en), "trees": trees, "water_towers": len(towers["en"])}
+
+
+def _no_props() -> dict:
+    return {"en": np.zeros((0, 2)), "height": np.zeros(0), "width": np.zeros(0), "trunk": np.zeros(0),
+            "type": np.zeros(0, np.int8), "tone": np.zeros(0, np.int8), "seed": np.zeros(0), "y": np.zeros(0)}
+
+
+def _on_open_ground(en: np.ndarray) -> np.ndarray:
+    """Which (N, 2) points are on land and not inside a building."""
+    ok = shapely.contains_xy(_W["g"]["land"], en[:, 0], en[:, 1])
+    hits = _W["building_tree"].query(shapely.points(en), predicate="within")
+    ok[hits[0]] = False
+    return ok
+
+
+def _street_trees(i: int, j: int) -> dict:
+    """The inventory's street trees in the tile, moved out of the road where
+    the data puts them in it."""
+    idx = _W["tree_groups"].get((i, j))
+    if idx is None:
+        return _no_props()
+    t = _W["trees"]
+    found = {key: t[key][idx] for key in ("en", "height", "width", "trunk", "type", "tone", "seed")}
+    en = found["en"].copy()
+    streets = _W["streets"]
+    keep = np.ones(len(en), dtype=bool)
+    if not streets.is_empty:
+        in_road = np.flatnonzero(shapely.contains_xy(streets, en[:, 0], en[:, 1]))
+        if len(in_road):
+            lines = shapely.shortest_line(shapely.points(en[in_road]), shapely.boundary(streets))
+            ends = shapely.get_coordinates(shapely.get_point(lines, 1))
+            step = ends - en[in_road]
+            moved = np.linalg.norm(step, axis=1)
+            en[in_road] = ends + step / np.maximum(moved, 1e-6)[:, None] * TREE_CURB_GAP
+            keep[in_road[moved > TREE_MAX_MOVE]] = False
+    found["en"] = en
+    keep &= _on_open_ground(en)
+    return {key: value[keep] for key, value in found.items()}
+
+
+def _canopy_trees(i: int, j: int, bounds, street_en: np.ndarray) -> dict:
+    """Trees wherever the land cover map shows canopy, off the streets and
+    away from street trees."""
+    en, seed = props.canopy_candidates(bounds.bounds)
+    cover = _W["landcover"]
+    on = cover.is_canopy(en)
+    en, seed = en[on], seed[on]
+    if len(en) == 0:
+        return _no_props()
+    keep = _on_open_ground(en)
+    if not _W["streets"].is_empty:
+        keep &= ~shapely.contains_xy(_W["streets"], en[:, 0], en[:, 1])
+    # Street trees in this tile (as placed) and the ones around it.
+    near = [street_en] + [_W["trees"]["en"][idx] for di in (-1, 0, 1) for dj in (-1, 0, 1)
+                          if (di or dj) and (idx := _W["tree_groups"].get((i + di, j + dj))) is not None]
+    near = np.concatenate(near)
+    if len(near):
+        hits = shapely.STRtree(shapely.points(near)).query(shapely.points(en), predicate="dwithin",
+                                                            distance=CANOPY_CLEARANCE)
+        keep[hits[0]] = False
+    en, seed = en[keep], seed[keep]
+    return props.canopy_trees(en, seed, cover.canopy_share(en, CANOPY_REACH))
+
+
+def _water_towers(indices: np.ndarray) -> dict:
+    """Rooftop water tanks on the tile's buildings that get one (props.py)."""
+    if len(indices) == 0:
+        return _no_props()
+    b, f = _W["b"], _W["facades"]
+    height = b["height"][indices].astype(np.float64)
+    floors = height / np.maximum(f["floor_dm"][indices] / 10.0, 1.0)
+    borough = b["bbl"][indices] // 1_000_000_000
+    found = defaultdict(list)
+    for k in np.flatnonzero(props.tower_mask(f["archetype"][indices], floors, height, borough, b["seed"][indices])):
+        index = int(indices[k])
+        parts = polygons_of(b["geoms"][index], 20.0)
+        if not parts:
+            continue
+        poly = shapely.simplify(max(parts, key=lambda p: p.area), 0.3)
+        seed = float(b["seed"][index])
+        tower_height, diameter, variant = props.tower_sizes(poly.area, seed)
+        ground = _footprint_ground(b["geoms"][index])
+        shape = _W["shapes"].get(int(b["bin"][index]))
+        if shape is not None and not _shape_matches(shape, b["geoms"][index], float(height[k])):
+            shape = None
+        for n, spot in enumerate(props.tower_spots(poly, _W["streets"], diameter, seed)):
+            roof = _shape_roof_at(shape, ground, spot) if shape is not None else None
+            found["en"].append(spot)
+            found["y"].append(roof if roof is not None else ground + float(height[k]))
+            found["height"].append(tower_height)
+            found["width"].append(diameter)
+            found["tone"].append(variant)
+            found["seed"].append((seed + 0.37 * n) % 1.0)
+    if not found:
+        return _no_props()
+    out = {key: np.asarray(value, np.float64) for key, value in found.items()}
+    out["en"] = out["en"].reshape(-1, 2)
+    out["trunk"] = np.zeros(len(out["en"]))
+    out["type"] = np.full(len(out["en"]), PROP_WATER_TOWER, dtype=np.int8)
+    return out
+
+
+def _shape_roof_at(shape, ground: float, en: np.ndarray) -> float | None:
+    """The highest roof of a 3-D model building over a point (moved to stand
+    at `ground`, like _add_shape), or None if no roof covers it."""
+    vertices, offsets, ring_polygon, kinds, model_ground = shape
+    starts = np.searchsorted(ring_polygon, np.arange(len(kinds)))
+    best = None
+    for polygon in np.flatnonzero(np.asarray(kinds) == buildings3d.ROOF):
+        outline = vertices[offsets[starts[polygon]]:offsets[starts[polygon] + 1]].astype(np.float64)
+        if len(outline) < 3 or not shapely.contains_xy(Polygon(outline[:, :2]), en[0], en[1]):
+            continue
+        normal = polygon_normal(outline)
+        if abs(normal[2]) < 1e-3:
+            continue
+        z = (normal @ outline[0] - normal[0] * en[0] - normal[1] * en[1]) / normal[2]
+        best = z if best is None else max(best, z)
+    return None if best is None else float(best + ground - float(model_ground))
 
 
 def _build_lanes(bounds, origin):

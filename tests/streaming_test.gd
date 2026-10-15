@@ -3,8 +3,11 @@ extends Node
 ## waits for tiles to finish loading, then checks that no tile is drawn
 ## together with an ancestor or descendant (doubled-up geometry) and that the
 ## ground around the camera is covered by some drawn tile (no holes). Also
-## checks that every loaded tile with an aerial photo shows it, and that the
-## photos of tiles that have unloaded are freed.
+## checks that every loaded tile with an aerial photo shows it, that the
+## photos of tiles that have unloaded are freed, that near tiles have their
+## trees and water towers (as many as the tile holds) and road markings, and
+## that the tree canopy map has reached the ground material (if the city has
+## one).
 ## Run: godot --headless --path . res://tests/streaming_test.tscn
 
 ## [name, world position of the camera]
@@ -27,6 +30,7 @@ var _settled := 0.0
 var _problems := 0
 ## Every aerial photo texture seen so far: instance id -> WeakRef.
 var _photo_refs := {}
+var _expects_canopy := false
 
 
 func _ready() -> void:
@@ -35,6 +39,8 @@ func _ready() -> void:
 	for node_name in ["PlayerInput", "Crowd", "Encounters", "Hero"]:
 		world.get_node(node_name).process_mode = Node.PROCESS_MODE_DISABLED
 	_city = world.get_node("City")
+	var manifest = JSON.parse_string(FileAccess.get_file_as_string("res://data/tiles/%s/manifest.json" % _city.region))
+	_expects_canopy = manifest is Dictionary and manifest.has("canopy")
 	_camera = world.get_node("FreeCamera")
 	_camera.current = true
 	_camera.set_process(false)
@@ -106,11 +112,34 @@ func _check() -> void:
 	for ref: WeakRef in _photo_refs.values():
 		if ref.get_ref():
 			leaked += 1
-	var ok := doubled == 0 and holes == 0 and missing == 0 and leaked == 0 and _time < MAX_WAIT
+	# Near tiles: their props drawn as MultiMeshes holding every one of them,
+	# and road markings. Every spot with near tiles has streets and trees.
+	var props := 0
+	var water_towers := 0
+	var with_markings := 0
+	var miscounted := 0
+	for tile in _city._levels[CityStreamer.LEVEL_NEAR]["tiles"]:
+		if tile.node == null:
+			continue
+		var instances := 0
+		for child in tile.node.get_children():
+			if child is MultiMeshInstance3D and not String(child.name).ends_with("Shadows"):
+				instances += child.multimesh.instance_count
+				if child.name == "WaterTowers":
+					water_towers += child.multimesh.instance_count
+			elif child.name == "Markings":
+				with_markings += 1
+		if instances != tile.prop_count:
+			miscounted += 1
+		props += instances
+	var near_ok: bool = loaded[CityStreamer.LEVEL_NEAR] == 0 or (props > 0 and with_markings > 0 and miscounted == 0)
+	var canopy_ok: bool = _city.canopy_loaded or not _expects_canopy
+	var ok := doubled == 0 and holes == 0 and missing == 0 and leaked == 0 and near_ok and canopy_ok and _time < MAX_WAIT
 	if not ok:
 		_problems += 1
-	print("%-24s %5.1fs  loaded %s  drawn %s  doubled %d  holes %d  photos %d (missing %d, leaked %d)  %s" % [
-		SPOTS[_spot][0], _time, loaded, visible, doubled, holes, photos, missing, leaked, "ok" if ok else "PROBLEM"])
+	print("%-24s %5.1fs  loaded %s  drawn %s  doubled %d  holes %d  photos %d (missing %d, leaked %d)  props %d (%d water towers, %d miscounted)  markings in %d  canopy %s  %s" % [
+		SPOTS[_spot][0], _time, loaded, visible, doubled, holes, photos, missing, leaked, props, water_towers, miscounted,
+		with_markings, "ok" if canopy_ok else "MISSING", "ok" if ok else "PROBLEM"])
 
 
 ## The aerial photo a tile's node is showing, or null.

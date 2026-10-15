@@ -67,6 +67,11 @@ const vec3 BUFF_BRICK[4] = vec3[](vec3(0.80, 0.70, 0.55), vec3(0.85, 0.77, 0.63)
 const vec3 WHITE_BRICK[3] = vec3[](vec3(0.86, 0.84, 0.78), vec3(0.90, 0.88, 0.83), vec3(0.80, 0.78, 0.72));
 const vec3 LIMESTONE[4] = vec3[](vec3(0.89, 0.83, 0.70), vec3(0.85, 0.78, 0.64), vec3(0.91, 0.87, 0.78),
 		vec3(0.80, 0.74, 0.60));
+// Landmark stone: pale gray Indiana limestone; gray, pink and dark granite;
+// cream and ivory glazed terracotta.
+const vec3 LANDMARK_LIMESTONE[3] = vec3[](vec3(0.86, 0.83, 0.76), vec3(0.82, 0.80, 0.74), vec3(0.89, 0.87, 0.81));
+const vec3 GRANITE[3] = vec3[](vec3(0.72, 0.71, 0.68), vec3(0.75, 0.64, 0.58), vec3(0.55, 0.54, 0.52));
+const vec3 TERRACOTTA[3] = vec3[](vec3(0.93, 0.89, 0.78), vec3(0.91, 0.86, 0.74), vec3(0.95, 0.92, 0.84));
 const vec3 CAST_IRON[5] = vec3[](vec3(0.91, 0.88, 0.80), vec3(0.80, 0.79, 0.74), vec3(0.66, 0.73, 0.66),
 		vec3(0.71, 0.76, 0.81), vec3(0.86, 0.79, 0.63));
 const vec3 SIDING_PAINT[6] = vec3[](vec3(0.90, 0.88, 0.83), vec3(0.76, 0.82, 0.86), vec3(0.80, 0.83, 0.71),
@@ -480,7 +485,8 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 		f.lintels = true;
 		f.shades = 0.3;
 	} else if (archetype == HOTEL) {
-		if (r1 < 0.5) {
+		// Masonry with a stone base (landmark hotels always), or a glass tower.
+		if (r1 < 0.5 || landmark) {
 			f.wall = srgb(r4 < 0.5 ? LIMESTONE[pick(r3, 4)] : BUFF_BRICK[pick(r3, 4)]);
 			f.surface = r4 < 0.5 ? STONE : BRICK;
 			f.base = srgb(LIMESTONE[pick(r2, 4)]);
@@ -516,8 +522,30 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 		f.side_open = 0.2;
 		f.shades = 0.0;
 	}
-	if (landmark) {
-		// Landmarks get stone lintels on any punched masonry windows.
+	if (landmark && (archetype == PREWAR_OFFICE || archetype == PREWAR_APARTMENT || archetype == HOTEL
+			|| archetype == INSTITUTION) && f.windows != CURTAIN) {
+		// The old masonry landmarks are mostly faced in stone or terracotta
+		// rather than brick. Every prewar office tower is: 70% pale limestone,
+		// 30% ivory terracotta, so the Empire State, Chrysler and Woolworth
+		// Buildings read light. Three in four of the others are: 60%
+		// limestone, 25% terracotta, 15% granite.
+		float r5 = rnd(seed, 5.0);
+		bool office = archetype == PREWAR_OFFICE;
+		if (office || r5 < 0.75) {
+			if (r5 < (office ? 0.7 : 0.45)) {
+				f.wall = srgb(LANDMARK_LIMESTONE[pick(r4, 3)]);
+			} else if (office || r5 < 0.64) {
+				f.wall = srgb(TERRACOTTA[pick(r4, 3)]);
+			} else {
+				f.wall = srgb(GRANITE[pick(r4, 3)]);
+			}
+			f.surface = STONE;
+			f.base = archetype == INSTITUTION && r3 < 0.5 ? srgb(GRANITE[pick(r2, 3)]) : f.wall * 0.94;
+			f.trim = f.wall * 1.05;
+			f.cornice = f.trim;
+			f.base_floors = max(f.base_floors, 1.0);
+		}
+		// Stone lintels on any punched masonry windows.
 		f.lintels = f.lintels || (f.surface != SIDING && f.windows == PUNCHED);
 	}
 	return f;

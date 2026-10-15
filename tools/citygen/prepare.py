@@ -16,6 +16,9 @@ import shapely
 from shapely.geometry import shape
 
 import facades
+import landcover
+import markings
+import props
 import terrain
 from common import (CACHE_DIR, FEET, facade_style, load_features, polygons_of, project)
 
@@ -132,12 +135,18 @@ def load_terrain() -> None:
         terrain.prepare(load("ground")["land"].bounds)
 
 
+def load_landcover() -> None:
+    """Builds the land cover grid if it's missing."""
+    if not landcover.GRID_PATH.exists():
+        landcover.prepare(load("ground")["land"].bounds)
+
+
 def prepare_facades() -> dict:
     return facades.prepare(load("buildings"))
 
 
 PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": prepare_water,
-             "facades": prepare_facades}
+             "facades": prepare_facades, "trees": props.prepare_trees, "centerline": markings.prepare}
 
 
 def load(name: str) -> dict:
@@ -161,3 +170,4 @@ if __name__ == "__main__":
     for dataset in PREPARERS:
         load(dataset)
     load_terrain()
+    load_landcover()

@@ -15,7 +15,7 @@ versions come last (step 8).
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public hosting still to do |
-| 6 | Realism from open data | In progress (real shape and stylized facades done) |
+| 6 | Realism from open data | In progress (real shape, stylized facades, trees, water towers and street paint done) |
 | 7 | Overpasses and missing bridges | Planned |
 | 8 | Mac and Windows versions | Planned (last) |
 
@@ -126,14 +126,14 @@ In order:
 2. **Real view from above (done, below, now opt-in):** the city's 2024
    aerial photos draped over streets, parks and roofs; replaced by the
    stylized look by default.
-3. **Real architecture (facades done, below):** every building's type from
+3. **Real architecture (done, below):** every building's type from
    the city's tax lot data (PLUTO: building class, year, floors, retail
    space, landmark status), drawn as stylized facades: real floor counts,
-   storefronts, fire escapes, cornices, blank side walls. Rooftop water
-   towers to follow.
-4. **Street life:** street trees (tree census), hydrants, bus shelters,
-   LinkNYC kiosks, benches, bike parking, parking meters, subway entrances,
-   street and traffic lights; parked cars and traffic.
+   storefronts, fire escapes, cornices, blank side walls; rooftop water
+   towers.
+4. **Street life:** trees and street paint (done, below); hydrants, bus
+   shelters, LinkNYC kiosks, benches, bike parking, parking meters, subway
+   entrances, street and traffic lights; parked cars and traffic.
 5. **Landmarks:** about 25 hand-made iconic buildings and bridges.
 6. **Light and atmosphere:** sun position for NYC, clouds, haze, glass
    reflections, night mode with lit windows and street lights.
@@ -241,10 +241,59 @@ In order:
   Details fade to their average color in the distance.
 - `?sun_dir=az,el`, `?saturation=`, `?sh_<uniform>=<value>` and friends
   tune the look from the URL (`scripts/world/lighting_overrides.gd`).
-- Still to do: rooftop water towers, street trees and other props, road
-  markings and crosswalks, roof parapets, colors for famous landmarks (the
-  Empire State Building picks a random brick today), night lighting.
 - Cost: full-detail tiles 938 MB in total (mid 225 MB); frame rate unchanged.
+
+**Trees, water towers and street paint (tile format v6):**
+- Street trees: all ~886,000 living trees in the Parks Department's street
+  tree inventory (Forestry Tree Points), each with its species and trunk
+  size: London planes and oaks get broad crowns, Callery pears and ginkgos
+  narrow ones, pines and cedars are conifers; honeylocusts and ginkgos are
+  light green, oaks and lindens dark, purple-leaf plums and 'Crimson King'
+  maples red. Height comes from trunk size. Trees the data puts in the road
+  (it and the road outlines disagree by a meter or two) step onto the curb.
+- Every other tree (parks, back yards, woods) comes from the city's 2017
+  land cover map (LiDAR, 6-inch pixels; `tools/citygen/landcover.py`
+  samples its 8x reduced layer onto a 2 m grid): one tree per 7 m cell of
+  canopy, on a jittered grid, kept off streets and buildings and away from
+  street trees, taller where the canopy is thick, with conifers in patches.
+- Rooftop water towers: a guess per building from its type, floors (six and
+  up, under 160 m) and borough (most likely on prewar Manhattan walk-ups,
+  apartments, offices and lofts; rare on Staten Island), at a back corner of
+  the roof, on the real roof level where the 3-D model has one. A few big
+  roofs get two; 15% are steel.
+- Street paint from the city's street centerlines (CSCL: lanes, width,
+  traffic direction): double yellow lines on two-way streets, dashed lane
+  lines (10-foot dashes, 30-foot gaps), edge lines on highways, and at
+  intersections with a bigger street, high-visibility crosswalks and stop
+  lines on the lanes coming in (`tools/citygen/markings.py`). Lines are
+  strips with coordinates along and across them, and the game's shader
+  paints the dashes and the double line, so a line costs a few vertices
+  instead of a quad per dash; strip pieces that would hang over a curb or
+  median are left out. Crosswalks and stop lines are measured across the
+  road surface, curb to curb. Only street-level roads get paint.
+- Tiles carry props as points (position, height, width, yaw, type, tone,
+  trunk, seed) in a props surface, and paint as its own mesh surface (no
+  collision), in full-detail tiles only.
+- The game draws props with instancing (`scripts/world/city_props.gd`,
+  meshes built in code in `prop_meshes.gd`): one draw call for all of a
+  tile's trees (90-triangle trees in three shapes, picked per tree in the
+  shader, with wind sway), one for its water towers (140 triangles: staved
+  wood or steel tank, hoops, roof, legs), and cheap 30-triangle stand-ins
+  for tree shadows. Trees fade out by about 850 m; beyond that, a
+  citywide canopy map (8 m pixels, 3.9 MB, from the land cover map) darkens
+  wooded parks and yards in the ground shader, so woods still read from the
+  air. Paint has its own shader (`shaders/markings.gdshader`): dashes,
+  double lines and crosswalk bars drawn from the strip coordinates,
+  anti-aliased, nudged toward the camera so it never flickers against the
+  road.
+- Famous prewar landmarks (offices, apartments, hotels, institutions marked
+  as landmarks) get limestone, granite or terracotta instead of brick: the
+  Empire State, Chrysler and Woolworth buildings read as stone.
+- Cost: full-detail tiles 1,088 MB in total (+150 MB: trees and water
+  towers 74, paint 76), plus the 3.9 MB canopy map; 3.4 million trees and
+  9,637 water towers citywide. About +0.3-0.8 ms per frame (draw calls in
+  midtown 190 to 290); every view still at the 145 FPS cap.
+- Still to do: roof parapets, night lighting, other street furniture.
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
@@ -323,7 +372,8 @@ templates for both are already installed.
 ## Working on the project
 
 - Rebuild city data: `tools/citygen/fetch_data.py` (NYC Open Data, the
-  USGS elevation tiles and the 3-D building model), then `build_tiles.py`,
+  USGS elevation tiles, the 3-D building model and the land cover map, about
+  4 GB with 33 GB unpacked), then `build_tiles.py`,
   then, only for the photo comparison, `aerial.py` (downloads and lays out
   the aerial photos once; after later `build_tiles.py` runs, `aerial.py
   mark` re-adds them to the manifest). Python venv in `tools/citygen/.venv`,
@@ -340,4 +390,5 @@ templates for both are already installed.
   free camera, `?spawn=x,y,z,yaw` hero start, `?stats` console stats,
   `?peds=N`, `?gangs=N`, `?demo` / `?demo=fight` scripted tours for videos,
   `?host` / `?join=CODE` co-op, `?signal=wss://...` signaling server
-  (default: the page's host, port 8070).
+  (default: the page's host, port 8070), `?tree_shadows=0` trees without
+  shadows.

@@ -19,6 +19,9 @@
 [ext_resource type="Script" path="res://scripts/net/player_sync.gd" id="17_player_sync"]
 [ext_resource type="Script" path="res://scripts/ui/coop_panel.gd" id="18_coop_panel"]
 [ext_resource type="Shader" path="res://shaders/sky.gdshader" id="19_sky"]
+[ext_resource type="Shader" path="res://shaders/tree.gdshader" id="20_tree"]
+[ext_resource type="Shader" path="res://shaders/water_tower.gdshader" id="21_water_tower"]
+[ext_resource type="Shader" path="res://shaders/markings.gdshader" id="22_markings"]
 
 [sub_resource type="ShaderMaterial" id="SkyMaterial_sky"]
 shader = ExtResource("19_sky")
@@ -46,6 +49,17 @@ shader = ExtResource("5_building")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ground"]
 shader = ExtResource("6_ground")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_tree"]
+shader = ExtResource("20_tree")
+shader_parameter/toon_softness = 0.3
+shader_parameter/toon_lambert = 0.3
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_water_tower"]
+shader = ExtResource("21_water_tower")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_markings"]
+shader = ExtResource("22_markings")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ocean"]
 shader = ExtResource("7_ocean")
@@ -86,6 +100,9 @@ script = ExtResource("1_city")
 building_material = SubResource("ShaderMaterial_building")
 ground_material = SubResource("ShaderMaterial_ground")
 water_material = SubResource("ShaderMaterial_ocean")
+markings_material = SubResource("ShaderMaterial_markings")
+tree_material = SubResource("ShaderMaterial_tree")
+water_tower_material = SubResource("ShaderMaterial_water_tower")
 
 [node name="Ocean" type="MeshInstance3D" parent="."]
 cast_shadow = 0

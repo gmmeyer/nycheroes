@@ -13,6 +13,21 @@ Mesh surfaces are triangle lists. The lanes surface is instead a set of polyline
 (points along the sidewalks, LANE_BREAK between polylines); its normals and uvs are zero.
 The water surface is inland water above sea level (lakes, reservoirs, creeks);
 sea-level water is the game's ocean plane.
+The markings surface (lod0) is paint on the streets: a triangle mesh
+MARKING_LIFT above the road, with no collision. Its uv2.x is a GROUND_MARKING_*
+kind, uv is local to each strip of paint in meters (x along the street, y
+across it; see the kinds for what the shader paints), normals face up and
+positions are rounded to 1 cm.
+The props surface (lod0) is one point per prop, no indices:
+  position = where it stands (a tree's trunk on the ground, a water tower's
+             legs on the roof)
+  normal   = (height m, width m, yaw radians): total height to the top; the
+             crown's or tank's diameter; rotation about +Y
+  uv       = (variant, trunk): trees' foliage tone (PROP_TONE_*) and trunk
+             diameter (m); water towers' tank (0 wood, 1 steel) and 0
+  uv2      = (PROP_* type, seed 0..1)
+Props are sorted by type. The manifest's "canopy" entry is a citywide map of
+tree canopy (landcover.write_canopy_map) for the ground shader.
 """
 
 import json
@@ -44,13 +59,26 @@ CURB_HEIGHT = 0.15
 SEAWALL_BOTTOM_Y = -6.0
 FEET = 0.3048
 
-FORMAT_VERSION = 5
+FORMAT_VERSION = 6
 SURFACE_BUILDINGS = 0
 SURFACE_GROUND = 1
 SURFACE_LANES = 2
 SURFACE_STRUCTURES = 3
 SURFACE_WATER = 4
+SURFACE_PROPS = 5
+SURFACE_MARKINGS = 6
 LANE_BREAK = 0xFFFFFFFF
+
+# Props (uv2.x of the props surface).
+PROP_TREE = 0         # broadleaf tree, round crown
+PROP_TREE_NARROW = 1  # columnar or oval crown (Callery pear, ginkgo, columnar oaks)
+PROP_CONIFER = 2      # pine, spruce, fir, cedar
+PROP_WATER_TOWER = 3  # rooftop water tank on legs
+# Trees' foliage tones (uv.x of the props surface).
+PROP_TONE_GREEN = 0
+PROP_TONE_LIGHT = 1   # yellow-green: honeylocust, ginkgo, birch, willow
+PROP_TONE_DARK = 2    # oaks, lindens, conifers
+PROP_TONE_RED = 3     # purple-leaf plum, copper beech, red-leaved maples
 
 # Ground and structure kinds, stored in uv2.x and read by shaders/ground.gdshader.
 GROUND_PAVEMENT = 0
@@ -63,6 +91,14 @@ STRUCTURE_CONCRETE = 6
 STRUCTURE_CABLE = 7
 STRUCTURE_STONE = 8
 GROUND_YARD = 9  # back yards, gardens and lawns around homes
+# Markings surface kinds; uv = (meters along, meters across).
+GROUND_MARKING_WHITE = 10      # solid white: stop lines, highway edge lines
+GROUND_MARKING_YELLOW = 11     # double yellow center line: a 0.45 m strip, uv.y -0.225..0.225,
+                               # painted where |uv.y| >= 0.075
+GROUND_MARKING_DASHED = 12     # white lane line: painted where fract(uv.x / 12) < 0.25
+GROUND_MARKING_CROSSWALK = 13  # curb to curb, uv.y from one curb: bars where fract(uv.y / 1.2) < 0.5
+# Paint sits this far above the road (the shader also nudges it toward the camera).
+MARKING_LIFT = 0.03
 
 # Facade styles, stored in uv2.x and read by shaders/building.gdshader. Roof
 # surfaces add ROOF to their building's style.
@@ -180,13 +216,25 @@ class MeshBuilder:
         normal(en) gives smooth per-vertex normals (Godot space); without it
         they face straight up."""
         tris = [t for t in (triangles_of(poly) for poly in polygons) if t is not None]
-        if not tris:
+        if tris:
+            self.add_draped_triangles(np.concatenate(tris), cell, height, uv2, normal)
+
+    def add_draped_triangles(self, tris, cell, height, uv2, normal=None, uv=None):
+        """Like add_draped, for (T, 3, 2) east/north triangles. uv (T, 3, 2)
+        replaces the default (world x/z) and is blended across the cuts."""
+        if len(tris) == 0:
             return
-        tris = split_triangles(np.concatenate(tris), cell)
+        tris = np.asarray(tris, np.float64)
+        if uv is None:
+            tris = split_triangles(tris, cell)
+            uv = np.stack([tris[..., 0], -tris[..., 1]], axis=-1)
+        else:
+            pieces, owner = split_triangles(tris, cell, owners=True)
+            uv = _blend(tris[owner], np.asarray(uv, np.float64)[owner], pieces)
+            tris = pieces
         en = tris.reshape(-1, 2)
         y = np.asarray(height(en), np.float64)
         pos = np.column_stack([en[:, 0], y, -en[:, 1]]).reshape(-1, 3, 3)
-        uv = np.stack([tris[..., 0], -tris[..., 1]], axis=-1)
         normals = None if normal is None else normal(en).reshape(-1, 3, 3)
         self.add(pos, uv, uv2, (0.0, 1.0, 0.0), normals)
 
@@ -228,7 +276,9 @@ class MeshBuilder:
     def is_empty(self) -> bool:
         return not self.pos
 
-    def build(self, origin):
+    def build(self, origin, decimals: int = 3):
+        """The mesh arrays relative to origin, with positions and uvs rounded
+        to `decimals` (normals to 0.001) so the files compress well."""
         if not self.pos:
             return None
         pos = np.concatenate(self.pos) - np.asarray(origin)
@@ -247,10 +297,9 @@ class MeshBuilder:
         for arr in (pos, uv, uv2, normals):
             arr[flip] = arr[flip][:, [0, 2, 1]]
 
-        # Rounded (1 mm positions, 0.001 normals) so the files compress well.
         verts = np.concatenate(
-            [np.round(pos.reshape(-1, 3), 3), np.round(normals.reshape(-1, 3), 3),
-             np.round(uv.reshape(-1, 2), 3), uv2.reshape(-1, 2)], axis=1
+            [np.round(pos.reshape(-1, 3), decimals), np.round(normals.reshape(-1, 3), 3),
+             np.round(uv.reshape(-1, 2), decimals), uv2.reshape(-1, 2)], axis=1
         ).astype(np.float32)
         unique, inverse = np.unique(verts, axis=0, return_inverse=True)
         return unique[:, 0:3], unique[:, 3:6], unique[:, 6:8], unique[:, 8:10], inverse.reshape(-1).astype(np.uint32)
@@ -311,15 +360,16 @@ def polygon_normal(ring: np.ndarray) -> np.ndarray:
     return normal / length if length > 1e-9 else np.zeros(3)
 
 
-def split_triangles(tris: np.ndarray, cell: float) -> np.ndarray:
+def split_triangles(tris: np.ndarray, cell: float, owners: bool = False):
     """Cuts (T, 3, 2) triangles along a `cell`-meter grid wherever they cross
     it, so no piece spans more than one grid cell. Neighbors are cut at the
-    same points, so a surface bent along the grid has no cracks."""
+    same points, so a surface bent along the grid has no cracks. With
+    `owners`, also returns which input triangle each piece came from."""
     lows = np.floor(tris.min(axis=1) / cell).astype(np.int64)
     highs = np.floor((tris.max(axis=1) - 1e-6) / cell).astype(np.int64)
     single = (lows == highs).all(axis=1)
     if single.all():
-        return tris
+        return (tris, np.arange(len(tris))) if owners else tris
     many = np.flatnonzero(~single)
     span = highs[many] - lows[many] + 1
     counts = span[:, 0] * span[:, 1]
@@ -331,9 +381,29 @@ def split_triangles(tris: np.ndarray, cell: float) -> np.ndarray:
     triangles = shapely.polygons(np.concatenate([rings, rings[:, :1]], axis=1))
     cells = shapely.box(cx * cell, cy * cell, (cx + 1) * cell, (cy + 1) * cell)
     pieces = shapely.intersection(triangles, cells)
-    pieces = pieces[(shapely.get_type_id(pieces) == 3) & (shapely.area(pieces) > 1e-6)]
-    cut = shapely.get_coordinates(shapely.constrained_delaunay_triangles(pieces)).reshape(-1, 4, 2)[:, :3]
-    return np.concatenate([tris[single], cut])
+    kept = (shapely.get_type_id(pieces) == 3) & (shapely.area(pieces) > 1e-6)
+    parts, which = shapely.get_parts(shapely.constrained_delaunay_triangles(pieces[kept]), return_index=True)
+    cut = shapely.get_coordinates(parts).reshape(-1, 4, 2)[:, :3]
+    out = np.concatenate([tris[single], cut])
+    if not owners:
+        return out
+    return out, np.concatenate([np.flatnonzero(single), many[owner[kept]][which]])
+
+
+def _blend(corners: np.ndarray, values: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """Values (T, 3, D) at triangles' corners (T, 3, 2), blended at points
+    (T, K, 2) inside them (barycentric)."""
+    a = corners[:, 0][:, None]
+    v0, v1 = (corners[:, 1] - corners[:, 0])[:, None], (corners[:, 2] - corners[:, 0])[:, None]
+    v2 = points - a
+    d00, d01, d11 = (v0 * v0).sum(-1), (v0 * v1).sum(-1), (v1 * v1).sum(-1)
+    d20, d21 = (v2 * v0).sum(-1), (v2 * v1).sum(-1)
+    denom = np.where(np.abs(d00 * d11 - d01 * d01) > 1e-12, d00 * d11 - d01 * d01, 1e-12)
+    w1 = (d11 * d20 - d01 * d21) / denom
+    w2 = (d00 * d21 - d01 * d20) / denom
+    w0 = 1.0 - w1 - w2
+    return (w0[..., None] * values[:, 0][:, None] + w1[..., None] * values[:, 1][:, None]
+            + w2[..., None] * values[:, 2][:, None])
 
 
 def encode_tile(surfaces: list[tuple[int, tuple]]) -> bytes:
