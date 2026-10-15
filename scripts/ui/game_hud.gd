@@ -2,7 +2,8 @@ class_name GameHud
 extends Control
 ## Player HUD: health bar, thugs taken down, a marker pointing to the nearest
 ## thug, and in co-op a marker for each other player and the game's status
-## (markers sit at the screen edge when what they point at is off screen).
+## (markers sit at the screen edge when what they point at is off screen),
+## plus the aerial photos' credit while any are shown.
 
 ## Thugs closer than this and on screen don't need a marker.
 const NEAR_ENOUGH := 35.0
@@ -10,10 +11,13 @@ const NEAR_ENOUGH := 35.0
 const PLAYER_NEAR_ENOUGH := 120.0
 const EDGE_MARGIN := 48.0
 const MARKER_COLOR := Color(1.0, 0.35, 0.25)
+## The license (CC BY 4.0) asks for this whenever the photos are shown.
+const AERIAL_CREDIT := "Aerial imagery: NYC OTI / NYS Orthoimagery Program 2024 (CC BY 4.0)"
 
 @export var hero: Hero
 @export var encounters: EncounterDirector
 @export var players: PlayerSync
+@export var city: CityStreamer
 
 var _font: Font
 
@@ -39,6 +43,9 @@ func _draw() -> void:
 	if hero.mode.name == &"KnockedOut":
 		_text(Vector2(size.x * 0.5 - 110.0, size.y * 0.35), "KNOCKED OUT", 40, MARKER_COLOR)
 	_draw_coop_status()
+	if city and city.photo_count > 0:
+		var width := _font.get_string_size(AERIAL_CREDIT, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12).x
+		_text(Vector2(size.x - width - 16.0, size.y - 12.0), AERIAL_CREDIT, 12, Color(1.0, 1.0, 1.0, 0.8))
 	var thug := encounters.nearest_thug(hero.world_position())
 	if thug:
 		_draw_marker(thug.global_position + Vector3.UP * 2.2, "THUGS", MARKER_COLOR, NEAR_ENOUGH)

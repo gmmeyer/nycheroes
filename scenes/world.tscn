@@ -33,7 +33,7 @@ background_mode = 2
 sky = SubResource("Sky_sky")
 ambient_light_source = 2
 ambient_light_color = Color(0.6, 0.66, 0.75, 1)
-ambient_light_energy = 0.6
+ambient_light_energy = 0.8
 tonemap_mode = 4
 fog_enabled = true
 fog_light_color = Color(0.7, 0.77, 0.85, 1)
@@ -73,7 +73,7 @@ script = ExtResource("8_lighting")
 sun = NodePath("../Sun")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-rotation = Vector3(-0.8, -0.6, 0)
+rotation = Vector3(-0.72, 0.6, 0)
 light_color = Color(1, 0.96, 0.9, 1)
 light_energy = 1.3
 shadow_enabled = true
@@ -142,7 +142,7 @@ script = ExtResource("2_camera")
 
 [node name="HUD" type="CanvasLayer" parent="."]
 
-[node name="GameHud" type="Control" parent="HUD" node_paths=PackedStringArray("hero", "encounters", "players")]
+[node name="GameHud" type="Control" parent="HUD" node_paths=PackedStringArray("hero", "encounters", "players", "city")]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -154,6 +154,7 @@ script = ExtResource("16_game_hud")
 hero = NodePath("../../Hero")
 encounters = NodePath("../../Encounters")
 players = NodePath("../../Players")
+city = NodePath("../../City")
 
 [node name="DebugLabel" type="Label" parent="HUD" node_paths=PackedStringArray("city", "hero", "free_camera")]
 offset_left = 12.0

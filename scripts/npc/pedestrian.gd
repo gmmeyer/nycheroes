@@ -31,6 +31,7 @@ var _pause := 0.0
 var _facing := 0.0
 var _player: AnimationPlayer
 var _detail_check := randf() * 0.5
+var _warmup: SkinWarmup
 
 @onready var _model: Node3D = $Model
 
@@ -42,6 +43,7 @@ func _ready() -> void:
 	_player.seek(randf() * 1.3)
 	for mesh in find_children("*", "MeshInstance3D", true, false):
 		(mesh as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_warmup = SkinWarmup.add_to(_model, &"Idle")
 
 
 ## Places the pedestrian on `lane` (world-space polyline), `t` of the way along `segment`.
@@ -87,6 +89,8 @@ func _process(delta: float) -> void:
 		speed = _walk_speed
 		if randf() < delta * 0.02:
 			_pause = randf_range(2.0, 6.0)  # stop for a moment now and then
+	if is_instance_valid(_warmup) and _warmup.holding:
+		speed = 0.0  # stand still while the pose is held (see SkinWarmup)
 	_move(speed * delta)
 
 	var from_hero := world_position - hero.world_position()

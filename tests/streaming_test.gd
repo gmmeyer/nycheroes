@@ -2,7 +2,9 @@ extends Node
 ## Headless check of city streaming across the five boroughs: at each spot,
 ## waits for tiles to finish loading, then checks that no tile is drawn
 ## together with an ancestor or descendant (doubled-up geometry) and that the
-## ground around the camera is covered by some drawn tile (no holes).
+## ground around the camera is covered by some drawn tile (no holes). Also
+## checks that every loaded tile with an aerial photo shows it, and that the
+## photos of tiles that have unloaded are freed.
 ## Run: godot --headless --path . res://tests/streaming_test.tscn
 
 ## [name, world position of the camera]
@@ -23,6 +25,8 @@ var _spot := -1
 var _time := 0.0
 var _settled := 0.0
 var _problems := 0
+## Every aerial photo texture seen so far: instance id -> WeakRef.
+var _photo_refs := {}
 
 
 func _ready() -> void:
@@ -85,11 +89,38 @@ func _check() -> void:
 			var point := focus + Vector3(cos(angle), 0.0, sin(angle)) * radius
 			if not _drawn_at(point):
 				holes += 1
-	var ok := doubled == 0 and holes == 0 and _time < MAX_WAIT
+	# Photos: shown on every loaded tile that has one, and gone with their tiles.
+	var photos := 0
+	var missing := 0
+	for level in _city._levels.size():
+		for tile in _city._levels[level]["tiles"]:
+			if tile.node == null:
+				continue
+			var photo := _photo_of(tile.node)
+			if photo:
+				photos += 1
+				_photo_refs[photo.get_instance_id()] = weakref(photo)
+			elif _city._photos_enabled and tile.info.get("aerial"):
+				missing += 1
+	var leaked := -photos
+	for ref: WeakRef in _photo_refs.values():
+		if ref.get_ref():
+			leaked += 1
+	var ok := doubled == 0 and holes == 0 and missing == 0 and leaked == 0 and _time < MAX_WAIT
 	if not ok:
 		_problems += 1
-	print("%-24s %5.1fs  loaded %s  drawn %s  doubled %d  holes %d  %s" % [
-		SPOTS[_spot][0], _time, loaded, visible, doubled, holes, "ok" if ok else "PROBLEM"])
+	print("%-24s %5.1fs  loaded %s  drawn %s  doubled %d  holes %d  photos %d (missing %d, leaked %d)  %s" % [
+		SPOTS[_spot][0], _time, loaded, visible, doubled, holes, photos, missing, leaked, "ok" if ok else "PROBLEM"])
+
+
+## The aerial photo a tile's node is showing, or null.
+func _photo_of(node: Node3D) -> Texture2D:
+	for child in node.get_children():
+		if child is MeshInstance3D and child.material_override is ShaderMaterial:
+			var photo: Texture2D = child.material_override.get_shader_parameter("aerial")
+			if photo:
+				return photo
+	return null
 
 
 ## True if something is drawn at this point, or nothing needs to be: no tile

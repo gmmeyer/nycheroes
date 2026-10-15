@@ -27,6 +27,9 @@ const PUNCH_HIT_TIME := 0.45
 const RECOVER_TIME := 0.4
 const STAGGER_TIME := 0.5
 const BLOOD_POOL_DELAY := 1.2
+## Further from the camera than this, stop animating (too small to notice, and
+## each animated character costs GPU time in browsers; see SkinWarmup).
+const ANIMATE_DISTANCE := 60.0
 
 ## The hero this thug is after (or, while idle, the one its gang was put near).
 var hero: Hero
@@ -61,6 +64,7 @@ var _bone_offsets: Array[Vector3] = []
 var _snapshots: SnapshotBuffer
 var _shown_restarts := -1
 var _local_animation_until := 0
+var _detail_check := randf() * 0.5
 
 @onready var _model: Node3D = $Model
 
@@ -76,6 +80,7 @@ func _ready() -> void:
 	_model.rotation.y = _facing
 	_play(&"Idle")
 	_player.seek(randf() * 2.0)
+	SkinWarmup.add_to(_model)
 	if puppet:
 		_snapshots = SnapshotBuffer.new()
 
@@ -146,6 +151,16 @@ func go_down(launch: Vector3, counts := true) -> void:
 	_ragdoll = Ragdoll.start(_skeleton, launch)
 	if counts:
 		Combat.on_thug_down(self, launch)
+
+
+func _process(delta: float) -> void:
+	_detail_check -= delta
+	if _detail_check > 0.0:
+		return
+	_detail_check = 0.5
+	var camera := get_viewport().get_camera_3d()
+	if camera:
+		_player.active = global_position.distance_to(camera.global_position) < ANIMATE_DISTANCE
 
 
 ## A copy's update from the host (world position).

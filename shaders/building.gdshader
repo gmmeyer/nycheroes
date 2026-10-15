@@ -3,7 +3,10 @@
 // UV2: x = facade style (0 brick, 1 prewar stone, 2 postwar concrete, 3 glass),
 //      plus 4 on roofs (which may slope, so the normal can't tell);
 //      y = per-building random seed in [0, 1).
+// With an aerial photo, roofs show it; walls keep the procedural facades.
 shader_type spatial;
+
+#include "res://shaders/aerial.gdshaderinc"
 
 uniform vec3 roof_color : source_color = vec3(0.36, 0.36, 0.37);
 uniform vec3 window_color : source_color = vec3(0.09, 0.12, 0.17);
@@ -30,13 +33,18 @@ vec3 wall_color(int style, float seed) {
 	return srgb(mix(vec3(0.30, 0.42, 0.50), vec3(0.46, 0.53, 0.58), fract(seed * 3.9)));
 }
 
+void vertex() {
+	aerial_uv = aerial_uv_of(VERTEX);
+}
+
 void fragment() {
 	int marked_style = int(UV2.x + 0.5);
 	int style = marked_style % 4;
 	float seed = UV2.y;
+	vec3 photo = aerial_albedo(aerial_uv);
 
 	if (marked_style >= 4) {
-		ALBEDO = roof_color * mix(0.75, 1.15, fract(seed * 17.3));
+		ALBEDO = mix(roof_color * mix(0.75, 1.15, fract(seed * 17.3)), photo, aerial_amount(aerial_uv));
 		ROUGHNESS = 0.95;
 		SPECULAR = 0.1;
 	} else {

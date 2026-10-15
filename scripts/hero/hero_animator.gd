@@ -28,6 +28,7 @@ func _ready() -> void:
 	_hand.bone_name = "DEF-hand.R"
 	skeleton.add_child(_hand)
 	_paint(find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D)
+	SkinWarmup.add_to(self)
 	hero.landed.connect(_on_landed)
 	_yaw = hero.facing
 

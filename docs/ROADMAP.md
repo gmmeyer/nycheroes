@@ -15,7 +15,7 @@ versions come last (step 8).
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public hosting still to do |
-| 6 | Realism from open data | In progress (real shape done) |
+| 6 | Realism from open data | In progress (real shape and aerial photos done) |
 | 7 | Overpasses and missing bridges | Planned |
 | 8 | Mac and Windows versions | Planned (last) |
 
@@ -118,8 +118,8 @@ In order:
 
 1. **Real shape (done, below):** terrain, building shapes, curbs and
    medians. (Bridges and overpasses come in step 7.)
-2. **Real view from above:** NY State aerial photos (2024/2025) draped on
-   streets, parks and roofs. The license needs confirming first.
+2. **Real view from above (done, below):** the city's 2024 aerial photos
+   draped over streets, parks and roofs.
 3. **Real architecture:** styles chosen from city tax-lot data (PLUTO:
    building class, year, floors, landmark status) with real photo textures
    (CC0 libraries); storefronts, fire escapes, cornices, rooftop water towers.
@@ -183,6 +183,30 @@ In order:
 - Waterfronts and piers sit at least 2 m above sea level (the pier data's
   median deck height is 2.1 m).
 - Cost: full-detail tiles grew to 852 MB in total.
+
+**Aerial photos (done):**
+- The city's 2024 orthoimagery (NYC OTI with the NYS Statewide Digital
+  Orthoimagery Program, 6-inch, flown March 2024). The city's metadata gives
+  CC BY 4.0, though its map service points to the general NYC.gov terms;
+  we went with CC BY 4.0, and the HUD shows the credit whenever photos are
+  on screen (see `CREDITS.md`). They're true orthophotos: roofs line up with
+  the footprints instead of leaning.
+- `tools/citygen/aerial.py` downloads the city's web-map tiles at zoom 18
+  (about 0.45 m per pixel; 74,000 tiles, 1.2 GB, cached in data/raw) and
+  resamples them into one JPEG per city tile in our projection: 0.5 m per
+  pixel up close (1128 px), 2 m mid (564 px), 16 m far (266 px), each with a
+  margin (32, 64, 128 m) for roofs that overhang their tile. 1.2 GB in all;
+  a player only downloads the tiles around them (about 9 MB at the start).
+- The game drapes each photo over its tile's ground, bridges and roofs; walls
+  keep their painted windows. Within about 100 m of the camera the ground
+  goes back to its plain colors, since the photo is blurry at eye level.
+- The photos have the morning's shadows baked in: the shader softens them,
+  and the game's sun now shines from the same direction (south-east), so its
+  own shadows agree. Parks are tinted greener (bare March trees), and the
+  asphalt and ambient light were lightened so shaded streets aren't black.
+- `?aerial=0` turns photos off; `?aerial_shadow=` and `?aerial_brightness=`
+  tune them. Photo textures take about 150-230 MB of GPU memory; decoding a
+  close-up photo takes about 7 ms on the web, at most one per frame.
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
@@ -249,14 +273,22 @@ templates for both are already installed.
 - **Single-threaded by default.** Tile decoding happens on the main thread
   within a per-frame budget. A threaded build needs cross-origin isolation
   headers from the host.
+- **Animated characters in Chrome on Windows** go through ANGLE (WebGL on
+  Direct3D 11), which treats Godot's skinned-vertex buffers as dynamic and
+  stalls on them until a pose stays still for ~30 frames.
+  `scripts/util/skin_warmup.gd` holds each character's pose briefly the
+  first time it's on screen and stops animating characters off screen; that
+  took a crowded Times Square from 22-35 FPS to the 180 FPS cap.
 - **Floating origin.** World positions are scene positions plus
   `WorldOrigin.offset`; anything physics-driven must survive a shift.
 
 ## Working on the project
 
-- Rebuild city data: `tools/citygen/fetch_data.py` (NYC Open Data and the
-  USGS elevation tiles), then `build_tiles.py` (Python venv in
-  `tools/citygen/.venv`, `requirements.txt` alongside).
+- Rebuild city data: `tools/citygen/fetch_data.py` (NYC Open Data, the
+  USGS elevation tiles and the 3-D building model), then `build_tiles.py`,
+  then `aerial.py` (downloads and lays out the aerial photos; it adds them
+  to the manifest, so run it after every `build_tiles.py`). Python venv in
+  `tools/citygen/.venv`, `requirements.txt` alongside.
   Prepared geometry is cached in `data/cache`; delete it after changing
   `prepare.py` or re-downloading.
 - Web build: `tools/build_web.ps1` (add `-Serve` to play at

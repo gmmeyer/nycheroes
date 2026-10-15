@@ -39,15 +39,16 @@ func _process(delta: float) -> void:
 	if not free and hero.frozen:
 		who = "Waiting for ground"
 
-	var render := "FPS %d  ·  %d draw calls  ·  %.2fM triangles" % [
+	var render := "FPS %d  ·  %d draw calls  ·  %.2fM triangles  ·  %d MB textures" % [
 		int(Engine.get_frames_per_second()),
 		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
-		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1e6]
+		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1e6,
+		int(Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1e6)]
 	var status := "%s  ·  %.0f m/s (%.0f km/h)  ·  altitude %.0f m  ·  %.5f, %.5f" % [
 		who, speed, speed * 3.6, world.y, lat, lon]
-	var tiles := "Tiles: %d near, %d mid, %d far, %d loading  ·  last tile build %.1f ms" % [
+	var tiles := "Tiles: %d near, %d mid, %d far, %d loading  ·  last tile build %.1f ms  ·  %d photos (last %.0f ms)" % [
 		city.loaded_counts[0], city.loaded_counts[1], city.loaded_counts[2],
-		city.pending_count(), city.last_build_msec]
+		city.pending_count(), city.last_build_msec, city.photo_count, city.last_photo_msec]
 	var standing := Combat.thugs.filter(func(thug: Thug) -> bool: return not thug.is_down()).size()
 	var people := "Pedestrians %d  ·  thugs %d standing, %d down  ·  health %d" % [
 		get_tree().get_node_count_in_group("pedestrians"), standing, Combat.defeated_count, int(hero.health)]
