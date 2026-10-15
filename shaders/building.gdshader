@@ -1,7 +1,10 @@
 // Buildings, drawn as stylized New York facades from per-building data
 // (tools/citygen/facades.py and build_tiles.py). Per vertex:
 //   UV    walls: (meters along the wall, meters above the building's base;
-//         the walls' feet are sunk 1 m below the base); roofs: world x/z.
+//         the walls' feet are sunk 1 m below the base); flat roofs: world
+//         x/z; houses' pitched roofs: (meters along the eaves, meters up
+//         the slope). Up close, flat roofs have parapets: the walls rise
+//         PARAPET_HEIGHT above the roof, with inner faces.
 //   UV2.x archetype + 64 * flags, a whole number (see the constants below).
 //   UV2.y floor height in decimeters + the building's random seed (0..0.999).
 // Each building type picks a palette and a window system (punched windows with
@@ -43,6 +46,10 @@ const int RETAIL = 4;
 const int FIRE_ESCAPES = 8;
 const int CORNICE = 16;
 const int LANDMARK = 32;
+const int PARAPET = 64;          // the wall's top PARAPET_HEIGHT stands above its roof
+const int PARAPET_INSIDE = 128;  // the inner side of a parapet, facing the roof
+// Same as tools/citygen/facades.py.
+const float PARAPET_HEIGHT = 1.0;
 
 // Window systems.
 const int PUNCHED = 0;   // separate windows in a masonry wall
@@ -939,6 +946,13 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 		glass *= 1.0 - escape.x;
 	}
 
+	// A parapet: the top of the wall, above the roof, is solid.
+	if ((flags & PARAPET) != 0) {
+		float solid = band(below_top, -1.0, PARAPET_HEIGHT, footprint.y);
+		color = mix(color, f.windows == CURTAIN ? f.frame : wall, solid);
+		glass *= 1.0 - solid;
+	}
+
 	// Top of the wall: a cornice on prewar street fronts, else a plain coping.
 	if (below_top < 4.0) {
 		bool masonry = f.windows != CURTAIN;
@@ -986,8 +1000,21 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 	return s;
 }
 
+// The inside of a parapet, seen from the roof: plain wall under its coping.
+Surface parapet_inside(vec2 p, vec2 footprint, int archetype, int flags, float seed, float below_top) {
+	Facade f = facade_for(archetype, seed, (flags & LANDMARK) != 0);
+	vec3 color = f.windows == CURTAIN ? f.frame : wall_texture(f.wall, f.surface, p, footprint) * 0.9;
+	color = mix(color, f.trim, band(below_top, -1.0, 0.24, footprint.y));
+	Surface s;
+	s.albedo = color;
+	s.emission = vec3(0.0);
+	s.glass = 0.0;
+	return s;
+}
+
 // Roofs: tar, silver coating, white membrane, gravel or shingles by building
-// type, with seams, blotches, and the odd vent or skylight.
+// type, with seams, blotches, and the odd vent or skylight. Pitched roofs'
+// uv runs along the eaves and up the slope, so shingle rows follow the eaves.
 vec3 roof(vec2 xz, vec2 footprint, int archetype, float seed) {
 	float r1 = rnd(seed, 51.0);
 	vec3 base;
@@ -1071,6 +1098,8 @@ void fragment() {
 		s.albedo = mix(roof(UV, footprint, archetype, seed), photo, aerial_amount(aerial_uv));
 		s.emission = vec3(0.0);
 		s.glass = 0.0;
+	} else if ((flags & PARAPET_INSIDE) != 0) {
+		s = parapet_inside(UV, footprint, archetype, flags, seed, wall_top_distance(wall_moments, UV.y));
 	} else {
 		float below_top = wall_top_distance(wall_moments, UV.y);
 		s = facade(UV, footprint, archetype, flags, floor_height, seed, below_top);

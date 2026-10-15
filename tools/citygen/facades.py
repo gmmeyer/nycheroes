@@ -7,8 +7,8 @@ The game's building shader draws them (shaders/building.gdshader). In the
 tiles, building surfaces carry, per vertex:
   uv2.x = archetype + FLAG_SCALE * flags   (a whole number in a float)
   uv2.y = floor height in decimeters + the building's random seed (0..0.999)
-Flags are per face: ROOF and FRONT (the wall faces a street) are set by
-build_tiles.py; the rest are per building, from here.
+Flags are per face: ROOF, FRONT (the wall faces a street), PARAPET and
+PARAPET_INSIDE are set by build_tiles.py; the rest are per building, from here.
 
 prepare() makes data/cache/facades.pkl: arrays in the same order as the
 prepared buildings (prepare.py).
@@ -45,7 +45,10 @@ RETAIL = 4        # shops on the ground floor
 FIRE_ESCAPES = 8  # fire escapes on the street front
 CORNICE = 16      # a cornice along the top of the walls
 LANDMARK = 32     # a designated landmark
+PARAPET = 64      # the wall's top PARAPET_HEIGHT stands above its roof
+PARAPET_INSIDE = 128  # the face is a parapet's inner side, facing the roof
 FLAG_SCALE = 64
+PARAPET_HEIGHT = 1.0  # meters; the shader has the same constant
 
 DEFAULT_FLOOR = 3.3  # meters, when the floor count isn't known or doesn't fit
 MIN_FLOOR, MAX_FLOOR = 2.6, 6.0

@@ -47,7 +47,8 @@ from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND
                     ORIGIN_LON, PROJECTION, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y, STRUCTURE_CONCRETE,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
                     SURFACE_STRUCTURES, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
-                    polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangulate_planar)
+                    polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangles_of,
+                    triangulate_planar)
 from terrain import Terrain
 
 REGION = "nyc"
@@ -58,10 +59,11 @@ OUT_DIR = TILES_DIR / REGION
 # from the 3-D model instead of a footprint prism, where the model has one.
 # curbs: streets sit CURB_HEIGHT below the sidewalks, behind curbs (up close
 # only; from further away nobody can tell).
+# roofs: flat roofs get parapets and houses pitched roofs (up close only).
 LEVELS = {
     "lod0": {"size": 500.0, "building_tolerance": 0.3, "ground_tolerance": 0.2, "keep_holes": True,
              "min_area": 4.0, "roads": True, "min_ground_area": 0.5, "ground_cell": 20.0,
-             "shapes_from": 0.0, "curbs": True},
+             "shapes_from": 0.0, "curbs": True, "roofs": True},
     "lod1": {"size": 1000.0, "building_tolerance": 3.0, "ground_tolerance": 2.5, "keep_holes": False,
              "min_area": 60.0, "roads": True, "min_ground_area": 20.0, "ground_cell": 40.0,
              "shapes_from": 40.0,
@@ -113,6 +115,16 @@ SHAPE_HEIGHT_TOLERANCE = (6.0, 0.25)  # meters, fraction of the height
 # so setback walls above a lower roof count too.
 FRONT_PROBES = (6.0, 15.0)
 FRONT_REACH = 4.0
+
+# Pitched roofs: houses whose footprint fills at least PITCH_FILL of its
+# smallest enclosing rectangle, PITCH_WIDTH wide, get a gable or (on longer
+# ones, HIP_SHARE of the time) a hip roof, PITCH_DEGREES steep, rising to the
+# building's height; the walls stop at the eaves, at least MIN_EAVES up.
+PITCH_FILL = 0.8
+PITCH_WIDTH = (3.5, 16.0)
+PITCH_DEGREES = (28.0, 40.0)
+HIP_SHARE = 0.4
+MIN_EAVES = 2.6
 
 # Paint can come from street centerlines this far outside a tile.
 MARKING_REACH = 30.0
@@ -356,25 +368,136 @@ def _facade(index: int) -> tuple[int, int, int, float]:
     return int(f["archetype"][index]), int(f["flags"][index]), int(f["floor_dm"][index]), float(b["seed"][index])
 
 
-def _add_prism(builder: MeshBuilder, poly, height: float, facade: tuple, fronts: bool = True) -> None:
+def _add_prism(builder: MeshBuilder, poly, height: float, facade: tuple, fronts: bool = True,
+               parapet: bool = False) -> None:
     """A building standing on its lowest corner (heights are measured from
     there); uphill, its walls run into the ground. Walls facing a street are
-    marked FRONT (unless `fronts` is off, for merged blocks)."""
+    marked FRONT (unless `fronts` is off, for merged blocks). With `parapet`,
+    the walls rise PARAPET_HEIGHT above the roof, with an inner face."""
     archetype, flags, floor_dm, seed = facade
     poly = shapely.orient_polygons(poly)
     ground = _footprint_ground(poly)
     top = ground + height
+    wall_flags = flags | (facades.PARAPET if parapet else 0)
     for ring in (poly.exterior, *poly.interiors):
         coords = np.asarray(ring.coords)[:, :2]
-        uv2 = np.tile(facades.encode(archetype, flags, floor_dm, seed), (len(coords) - 1, 1))
-        if fronts and len(coords) > 1:
-            seg = coords[1:] - coords[:-1]
-            length = np.maximum(np.hypot(seg[:, 0], seg[:, 1]), 1e-9)
-            outward = np.column_stack([seg[:, 1], -seg[:, 0]]) / length[:, None]  # right of travel
-            front = _faces_street((coords[1:] + coords[:-1]) * 0.5, outward)
-            uv2[front, 0] += facades.FLAG_SCALE * facades.FRONT
-        builder.add_walls(coords, ground - 1.0, top, uv2, ground_y=ground)
+        uv2 = _wall_uv2(coords, (archetype, wall_flags, floor_dm, seed), fronts)
+        if parapet:
+            builder.add_walls(coords, ground - 1.0, top + facades.PARAPET_HEIGHT, uv2, ground_y=ground)
+            inside = facades.encode(archetype, flags | facades.PARAPET_INSIDE, floor_dm, seed)
+            builder.add_walls(coords[::-1], top, top + facades.PARAPET_HEIGHT, inside, ground_y=ground)
+        else:
+            builder.add_walls(coords, ground - 1.0, top, uv2, ground_y=ground)
     builder.add_flat([poly], top, facades.encode(archetype, flags | facades.ROOF, floor_dm, seed))
+
+
+def _wall_uv2(coords: np.ndarray, facade: tuple, fronts: bool) -> np.ndarray:
+    """Per-segment uv2 for walls along coords, FRONT where they face a street."""
+    archetype, flags, floor_dm, seed = facade
+    uv2 = np.tile(facades.encode(archetype, flags, floor_dm, seed), (max(len(coords) - 1, 0), 1))
+    if fronts and len(coords) > 1:
+        seg = coords[1:] - coords[:-1]
+        length = np.maximum(np.hypot(seg[:, 0], seg[:, 1]), 1e-9)
+        outward = np.column_stack([seg[:, 1], -seg[:, 0]]) / length[:, None]  # right of travel
+        front = _faces_street((coords[1:] + coords[:-1]) * 0.5, outward)
+        uv2[front, 0] += facades.FLAG_SCALE * facades.FRONT
+    return uv2
+
+
+def _add_pitched(builder: MeshBuilder, poly, height: float, facade: tuple) -> bool:
+    """A house with a gable or hip roof over its footprint's smallest
+    enclosing rectangle, peaking at `height` (see PITCH_FILL). Returns False,
+    adding nothing, if the footprint doesn't suit one."""
+    archetype, flags, floor_dm, seed = facade
+    if len(poly.interiors):
+        return False
+    rect = shapely.oriented_envelope(poly)
+    if rect.geom_type != "Polygon" or poly.area < PITCH_FILL * rect.area:
+        return False
+    corners = np.asarray(rect.exterior.coords)[:4]
+    edges = [corners[1] - corners[0], corners[2] - corners[1]]
+    lengths = [float(np.hypot(*e)) for e in edges]
+    k = 0 if lengths[0] >= lengths[1] else 1
+    along, length = edges[k] / lengths[k], lengths[k]
+    across, width = edges[1 - k] / lengths[1 - k], lengths[1 - k]
+    if not PITCH_WIDTH[0] <= width <= PITCH_WIDTH[1]:
+        return False
+    r = props.location_seed(np.array([[seed * 1000.0, 17.0]]))[0]
+    degrees = PITCH_DEGREES[0] + (PITCH_DEGREES[1] - PITCH_DEGREES[0]) * r
+    rise = min(np.tan(np.radians(degrees)) * width / 2, height - MIN_EAVES)
+    if rise < 1.0:
+        return False
+    pitch = np.arctan2(rise, width / 2)  # shallower than `degrees` on low houses
+    hip = props.location_seed(np.array([[seed * 1000.0, 29.0]]))[0] < HIP_SHARE and length > 1.15 * width
+    center = corners.mean(axis=0)
+    poly = shapely.orient_polygons(poly)
+    ground = _footprint_ground(poly)
+    eaves = ground + height - rise
+    half_l, half_w = length / 2, width / 2
+
+    def local(en):
+        d = np.asarray(en, np.float64).reshape(-1, 2) - center
+        return d @ along, d @ across
+
+    def roof_height(en):
+        u, v = local(en)
+        slope = 1.0 - np.abs(v) / half_w
+        if hip:
+            slope = np.minimum(slope, (half_l - np.abs(u)) / half_w)
+        return eaves + rise * np.clip(slope, 0.0, 1.0)
+
+    def world(uv):
+        uv = np.asarray(uv, np.float64)
+        return center + uv[:, :1] * along + uv[:, 1:] * across
+
+    # Roof faces in (u, v): each with its outline and its downhill direction.
+    if hip:
+        ridge = half_l - half_w
+        faces = [([(-half_l, half_w), (half_l, half_w), (ridge, 0.0), (-ridge, 0.0)], (0.0, 1.0)),
+                 ([(-half_l, -half_w), (half_l, -half_w), (ridge, 0.0), (-ridge, 0.0)], (0.0, -1.0)),
+                 ([(half_l, half_w), (half_l, -half_w), (ridge, 0.0)], (1.0, 0.0)),
+                 ([(-half_l, half_w), (-half_l, -half_w), (-ridge, 0.0)], (-1.0, 0.0))]
+        breaks = [[(-half_l, half_w), (-ridge, 0.0), (ridge, 0.0), (half_l, half_w)],
+                  [(-half_l, -half_w), (-ridge, 0.0)], [(ridge, 0.0), (half_l, -half_w)]]
+    else:
+        faces = [([(-half_l, half_w), (half_l, half_w), (half_l, 0.0), (-half_l, 0.0)], (0.0, 1.0)),
+                 ([(-half_l, -half_w), (half_l, -half_w), (half_l, 0.0), (-half_l, 0.0)], (0.0, -1.0))]
+        breaks = [[(-half_l - 1.0, 0.0), (half_l + 1.0, 0.0)]]
+    grown = shapely.buffer(poly, 0.01, join_style="mitre")
+    roof_uv2 = facades.encode(archetype, flags | facades.ROOF, floor_dm, seed)
+    for outline, down in faces:
+        piece = shapely.intersection(Polygon(world(np.array(outline) * 1.002)), grown)
+        tris = [t for t in (triangles_of(p) for p in polygons_of(piece, 0.01)) if t is not None]
+        if not tris:
+            continue
+        tris = np.concatenate(tris)
+        en = tris.reshape(-1, 2)
+        y = roof_height(en)
+        pos = np.column_stack([en[:, 0], y, -en[:, 1]]).reshape(-1, 3, 3)
+        # uv: meters along the eave, meters up the slope (shingle rows).
+        u, v = local(en)
+        down_u, down_v = down
+        across_eave = u * down_v - v * down_u
+        up_slope = (half_w - (u * down_u + v * down_v)) / np.cos(pitch)
+        uv = np.column_stack([across_eave, up_slope]).reshape(-1, 3, 2)
+        d = down_u * along + down_v * across  # downhill, east/north
+        normal = np.array([d[0] * np.sin(pitch), np.cos(pitch),
+                           -d[1] * np.sin(pitch)])
+        builder.add(pos, uv, roof_uv2, normal / np.linalg.norm(normal))
+
+    # Walls up to the roof, with corners where they pass under a ridge or hip.
+    ring = shapely.LineString(np.asarray(poly.exterior.coords)[:, :2])
+    lines = shapely.MultiLineString([world(np.array(b)) for b in breaks])
+    cuts = shapely.get_coordinates(shapely.intersection(ring, lines))
+    distances = np.concatenate([
+        shapely.line_locate_point(ring, shapely.points(np.asarray(ring.coords))),
+        shapely.line_locate_point(ring, shapely.points(cuts)) if len(cuts) else np.zeros(0)])
+    distances[len(ring.coords) - 1] = ring.length  # the closing point
+    distances = np.unique(np.round(distances, 3))
+    coords = shapely.get_coordinates(shapely.line_interpolate_point(ring, distances))
+    uv2 = _wall_uv2(coords, facade, True)
+    builder.add_walls(coords, ground - 1.0, roof_height(coords), uv2, ground_y=ground)
+    return True
 
 
 def _footprint_ground(geom) -> float:
@@ -387,14 +510,23 @@ def _add_building(builder: MeshBuilder, index: int, settings: dict) -> None:
     b = _W["b"]
     height = float(b["height"][index])
     shape = _W["shapes"].get(int(b["bin"][index])) if height >= settings["shapes_from"] else None
+    # Houses get pitched roofs instead (the 3-D model's roofs are flat levels).
+    if settings.get("roofs") and _W["facades"]["archetype"][index] == facades.HOUSE:
+        shape = None
     if shape is not None and _shape_matches(shape, b["geoms"][index], height):
         _add_shape(builder, shape, _footprint_ground(b["geoms"][index]), _facade(index))
         return
     geom = shapely.simplify(b["geoms"][index], settings["building_tolerance"], preserve_topology=True)
+    facade = _facade(index)
+    roofs = settings.get("roofs", False)
     for poly in polygons_of(geom, settings["min_area"]):
         if not settings["keep_holes"]:
             poly = Polygon(poly.exterior)
-        _add_prism(builder, poly, float(b["height"][index]), _facade(index))
+        if roofs and facade[0] == facades.HOUSE:
+            if not _add_pitched(builder, poly, height, facade):
+                _add_prism(builder, poly, height, facade)
+        else:
+            _add_prism(builder, poly, height, facade, parapet=roofs)
 
 
 def _shape_matches(shape, footprint, height: float) -> bool:

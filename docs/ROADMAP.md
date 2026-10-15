@@ -15,7 +15,7 @@ versions come last (step 8).
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public hosting still to do |
-| 6 | Realism from open data | In progress (real shape, stylized facades, trees, water towers and street paint done) |
+| 6 | Realism from open data | In progress (real shape, stylized facades, trees, water towers, street paint and roofs done) |
 | 7 | Overpasses and missing bridges | Planned |
 | 8 | Mac and Windows versions | Planned (last) |
 
@@ -293,7 +293,19 @@ In order:
   towers 74, paint 76), plus the 3.9 MB canopy map; 3.4 million trees and
   9,637 water towers citywide. About +0.3-0.8 ms per frame (draw calls in
   midtown 190 to 290); every view still at the 145 FPS cap.
-- Still to do: roof parapets, night lighting, other street furniture.
+- Still to do: night lighting, other street furniture.
+
+**Roofs: parapets and pitched roofs (done):**
+- Up close, flat roofs get 1 m parapets: the walls rise above the roof
+  with an inner face, and the shader draws the band solid (no windows)
+  under its coping or cornice, and the inside as plain wall. Rowhouse rows
+  show their party walls; the parapets cast toon shadows on the roofs.
+- Detached houses (the 3-D model's roofs are flat levels) get gable or hip
+  roofs, 28-40 degrees, over their footprint's smallest enclosing
+  rectangle when the footprint fills most of it, peaking at the data's
+  height; walls rise to the roof line with gable ends, and shingle rows
+  follow the eaves. Other houses keep flat roofs.
+- Cost: full-detail tiles 1,201 MB (+113 MB); frame rate unchanged.
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
