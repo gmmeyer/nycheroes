@@ -1,17 +1,22 @@
 class_name CityProps
 extends RefCounted
-## Trees, rooftop water towers and street lights of a near city tile (its
-## props surface, see CityTileDecoder), drawn with the low-poly meshes from
-## PropMeshes: one MultiMeshInstance3D for every kind of tree (they share a
-## mesh with three shapes), one that casts the trees' shadows, one for water
-## towers, and one for street lights (both styles share a mesh). Draw calls
-## are what props cost most on the web (measured), hence so few.
+## Trees, rooftop water towers, street lights and street furniture of a near
+## city tile (its props surface, see CityTileDecoder), drawn with the low-poly
+## meshes from PropMeshes: one MultiMeshInstance3D for every kind of tree
+## (they share a mesh with three shapes), one that casts the trees' shadows,
+## one for water towers, one for street lights (both styles share a mesh),
+## and two for street furniture: small pieces (hydrants, benches, litter
+## baskets, bike racks, parking meters) and large ones (bus shelters, LinkNYC
+## kiosks, subway entrances, traffic signals, newsstands), each mesh holding
+## all its pieces' shapes. Draw calls are what props cost most on the web
+## (measured), hence so few.
 ##
 ## At night street lights add a MultiMesh of glows around their heads (shown
 ## only while the city's lights are on: set lights_on), and their pools of
-## light go to the street light map (StreetLightMap) as a 2D MultiMesh, which
-## the ground, paint, walls and trees look up; the main view draws no extra
-## geometry for them.
+## light go to the street light map (StreetLightMap) as a 2D MultiMesh, with
+## the light of lit bus shelters and newsstands; the ground, paint, walls,
+## trees and furniture look it up, and the main view draws no extra geometry
+## for it.
 ##
 ## Each instance's transform scales the unit mesh to the prop's size (x and z
 ## by its width, y by its height) and moves it to its base point; its color
@@ -19,21 +24,29 @@ extends RefCounted
 ## seed 0..1, type). The shaders turn the mesh to its yaw (rotating there
 ## keeps the transform free of sines and cosines). A street light's "width"
 ## is its arm's length (0 for post-tops), so its shader places its vertices
-## itself.
+## itself, and so does the furniture's (its meshes are in meters).
 ##
 ## Tiles are built under a few milliseconds a frame on the web, where a
 ## GDScript loop writing thousands of props would take too long, so the
 ## instance buffer is assembled by native code: the decoded columns are
 ## wrapped as one-channel float images and copied into place column by column
 ## with Image.blit_rect. The tiles have the props sorted by type, so each
-## MultiMesh's share is one slice of it.
+## MultiMesh's share is a slice of it per range of types.
 
-## The MultiMeshes: their node names, and the first and last prop type
-## (CityTileDecoder.PROP_*) each holds.
-const GROUP_NAMES: Array[String] = ["Trees", "WaterTowers", "StreetLights"]
-const GROUP_TYPES: Array[Vector2i] = [Vector2i(0, 2), Vector2i(3, 3), Vector2i(4, 4)]
+## The MultiMeshes: their node names, and the prop types
+## (CityTileDecoder.PROP_*) each holds, as ranges (first, last).
+const GROUP_NAMES: Array[String] = ["Trees", "WaterTowers", "StreetLights", "SmallFurniture", "LargeFurniture"]
+const GROUP_TYPES: Array[Array] = [
+	[Vector2i(0, 2)], [Vector2i(3, 3)], [Vector2i(4, 4)],
+	# Hydrants; benches; litter baskets, bike racks and parking meters.
+	[Vector2i(5, 5), Vector2i(8, 8), Vector2i(11, 13)],
+	# Bus shelters and LinkNYC; subway entrances and traffic signals; newsstands.
+	[Vector2i(6, 7), Vector2i(9, 10), Vector2i(14, 14)],
+]
 const WATER_TOWERS := 1
 const STREET_LIGHTS := 2
+const SMALL_FURNITURE := 3
+const LARGE_FURNITURE := 4
 ## Street lights' glows: their node name, and the group they're all in.
 const GLOW_NAME := "StreetLightGlow"
 const GLOW_GROUP := &"street_light_glow"
@@ -60,6 +73,15 @@ const POOL_COPIES: Array[Vector3i] = [
 	Vector3i(4, 0, 0), Vector3i(0, 0, 3), Vector3i(4, 0, 5), Vector3i(0, 2, 7),
 	Vector3i(1, 2, 8), Vector3i(1, 1, 9), Vector3i(1, 0, 10), Vector3i(2, 0, 11),
 ]
+## Lit furniture's light in the same map: custom is (yaw, 0, height, prop
+## type), so shaders/street_light_pool.gdshader tells it from lamps.
+const LIT_FURNITURE_POOL_COPIES: Array[Vector3i] = [
+	Vector3i(4, 0, 0), Vector3i(0, 0, 3), Vector3i(4, 0, 5), Vector3i(0, 2, 7),
+	Vector3i(1, 2, 8), Vector3i(1, 0, 10), Vector3i(3, 0, 11),
+]
+## Furniture lit at night that lights the sidewalk around it (prop types):
+## bus shelters and newsstands.
+const LIT_FURNITURE: Array[int] = [CityTileDecoder.PROP_BUS_SHELTER, CityTileDecoder.PROP_NEWSSTAND]
 ## Wind sway, seed variety and the distance shrink move vertices a little
 ## outside the unit mesh's box (meters).
 const CULL_MARGIN := 1.5
@@ -68,6 +90,13 @@ const CULL_MARGIN := 1.5
 ## grow with distance.
 const STREET_LIGHT_CULL_MARGIN := 4.0
 const GLOW_CULL_MARGIN := 8.0
+## Furniture's boxes don't know its yaw or its meshes' real sizes either: a
+## signal's arm reaches 4.6 m from its pole.
+const FURNITURE_CULL_MARGIN := 5.0
+## A tile's furniture draws until its tile's center is this much further from
+## the camera than where its pieces have shrunk away (half a 500 m tile's
+## diagonal, and a little).
+const FURNITURE_RANGE_PAST_FADE := 370.0
 
 ## Trees stop drawing once their tile's center is this far from the camera
 ## (m). The tree shader shrinks each tree away before that (its
@@ -86,6 +115,12 @@ var water_tower_range := 1600.0
 ## go on to 1500 m (street_light_glow.gdshader).
 var street_light_range := 1050.0
 var glow_range := 1900.0
+## Street furniture shrinks away piece by piece between these distances from
+## the camera (m; set_furniture_fade() changes them): small pieces (hydrants,
+## benches, baskets, bike racks, meters), which are a pixel or two by then,
+## and large ones. Each tile's furniture stops drawing past them.
+var small_furniture_fade := Vector2(180.0, 260.0)
+var large_furniture_fade := Vector2(420.0, 580.0)
 ## Whether new tiles' glows show (the city's lights are on).
 var lights_on := false
 ## Where street lights' pools go (null: nowhere).
@@ -99,14 +134,38 @@ var _glow_material: Material
 
 
 func _init(tree_material: Material, water_tower_material: Material, street_light_material: Material,
-		street_light_glow_material: Material) -> void:
-	_meshes = [PropMeshes.tree(), PropMeshes.water_tower(), PropMeshes.street_light()]
-	# Water towers cast their own shadows; street lights cast none (too thin
-	# to show in the shadow map, and they'd cost a draw call per split).
-	_shadow_meshes = [PropMeshes.tree_shadow(), null, null]
-	_materials = [tree_material, water_tower_material, street_light_material]
+		street_light_glow_material: Material, street_furniture_material: Material) -> void:
+	_meshes = [PropMeshes.tree(), PropMeshes.water_tower(), PropMeshes.street_light(),
+		PropMeshes.street_furniture_small(), PropMeshes.street_furniture_large()]
+	# Water towers cast their own shadows; street lights and furniture cast
+	# none (thin, or small next to the buildings' shadows, and each would cost
+	# a draw call per shadow split: large furniture's shadows measured 3-11%
+	# of the frame rate in midtown for little to see).
+	_shadow_meshes = [PropMeshes.tree_shadow(), null, null, null, null]
+	_materials = [tree_material, water_tower_material, street_light_material, street_furniture_material,
+		street_furniture_material]
 	_glow_mesh = PropMeshes.street_light_glow()
 	_glow_material = street_light_glow_material
+	# Fade distances already set on the material (?sh_small_fade_distance=...,
+	# see LightingOverrides) win over the defaults.
+	var material := street_furniture_material as ShaderMaterial
+	if material:
+		var small: Variant = material.get_shader_parameter("small_fade_distance")
+		var large: Variant = material.get_shader_parameter("large_fade_distance")
+		small_furniture_fade = small if small is Vector2 else small_furniture_fade
+		large_furniture_fade = large if large is Vector2 else large_furniture_fade
+	set_furniture_fade(small_furniture_fade, large_furniture_fade)
+
+
+## Sets where street furniture shrinks away (see small_furniture_fade), in
+## its shader too. Tiles built from then on draw it to match.
+func set_furniture_fade(small: Vector2, large: Vector2) -> void:
+	small_furniture_fade = small
+	large_furniture_fade = large
+	var material := _materials[SMALL_FURNITURE] as ShaderMaterial
+	if material:
+		material.set_shader_parameter("small_fade_distance", small)
+		material.set_shader_parameter("large_fade_distance", large)
 
 
 ## Adds a tile's props (a decoded props surface) under its node. Returns how
@@ -124,17 +183,22 @@ func add_to(parent: Node3D, props: Dictionary) -> int:
 	var buffer := _buffer(sources, count, COPIES, STRIDE)
 	var types := sources[3].get_region(Rect2i(0, 0, 1, count)).get_data().to_float32_array()
 	for group in GROUP_NAMES.size():
-		# Types are whole numbers, sorted.
-		var start := types.bsearch(GROUP_TYPES[group].x - 0.5)
-		var end := types.bsearch(GROUP_TYPES[group].y + 0.5)
-		if end <= start:
+		# Types are whole numbers, sorted: a slice per range.
+		var share := PackedFloat32Array()
+		for types_range: Vector2i in GROUP_TYPES[group]:
+			var start := types.bsearch(types_range.x - 0.5)
+			var end := types.bsearch(types_range.y + 0.5)
+			if end > start:
+				share.append_array(buffer.slice(start * STRIDE, end * STRIDE))
+		if share.is_empty():
 			continue
-		var share := buffer.slice(start * STRIDE, end * STRIDE)
 		var instance := _instance(group, share, _meshes[group])
 		parent.add_child(instance)
 		if group == STREET_LIGHTS:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			_add_street_light_extras(parent, share, sources, start, end)
+			_add_glows(parent, share)
+		elif group >= SMALL_FURNITURE:
+			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		elif _shadow_meshes[group]:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			if tree_shadows:
@@ -143,11 +207,13 @@ func add_to(parent: Node3D, props: Dictionary) -> int:
 				shadows.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 				shadows.visibility_range_end = tree_shadow_range
 				parent.add_child(shadows)
+	if light_map:
+		_add_pools(parent, sources, types)
 	return count
 
 
-## Street lights' glows (under the tile's node) and pools (in the light map).
-func _add_street_light_extras(parent: Node3D, share: PackedFloat32Array, sources: Array[Image], start: int, end: int) -> void:
+## Street lights' glows, under the tile's node.
+func _add_glows(parent: Node3D, share: PackedFloat32Array) -> void:
 	var glows := _instance(STREET_LIGHTS, share, _glow_mesh)
 	glows.name = GLOW_NAME
 	glows.material_override = _glow_material
@@ -157,16 +223,29 @@ func _add_street_light_extras(parent: Node3D, share: PackedFloat32Array, sources
 	glows.visible = lights_on
 	glows.add_to_group(GLOW_GROUP)
 	parent.add_child(glows)
-	if light_map == null:
-		return
-	var count := end - start
-	var lamps: Array[Image] = []
-	for source in sources:
-		lamps.append(source.get_region(Rect2i(0, start, source.get_width(), count)))
-	var ones := Image.create_empty(1, count, false, Image.FORMAT_RF)
-	ones.fill(Color(1.0, 0.0, 0.0))
-	lamps.append(ones)
-	light_map.add_pools(parent, _buffer(lamps, count, POOL_COPIES, POOL_STRIDE), count)
+
+
+## The street lights' pools and lit furniture's light, as one 2D MultiMesh
+## in the light map (if the tile has any).
+func _add_pools(parent: Node3D, sources: Array[Image], types: PackedFloat32Array) -> void:
+	var buffer := PackedFloat32Array()
+	var count := 0
+	for kind: int in [CityTileDecoder.PROP_STREET_LIGHT] + LIT_FURNITURE:
+		var start := types.bsearch(kind - 0.5)
+		var end := types.bsearch(kind + 0.5)
+		if end <= start:
+			continue
+		var slice: Array[Image] = []
+		for source in sources:
+			slice.append(source.get_region(Rect2i(0, start, source.get_width(), end - start)))
+		var ones := Image.create_empty(1, end - start, false, Image.FORMAT_RF)
+		ones.fill(Color(1.0, 0.0, 0.0))
+		slice.append(ones)
+		var copies := POOL_COPIES if kind == CityTileDecoder.PROP_STREET_LIGHT else LIT_FURNITURE_POOL_COPIES
+		buffer.append_array(_buffer(slice, end - start, copies, POOL_STRIDE))
+		count += end - start
+	if count > 0:
+		light_map.add_pools(parent, buffer, count)
 
 
 ## The instance buffer of all `count` props, in the tile's order: `stride`
@@ -197,6 +276,12 @@ func _instance(group: int, buffer: PackedFloat32Array, mesh: Mesh) -> MultiMeshI
 		STREET_LIGHTS:
 			instance.extra_cull_margin = STREET_LIGHT_CULL_MARGIN
 			instance.visibility_range_end = street_light_range
+		SMALL_FURNITURE:
+			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
+			instance.visibility_range_end = small_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
+		LARGE_FURNITURE:
+			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
+			instance.visibility_range_end = large_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
 		_:
 			instance.extra_cull_margin = CULL_MARGIN
 			instance.visibility_range_end = tree_range

@@ -44,7 +44,9 @@ import prepare
 import props
 from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT,
                     GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_YARD, LANE_BREAK, MARKING_LIFT, ORIGIN_LAT,
-                    ORIGIN_LON, PROJECTION, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y, STRUCTURE_CONCRETE,
+                    ORIGIN_LON, PROJECTION, PROP_HYDRANT, PROP_PARKING_METER, PROP_TRAFFIC_SIGNAL,
+                    PROP_WATER_TOWER, SEAWALL_BOTTOM_Y,
+                    STRUCTURE_CONCRETE,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
                     SURFACE_STRUCTURES, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
                     polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangles_of,
@@ -133,6 +135,11 @@ MARKING_REACH = 30.0
 # have to move further than TREE_MAX_MOVE (then they're left out).
 TREE_CURB_GAP = 0.8
 TREE_MAX_MOVE = 4.0
+# Hydrants and parking meters stand CURBSIDE_GAP from the curb; the data puts
+# some of them meters back, so ones within CURBSIDE_REACH of it move up.
+CURBSIDE_TYPES = (PROP_HYDRANT, PROP_PARKING_METER)
+CURBSIDE_GAP = 0.5
+CURBSIDE_REACH = 6.0
 # Canopy trees keep this far from street trees (which already stand for the
 # canopy over sidewalks) and judge how wooded it is within CANOPY_REACH.
 CANOPY_CLEARANCE = 4.5
@@ -153,6 +160,7 @@ def main() -> None:
     prepare.load("facades")
     prepare.load("trees")
     prepare.load("centerline")
+    prepare.load("furniture")
     prepare.load_terrain()
     prepare.load_landcover()
     buildings3d.load()
@@ -200,7 +208,7 @@ def main() -> None:
                 entries[level].append(entry)
                 for key in ("bytes", "vertices", "triangles"):
                     totals[f"{level}_{key}"] += entry.pop(key)
-                for key in ("lane_points", "props", "trees", "water_towers", "street_lights"):
+                for key in ("lane_points", "props", "trees", "water_towers", "street_lights", "furniture"):
                     totals[key] += entry.pop(key, 0)
             if n % 250 == 0 or n == len(tasks):
                 print(f"  {n:,}/{len(tasks):,} tiles ({time.time() - started:.0f} s)", flush=True)
@@ -209,6 +217,8 @@ def main() -> None:
     canopy = landcover.write_canopy_map(OUT_DIR / "canopy.png")
     manifest = {
         "version": FORMAT_VERSION,
+        # Goes on tile URLs, so browsers never mix tiles from different builds.
+        "build": f"{int(started):x}",
         "region": REGION,
         # Building faces carry archetype, flags and floor height (facades.py).
         "facades": 1,
@@ -231,7 +241,7 @@ def main() -> None:
               f"{totals[f'{level}_vertices']:,} vertices, {totals[f'{level}_triangles']:,} triangles")
     print(f"  walking lanes: {totals['lane_points']:,} points")
     print(f"  props: {totals['trees']:,} trees, {totals['water_towers']:,} water towers, "
-          f"{totals['street_lights']:,} street lights")
+          f"{totals['street_lights']:,} street lights, {totals['furniture']:,} pieces of street furniture")
     if failed:
         print(f"  {len(failed)} tiles FAILED and are missing: {failed}")
         raise SystemExit(1)
@@ -278,6 +288,12 @@ def _init_worker() -> None:
     for index, key in enumerate(_anchor_tiles(trees["en"], LEVELS["lod0"]["size"])):
         groups[key].append(index)
     _W["tree_groups"] = {key: np.array(value) for key, value in groups.items()}
+    furniture = prepare.load("furniture")
+    _W["furniture"] = furniture
+    groups = defaultdict(list)
+    for index, key in enumerate(_anchor_tiles(furniture["en"], LEVELS["lod0"]["size"])):
+        groups[key].append(index)
+    _W["furniture_groups"] = {key: np.array(value) for key, value in groups.items()}
     _W["landcover"] = landcover.LandCover()
 
 
@@ -796,13 +812,15 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     canopy = _canopy_trees(i, j, bounds, street["en"])
     towers = _water_towers(indices)
     lamps = _street_lights(i, j, bounds)
-    parts = [street, canopy, towers, lamps]
+    furniture = _furniture(i, j, bounds)
+    parts = [street, canopy, towers, lamps, furniture]
     en = np.concatenate([p["en"] for p in parts])
     if len(en) == 0:
         return None, {}
     trees = len(street["en"]) + len(canopy["en"])
     ground = _W["ground"]["lod0"]
-    y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]), towers["y"], lamps["y"]])
+    y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]), towers["y"], lamps["y"],
+                        furniture["y"]])
     seed = np.concatenate([p["seed"] for p in parts])
     # Trees and towers face any way; lamps reach over the street.
     yaw = np.concatenate([p["yaw"] if "yaw" in p else props.location_seed(p["en"] * 3.7) * (2 * np.pi)
@@ -817,7 +835,91 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     surface = (positions[order], np.round(normals, 2).astype(np.float32)[order],
                np.round(uv, 2).astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
     return surface, {"props": len(en), "trees": trees, "water_towers": len(towers["en"]),
-                     "street_lights": len(lamps["en"])}
+                     "street_lights": len(lamps["en"]), "furniture": len(furniture["en"])}
+
+
+def _furniture(i: int, j: int, bounds) -> dict:
+    """The city's street furniture in the tile (props.prepare_furniture), on
+    the sidewalk and facing the street, plus traffic signals."""
+    parts = []
+    idx = _W["furniture_groups"].get((i, j))
+    if idx is not None:
+        f = _W["furniture"]
+        found = {key: f[key][idx] for key in ("en", "type", "tone", "height", "width", "seed")}
+        en, keep = _onto_sidewalk(found["en"])
+        found["en"] = en
+        found = {key: value[keep] for key, value in found.items()}
+        curbside = np.flatnonzero(np.isin(found["type"], CURBSIDE_TYPES))
+        found["en"][curbside] = _to_curb(found["en"][curbside])
+        found["yaw"] = _toward_street(found["en"], found["seed"])
+        parts.append(found)
+    if not _W["streets"].is_empty:
+        segments = _W["centerline_tree"].query(shapely.buffer(bounds, MARKING_REACH, join_style="mitre"))
+        points, facing = markings.signals(_W["centerline"], segments, bounds.bounds, _W["streets"])
+        if len(points):
+            ok = _on_open_ground(points) & ~shapely.contains_xy(_W["streets"], points[:, 0], points[:, 1])
+            points, facing = points[ok], facing[ok]
+            height, width = props.TRAFFIC_SIGNAL_SIZE
+            parts.append({"en": points, "type": np.full(len(points), PROP_TRAFFIC_SIGNAL, dtype=np.int8),
+                          "tone": np.zeros(len(points), dtype=np.int8), "height": np.full(len(points), height),
+                          "width": np.full(len(points), width), "seed": props.location_seed(points),
+                          "yaw": np.arctan2(facing[:, 0], -facing[:, 1])})
+    if not parts:
+        return _no_props()
+    out = {key: np.concatenate([p[key] for p in parts]) for key in parts[0]}
+    out["trunk"] = np.zeros(len(out["en"]))
+    out["y"] = _W["ground"]["lod0"].height(out["en"])
+    return out
+
+
+def _onto_sidewalk(en: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Points the data puts in the road (it and the road outlines disagree by
+    a meter or two) moved TREE_CURB_GAP onto the sidewalk; and which points
+    to keep (not too far in the road, on land, not in a building)."""
+    en = en.copy()
+    keep = np.ones(len(en), dtype=bool)
+    streets = _W["streets"]
+    if not streets.is_empty and len(en):
+        in_road = np.flatnonzero(shapely.contains_xy(streets, en[:, 0], en[:, 1]))
+        if len(in_road):
+            lines = shapely.shortest_line(shapely.points(en[in_road]), shapely.boundary(streets))
+            ends = shapely.get_coordinates(shapely.get_point(lines, 1))
+            step = ends - en[in_road]
+            moved = np.linalg.norm(step, axis=1)
+            en[in_road] = ends + step / np.maximum(moved, 1e-6)[:, None] * TREE_CURB_GAP
+            keep[in_road[moved > TREE_MAX_MOVE]] = False
+    if len(en):
+        keep &= _on_open_ground(en)
+    return en, keep
+
+
+def _to_curb(en: np.ndarray) -> np.ndarray:
+    """Points within CURBSIDE_REACH of a curb moved to CURBSIDE_GAP from it."""
+    streets = _W["streets"]
+    if streets.is_empty or len(en) == 0:
+        return en
+    lines = shapely.shortest_line(shapely.points(en), shapely.boundary(streets))
+    curb = shapely.get_coordinates(shapely.get_point(lines, 1))
+    away = en - curb
+    distance = np.linalg.norm(away, axis=1)
+    move = (distance > CURBSIDE_GAP) & (distance < CURBSIDE_REACH)
+    out = en.copy()
+    out[move] = curb[move] + away[move] / distance[move, None] * CURBSIDE_GAP
+    return out
+
+
+def _toward_street(en: np.ndarray, seed: np.ndarray) -> np.ndarray:
+    """Yaws (see common.PROP_*) facing each point's nearest street; random
+    where no street is near."""
+    yaw = seed * (2 * np.pi)
+    streets = _W["streets"]
+    if streets.is_empty or len(en) == 0:
+        return yaw
+    lines = shapely.shortest_line(shapely.points(en), shapely.boundary(streets))
+    step = shapely.get_coordinates(shapely.get_point(lines, 1)) - en
+    near = np.linalg.norm(step, axis=1) > 1e-3
+    yaw[near] = np.arctan2(step[near, 0], -step[near, 1])
+    return yaw
 
 
 def _street_lights(i: int, j: int, bounds) -> dict:

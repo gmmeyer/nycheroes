@@ -1,5 +1,5 @@
 """Props standing in the city, one point each (see common.py's props surface):
-trees, rooftop water towers and street lights.
+trees, rooftop water towers, street lights and street furniture.
 
 Trees come from two places:
   street trees: the Parks Department's tree inventory (Forestry Tree Points),
@@ -12,6 +12,10 @@ have one is a guess from the building's type, floors and borough, seeded
 per building, and the tank stands at a back corner of the roof.
 Street lights: the city doesn't publish where its lamps are, so they stand
 along every curb at a typical spacing (lamp_spots()).
+Street furniture: hydrants, bus shelters, LinkNYC kiosks, benches, subway
+entrances, litter baskets, bike racks, parking meters and newsstands where
+the city's inventories put them (prepare_furniture()); traffic signals at
+intersections with a wide street (markings.signals()).
 
 prepare_trees() makes data/cache/trees.pkl; build_tiles.py does the rest per
 lod0 tile with the helpers here.
@@ -23,8 +27,10 @@ import numpy as np
 import shapely
 
 import facades
-from common import (PROP_CONIFER, PROP_STREET_LIGHT, PROP_TONE_DARK, PROP_TONE_GREEN, PROP_TONE_LIGHT,
-                    PROP_TONE_RED, PROP_TREE, PROP_TREE_NARROW, RAW_DIR, project)
+from common import (PROP_BENCH, PROP_BIKE_RACK, PROP_BUS_SHELTER, PROP_CONIFER, PROP_HYDRANT,
+                    PROP_LINKNYC, PROP_LITTER_BASKET, PROP_NEWSSTAND, PROP_PARKING_METER, PROP_STREET_LIGHT,
+                    PROP_SUBWAY_ENTRANCE, PROP_TONE_DARK, PROP_TONE_GREEN, PROP_TONE_LIGHT, PROP_TONE_RED,
+                    PROP_TRAFFIC_SIGNAL, PROP_TREE, PROP_TREE_NARROW, RAW_DIR, project)
 
 # Street trees' shapes and colors by genus (the inventory's species names
 # start with it: "Acer saccharinum - silver maple").
@@ -260,6 +266,59 @@ def lamps(points: np.ndarray, arms: np.ndarray, post_top: np.ndarray) -> dict:
     return {"en": points, "height": height, "width": arm, "trunk": np.zeros(len(points)),
             "type": np.full(len(points), PROP_STREET_LIGHT, dtype=np.int8),
             "tone": post_top.astype(np.int8), "seed": seed, "yaw": yaw}
+
+
+# Street furniture: (table, latitude and longitude fields, type, height and
+# width in meters for variant 0 and 1 (and 2)).
+FURNITURE = (
+    ("hydrants", "latitude", "longitude", PROP_HYDRANT, [(0.75, 0.4)]),
+    ("bus_shelters", "latitude", "longitude", PROP_BUS_SHELTER, [(2.6, 4.2)]),
+    ("linknyc", "latitude", "longitude", PROP_LINKNYC, [(2.9, 0.9), (9.0, 0.6)]),
+    ("seating", "latitude", "longitude", PROP_BENCH, [(0.85, 1.8)]),
+    ("subway_entrances", "entrance_latitude", "entrance_longitude", PROP_SUBWAY_ENTRANCE,
+     [(2.5, 1.8), (2.5, 1.8), (3.0, 2.2)]),
+    ("bike_racks", "latitude", "longitude", PROP_BIKE_RACK, [(0.9, 0.9), (0.9, 1.2)]),
+    ("litter_baskets", "latitude", "longitude", PROP_LITTER_BASKET, [(0.9, 0.6), (1.2, 0.7)]),
+    ("parking_meters", "lat", "long", PROP_PARKING_METER, [(1.6, 0.35)]),
+    ("newsstands", "latitude", "longitude", PROP_NEWSSTAND, [(2.7, 3.0)]),
+)
+# Subway entrances that are a stairway, ramp or elevator on the sidewalk (not
+# inside a building, a station house, or a passage).
+SUBWAY_STREET_TYPES = ("Stair", "Elevator", "Escalator", "Ramp")
+TRAFFIC_SIGNAL_SIZE = (6.2, 0.4)  # pole height, width (m)
+
+
+def prepare_furniture() -> dict:
+    """Street furniture from the city's inventories: positions (east/north),
+    types, variants (uv.x), sizes and seeds."""
+    parts = []
+    for table, lat_key, lon_key, kind, sizes in FURNITURE:
+        with open(RAW_DIR / f"{table}.json", encoding="utf-8") as f:
+            rows = [r for r in json.load(f) if r.get(lat_key) and r.get(lon_key)]
+        variant = np.zeros(len(rows), dtype=np.int8)
+        keep = np.ones(len(rows), dtype=bool)
+        for k, r in enumerate(rows):
+            if table == "linknyc":
+                variant[k] = 1 if "5G" in str(r.get("planned_kiosk_type", "")) else 0
+            elif table == "subway_entrances":
+                kind_name = str(r.get("entrance_type", ""))
+                keep[k] = kind_name.startswith(SUBWAY_STREET_TYPES)
+                variant[k] = 2 if kind_name == "Elevator" else (0 if r.get("entry_allowed") == "YES" else 1)
+            elif table == "bike_racks":
+                variant[k] = 0 if "hoop" in str(r.get("racktype", "")).lower() else 1
+            elif table == "litter_baskets":
+                variant[k] = 0 if "wire" in str(r.get("baskettype", "")).lower() else 1
+        lon = np.array([float(r[lon_key]) for r in rows])
+        lat = np.array([float(r[lat_key]) for r in rows])
+        en = shapely.get_coordinates(project(shapely.points(lon, lat)))
+        size = np.array(sizes)[np.minimum(variant, len(sizes) - 1)]
+        part = {"en": en, "type": np.full(len(rows), kind, dtype=np.int8), "tone": variant,
+                "height": size[:, 0], "width": size[:, 1]}
+        parts.append({key: value[keep] for key, value in part.items()})
+        print(f"  {table}: {int(keep.sum()):,}", flush=True)
+    out = {key: np.concatenate([p[key] for p in parts]) for key in parts[0]}
+    out["seed"] = location_seed(out["en"]).astype(np.float32)
+    return out
 
 
 def tower_mask(archetype, floors, height, borough, seed) -> np.ndarray:

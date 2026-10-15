@@ -26,6 +26,7 @@
 [ext_resource type="Shader" path="res://shaders/street_light.gdshader" id="24_street_light"]
 [ext_resource type="Shader" path="res://shaders/street_light_glow.gdshader" id="25_street_light_glow"]
 [ext_resource type="Shader" path="res://shaders/street_light_pool.gdshader" id="26_street_light_pool"]
+[ext_resource type="Shader" path="res://shaders/street_furniture.gdshader" id="27_street_furniture"]
 
 [sub_resource type="ShaderMaterial" id="SkyMaterial_sky"]
 shader = ExtResource("19_sky")
@@ -74,6 +75,9 @@ shader = ExtResource("25_street_light_glow")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_street_light_pool"]
 shader = ExtResource("26_street_light_pool")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_street_furniture"]
+shader = ExtResource("27_street_furniture")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ocean"]
 shader = ExtResource("7_ocean")
@@ -127,6 +131,7 @@ water_tower_material = SubResource("ShaderMaterial_water_tower")
 street_light_material = SubResource("ShaderMaterial_street_light")
 street_light_glow_material = SubResource("ShaderMaterial_street_light_glow")
 street_light_pool_material = SubResource("ShaderMaterial_street_light_pool")
+street_furniture_material = SubResource("ShaderMaterial_street_furniture")
 
 [node name="Ocean" type="MeshInstance3D" parent="."]
 cast_shadow = 0

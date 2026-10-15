@@ -57,6 +57,13 @@ MAJOR_LANES, MAJOR_WIDTH = 2, 12.0
 CROSSWALK_MIN_WIDTH = 8.0
 DEFAULT_HALF_WIDTH = 5.0
 MAX_SETBACK = 25.0
+# Traffic signals: at intersections where a street at least this wide, or
+# with this many lanes, meets others (most such crossings in New York have
+# signals); one pole per approach, on its right-hand side just behind the
+# crosswalk, this far onto the sidewalk.
+SIGNAL_WIDTH, SIGNAL_LANES = 14.0, 3
+SIGNAL_SETBACK = 0.9
+SIGNAL_BEHIND = 0.6  # meters behind the crosswalk
 
 
 def prepare() -> dict:
@@ -93,6 +100,9 @@ def prepare() -> dict:
                                                     DEFAULT_HALF_WIDTH))
     both_half = np.concatenate([half, half])
     major_end = np.concatenate([(lanes >= MAJOR_LANES) | (width >= MAJOR_WIDTH)] * 2) & (np.concatenate([rw, rw]) == STREET)
+    wide_end = np.concatenate([(lanes >= SIGNAL_LANES) | (width >= SIGNAL_WIDTH)] * 2) & (np.concatenate([rw, rw]) == STREET)
+    signal = np.zeros(degree.size, dtype=bool)
+    np.logical_or.at(signal, node, wide_end)
     widest = np.zeros(degree.size)
     second = np.zeros(degree.size)
     major = np.zeros(degree.size, dtype=bool)
@@ -117,6 +127,7 @@ def prepare() -> dict:
         "width": width.astype(np.float32),
         "setback": setback.reshape(2, count).T.astype(np.float32),  # (start, end)
         "major": (major[node] & is_crossing).reshape(2, count).T,
+        "signal": (signal[node] & is_crossing).reshape(2, count).T,
     }
 
 
@@ -139,6 +150,48 @@ def quads(data: dict, segments: np.ndarray, center_box, road) -> dict:
         if inside.any():
             result[kind] = (q[inside], uv[inside], check[inside])
     return result
+
+
+def signals(data: dict, segments: np.ndarray, center_box, road) -> tuple[np.ndarray, np.ndarray]:
+    """Traffic signal poles for these segments inside center_box: positions
+    (N, 2) and the directions (N, 2) they face (toward the drivers they
+    control)."""
+    points, facing = [], []
+    for k in segments:
+        k = int(k)
+        if int(data["rw"][k]) != STREET:
+            continue
+        line = data["lines"][k]
+        length = line.length
+        trafdir = int(data["trafdir"][k])
+        width = float(data["width"][k])
+        lanes = max(int(data["lanes"][k]), 1)
+        span = width if width > 0 else lanes * LANE_WIDTH + int(data["parking"][k]) * PARKING_WIDTH
+        for at_start, setback, signal in ((True, float(data["setback"][k][0]), data["signal"][k][0]),
+                                          (False, float(data["setback"][k][1]), data["signal"][k][1])):
+            # Only where traffic comes toward the intersection.
+            if not signal or setback <= 0 or setback + CROSSWALK_DEPTH > length / 2:
+                continue
+            if not (trafdir == BOTH or (trafdir == WITH) != at_start):
+                continue
+            # Just behind the crosswalk, where the curb is straight again.
+            s = setback + CROSSWALK_DEPTH + SIGNAL_BEHIND
+            across = _road_across(line, s if at_start else length - s, road, span / 2 + 3.0)
+            if across is None:
+                continue
+            point, normal = _frame(line, np.array([s if at_start else length - s]))
+            tangent = np.array([normal[0][1], -normal[0][0]])
+            # Traffic keeps right: arriving at the start it travels against the
+            # line, so its curb is on the line's left; at the end, its right.
+            offset = across[1] + SIGNAL_SETBACK if at_start else across[0] - SIGNAL_SETBACK
+            points.append(point[0] + normal[0] * offset)
+            facing.append(tangent if at_start else -tangent)
+    if not points:
+        return np.zeros((0, 2)), np.zeros((0, 2))
+    points, facing = np.array(points), np.array(facing)
+    min_e, min_n, max_e, max_n = center_box
+    inside = (points[:, 0] >= min_e) & (points[:, 0] < max_e) & (points[:, 1] >= min_n) & (points[:, 1] < max_n)
+    return points[inside], facing[inside]
 
 
 def keep(q: np.ndarray, road) -> np.ndarray:

@@ -146,7 +146,8 @@ def prepare_facades() -> dict:
 
 
 PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": prepare_water,
-             "facades": prepare_facades, "trees": props.prepare_trees, "centerline": markings.prepare}
+             "facades": prepare_facades, "trees": props.prepare_trees, "centerline": markings.prepare,
+             "furniture": props.prepare_furniture}
 
 
 def load(name: str) -> dict:

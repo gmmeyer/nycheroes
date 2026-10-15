@@ -78,6 +78,19 @@ PROP_WATER_TOWER = 3  # rooftop water tank on legs
 PROP_STREET_LIGHT = 4  # lamp post at the curb: its normal is (pole height, arm
                        # length, yaw); the arm reaches along (sin yaw, 0, cos yaw),
                        # over the street; uv.x 0 cobra-head, 1 historic post-top
+# Street furniture: normal = (height, width, yaw); the front faces along
+# (sin yaw, 0, cos yaw), toward the street. uv.x is the variant.
+PROP_HYDRANT = 5
+PROP_BUS_SHELTER = 6       # width = length along the curb
+PROP_LINKNYC = 7           # uv.x 0 kiosk (Link1.0), 1 tall Link5G pole
+PROP_BENCH = 8             # benches and leaning bars (CityBench seating)
+PROP_SUBWAY_ENTRANCE = 9   # stairs down, railing and globe lamps; uv.x 0 entrance
+                           # (green globes), 1 exit only (red), 2 elevator
+PROP_TRAFFIC_SIGNAL = 10   # pole at an intersection; faces the traffic it controls
+PROP_LITTER_BASKET = 11    # uv.x 0 wire basket, 1 other (solar compactor)
+PROP_BIKE_RACK = 12        # uv.x 0 hoop, 1 other
+PROP_PARKING_METER = 13    # pay station (Muni-Meter)
+PROP_NEWSSTAND = 14
 # Trees' foliage tones (uv.x of the props surface).
 PROP_TONE_GREEN = 0
 PROP_TONE_LIGHT = 1   # yellow-green: honeylocust, ginkgo, birch, willow

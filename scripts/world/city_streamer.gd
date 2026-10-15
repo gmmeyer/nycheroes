@@ -3,7 +3,8 @@ extends Node3D
 ## Streams the city around the camera from a three-level tile tree, built by
 ## tools/citygen/build_tiles.py into data/tiles/<region>/:
 ##   lod0: 500 m tiles, full detail, with collision, walking lanes, road
-##         markings, trees, rooftop water towers and street lights
+##         markings, trees, rooftop water towers, street lights and street
+##         furniture
 ##   lod1: 1 km tiles, simplified
 ##   lod2: 4 km tiles, coarse, out to the horizon
 ## A level's tiles load when their parent tile is near the camera. A tile is
@@ -14,7 +15,8 @@ extends Node3D
 ## (tools/build_web.ps1 copies them there).
 ## Buildings and ground are drawn by their own shaders (stylized facades from
 ## the tiles' per-building data), and so are road markings; trees, water
-## towers and street lights are a few MultiMeshes per tile (CityProps). At
+## towers, street lights and street furniture are a few MultiMeshes per tile
+## (CityProps). At
 ## night (city_lights, from TimeOfDay) street lights glow, and their pools of
 ## light go into a map around the camera that the shaders look up
 ## (StreetLightMap). The manifest's citywide
@@ -35,6 +37,8 @@ const LEVEL_NEAR := 0
 const LEVEL_COUNT := 3
 const UPDATE_INTERVAL := 0.25
 const MAX_ATTEMPTS := 3
+## A tile that failed is asked for again after this long times its failures.
+const RETRY_MSEC := 1500
 ## Physics layer 1, "world".
 const COLLISION_LAYER := 1
 ## Physics layer 5, "water": raised lakes' surfaces, which nothing collides
@@ -85,6 +89,8 @@ const PHOTO_OPTIONS := {"aerial_shadow": "aerial_shadow_softening", "aerial_brig
 @export var street_light_material: Material
 @export var street_light_glow_material: Material
 @export var street_light_pool_material: Material
+## Street furniture, small and large (shaders/street_furniture.gdshader).
+@export var street_furniture_material: Material
 
 var loaded_counts: Array[int] = [0, 0, 0]
 ## World positions that need the ground loaded around them besides the
@@ -93,7 +99,7 @@ var loaded_counts: Array[int] = [0, 0, 0]
 var extra_foci: Array[Vector3] = []
 ## Time the last tile took to turn into meshes and collision, in milliseconds.
 var last_build_msec := 0.0
-## Trees, water towers and street lights in loaded near tiles.
+## Trees, water towers, street lights and furniture in loaded near tiles.
 var prop_count := 0
 ## Loaded tiles that are showing their aerial photo.
 var photo_count := 0
@@ -115,6 +121,7 @@ var _props: CityProps
 var _light_map: StreetLightMap
 var _in_flight := 0
 var _base_url := ""  # web only
+var _build_id := ""  # the manifest's, for tile URLs
 var _idle_requests: Array[HTTPRequest] = []
 var _update_cooldown := 0.0
 var _start_msec := 0
@@ -130,11 +137,13 @@ class Tile:
 	var node: Node3D
 	var pending := false
 	var failures := 0
+	## After a failure, when it may be asked for again (Time.get_ticks_msec).
+	var retry_msec := 0
 	var parent: Tile
 	var children: Array[Tile] = []
 	## Sidewalk walking lanes (world-space polylines), lod0 only, while loaded.
 	var lanes: Array[PackedVector3Array] = []
-	## Trees, water towers and street lights, lod0 only, while loaded.
+	## Trees, water towers, street lights and furniture, lod0 only, while loaded.
 	var prop_count := 0
 	## The aerial photo's state for the current node.
 	var photo := Photo.NONE
@@ -156,7 +165,8 @@ func _ready() -> void:
 	if building_material is ShaderMaterial:
 		_merged_building_material = building_material.duplicate()
 		_merged_building_material.set_shader_parameter("merged_blocks", true)
-	_props = CityProps.new(tree_material, water_tower_material, street_light_material, street_light_glow_material)
+	_props = CityProps.new(tree_material, water_tower_material, street_light_material, street_light_glow_material,
+		street_furniture_material)
 	_props.tree_shadows = LaunchOptions.get_string("tree_shadows", "1") != "0"
 	_light_map = StreetLightMap.new(street_light_pool_material)
 	add_child(_light_map)
@@ -205,6 +215,13 @@ func set_city_lights(amount: float) -> void:
 	_props.lights_on = on
 	_light_map.on = on
 	get_tree().call_group(CityProps.GLOW_GROUP, "set_visible", on)
+
+
+## Where street furniture shrinks away from the camera (m): small pieces
+## and large ones (CityProps.small_furniture_fade). Takes effect for tiles
+## built from then on, so set it before the city loads (Quality does).
+func set_furniture_fade(small: Vector2, large: Vector2) -> void:
+	_props.set_furniture_fade(small, large)
 
 
 ## The street light map's pools: one MultiMeshInstance2D per near tile with lamps.
@@ -259,6 +276,7 @@ func _on_manifest_loaded(bytes: PackedByteArray) -> void:
 	if typeof(manifest) != TYPE_DICTIONARY or not manifest.has("levels"):
 		push_error("City manifest for '%s' is missing or out of date. Run tools/citygen/build_tiles.py." % region)
 		return
+	_build_id = str(manifest.get("build", ""))
 	for level in manifest.levels.size():
 		var data: Dictionary = manifest.levels[level]
 		var size := float(data.tile_size)
@@ -293,6 +311,7 @@ func _update_wanted_tiles() -> void:
 	if camera == null:
 		return
 	var focus := WorldOrigin.to_world(camera.global_position)
+	var now := Time.get_ticks_msec()
 	# Height counts too, so flying high doesn't load street-level detail.
 	var height := maxf(focus.y, 0.0)
 	_queue.clear()
@@ -304,7 +323,8 @@ func _update_wanted_tiles() -> void:
 			var distance := Vector2(anchor.distance_to(focus.x, focus.z), height).length()
 			var extra := _extra_focus_distance(tile) if level == LEVEL_NEAR else INF
 			if tile.node == null:
-				if (distance < limit or extra < extra_focus_radius) and not tile.pending and tile.failures < MAX_ATTEMPTS:
+				if ((distance < limit or extra < extra_focus_radius) and not tile.pending
+						and tile.failures < MAX_ATTEMPTS and now >= tile.retry_msec):
 					_queue.append([minf(tile.distance_to(focus.x, focus.z), extra) + LEVEL_PRIORITY[level], tile, false])
 			elif distance > limit + unload_margin and extra > extra_focus_radius + unload_margin:
 				_unload(tile)
@@ -361,7 +381,12 @@ func _children_ready(tile: Tile) -> bool:
 func _request_tile(tile: Tile) -> void:
 	tile.pending = true
 	_in_flight += 1
-	_load_file("%s/%d_%d.nyct" % [_levels[tile.level]["name"], tile.i, tile.j], _on_tile_loaded.bind(tile))
+	# The build's id keeps browsers from mixing in tiles cached from an older
+	# build; a retry skips past whatever is cached.
+	var query := "?b=%s" % _build_id
+	if tile.failures > 0:
+		query += "&retry=%d" % tile.failures
+	_load_file("%s/%d_%d.nyct" % [_levels[tile.level]["name"], tile.i, tile.j], _on_tile_loaded.bind(tile), query)
 
 
 func _on_tile_loaded(bytes: PackedByteArray, tile: Tile) -> void:
@@ -387,16 +412,19 @@ func _build_ready_tiles() -> void:
 	while not _ready_to_build.is_empty() and Time.get_ticks_usec() < deadline:
 		var item: Array = _ready_to_build.pop_front()
 		var tile: Tile = item[0]
-		var bytes: PackedByteArray = item[1]
 		tile.pending = false
-		if bytes.is_empty():
-			# The next update requests it again; give up after a few tries.
+		var data := CityTileDecoder.unpack(item[1], int(tile.info.raw_bytes))
+		if data.is_empty():
+			# A failed download, or a stale copy (say, cached at the edge just
+			# after the site was updated): an update asks again a little later,
+			# a few times.
 			tile.failures += 1
+			tile.retry_msec = Time.get_ticks_msec() + RETRY_MSEC * tile.failures
 			if tile.failures >= MAX_ATTEMPTS:
 				push_error("Giving up on tile %s %d_%d" % [_levels[tile.level]["name"], tile.i, tile.j])
 			continue
 		var build_start := Time.get_ticks_usec()
-		var node := _build_tile_node(tile, bytes)
+		var node := _build_tile_node(tile, data)
 		last_build_msec = (Time.get_ticks_usec() - build_start) / 1000.0
 		node.visible = false  # _refresh_visibility decides
 		add_child(node)
@@ -424,7 +452,7 @@ func _build_ready_tiles() -> void:
 		initial_load_finished.emit(seconds)
 
 
-func _build_tile_node(tile: Tile, bytes: PackedByteArray) -> Node3D:
+func _build_tile_node(tile: Tile, data: PackedByteArray) -> Node3D:
 	var near := tile.level == LEVEL_NEAR
 	var node := Node3D.new()
 	node.name = "%s_%d_%d" % [_levels[tile.level]["name"], tile.i, tile.j]
@@ -435,7 +463,7 @@ func _build_tile_node(tile: Tile, bytes: PackedByteArray) -> Node3D:
 		body.collision_layer = COLLISION_LAYER
 		body.collision_mask = 0
 		node.add_child(body)
-	for surface in CityTileDecoder.decode(bytes, int(tile.info.raw_bytes)):
+	for surface in CityTileDecoder.decode_unpacked(data):
 		if surface.kind == CityTileDecoder.SURFACE_LANES:
 			tile.lanes.clear()
 			for lane: PackedVector3Array in surface.lanes:
@@ -577,15 +605,15 @@ func _unload(tile: Tile) -> void:
 
 
 ## Loads a file from the tile directory and calls on_loaded(bytes) when done;
-## bytes is empty on failure.
-func _load_file(file: String, on_loaded: Callable) -> void:
+## bytes is empty on failure. The query only goes on web requests.
+func _load_file(file: String, on_loaded: Callable, query := "") -> void:
 	if _base_url.is_empty():
 		on_loaded.call_deferred(FileAccess.get_file_as_bytes(_local_dir() + file))
 		return
 	var request: HTTPRequest = _idle_requests.pop_back()
 	var callback := _on_request_completed.bind(request, file, on_loaded)
 	request.request_completed.connect(callback, CONNECT_ONE_SHOT)
-	if request.request(_base_url + file) != OK:
+	if request.request(_base_url + file + query) != OK:
 		request.request_completed.disconnect(callback)
 		_idle_requests.append(request)
 		push_warning("Couldn't request %s" % file)

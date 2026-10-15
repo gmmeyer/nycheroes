@@ -20,6 +20,11 @@ lines below wherever a license asks for one (the aerial photos do).
 - **Street trees, street centerlines and land cover:** NYC Parks Forestry
   Tree Points (hn5i-inap), the Citywide Street Centerline (CSCL, inkn-q76z)
   and the 2017 LiDAR land cover map (he6d-2qns), via NYC Open Data.
+- **Street furniture:** NYC Open Data: hydrants (5bgh-vtsn), bus stop
+  shelters (t4f2-8md7), LinkNYC kiosks (s4kf-3yrf), seating locations
+  (esmy-s8q5), bicycle parking (592z-n7dk), DSNY litter baskets
+  (8znf-7b2c), parking meters (693u-uax6) and newsstands (w9zq-xm8b); MTA
+  subway entrances and exits (data.ny.gov, i9wp-a4ja).
 - **Ground elevation:** USGS 3D Elevation Program, 1/3 arc-second DEM
   (public domain, U.S. Government work).
 

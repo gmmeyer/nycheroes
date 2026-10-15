@@ -4,7 +4,9 @@
 // instance (a MultiMesh 2D per near tile, see CityProps): the transform moves
 // the quad (PropMeshes.light_pool(), corners -1..1) to the lamp's foot, in
 // world meters (x east, y south); INSTANCE_CUSTOM = (yaw radians, arm length
-// m, pole height m, style: 0 cobra-head, 1 post-top).
+// m, pole height m, style: 0 cobra-head, 1 post-top). Lit street furniture
+// (bus shelters, newsstands) adds its own light the same way, with arm length
+// 0 and its prop type (6, 14) for the style.
 // The pool is centered under the lamp's head, out over the street on the arm,
 // and wider for taller poles; brightest under the lamp, soft to its edge.
 // Colors are linear light, as the map holds them (0..1 each; the shaders
@@ -14,9 +16,14 @@ render_mode blend_add, unshaded;
 
 uniform vec3 cobra_head_pool = vec3(0.32, 0.18, 0.07);
 uniform vec3 post_top_pool = vec3(0.30, 0.15, 0.05);
-// A pool's radius: this many meters per meter of pole height, plus this.
+// Cool white under a bus shelter, warm around a newsstand.
+uniform vec3 shelter_pool = vec3(0.13, 0.15, 0.18);
+uniform vec3 newsstand_pool = vec3(0.22, 0.14, 0.06);
+// A pool's radius: this many meters per meter of pole height, plus this; and
+// a lit piece of furniture's, per meter of its height, plus this.
 uniform float reach_per_height = 1.25;
 uniform float reach = 1.5;
+uniform vec2 furniture_reach = vec2(0.9, 1.2);
 
 varying vec2 corner;
 varying vec3 light;
@@ -25,9 +32,12 @@ void vertex() {
 	float yaw = INSTANCE_CUSTOM.x;
 	float arm = INSTANCE_CUSTOM.y;
 	float height = INSTANCE_CUSTOM.z;
+	float style = INSTANCE_CUSTOM.w;
+	bool furniture = style > 1.5;
 	corner = VERTEX;
-	VERTEX = VERTEX * (height * reach_per_height + reach) + vec2(sin(yaw), cos(yaw)) * arm;
-	light = INSTANCE_CUSTOM.w > 0.5 ? post_top_pool : cobra_head_pool;
+	float radius = furniture ? height * furniture_reach.x + furniture_reach.y : height * reach_per_height + reach;
+	VERTEX = VERTEX * radius + vec2(sin(yaw), cos(yaw)) * arm;
+	light = furniture ? (style > 10.0 ? newsstand_pool : shelter_pool) : (style > 0.5 ? post_top_pool : cobra_head_pool);
 }
 
 void fragment() {

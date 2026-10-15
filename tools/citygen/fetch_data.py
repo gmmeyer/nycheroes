@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw"
 API = "https://data.cityofnewyork.us/resource"
+STATE_API = "https://data.ny.gov/resource"  # New York State's open data (the MTA's)
 PAGE_SIZE = 10000
 
 DATASETS = {
@@ -96,6 +97,18 @@ TABLES = {
         "5zhs-2jue",  # Building Footprints: each building's PLUTO tax lot
         {"$select": "bin,mappluto_bbl"},
     ),
+    # Street furniture, as points (props.py).
+    "hydrants": ("5bgh-vtsn", {"$select": "latitude,longitude"}),
+    "bus_shelters": ("t4f2-8md7", {"$select": "latitude,longitude"}),
+    "linknyc": ("s4kf-3yrf", {"$select": "latitude,longitude,planned_kiosk_type",
+                              "$where": "link_installation_status='Live'"}),
+    "seating": ("esmy-s8q5", {"$select": "latitude,longitude"}),  # benches and leaning bars
+    "subway_entrances": ("i9wp-a4ja", {"$select": "entrance_latitude,entrance_longitude,entrance_type,entry_allowed"},
+                         STATE_API),
+    "bike_racks": ("592z-n7dk", {"$select": "latitude,longitude,racktype"}),
+    "litter_baskets": ("8znf-7b2c", {"$select": "latitude,longitude,baskettype"}),
+    "parking_meters": ("693u-uax6", {"$select": "lat,long", "$where": "status='Active'"}),
+    "newsstands": ("w9zq-xm8b", {"$select": "latitude,longitude"}),
 }
 TABLE_PAGE_SIZE = 50000
 
@@ -138,7 +151,7 @@ def fetch_dataset(name: str, dataset_id: str, params: dict) -> None:
     tmp_path.replace(out_path)
 
 
-def fetch_table(name: str, dataset_id: str, params: dict) -> None:
+def fetch_table(name: str, dataset_id: str, params: dict, api: str = API) -> None:
     out_path = RAW_DIR / f"{name}.json"
     if out_path.exists():
         print(f"{name}: cached at {out_path}")
@@ -146,7 +159,7 @@ def fetch_table(name: str, dataset_id: str, params: dict) -> None:
     rows = []
     while True:
         query = urllib.parse.urlencode({**params, "$order": ":id", "$limit": TABLE_PAGE_SIZE, "$offset": len(rows)})
-        request = urllib.request.Request(f"{API}/{dataset_id}.json?{query}", headers={"User-Agent": "new-game-citygen/1.0"})
+        request = urllib.request.Request(f"{api}/{dataset_id}.json?{query}", headers={"User-Agent": "new-game-citygen/1.0"})
         for attempt in range(6):
             try:
                 with urllib.request.urlopen(request, timeout=300) as response:
@@ -191,8 +204,8 @@ def fetch_file(label: str, url: str, out_path: Path) -> None:
 def main() -> None:
     for name, (dataset_id, params) in DATASETS.items():
         fetch_dataset(name, dataset_id, params)
-    for name, (dataset_id, params) in TABLES.items():
-        fetch_table(name, dataset_id, params)
+    for name, (dataset_id, params, *api) in TABLES.items():
+        fetch_table(name, dataset_id, params, *api)
     for tile in ELEVATION_TILES:
         fetch_file(f"elevation {tile}", ELEVATION_URL.format(tile=tile), ELEVATION_DIR / f"USGS_13_{tile}.tif")
     fetch_file("3-D building model", BUILDING_MODEL_URL, BUILDING_MODEL_PATH)

@@ -35,6 +35,22 @@ extends RefCounted
 ## Plus their glows (street_light_glow.gdshader, a quad the shader turns to
 ## the camera) and pools of light on the ground (street_light_pool.gdshader,
 ## a 2D quad drawn into StreetLightMap).
+## Street furniture (shaders/street_furniture.gdshader), in two meshes:
+## small pieces (hydrants, benches, litter baskets, bike racks, parking
+## meters) and large ones (bus shelters, LinkNYC kiosks, subway entrances,
+## traffic signals, newsstands). Each mesh holds all its pieces' shapes one
+## after another, and the shader folds away every shape but the instance's
+## own (their vertices still run, so the meshes stay small). Shapes are built
+## in meters at the sizes the tiles give each type and variant, standing on
+## the origin with their front toward +z (the street) and their right toward
+## -x; the shader scales them to each piece's height and width.
+##   UV = (part (Furniture), 0)
+##   UV2 = 0..1 across the part's face (around and up a turned part)
+##   CUSTOM0 = (prop type, the variants it's drawn for as bits (1 << variant),
+##             the height and width it's built at, m)
+##   CUSTOM1 = (the face's width and height m, 0, 0), or for a light that
+##             stays visible far away (signal lenses, subway globes) (its
+##             center, radius m), about which the shader grows it
 
 const PART_TRUNK := 0
 const PART_CROWN := 1
@@ -67,6 +83,24 @@ const CONIFER_BOTTOM := 0.12
 ## Trees' trunks' radius halfway up (they flare at the foot), as a share of
 ## the crown's width; shaders/tree.gdshader assumes it.
 const TRUNK_RADIUS := 0.04
+
+## Street furniture's parts (UV.x); shaders/street_furniture.gdshader has the
+## same numbers.
+enum Furniture {
+	HYDRANT, HYDRANT_CAP, BASKET, BASKET_FILL, COMPACTOR, COMPACTOR_DOOR, SOLAR_PANEL, BIKE_RACK,
+	METER, METER_FACE, METER_SIGN, BENCH, STEEL, ROOF, CEILING, GLASS, AD_BOX, POSTER, LINK, LINK_FRONT,
+	SCREEN, STAIRWELL, RAILING, LAMP_POST, GLOBE, SIGNAL_POLE, SIGNAL_HEAD, SIGNAL_FACE, SIGNAL_LAMP,
+	WALK_LAMP, STREET_SIGN, NEWSSTAND, NEWSSTAND_ROOF, MAGAZINES, BENCH_END,
+}
+## The variant bits of a shape drawn for every variant.
+const ALL_VARIANTS := 255
+## A traffic signal's lenses are this far apart (m), top (red) to bottom
+## (green); its lit lens is built at the top one, and the shader moves it.
+const SIGNAL_LAMP_SPACING := 0.35
+## A subway stair's opening: its length along the curb (the stairs go down
+## from its open end at +x) and its width (m).
+const STAIR_LENGTH := 4.2
+const STAIR_WIDTH := 1.8
 
 
 ## Every tree: a short trunk under a crown of four blobs, in three shapes
@@ -277,6 +311,363 @@ static func light_pool() -> ArrayMesh:
 	return mesh
 
 
+## Small street furniture (see above): a hydrant, a CityBench, a wire litter
+## basket and a solar compactor, a hoop and a U bike rack, and a Muni-Meter
+## pay station.
+static func street_furniture_small() -> ArrayMesh:
+	var k := _Kit.new()
+	_hydrant(k)
+	_bench(k)
+	_litter_baskets(k)
+	_bike_racks(k)
+	_parking_meter(k)
+	return k.build()
+
+
+## Large street furniture (see above): a bus shelter, a LinkNYC kiosk and a
+## Link5G pole, a subway stair and a street elevator, a traffic signal, and a
+## newsstand.
+static func street_furniture_large() -> ArrayMesh:
+	var k := _Kit.new()
+	_bus_shelter(k)
+	_linknyc(k)
+	_subway_entrances(k)
+	_traffic_signal(k)
+	_newsstand(k)
+	return k.build()
+
+
+## New York's hydrant: a barrel on a flared foot, a bonnet with an operating
+## nut on top, hose outlets on both sides and the bigger pumper outlet facing
+## the street. The bonnet and the outlets' ends are the caps (colored apart).
+static func _hydrant(k: _Kit) -> void:
+	k.shape = Vector4(CityTileDecoder.PROP_HYDRANT, ALL_VARIANTS, 0.75, 0.4)
+	_turned(k, 6, [Vector2(0.0, 0.15), Vector2(0.07, 0.11), Vector2(0.5, 0.11)], Furniture.HYDRANT)
+	_turned(k, 6, [Vector2(0.5, 0.11), Vector2(0.54, 0.14), Vector2(0.6, 0.13), Vector2(0.67, 0.09),
+		Vector2(0.7, 0.04), Vector2(0.75, 0.035), Vector2(0.75, 0.0)], Furniture.HYDRANT_CAP)
+	var outlets := _faces(Furniture.HYDRANT)
+	outlets["+x"] = Furniture.HYDRANT_CAP
+	outlets["-x"] = Furniture.HYDRANT_CAP
+	_box(k, Vector3(-0.19, 0.34, -0.045), Vector3(0.19, 0.43, 0.045), outlets)
+	var pumper := _faces(Furniture.HYDRANT, "-z")
+	pumper["+z"] = Furniture.HYDRANT_CAP
+	_box(k, Vector3(-0.065, 0.27, 0.0), Vector3(0.065, 0.4, 0.19), pumper)
+
+
+## A CityBench: a perforated steel seat and backrest facing the street, on
+## legs that rise into armrests at the ends and in the middle (the shader
+## cuts them out of flat panels).
+static func _bench(k: _Kit) -> void:
+	k.shape = Vector4(CityTileDecoder.PROP_BENCH, ALL_VARIANTS, 0.85, 1.8)
+	_panel(k, Vector3(-0.9, 0.45, 0.24), Vector3(1.8, 0.0, 0.0), Vector3(0.0, -0.03, -0.46), Furniture.BENCH)
+	_panel(k, Vector3(-0.9, 0.39, 0.25), Vector3(1.8, 0.0, 0.0), Vector3(0.0, 0.06, 0.0), Furniture.BENCH)
+	_panel(k, Vector3(-0.9, 0.49, -0.23), Vector3(1.8, 0.0, 0.0), Vector3(0.0, 0.36, -0.08), Furniture.BENCH)
+	for x: float in [-0.9, 0.0, 0.9]:
+		_panel(k, Vector3(x, 0.0, -0.27), Vector3(0.0, 0.0, 0.52), Vector3(0.0, 0.64, 0.0), Furniture.BENCH_END)
+
+
+## Litter baskets: the green wire basket (variant 0), open at the top with
+## trash inside, and a solar compactor (1), a box with a slanted solar panel
+## on top and its hopper door toward the sidewalk.
+static func _litter_baskets(k: _Kit) -> void:
+	k.shape = Vector4(CityTileDecoder.PROP_LITTER_BASKET, 1 << CityTileDecoder.BASKET_WIRE, 0.9, 0.6)
+	_turned(k, 8, [Vector2(0.0, 0.23), Vector2(0.9, 0.3)], Furniture.BASKET, Vector3.ZERO, true)
+	_disc(k, Vector3(0.0, 0.72, 0.0), 0.28, 8, Furniture.BASKET_FILL)
+	k.shape = Vector4(CityTileDecoder.PROP_LITTER_BASKET, 1 << CityTileDecoder.BASKET_COMPACTOR, 1.2, 0.7)
+	var lo := Vector3(-0.33, 0.0, -0.3)
+	var hi := Vector3(0.33, 0.0, 0.3)
+	var front_y := 1.06  # the panel slopes up to the back
+	var back_y := 1.2
+	var corners: Array[Vector3] = [Vector3(lo.x, 0.0, hi.z), Vector3(hi.x, 0.0, hi.z), Vector3(hi.x, 0.0, lo.z), Vector3(lo.x, 0.0, lo.z)]
+	var tops: Array[float] = [front_y, front_y, back_y, back_y]
+	for side in 4:
+		var a := corners[side]
+		var b := corners[(side + 1) % 4]
+		var part := Furniture.COMPACTOR_DOOR if side == 2 else Furniture.COMPACTOR
+		_quad(k, a, b, Vector3(b.x, tops[(side + 1) % 4], b.z), Vector3(a.x, tops[side], a.z), part)
+	_quad(k, Vector3(lo.x, front_y, hi.z), Vector3(hi.x, front_y, hi.z), Vector3(hi.x, back_y, lo.z),
+		Vector3(lo.x, back_y, lo.z), Furniture.SOLAR_PANEL)
+
+
+## Bike racks along the curb: the round CityRack hoop on a short stem
+## (variant 0) and an inverted U (1), as thin tubes.
+static func _bike_racks(k: _Kit) -> void:
+	k.shape = Vector4(CityTileDecoder.PROP_BIKE_RACK, 1 << CityTileDecoder.BIKE_RACK_HOOP, 0.9, 0.9)
+	var ring: Array[Vector3] = []
+	for i in 9:
+		var a := TAU * i / 9.0
+		ring.append(Vector3(sin(a) * 0.4, 0.48 + cos(a) * 0.4, 0.0))
+	_tube(k, ring, 0.022, Vector3.BACK, Furniture.BIKE_RACK, true)
+	_tube(k, [Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.09, 0.0)], 0.03, Vector3.BACK, Furniture.BIKE_RACK)
+	k.shape = Vector4(CityTileDecoder.PROP_BIKE_RACK, 1 << CityTileDecoder.BIKE_RACK_U, 0.9, 1.2)
+	_tube(k, [Vector3(-0.5, 0.0, 0.0), Vector3(-0.5, 0.74, 0.0), Vector3(-0.38, 0.88, 0.0), Vector3(0.38, 0.88, 0.0),
+		Vector3(0.5, 0.74, 0.0), Vector3(0.5, 0.0, 0.0)], 0.024, Vector3.BACK, Furniture.BIKE_RACK)
+
+
+## A Muni-Meter: a gray pay station on a pedestal, its screen and keypad
+## toward the sidewalk, under a blue sign that faces along the street.
+static func _parking_meter(k: _Kit) -> void:
+	k.shape = Vector4(CityTileDecoder.PROP_PARKING_METER, ALL_VARIANTS, 1.6, 0.35)
+	_box(k, Vector3(-0.08, 0.0, -0.07), Vector3(0.08, 0.78, 0.07), _faces(Furniture.METER, "+y -y"))
+	var faces := _faces(Furniture.METER, "-y")
+	faces["-z"] = Furniture.METER_FACE
+	_box(k, Vector3(-0.16, 0.78, -0.12), Vector3(0.16, 1.34, 0.12), faces)
+	_panel(k, Vector3(0.0, 1.34, 0.15), Vector3(0.0, 0.0, -0.3), Vector3(0.0, 0.26, 0.0), Furniture.METER_SIGN)
+
+
+## A bus shelter (the city's glass and steel design): a thin roof on posts at
+## the back, a glass back wall and one glass end, a lit ad panel at the other
+## end, and a bench inside. The front, toward the curb, is open.
+static func _bus_shelter(k: _Kit) -> void:
+	k.shape = Vector4(CityTileDecoder.PROP_BUS_SHELTER, ALL_VARIANTS, 2.6, 4.2)
+	var roof := _faces(Furniture.ROOF, "-y")
+	roof["-y"] = Furniture.CEILING
+	_box(k, Vector3(-2.2, 2.46, -0.85), Vector3(2.2, 2.6, 0.85), roof)
+	for x: float in [-2.1, 2.02]:
+		_box(k, Vector3(x, 0.0, -0.81), Vector3(x + 0.08, 2.46, -0.73), _faces(Furniture.STEEL, "+y -y"))
+	_panel(k, Vector3(-2.02, 0.1, -0.77), Vector3(4.04, 0.0, 0.0), Vector3(0.0, 2.3, 0.0), Furniture.GLASS)
+	_panel(k, Vector3(-2.06, 0.1, 0.3), Vector3(0.0, 0.0, -1.03), Vector3(0.0, 2.3, 0.0), Furniture.GLASS)
+	_box(k, Vector3(1.9, 0.12, -0.73), Vector3(2.08, 2.36, 0.62), _faces(Furniture.AD_BOX, "-y"))
+	_panel(k, Vector3(2.09, 0.24, 0.52), Vector3(0.0, 0.0, -1.14), Vector3(0.0, 1.98, 0.0), Furniture.POSTER)
+	_panel(k, Vector3(1.89, 0.24, -0.62), Vector3(0.0, 0.0, 1.14), Vector3(0.0, 1.98, 0.0), Furniture.POSTER)
+	_panel(k, Vector3(-1.5, 0.47, -0.4), Vector3(2.3, 0.0, 0.0), Vector3(0.0, 0.0, -0.32), Furniture.STEEL)
+	_panel(k, Vector3(-1.5, 0.42, -0.4), Vector3(2.3, 0.0, 0.0), Vector3(0.0, 0.05, 0.0), Furniture.STEEL)
+	for x: float in [-1.4, 0.7]:
+		_panel(k, Vector3(x, 0.0, -0.72), Vector3(0.0, 0.0, 0.3), Vector3(0.0, 0.47, 0.0), Furniture.STEEL)
+
+
+## LinkNYC: the Link1.0 kiosk (variant 0), a slim slab with a big screen on
+## each side (facing along the sidewalk) and a tablet toward the street; and
+## the Link5G pole (1), a wider kiosk with screens under a tall column.
+static func _linknyc(k: _Kit) -> void:
+	k.shape = Vector4(CityTileDecoder.PROP_LINKNYC, 1 << CityTileDecoder.LINKNYC_KIOSK, 2.9, 0.9)
+	var faces := _faces(Furniture.LINK, "-y")
+	faces["+z"] = Furniture.LINK_FRONT
+	_box(k, Vector3(-0.14, 0.0, -0.45), Vector3(0.14, 2.9, 0.45), faces)
+	_panel(k, Vector3(0.15, 1.12, 0.34), Vector3(0.0, 0.0, -0.68), Vector3(0.0, 1.22, 0.0), Furniture.SCREEN)
+	_panel(k, Vector3(-0.15, 1.12, -0.34), Vector3(0.0, 0.0, 0.68), Vector3(0.0, 1.22, 0.0), Furniture.SCREEN)
+	k.shape = Vector4(CityTileDecoder.PROP_LINKNYC, 1 << CityTileDecoder.LINKNYC_5G, 9.0, 0.6)
+	_box(k, Vector3(-0.3, 0.0, -0.3), Vector3(0.3, 2.75, 0.3), faces)
+	_panel(k, Vector3(0.31, 1.0, 0.22), Vector3(0.0, 0.0, -0.44), Vector3(0.0, 1.45, 0.0), Furniture.SCREEN)
+	_panel(k, Vector3(-0.31, 1.0, -0.22), Vector3(0.0, 0.0, 0.44), Vector3(0.0, 1.45, 0.0), Furniture.SCREEN)
+	_box(k, Vector3(-0.19, 2.75, -0.19), Vector3(0.19, 9.0, 0.19), _faces(Furniture.LINK, "-y"))
+
+
+## Subway entrances. A stair (variants 0 and 1): an opening in the sidewalk
+## along the curb, which the shader fills with steps going down from its open
+## end (+x) into the dark, a railing on the other three sides, and a globe
+## lamp on a post either side of the open end (green for an entrance, red for
+## exit only). A street elevator (2): a small glass box under a flat roof.
+static func _subway_entrances(k: _Kit) -> void:
+	k.shape = Vector4(CityTileDecoder.PROP_SUBWAY_ENTRANCE, (1 << CityTileDecoder.SUBWAY_STAIR) | (1 << CityTileDecoder.SUBWAY_STAIR_EXIT), 2.5,
+		STAIR_WIDTH)
+	var half := Vector2(STAIR_LENGTH, STAIR_WIDTH) * 0.5
+	_panel(k, Vector3(-half.x, 0.04, half.y), Vector3(STAIR_LENGTH, 0.0, 0.0), Vector3(0.0, 0.0, -STAIR_WIDTH),
+		Furniture.STAIRWELL)
+	var rail := 1.05
+	_panel(k, Vector3(-half.x, 0.0, half.y), Vector3(STAIR_LENGTH - 0.08, 0.0, 0.0), Vector3(0.0, rail, 0.0), Furniture.RAILING)
+	_panel(k, Vector3(half.x - 0.08, 0.0, -half.y), Vector3(0.08 - STAIR_LENGTH, 0.0, 0.0), Vector3(0.0, rail, 0.0),
+		Furniture.RAILING)
+	_panel(k, Vector3(-half.x, 0.0, -half.y), Vector3(0.0, 0.0, STAIR_WIDTH), Vector3(0.0, rail, 0.0), Furniture.RAILING)
+	for z: float in [-half.y, half.y]:
+		_turned(k, 4, [Vector2(0.0, 0.085), Vector2(2.14, 0.045)], Furniture.LAMP_POST, Vector3(half.x, 0.0, z))
+		_globe(k, Vector3(half.x, 2.31, z), 0.19, Furniture.GLOBE)
+	k.shape = Vector4(CityTileDecoder.PROP_SUBWAY_ENTRANCE, 1 << CityTileDecoder.SUBWAY_ELEVATOR, 3.0, 2.2)
+	_box(k, Vector3(-1.1, 0.0, -0.8), Vector3(1.1, 2.75, 0.8), _faces(Furniture.GLASS, "+y -y"))
+	var roof := _faces(Furniture.STEEL, "-y")
+	roof["-y"] = Furniture.CEILING
+	_box(k, Vector3(-1.2, 2.75, -0.9), Vector3(1.2, 3.0, 0.9), roof)
+
+
+## A traffic signal on the corner, facing the drivers it controls (+z): a
+## pole with a mast arm over the road (to its right, -x) carrying a signal
+## head and a street name sign, a second head on the pole, and a pedestrian
+## signal facing across the road. Each head's lit lens is a quad of its own.
+static func _traffic_signal(k: _Kit) -> void:
+	k.shape = Vector4(CityTileDecoder.PROP_TRAFFIC_SIGNAL, ALL_VARIANTS, 6.2, 0.4)
+	_turned(k, 6, [Vector2(0.0, 0.16), Vector2(0.4, 0.12), Vector2(0.5, 0.095), Vector2(6.1, 0.08), Vector2(6.2, 0.0)],
+		Furniture.SIGNAL_POLE)
+	_beam(k, Vector3(-0.05, 5.72, 0.0), Vector3(-4.6, 5.95, 0.0), 0.055, Furniture.SIGNAL_POLE)
+	var head := _faces(Furniture.SIGNAL_HEAD)
+	head["+z"] = Furniture.SIGNAL_FACE
+	for top: Vector3 in [Vector3(-4.1, 5.88, 0.0), Vector3(-0.26, 4.01, 0.0)]:
+		_box(k, top + Vector3(-0.18, -1.06, -0.13), top + Vector3(0.18, 0.0, 0.11), head)
+		var lens := top + Vector3(0.0, -0.18, 0.125)
+		k.extra = Vector4(lens.x, lens.y, lens.z, 0.125)
+		_panel(k, lens + Vector3(-0.125, -0.125, 0.0), Vector3(0.25, 0.0, 0.0), Vector3(0.0, 0.25, 0.0), Furniture.SIGNAL_LAMP)
+		k.extra = Vector4.ZERO
+	var walk := _faces(Furniture.SIGNAL_HEAD, "+x")
+	_box(k, Vector3(-0.38, 2.2, -0.23), Vector3(-0.1, 2.66, 0.23), walk)
+	k.extra = Vector4(-0.39, 2.43, 0.0, 0.18)
+	_panel(k, Vector3(-0.39, 2.25, -0.18), Vector3(0.0, 0.0, 0.36), Vector3(0.0, 0.36, 0.0), Furniture.WALK_LAMP)
+	k.extra = Vector4.ZERO
+	_panel(k, Vector3(-2.7, 5.4, 0.0), Vector3(1.7, 0.0, 0.0), Vector3(0.0, 0.3, 0.0), Furniture.STREET_SIGN)
+
+
+## A newsstand: a steel box under a green roof that overhangs the sidewalk
+## side, with racks of magazines in its windows there and at both ends, and
+## an ad toward the street.
+static func _newsstand(k: _Kit) -> void:
+	k.shape = Vector4(CityTileDecoder.PROP_NEWSSTAND, ALL_VARIANTS, 2.7, 3.0)
+	_box(k, Vector3(-1.5, 0.0, -0.8), Vector3(1.5, 2.45, 0.8), _faces(Furniture.NEWSSTAND, "+y -y"))
+	var roof := _faces(Furniture.NEWSSTAND_ROOF)
+	roof["-y"] = Furniture.CEILING
+	_box(k, Vector3(-1.62, 2.45, -1.08), Vector3(1.62, 2.7, 0.92), roof)
+	_panel(k, Vector3(1.35, 0.55, -0.81), Vector3(-2.7, 0.0, 0.0), Vector3(0.0, 1.55, 0.0), Furniture.MAGAZINES)
+	_panel(k, Vector3(1.51, 0.55, 0.62), Vector3(0.0, 0.0, -1.24), Vector3(0.0, 1.55, 0.0), Furniture.MAGAZINES)
+	_panel(k, Vector3(-1.51, 0.55, -0.62), Vector3(0.0, 0.0, 1.24), Vector3(0.0, 1.55, 0.0), Furniture.MAGAZINES)
+	# An ad toward the street.
+	_panel(k, Vector3(-1.2, 0.5, 0.81), Vector3(2.4, 0.0, 0.0), Vector3(0.0, 1.6, 0.0), Furniture.POSTER)
+
+
+## A box's faces ("+x", "-x", "+y", "-y", "+z", "-z") all as `part`, but
+## those in `skip` (space-separated).
+static func _faces(part: int, skip := "") -> Dictionary:
+	var faces := {}
+	for face: String in ["+x", "-x", "+y", "-y", "+z", "-z"]:
+		if not face in skip.split(" "):
+			faces[face] = part
+	return faces
+
+
+## An axis-aligned box from lo to hi with flat faces: `faces` maps the faces
+## to draw ("+x" ... "-z") to their parts. UV2 runs 0..1 across each face as
+## seen from outside (left to right, bottom to top; top and bottom faces
+## along x and z).
+static func _box(k: _Kit, lo: Vector3, hi: Vector3, faces: Dictionary) -> void:
+	var size := hi - lo
+	var sides := {
+		"+x": [Vector3(hi.x, lo.y, hi.z), Vector3(0.0, 0.0, -size.z), Vector3(0.0, size.y, 0.0)],
+		"-x": [Vector3(lo.x, lo.y, lo.z), Vector3(0.0, 0.0, size.z), Vector3(0.0, size.y, 0.0)],
+		"+z": [Vector3(lo.x, lo.y, hi.z), Vector3(size.x, 0.0, 0.0), Vector3(0.0, size.y, 0.0)],
+		"-z": [Vector3(hi.x, lo.y, lo.z), Vector3(-size.x, 0.0, 0.0), Vector3(0.0, size.y, 0.0)],
+		"+y": [Vector3(lo.x, hi.y, hi.z), Vector3(size.x, 0.0, 0.0), Vector3(0.0, 0.0, -size.z)],
+		"-y": [Vector3(lo.x, lo.y, lo.z), Vector3(size.x, 0.0, 0.0), Vector3(0.0, 0.0, size.z)],
+	}
+	for face: String in faces:
+		var side: Array = sides[face]
+		_panel(k, side[0], side[1], side[2], faces[face])
+
+
+## A flat quad from `origin` across `u` and up `v`, facing u x v. UV2 runs
+## 0..1 along u and v, CUSTOM1 holds their lengths (unless k.extra is set).
+static func _panel(k: _Kit, origin: Vector3, u: Vector3, v: Vector3, part: int) -> void:
+	_quad(k, origin, origin + u, origin + u + v, origin + v, part)
+
+
+## A flat quad through four corners in order (UV2 (0,0), (1,0), (1,1),
+## (0,1)), facing (b - a) x (d - a).
+static func _quad(k: _Kit, a: Vector3, b: Vector3, c: Vector3, d: Vector3, part: int) -> void:
+	var normal := (b - a).cross(d - a).normalized()
+	var saved := k.extra
+	if k.extra.w <= 0.0:
+		k.extra = Vector4((b - a).length(), (d - a).length(), 0.0, 0.0)
+	var uv := Vector2(part, 0.0)
+	k.quad(k.vertex(a, normal, uv, Vector2(0.0, 0.0)), k.vertex(b, normal, uv, Vector2(1.0, 0.0)),
+		k.vertex(c, normal, uv, Vector2(1.0, 1.0)), k.vertex(d, normal, uv, Vector2(0.0, 1.0)), normal)
+	k.extra = saved
+
+
+## A turned shape about the vertical line through `center`, through
+## `profile`'s (height, radius) points bottom to top, with smooth normals
+## shared between neighboring rings (fewer vertices than _lathe); a radius of
+## 0 at either end closes it with a point. With `seam`, the first column is
+## doubled so UV2.x runs 0..1 around. `light` is for a light's CUSTOM1 (see
+## _globe()).
+static func _turned(k: _Kit, sides: int, profile: Array[Vector2], part: int, center := Vector3.ZERO,
+		seam := false, light := Vector4.ZERO) -> void:
+	var bottom := profile[0].x
+	var height := profile[profile.size() - 1].x - bottom
+	var around := TAU * profile[0].y
+	var rings: Array[PackedInt32Array] = []
+	var columns := sides + 1 if seam else sides
+	# Squares are turned to line up with the axes.
+	var turn := 0.5 if sides == 4 else 0.0
+	for p in profile.size():
+		var slope := Vector2.ZERO  # (out, up) of the profile's normal here
+		if p > 0:
+			slope += Vector2(profile[p].x - profile[p - 1].x, profile[p - 1].y - profile[p].y).normalized()
+		if p < profile.size() - 1:
+			slope += Vector2(profile[p + 1].x - profile[p].x, profile[p].y - profile[p + 1].y).normalized()
+		slope = slope.normalized()
+		var up := (profile[p].x - bottom) / height
+		k.extra = light if light.w > 0.0 else Vector4(around, height, 0.0, 0.0)
+		var ring := PackedInt32Array()
+		if profile[p].y <= 0.0:
+			var pole := Vector3.DOWN if p == 0 else Vector3.UP
+			ring.append(k.vertex(center + Vector3.UP * profile[p].x, pole, Vector2(part, 0.0), Vector2(0.5, up)))
+		else:
+			for i in columns:
+				var a := TAU * (i + turn) / sides
+				var out := Vector3(cos(a), 0.0, sin(a))
+				ring.append(k.vertex(center + out * profile[p].y + Vector3.UP * profile[p].x,
+					out * slope.x + Vector3.UP * slope.y, Vector2(part, 0.0), Vector2(float(i) / sides, up)))
+		rings.append(ring)
+	k.extra = Vector4.ZERO
+	for p in rings.size() - 1:
+		var low := rings[p]
+		var high := rings[p + 1]
+		for i in sides:
+			var j := i + 1 if seam else (i + 1) % sides
+			var a := TAU * (i + 0.5 + turn) / sides
+			var out := Vector3(cos(a), 0.0, sin(a)) + Vector3.UP * (0.5 if high.size() == 1 else 0.0) 					+ Vector3.DOWN * (0.5 if low.size() == 1 else 0.0)
+			if high.size() == 1:
+				k.triangle(low[i], low[j], high[0], out)
+			elif low.size() == 1:
+				k.triangle(low[0], high[j], high[i], out)
+			else:
+				k.quad(low[i], low[j], high[j], high[i], out)
+
+
+## A flat, upward-facing polygon with `sides` corners (a fan).
+static func _disc(k: _Kit, center: Vector3, radius: float, sides: int, part: int) -> void:
+	k.extra = Vector4(radius * 2.0, radius * 2.0, 0.0, 0.0)
+	var rim := PackedInt32Array()
+	for i in sides:
+		var a := TAU * i / sides
+		rim.append(k.vertex(center + Vector3(cos(a), 0.0, sin(a)) * radius, Vector3.UP, Vector2(part, 0.0),
+			Vector2(cos(a), sin(a)) * 0.5 + Vector2(0.5, 0.5)))
+	k.extra = Vector4.ZERO
+	for i in range(1, sides - 1):
+		k.triangle(rim[0], rim[i], rim[i + 1], Vector3.UP)
+
+
+## A thin tube along `points` (lying in the plane facing `across`), as two
+## crossed strips: one in the plane, one across it, so it reads as a tube
+## from any side (the material is double-sided). 4 triangles a segment.
+static func _tube(k: _Kit, points: Array[Vector3], radius: float, across: Vector3, part: int, closed := false) -> void:
+	var count := points.size()
+	var flat := PackedInt32Array()
+	var deep := PackedInt32Array()
+	var length := 0.0
+	for i in count:
+		var before := points[(i - 1 + count) % count] if closed or i > 0 else points[i]
+		var after := points[(i + 1) % count] if closed or i < count - 1 else points[i]
+		var side := across.cross(after - before).normalized()
+		if i > 0:
+			length += points[i].distance_to(points[i - 1])
+		var uv := Vector2(part, 0.0)
+		flat.append(k.vertex(points[i] + side * radius, across, uv, Vector2(0.0, length)))
+		flat.append(k.vertex(points[i] - side * radius, across, uv, Vector2(1.0, length)))
+		deep.append(k.vertex(points[i] + across * radius, side, uv, Vector2(0.0, length)))
+		deep.append(k.vertex(points[i] - across * radius, side, uv, Vector2(1.0, length)))
+	for i in (count if closed else count - 1):
+		var j := (i + 1) % count
+		var side := across.cross(points[j] - points[i]).normalized()
+		k.quad(flat[2 * i], flat[2 * j], flat[2 * j + 1], flat[2 * i + 1], across)
+		k.quad(deep[2 * i], deep[2 * j], deep[2 * j + 1], deep[2 * i + 1], side)
+
+
+## A smooth ball (eight sides, three rings: 48 triangles) that the shader
+## keeps at least a pixel or two across far away (CUSTOM1: its center and
+## radius).
+static func _globe(k: _Kit, center: Vector3, radius: float, part: int) -> void:
+	var profile: Array[Vector2] = []
+	for y: float in [-1.0, -0.7, 0.0, 0.7, 1.0]:
+		profile.append(Vector2(center.y + y * radius, sqrt(maxf(1.0 - y * y, 0.0)) * radius))
+	_turned(k, 8, profile, part, Vector3(center.x, 0.0, center.z), false, Vector4(center.x, center.y, center.z, radius))
+
+
 ## A turned shape around the y axis through `profile`'s points (height,
 ## radius), bottom to top, with `sides` flat sides; a radius of 0 closes it to
 ## a point. UV.y runs 0..1 up it.
@@ -394,17 +785,7 @@ class _Builder:
 	## MultiMesh's instance colors reach the shader as they are (without a
 	## color array, the Compatibility renderer leaves whatever was last set).
 	func commit(shapes: Array[_Builder] = []) -> ArrayMesh:
-		var arrays := []
-		arrays.resize(Mesh.ARRAY_MAX)
-		arrays[Mesh.ARRAY_VERTEX] = positions
-		arrays[Mesh.ARRAY_NORMAL] = normals
-		arrays[Mesh.ARRAY_TEX_UV] = uvs
-		arrays[Mesh.ARRAY_TEX_UV2] = uv2s
-		var white := PackedColorArray()
-		white.resize(positions.size())
-		white.fill(Color.WHITE)
-		arrays[Mesh.ARRAY_COLOR] = white
-		arrays[Mesh.ARRAY_INDEX] = indices
+		var arrays := base_arrays()
 		const SHIFTS: Array[int] = [Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT, Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT,
 				Mesh.ARRAY_FORMAT_CUSTOM2_SHIFT, Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT]
 		var flags := 0
@@ -421,6 +802,49 @@ class _Builder:
 			arrays[Mesh.ARRAY_CUSTOM0 + 2 * k] = places
 			arrays[Mesh.ARRAY_CUSTOM1 + 2 * k] = shading
 			flags |= (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << SHIFTS[2 * k]) | (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << SHIFTS[2 * k + 1])
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, flags)
+		return mesh
+
+	## The mesh arrays of the vertices and triangles so far, with white
+	## vertex colors (see commit()).
+	func base_arrays() -> Array:
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = positions
+		arrays[Mesh.ARRAY_NORMAL] = normals
+		arrays[Mesh.ARRAY_TEX_UV] = uvs
+		arrays[Mesh.ARRAY_TEX_UV2] = uv2s
+		var white := PackedColorArray()
+		white.resize(positions.size())
+		white.fill(Color.WHITE)
+		arrays[Mesh.ARRAY_COLOR] = white
+		arrays[Mesh.ARRAY_INDEX] = indices
+		return arrays
+
+
+## Collects street furniture's shapes: a _Builder whose vertices also carry
+## the shape they belong to (CUSTOM0) and their face's size or light's center
+## (CUSTOM1), as the header describes.
+class _Kit extends _Builder:
+	var custom0 := PackedFloat32Array()
+	var custom1 := PackedFloat32Array()
+	## The shape being built: (type, variant bits, height, width).
+	var shape := Vector4.ZERO
+	## What the next vertices carry in CUSTOM1.
+	var extra := Vector4.ZERO
+
+	func vertex(position: Vector3, normal: Vector3, uv: Vector2, uv2 := Vector2.ZERO) -> int:
+		custom0.append_array([shape.x, shape.y, shape.z, shape.w])
+		custom1.append_array([extra.x, extra.y, extra.z, extra.w])
+		return super(position, normal, uv, uv2)
+
+	func build() -> ArrayMesh:
+		var arrays := base_arrays()
+		arrays[Mesh.ARRAY_CUSTOM0] = custom0
+		arrays[Mesh.ARRAY_CUSTOM1] = custom1
+		var flags := (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) \
+				| (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
 		var mesh := ArrayMesh.new()
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, flags)
 		return mesh

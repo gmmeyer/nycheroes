@@ -18,8 +18,8 @@ extends WorldEnvironment
 const SHADER_OPTION_PREFIX := "sh_"
 
 @export var sun: DirectionalLight3D
-## Its building, ground, markings, tree, water tower and street light materials
-## take the sh_ options.
+## Its building, ground, markings, tree, water tower and street furniture
+## materials take the sh_ options.
 @export var city: CityStreamer
 
 
@@ -66,7 +66,7 @@ func _apply_shader_options() -> void:
 	var materials: Array[ShaderMaterial] = []
 	if city:
 		for material in [city.building_material, city.ground_material, city.markings_material, city.tree_material,
-				city.water_tower_material]:
+				city.water_tower_material, city.street_furniture_material]:
 			if material is ShaderMaterial:
 				materials.append(material)
 	if environment.sky and environment.sky.sky_material is ShaderMaterial:

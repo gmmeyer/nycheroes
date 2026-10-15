@@ -8,9 +8,10 @@ extends SubViewport
 ## Compatibility renderer, and it has no decals; this costs one texture lookup
 ## per pixel, and no draw calls in the main view.
 ##
-## Each near tile adds its lamps as a MultiMeshInstance2D of soft additive
-## discs (CityProps, shaders/street_light_pool.gdshader), at its world
-## position in meters; the canvas transform maps meters to pixels. The map
+## Each near tile adds its lamps (and lit bus shelters and newsstands) as a
+## MultiMeshInstance2D of soft additive discs (CityProps,
+## shaders/street_light_pool.gdshader), at its world position in meters; the
+## canvas transform maps meters to pixels. The map
 ## only redraws when tiles come or go or it moves to follow the camera (in
 ## STEP-meter steps), and not at all while the lights are off: nothing
 ## happens per frame. The shader globals street_light_map (this viewport's

@@ -136,9 +136,8 @@ In order:
    space, landmark status), drawn as stylized facades: real floor counts,
    storefronts, fire escapes, cornices, blank side walls; rooftop water
    towers.
-4. **Street life:** trees and street paint (done, below); hydrants, bus
-   shelters, LinkNYC kiosks, benches, bike parking, parking meters, subway
-   entrances, street and traffic lights; parked cars and traffic.
+4. **Street life:** trees, street paint, street lights and street
+   furniture (done, below); parked cars and traffic.
 5. **Landmarks:** about 25 hand-made iconic buildings and bridges.
 6. **Light and atmosphere:** sun position for NYC, clouds, haze, glass
    reflections, night mode with lit windows and street lights.
@@ -298,7 +297,7 @@ In order:
   towers 74, paint 76), plus the 1.8 MB canopy map; 3.4 million trees and
   9,637 water towers citywide. About +0.3-0.8 ms per frame (draw calls in
   midtown 190 to 290); every view still at the 145 FPS cap.
-- Still to do: other street furniture.
+- Still to do: parked cars and traffic.
 
 **Roofs: parapets and pitched roofs (done):**
 - Up close, flat roofs get 1 m parapets: the walls rise above the roof
@@ -363,6 +362,42 @@ In order:
   cyan and amber (`ground.gdshader`, whose box must match `props.py`).
 - Frame rate unchanged (within noise; the screens fill about 40% of the
   frame at street level).
+
+**Street furniture (done):**
+- From the city's inventories, where they really stand: 110k fire
+  hydrants, 38k bike racks, 21k litter baskets, 13k parking meters, 5.7k
+  benches and leaning bars, 3.3k bus shelters, 2.2k LinkNYC kiosks (and
+  the tall 5G poles), 1.8k subway entrances (green globes, red for exit
+  only, elevators) and 361 newsstands. Points the data puts in the road
+  move onto the sidewalk; hydrants and parking meters within 6 m of a curb
+  move to 0.5 m from it (the data puts some by the building line);
+  everything faces its nearest street.
+- Traffic signals, which have no citywide data: one pole per approach,
+  just behind the crosswalk on the right, its arm reaching over the road,
+  at intersections with a street at least 14 m wide or with 3 lanes (about
+  30,000 poles).
+- 215,000 pieces in all, as new prop types 5-14 in the props surface.
+- Drawn with two instanced meshes per near tile (`prop_meshes.gd`,
+  `shaders/street_furniture.gdshader`): one holds every small piece
+  (hydrant, bench, wire basket, solar compactor, hoop and U racks,
+  Muni-Meter; 236 triangles), the other every large one (bus shelter, Link
+  kiosk and 5G pole, subway stair, street elevator, traffic signal,
+  newsstand; 352 triangles), and each instance folds away the shapes it
+  isn't. Cartoon glass; ads and kiosk screens that change every 8 s;
+  magazine racks; a street name sign on each signal. Signals cycle green,
+  yellow and red, with WALK and the flashing hand; their lenses and subway
+  globes stay visible far away. Subway stairs lead down into the dark
+  (drawn by the shader, no geometry under the sidewalk), lit warm at night;
+  shelters and newsstands light the sidewalk around them at night.
+- Small pieces are gone by about 260 m, large ones by about 580 m (low
+  preset: 90 and 300 m; medium: 220 and 500 m). No shadows: they cost 3-11%
+  of the frame rate for little to see.
+- Cost: full-detail tiles +3.4 MB (1,215 MB); about 10 more draw calls in
+  busy views, about 4% of the uncapped frame rate (0.08 ms a frame); every
+  view still at the 145 FPS cap, day and night.
+- Still to do: which end of a subway stair is open (the data doesn't say,
+  so every stair opens the same way along its curb); wave bike racks are
+  drawn as U racks.
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
@@ -515,7 +550,10 @@ templates for both are already installed.
   default over https). Needs `npx wrangler login` once, or a Cloudflare
   CLI login (`cf auth login`), which it lends to Wrangler; `npx wrangler dev`
   in `tools/cloudflare` runs it locally. First load: the 39.5 MB engine
-  arrives brotli-compressed (9.6 MB).
+  arrives brotli-compressed (9.6 MB). Tile URLs carry the build's id (from
+  the manifest), and a tile that arrives broken or stale (an edge cache
+  just after a deploy) is fetched again, past any cache, after 1.5 s and
+  3 s.
 - Tests (headless): `godot --headless --path . res://tests/hero_moves_test.tscn`,
   `res://tests/combat_test.tscn`, `res://tests/streaming_test.tscn` and
   `res://tests/coop_test.tscn`.
