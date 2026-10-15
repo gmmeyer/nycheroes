@@ -151,7 +151,7 @@ void fragment() {
 	if (!FRONT_FACING) {
 		color *= 0.6;
 	}
-	ALBEDO = color;
+	ALBEDO = toon_night_albedo(color);
 	EMISSION = ALBEDO * toon_ambient(world_normal, occlusion);
 	toon_glint = steel && part == TANK ? 0.15 : 0.0;
 }

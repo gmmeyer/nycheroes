@@ -3,11 +3,13 @@ extends Node3D
 ## Sets up a play session: places the hero (?spawn=x,y,z,yaw; without one, on
 ## the ground at Times Square), lets it move once the ground under it has
 ## loaded, and toggles the free-fly debug camera with F1 (starting with
-## ?cam=... also starts in the free camera). ?demo plays a scripted tour of
-## the powers instead of taking player input.
+## ?cam=... also starts in the free camera). ?demo plays a scripted tour
+## instead of taking player input (see DemoDirector).
 ##
 ## Co-op: M opens the co-op menu; ?host hosts a game and ?join=CODE joins one
 ## (invite links use it). Players who join start next to the host's hero.
+## T steps the time of day on to the next of dawn, day, dusk and night
+## (TimeOfDay; ?time=HH:MM and ?daylength=MINUTES set the clock).
 
 ## Times Square, facing north up Broadway (world meters; dropped onto the ground).
 const DEFAULT_SPAWN := Vector3(0.0, 15.0, 0.0)
@@ -24,6 +26,7 @@ const DROP_TRIES := 30
 @export var players: PlayerSync
 @export var hud: CanvasLayer
 @export var coop_panel: CoopPanel
+@export var time_of_day: TimeOfDay
 
 var _free_camera_on := false
 var _drop_to_ground := false
@@ -81,6 +84,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("coop_menu") and not coop_panel.is_typing():
 		coop_panel.toggle()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("time_of_day") and not coop_panel.is_typing():
+		time_of_day.step_forward()
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("debug_free_camera"):
 		if not _free_camera_on:
 			free_camera.global_transform = hero_camera.camera.global_transform
@@ -97,6 +103,8 @@ func _start_demo() -> void:
 	director.camera = hero_camera
 	director.city = city
 	director.encounters = encounters
+	director.free_camera = free_camera
+	director.time_of_day = time_of_day
 	add_child(director)
 
 
@@ -104,6 +112,11 @@ func _on_net_state_changed() -> void:
 	# Show what went wrong, e.g. a join link for a game that has ended.
 	if Net.state == Net.State.OFFLINE and Net.error:
 		coop_panel.open()
+
+
+## Switches between the hero's camera and the free-fly camera.
+func use_free_camera(on: bool) -> void:
+	_set_free_camera(on)
 
 
 func _set_free_camera(on: bool) -> void:

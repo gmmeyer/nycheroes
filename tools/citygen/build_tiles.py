@@ -200,7 +200,7 @@ def main() -> None:
                 entries[level].append(entry)
                 for key in ("bytes", "vertices", "triangles"):
                     totals[f"{level}_{key}"] += entry.pop(key)
-                for key in ("lane_points", "props", "trees", "water_towers"):
+                for key in ("lane_points", "props", "trees", "water_towers", "street_lights"):
                     totals[key] += entry.pop(key, 0)
             if n % 250 == 0 or n == len(tasks):
                 print(f"  {n:,}/{len(tasks):,} tiles ({time.time() - started:.0f} s)", flush=True)
@@ -230,7 +230,8 @@ def main() -> None:
         print(f"  {level}: {len(entries[level]):,} tiles, {totals[f'{level}_bytes'] / 1e6:.1f} MB, "
               f"{totals[f'{level}_vertices']:,} vertices, {totals[f'{level}_triangles']:,} triangles")
     print(f"  walking lanes: {totals['lane_points']:,} points")
-    print(f"  props: {totals['trees']:,} trees, {totals['water_towers']:,} water towers")
+    print(f"  props: {totals['trees']:,} trees, {totals['water_towers']:,} water towers, "
+          f"{totals['street_lights']:,} street lights")
     if failed:
         print(f"  {len(failed)} tiles FAILED and are missing: {failed}")
         raise SystemExit(1)
@@ -635,6 +636,7 @@ def _add_ground(builder: MeshBuilder, bounds, settings: dict) -> None:
             def height(en):
                 return terrain.height(en) - CURB_HEIGHT
             _add_curbs(builder, polys, bounds, cell, terrain)
+            _W["tile_roads"] = [shapely.orient_polygons(p) for p in polys]  # for street lights
         builder.add_draped(polys, cell, height, (kind, 0.0), terrain.normal)
 
     # Walls where the land meets water: down into the sea, or into a raised
@@ -788,14 +790,19 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     street = _street_trees(i, j)
     canopy = _canopy_trees(i, j, bounds, street["en"])
     towers = _water_towers(indices)
-    parts = [street, canopy, towers]
+    lamps = _street_lights(bounds)
+    parts = [street, canopy, towers, lamps]
     en = np.concatenate([p["en"] for p in parts])
     if len(en) == 0:
         return None, {}
     trees = len(street["en"]) + len(canopy["en"])
-    y = np.concatenate([_W["ground"]["lod0"].height(en[:trees]), towers["y"]])
+    ground = _W["ground"]["lod0"]
+    y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]), towers["y"],
+                        ground.height(lamps["en"])])
     seed = np.concatenate([p["seed"] for p in parts])
-    yaw = props.location_seed(en * 3.7) * (2 * np.pi)
+    # Trees and towers face any way; lamps reach over the street.
+    yaw = np.concatenate([p["yaw"] if "yaw" in p else props.location_seed(p["en"] * 3.7) * (2 * np.pi)
+                          for p in parts])
     positions = np.round(to_godot(en, y) - np.asarray(origin), 2).astype(np.float32)
     normals = np.column_stack([np.concatenate([p["height"] for p in parts]),
                                np.concatenate([p["width"] for p in parts]), yaw])
@@ -805,7 +812,26 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     order = np.argsort(kinds, kind="stable")  # grouped by type, for the game
     surface = (positions[order], np.round(normals, 2).astype(np.float32)[order],
                np.round(uv, 2).astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
-    return surface, {"props": len(en), "trees": trees, "water_towers": len(towers["en"])}
+    return surface, {"props": len(en), "trees": trees, "water_towers": len(towers["en"]),
+                     "street_lights": len(lamps["en"])}
+
+
+def _street_lights(bounds) -> dict:
+    """Lamps along the tile's curbs (props.lamp_spots), on open ground."""
+    roads = _W.pop("tile_roads", [])
+    if not roads:
+        return _no_props()
+    points, arms = props.lamp_spots(roads, shapely.buffer(bounds.boundary, 0.01))
+    if len(points) == 0:
+        return _no_props()
+    keep = _on_open_ground(points)
+    if not _W["streets"].is_empty:
+        keep &= ~shapely.contains_xy(_W["streets"], points[:, 0], points[:, 1])
+    points, arms = points[keep], arms[keep]
+    near_park = np.zeros(len(points), dtype=bool)
+    hits = _W["park_tree"].query(shapely.points(points), predicate="dwithin", distance=props.LAMP_PARK_REACH)
+    near_park[hits[0]] = True
+    return props.street_lights(points, arms, near_park)
 
 
 def _no_props() -> dict:

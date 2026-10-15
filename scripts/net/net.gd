@@ -1,15 +1,16 @@
 extends Node
 ## Co-op sessions (autoload "Net"): hosting and joining games, and who's in them.
 ##
-## Players find each other through a small signaling server (tools/signaling)
-## using a short room code, then connect directly over WebRTC in a star: every
+## Players find each other through a small signaling server (tools/signaling
+## locally, tools/cloudflare on the public site) using a short room code,
+## then connect directly over WebRTC in a star: every
 ## player connects to the host, whose game runs the thugs and decides every hit
 ## (see Combat), and Godot relays messages between the other players. Desktop
 ## builds have no WebRTC, so tests connect over ENet instead.
 ##
 ## Launch options (read by Game): ?host hosts a game, ?join=CODE joins one, and
-## ?signal=wss://... picks the signaling server (default: the page's own host,
-## port 8070).
+## ?signal=wss://... picks the signaling server (default: /signal on the page's
+## host over https, else the page's host on port 8070).
 
 signal state_changed
 signal player_joined(id: int)
@@ -182,9 +183,11 @@ func _start(greeting: Dictionary) -> void:
 func _default_signaling_url() -> String:
 	if LaunchOptions.has("signal"):
 		return LaunchOptions.get_string("signal")
-	var secure := str(JavaScriptBridge.eval("location.protocol")) == "https:"
-	var hostname := str(JavaScriptBridge.eval("location.hostname"))
-	return "%s://%s:%d" % ["wss" if secure else "ws", hostname, SIGNALING_PORT]
+	# The public site (https, tools/cloudflare) has it at /signal on the same
+	# host; a local build (tools/build_web.ps1 -Serve) on its own port.
+	if str(JavaScriptBridge.eval("location.protocol")) == "https:":
+		return "wss://%s/signal" % str(JavaScriptBridge.eval("location.host"))
+	return "ws://%s:%d" % [str(JavaScriptBridge.eval("location.hostname")), SIGNALING_PORT]
 
 
 func _poll_signaling() -> void:

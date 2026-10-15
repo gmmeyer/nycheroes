@@ -14,7 +14,8 @@
 // per-tree variety, a soft gradient (darker underneath), and leaf clumps up
 // close. Trees shrink away one by one between fade_distance from the camera,
 // before their tile's trees stop drawing; their shadows sooner.
-// Lighting is the shared toon model (toon.gdshaderinc).
+// Lighting is the shared toon model (toon.gdshaderinc); at night crowns near
+// a street light catch its warm light underneath.
 shader_type spatial;
 render_mode ambient_light_disabled;
 
@@ -44,6 +45,8 @@ uniform float trunk_min_pixels = 0.0025;
 uniform float trunk_max_share = 0.15;
 // How much darker a crown's underside is than its top.
 uniform float crown_shading : hint_range(0.0, 1.0) = 0.25;
+// Night: how much street light the undersides of crowns (and trunks) catch.
+uniform float street_light_catch = 1.0;
 
 // (tone, seed in 1024ths): the same for the whole tree.
 varying flat vec2 tree_data;
@@ -52,6 +55,8 @@ varying flat vec2 tree_data;
 varying vec3 mesh_position;
 varying flat vec2 tree_size;
 varying vec2 crown_shading_data;
+// Night: the street lights' light where the tree stands.
+varying flat vec3 tree_street_light;
 
 // A random number per tree (and salt).
 float rnd(float seed, float salt) {
@@ -80,6 +85,10 @@ void vertex() {
 	mesh_position = v;
 	float up = crown_shading_data.x;
 	float distance_to_camera = distance(MAIN_CAM_INV_VIEW_MATRIX[3].xyz, MODEL_MATRIX[3].xyz);
+	tree_street_light = vec3(0.0);
+	if (city_lights > 0.0 && !IN_SHADOW_PASS) {
+		tree_street_light = street_light_at(MODEL_MATRIX[3].xz, distance_to_camera) * city_lights;
+	}
 
 	bool crown = UV.x > 0.5;
 	if (crown) {
@@ -152,7 +161,11 @@ void fragment() {
 		float clumps = value_noise(q + seed);
 		color *= 1.0 + (clumps - 0.5) * 0.24 * visible(1.1, length(fwidth(q)) * 1.1);
 	}
-	ALBEDO = color;
+	ALBEDO = toon_night_albedo(color);
 	EMISSION = ALBEDO * toon_ambient(world_normal, occlusion);
 	toon_glint = 0.0;
+	if (city_lights > 0.0) {
+		float under = UV.x < 0.5 ? 1.0 : 1.0 - smoothstep(0.0, 0.8, crown_shading_data.x);
+		EMISSION += ALBEDO * tree_street_light * (street_light_catch * under);
+	}
 }

@@ -1,11 +1,16 @@
+class_name LightingOverrides
 extends WorldEnvironment
 ## Lighting overrides from launch options, for tuning without re-exporting:
 ## ?ambient=0.5&sun=1.2&tonemap=2&exposure=1&white=1&fog=0.00005&sky=1
 ## ?agx_contrast=1.25&agx_white=16 (AgX tonemapping), ?saturation=1.1
 ## ?sun_dir=235,42 points the sun from that azimuth (degrees clockwise from
 ## north) and elevation (degrees above the horizon); ?sun_color=1,0.93,0.8 (sRGB).
+## These tune the day: TimeOfDay (scripts/world/time_of_day.gd) takes the
+## scene as they leave it as its day, and blends from there into dusk and
+## night (?time=HH:MM, ?daylength=MINUTES).
 ## ?sh_<uniform>=<value> sets a uniform of the city's building, ground,
-## markings, tree and water tower shaders and the sky shader, wherever it exists: one number, or
+## markings, tree, water tower and street light shaders and the sky shader,
+## wherever it exists: one number, or
 ## comma-separated numbers for vectors and colors (sRGB), e.g.
 ## ?sh_ambient_energy=0.6&sh_toon_softness=0.05&sh_zenith_color=0.3,0.5,0.85
 
@@ -13,7 +18,8 @@ extends WorldEnvironment
 const SHADER_OPTION_PREFIX := "sh_"
 
 @export var sun: DirectionalLight3D
-## Its building, ground, markings, tree and water tower materials take the sh_ options.
+## Its building, ground, markings, tree, water tower and street light materials
+## take the sh_ options.
 @export var city: CityStreamer
 
 

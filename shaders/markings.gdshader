@@ -16,7 +16,8 @@
 // The strips sit a few centimeters above the road; vertex() also pulls them
 // toward the camera by a little more than the depth buffer can tell apart at
 // that distance, so they never flicker through the road, near or from the air.
-// Lighting is the shared toon model (toon.gdshaderinc), facing up like the road.
+// Lighting is the shared toon model (toon.gdshaderinc), facing up like the road;
+// at night paint picks up the street lights like the road around it.
 shader_type spatial;
 render_mode cull_disabled, ambient_light_disabled;
 
@@ -40,13 +41,20 @@ uniform vec2 fade_distance = vec2(550.0, 700.0);
 // gap between them varies by a few centimeters), then pulled toward the
 // camera by x m plus y times its distance.
 uniform vec3 depth_offset = vec3(0.02, 0.0015, 0.02);
+// Night: the street lights' average light out past their map, as on the road
+// (shaders/ground.gdshader).
+uniform vec3 street_light_average = vec3(0.16, 0.11, 0.06);
+uniform float street_light_sheen = 0.04;
 
 // Tile-local position, for wear that differs from strip to strip.
 varying vec2 tile_position;
 varying float distance_fade;
+// Scene x/z, where the street lights' map is looked up.
+varying vec2 scene_xz;
 
 void vertex() {
 	tile_position = VERTEX.xz;
+	scene_xz = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
 	VERTEX.y += depth_offset.z;
 	// Pulled straight toward the camera, which moves it in depth only. (Tiles
 	// are only ever moved, never turned, so world directions are mesh
@@ -81,7 +89,12 @@ void fragment() {
 
 	vec3 color = kind == YELLOW ? yellow_paint : white_paint;
 	color *= 0.95 + 0.07 * value_noise(p * 0.05);
-	ALBEDO = mix(asphalt, color, paint);
+	ALBEDO = toon_night_albedo(mix(asphalt, color, paint));
 	EMISSION = ALBEDO * toon_ambient(vec3(0.0, 1.0, 0.0), 1.0);
 	toon_glint = 0.0;
+	if (city_lights > 0.0) {
+		float distance_to_camera = length(VERTEX);
+		vec3 lamps = street_light_at(scene_xz, distance_to_camera) + street_light_average * street_light_far(distance_to_camera);
+		EMISSION += (ALBEDO + street_light_sheen) * lamps * city_lights;
+	}
 }

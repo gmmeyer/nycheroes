@@ -14,6 +14,14 @@
 // into its average color instead of shimmering.
 // Lighting is the shared toon model (toon.gdshaderinc); glass also reflects a
 // simple sky. With an aerial photo (?aerial=1), roofs show it.
+// At night (the time of day: shaders/night.gdshaderinc) a share of windows is
+// lit, by building type and hour (offices empty out late, homes fill up in
+// the evening; offices' glass walls in whole floors and runs of bays), shops,
+// signs, lobbies and front doors glow, street lights light the feet of the
+// walls, floodlights wash landmarks' setbacks, and glass reflects the night
+// sky. Which windows are lit is a hash of the window, so it never changes as
+// the camera moves; small windows settle into their floor's and building's
+// average glow in the distance.
 shader_type spatial;
 render_mode ambient_light_disabled;
 
@@ -114,6 +122,16 @@ const vec3 GOODS[5] = vec3[](vec3(0.76, 0.32, 0.26), vec3(0.30, 0.50, 0.72), vec
 		vec3(0.40, 0.62, 0.36), vec3(0.88, 0.87, 0.82));
 const vec3 SHOP_LIGHT = vec3(1.0, 0.82, 0.55);
 const vec3 METAL_DOOR = vec3(0.62, 0.63, 0.62);
+// Lights in windows at night, in sRGB: incandescent, soft warm white, cool
+// white (LEDs, offices' fluorescents), neutral white, a TV's blue; office
+// lobbies; floodlights on landmarks.
+const vec3 LAMP_WARM = vec3(1.0, 0.70, 0.40);
+const vec3 LAMP_SOFT = vec3(1.0, 0.84, 0.62);
+const vec3 LAMP_COOL = vec3(0.84, 0.90, 0.96);
+const vec3 LAMP_NEUTRAL = vec3(1.0, 0.88, 0.68);
+const vec3 TV_BLUE = vec3(0.45, 0.58, 1.0);
+const vec3 LOBBY_LIGHT = vec3(1.0, 0.88, 0.68);
+const vec3 FLOODLIGHT = vec3(1.0, 0.86, 0.62);
 
 // Roofs, in sRGB: tar, silver coating, membrane, gravel, shingles.
 const vec3 ROOF_TAR = vec3(0.30, 0.29, 0.29);
@@ -140,6 +158,27 @@ uniform float canyon_height = 25.0;
 uniform float shop_glow = 0.35;
 // How far tiny far-off window grids are pulled toward their average color.
 uniform float distance_calm : hint_range(0.0, 1.0) = 0.6;
+// Night: how bright lit windows, shop windows (times their day glow), lit
+// signs, lobbies and front doors are.
+uniform float window_glow = 1.0;
+uniform float shop_night_glow = 5.0;
+uniform float sign_glow = 1.2;
+uniform float lobby_glow = 1.4;
+// Street lights reach this high up the walls (m above the building's base).
+uniform vec2 street_light_reach = vec2(3.0, 13.0);
+// Landmarks' setbacks from this high (m) up are floodlit from the roof below,
+// fading out over floodlight_reach meters up the wall.
+uniform float floodlight_min_height = 40.0;
+uniform float floodlight_reach = 28.0;
+uniform float floodlight_strength = 1.3;
+// What glass reflects at dusk and at night, in sRGB: overhead, at the
+// horizon, and the city below.
+uniform vec3 dusk_reflect_zenith : source_color = vec3(0.30, 0.38, 0.62);
+uniform vec3 dusk_reflect_horizon : source_color = vec3(0.98, 0.70, 0.52);
+uniform vec3 dusk_reflect_ground : source_color = vec3(0.30, 0.27, 0.30);
+uniform vec3 night_reflect_zenith : source_color = vec3(0.03, 0.05, 0.12);
+uniform vec3 night_reflect_horizon : source_color = vec3(0.30, 0.21, 0.22);
+uniform vec3 night_reflect_ground : source_color = vec3(0.13, 0.10, 0.09);
 
 // Moments of the wall height at the vertices (see wall_top_distance).
 varying vec4 wall_moments;
@@ -565,27 +604,117 @@ vec3 glass_sweep(vec2 p, float period, float detail) {
 	return vec3(0.05, 0.06, 0.07) * smoothstep(0.0, 0.06, s) * (1.0 - smoothstep(0.14, 0.22, s)) * detail;
 }
 
-// Meters from this fragment up to the top of its wall, or a big number where
-// that isn't known. A wall triangle's corners sit at just two heights, its
-// foot b and its top t; the vertex shader passes the first four powers of the
-// height, and since every fragment's interpolated moments m_k mix b^k and t^k
-// with the same weights, b and t are the roots of x^2 - s x + p = 0, with s
-// and p found from m1..m3. The fourth moment checks that there really were
-// only two heights (wall polygons with steps triangulate into some
-// triangles with three).
-float wall_top_distance(vec4 m, float y) {
+// A smooth bump in time: up from a to b, down from c to d (hours).
+float bump(float h, float a, float b, float c, float d) {
+	return smoothstep(a, b, h) * (1.0 - smoothstep(c, d, h));
+}
+
+// The share of a building type's windows lit at this hour, before each
+// building's and floor's own variety: homes busy in the evening and nearly
+// dark before dawn, offices emptying after work (cleaners and lights left on
+// keep some lit all night), hotels in between.
+float occupancy(int archetype, float hours) {
+	float h = hours < 6.0 ? hours + 24.0 : hours;  // 6..30, so the night is in one piece
+	float home = 0.05 + 0.18 * bump(h, 6.0, 7.0, 8.0, 9.5) + 0.38 * bump(h, 16.5, 20.0, 23.0, 26.5);
+	float work = 0.1 + 0.45 * bump(h, 6.5, 8.5, 17.0, 19.5) + 0.12 * bump(h, 6.5, 8.5, 19.5, 23.0);
+	if (archetype >= PREWAR_OFFICE && archetype <= MODERN_OFFICE) {
+		return work;
+	}
+	if (archetype == LOFT) {
+		return mix(home, work, 0.4);
+	}
+	if (archetype == HOTEL) {
+		return 0.1 + 0.75 * home;
+	}
+	if (archetype == STORE) {
+		return 0.75 * home;  // flats over the shops
+	}
+	if (archetype == INSTITUTION) {
+		return 0.12 + 0.3 * bump(h, 6.5, 8.0, 18.0, 21.0);
+	}
+	if (archetype == INDUSTRIAL || archetype == OTHER) {
+		return 0.07;
+	}
+	return home;
+}
+
+// The light in the window at `cell` (bay, floor) at night (linear, before
+// city_lights and window_glow). Whether it's lit is a hash of the window (in
+// offices, of a run of bays on a floor that's mostly lit or mostly dark), so
+// it never changes as the camera moves, and windows switch on and off one by
+// one as the hours pass. `cell_pixels` is how many pixels a window cell spans
+// (across, up): once windows are only a few pixels, they become their floor's
+// average light, and floors their building's, so the distance settles from a
+// glitter into a steady glow. `up` is how far up the window this is (0..1).
+vec3 window_light(int archetype, bool curtain, vec2 cell, float seed, vec2 cell_pixels, float up) {
+	bool office = archetype >= PREWAR_OFFICE && archetype <= MODERN_OFFICE;
+	float share = clamp(occupancy(archetype, clock_hours) * mix(0.55, 1.45, rnd(seed, 61.0)), 0.0, 1.0);
+	float floor_hash = hash(vec2(cell.y * 1.37 + 0.5, seed * 293.0 + 11.0));
+	float floor_share = office ? (floor_hash < 0.3 ? min(2.2 * share, 1.0) : 0.5 * share)
+			: share * mix(0.7, 1.3, floor_hash);
+	float building_share = office ? 0.3 * min(2.2 * share, 1.0) + 0.35 * share : share;
+	// Offices are lit in runs of bays; homes in flats of two windows (offset
+	// floor to floor), all one color.
+	float run = office ? floor(cell.x / (2.0 + floor(rnd(seed, 62.0) * 4.0)))
+			: floor((cell.x + step(0.5, hash(vec2(cell.y, seed * 37.0)))) * 0.5);
+	float lit = step(hash(vec2(run * 0.71 + 0.3, cell.y) + seed * 91.3), floor_share);
+	float c = hash(vec2(run, cell.y) + seed * 57.0 + 63.1);
+	float brightness = mix(0.6, 1.25, hash(cell + seed * 57.0 + 71.7));
+	vec3 color;
+	vec3 average;
+	if (office) {
+		color = srgb(c < 0.5 ? LAMP_COOL : LAMP_NEUTRAL);
+		average = mix(srgb(LAMP_NEUTRAL), srgb(LAMP_COOL), 0.5);
+		brightness *= 0.8;
+	} else {
+		color = srgb(c < 0.6 ? LAMP_WARM : (c < 0.88 ? LAMP_SOFT : (c < 0.96 ? LAMP_COOL : TV_BLUE)));
+		// (Far off, lit windows read as golden sparkle more than orange.)
+		average = srgb(LAMP_SOFT) * 0.9;
+		if (c >= 0.96) {
+			// A TV: its picture changes a few times a second.
+			brightness *= 0.45 + 0.55 * hash(vec2(floor(TIME * 2.5 + c * 40.0), c * 17.0));
+		}
+	}
+	float window_detail = smoothstep(1.6, 3.5, min(cell_pixels.x, cell_pixels.y));
+	float expected = mix(building_share, floor_share, smoothstep(1.2, 3.0, cell_pixels.y));
+	// (The distant glow is kept under the windows' true average: spread over a
+	// whole wall it would read as the wall lit, not its windows.)
+	vec3 light = mix(average * (expected * 0.6), color * (lit * brightness), window_detail);
+	if (office && curtain) {
+		// Every floor glows a little from the lit core deep inside.
+		light += srgb(LAMP_COOL) * 0.1;
+	}
+	// Ceiling lights: a little brighter toward the top of the window.
+	return light * mix(0.8, 1.15, up);
+}
+
+// The foot and top of this fragment's wall triangle (UV.y meters), or
+// (-1e4, 1e4) where they aren't known. A wall triangle's corners sit at just
+// two heights, its foot b and its top t; the vertex shader passes the first
+// four powers of the height, and since every fragment's interpolated moments
+// m_k mix b^k and t^k with the same weights, b and t are the roots of
+// x^2 - s x + p = 0, with s and p found from m1..m3. The fourth moment checks
+// that there really were only two heights (wall polygons with steps
+// triangulate into some triangles with three).
+vec2 wall_span(vec4 m) {
 	float variance = m.y - m.x * m.x;
 	if (abs(variance) < 1e-10) {
-		return 1e4;
+		return vec2(-1e4, 1e4);
 	}
 	float s = (m.z - m.x * m.y) / variance;
 	float p = s * m.x - m.y;
 	float discriminant = s * s - 4.0 * p;
 	if (discriminant < 0.0 || abs(m.w - (s * m.z - p * m.y)) > 0.01 * max(m.w, 1e-8)) {
-		return 1e4;
+		return vec2(-1e4, 1e4);
 	}
-	float top = 0.5 * (s + sqrt(discriminant));
-	return top * 100.0 - 1.0 - y;
+	float root = sqrt(discriminant);
+	return vec2(0.5 * (s - root), 0.5 * (s + root)) * 100.0 - 1.0;
+}
+
+// Meters from this fragment up to the top of its wall, or a big number where
+// that isn't known (see wall_span()).
+float wall_top_distance(vec4 m, float y) {
+	return wall_span(m).y - y;
 }
 
 vec3 wall_texture(vec3 color, int surface, vec2 p, vec2 footprint) {
@@ -663,7 +792,22 @@ Surface storefront(vec2 p, vec2 footprint, float floor_height, float bay, float 
 	color = mix(color, interior, glass);
 	color = mix(color, mix(srgb(SHOP_GLASS), srgb(SHOP_INTERIOR), 0.4), door * door_band);
 	s.glass = max(glass, door * door_band) * (1.0 - piers);
-	s.emission = srgb(SHOP_LIGHT) * shop_glow * 0.3 * s.glass * (1.0 - smoothstep(0.2, 0.8, rise)) * mix(0.7, 1.3, r3);
+	float lit_part = 1.0 - smoothstep(0.2, 0.8, rise);
+	float glow = shop_glow * 0.3;
+	float closed = 0.0;
+	if (city_lights > 0.0) {
+		// Night: shops glow bright, all the way up; late at night more and more
+		// of them are shut behind roll-down gates (until early morning).
+		glow *= 1.0 + shop_night_glow * city_lights;
+		lit_part = mix(lit_part, 1.0, 0.6 * city_lights);
+		float h = clock_hours < 6.0 ? clock_hours + 24.0 : clock_hours;
+		float shut = 0.45 * bump(h, 21.0, 25.0, 29.0, 30.5) * city_lights;
+		closed = mix(shut, step(hash(vec2(store + 0.75, seed * 613.0 + 29.0)), shut), detail);
+		float gate = closed * band(p.y, -1.0, window_top, footprint.y) * (1.0 - piers);
+		color = mix(color, srgb(METAL_DOOR) * (1.0 - 0.25 * stripes(p.y / 0.1, 0.35, footprint.y / 0.1)), gate);
+		s.glass *= 1.0 - gate;
+	}
+	s.emission = srgb(SHOP_LIGHT) * glow * s.glass * lit_part * mix(0.7, 1.3, r3);
 	// Sign band with a row of letters.
 	vec3 sign_color = srgb(mix(vec3(0.4), SIGN[pick(r1, 6)], detail));
 	float letters = stripes(sx / 0.32, 0.55, footprint.x / 0.32) * band(sx, store_width * 0.22, store_width * 0.78, footprint.x)
@@ -671,6 +815,13 @@ Surface storefront(vec2 p, vec2 footprint, float floor_height, float bay, float 
 	vec3 letter_color = dot(sign_color, vec3(0.33)) > 0.3 ? srgb(vec3(0.12)) : srgb(vec3(0.95, 0.93, 0.85));
 	float sign_band = band(p.y, sign_bottom, top, footprint.y);
 	color = mix(color, mix(sign_color, letter_color, letters), sign_band);
+	if (city_lights > 0.0) {
+		// Most signs are lit at night: a light box behind dark letters, or
+		// light letters on a dark sign.
+		float lit_sign = mix(0.7, step(hash(vec2(store + 0.6, seed * 613.0 + 41.0)), 0.7), detail) * (1.0 - 0.6 * closed);
+		vec3 sign_light = mix(sign_color, letter_color, letters);
+		s.emission += sign_light * (sign_glow * sign_band * lit_sign * city_lights);
+	}
 	// Awning: lit on its slope, a darker scalloped valance, its shadow below.
 	if (has_awning) {
 		float v = (p.y - awning_bottom) / 0.85;
@@ -781,6 +932,10 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 
 	vec3 color = wall;
 	float glass = 0.0;
+	// Night: how much of the pixel is window that glows when lit (glass, and
+	// shades glowing through), and how far up the window it is.
+	float glow = 0.0;
+	float window_up = 0.5;
 	if (f.windows == CURTAIN) {
 		float mullions = centered_stripes(q.x, f.mullion / f.bay, fq.x);
 		float spandrel = stripes(q.y, f.spandrel / floor_height, fq.y);
@@ -794,6 +949,8 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 		color = mix(f.frame, f.accent, (1.0 - mullions) * spandrel);
 		color = mix(color, pane_color, pane);
 		glass = pane * (1.0 - blind * 0.5) + (1.0 - mullions) * spandrel * 0.6 * float(archetype == MODERN_OFFICE);
+		glow = pane * (1.0 - 0.4 * blind);
+		window_up = clamp((fy - f.spandrel) / max(floor_height - f.spandrel, 0.1), 0.0, 1.0);
 	} else {
 		float width = f.window_width;
 		float height = f.window_height * floor_height;
@@ -864,11 +1021,14 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 		color = mix(color, f.frame, window);
 		color = mix(color, pane_color, pane);
 		glass = pane * (1.0 - shade);
+		glow = pane * (1.0 - 0.4 * shade);
+		window_up = clamp(t, 0.0, 1.0);
 		if (f.air_conditioners > 0.0) {
 			float unit = step(w3, f.air_conditioners) * band(bx, -0.33, 0.33, footprint.x)
 					* band(fy, sill + 0.02, sill + 0.42, footprint.y) * present * detail * upper;
 			color = mix(color, srgb(AIR_CONDITIONER) * mix(0.82, 1.0, smoothstep(sill, sill + 0.42, fy)), unit);
 			glass *= 1.0 - unit;
+			glow *= 1.0 - unit;
 		}
 		// Balconies: a slab and railing at the bottom of each floor.
 		if (f.balconies > 0.0) {
@@ -879,6 +1039,7 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 			float slab = stripes(q.y, 0.2 / floor_height, fq.y);
 			vec3 railing = mix(f.accent * 0.8, srgb(IRON) * 2.0, stripes(p.x / 0.14, 0.3, footprint.x / 0.14) * fine);
 			color = mix(color, mix(railing, f.accent, slab), balcony * present);
+			glow *= 1.0 - 0.5 * balcony * present;
 		}
 	}
 	// Curtain-wall balconies (modern residential): glass railings, white slabs.
@@ -889,6 +1050,7 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 		vec3 railing = mix(color, srgb(vec3(0.78, 0.86, 0.90)), 0.55);
 		color = mix(color, mix(railing, f.accent, slab), balcony);
 		glass *= 1.0 - balcony * 0.5;
+		glow *= 1.0 - balcony * 0.5;
 	}
 
 	Surface s;
@@ -914,6 +1076,10 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 			ground_color = mix(surround, f.glass * 0.9, lobby);
 			ground_color = mix(ground_color, color, band(p.y, top + 0.45, 1e4, footprint.y));
 			ground_glass = lobby;
+			if (city_lights > 0.0) {
+				// Lit all night, brightest up by the ceiling.
+				ground_emission = srgb(LOBBY_LIGHT) * (lobby * lobby_glow * city_lights * mix(0.7, 1.2, smoothstep(0.25, top, p.y)));
+			}
 		} else if (archetype == INDUSTRIAL && street) {
 			// Roll-up loading doors.
 			float slot = floor(p.x / (3.0 * f.bay));
@@ -932,9 +1098,15 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 			vec3 surround = mix(f.trim, door_color, band(bx, -0.5, 0.5, footprint.x) * band(p.y, -1.0, min(2.4, floor_height - 0.5), footprint.y));
 			ground_color = mix(ground_color, mix(surround, f.glass, door_glass), door);
 			ground_glass *= 1.0 - door;
+			if (city_lights > 0.0) {
+				// The hall light through the door's glass, and a lamp over the door.
+				float lamp = has_door * (1.0 - smoothstep(0.0, 0.8, length(vec2(bx, p.y - min(2.75, floor_height - 0.3)))));
+				ground_emission = srgb(LAMP_WARM) * ((door * door_glass * 1.2 + lamp * 0.35) * city_lights);
+			}
 		}
 		color = mix(color, ground_color, ground);
 		glass = mix(glass, ground_glass, ground);
+		glow *= 1.0 - ground;
 		s.emission = ground_emission * ground;
 	}
 
@@ -944,6 +1116,7 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 		color *= 1.0 - escape.y;
 		color = mix(color, srgb(IRON), escape.x);
 		glass *= 1.0 - escape.x;
+		glow *= 1.0 - escape.x;
 	}
 
 	// A parapet: the top of the wall, above the roof, is solid.
@@ -951,6 +1124,7 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 		float solid = band(below_top, -1.0, PARAPET_HEIGHT, footprint.y);
 		color = mix(color, f.windows == CURTAIN ? f.frame : wall, solid);
 		glass *= 1.0 - solid;
+		glow *= 1.0 - solid;
 	}
 
 	// Top of the wall: a cornice on prewar street fronts, else a plain coping.
@@ -974,17 +1148,25 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 			color *= 1.0 - shadow;
 			color = mix(color, shaded / max(coverage, 1e-3), coverage);
 			glass *= (1.0 - coverage) * (1.0 - shadow);
+			glow *= 1.0 - coverage;
 		} else if (masonry) {
 			float coping = band(below_top, -1.0, 0.24, footprint.y);
 			float shadow = band(below_top, 0.24, 0.4, footprint.y) * 0.3;
 			color *= 1.0 - shadow;
 			color = mix(color, f.trim * (f.surface == SIDING ? 0.9 : 1.0), coping);
 			glass *= 1.0 - coping;
+			glow *= 1.0 - coping;
 		} else {
 			float cap = band(below_top, -1.0, 0.5, footprint.y);
 			color = mix(color, f.frame, cap);
 			glass *= 1.0 - cap;
+			glow *= 1.0 - cap;
 		}
+	}
+
+	if (city_lights > 0.0 && glow > 0.0) {
+		s.emission += window_light(archetype, f.windows == CURTAIN, cell, seed, cell_size / footprint, window_up)
+				* (glow * window_glow * city_lights);
 	}
 
 	// Calm distance: once windows are only a few pixels, pull the grid toward
@@ -1064,8 +1246,16 @@ vec3 roof(vec2 xz, vec2 footprint, int archetype, float seed) {
 
 // The sky as glass sees it, in direction r (world space).
 vec3 sky_reflection(vec3 r) {
-	vec3 sky = mix(reflect_horizon, reflect_zenith, smoothstep(0.0, 0.65, r.y));
-	return mix(reflect_ground, sky, smoothstep(-0.1, 0.03, r.y));
+	vec3 zenith = reflect_zenith;
+	vec3 horizon = reflect_horizon;
+	vec3 ground = reflect_ground;
+	if (dusk > 0.0 || night > 0.0) {
+		zenith = mix(mix(zenith, dusk_reflect_zenith, dusk), night_reflect_zenith, night);
+		horizon = mix(mix(horizon, dusk_reflect_horizon, dusk), night_reflect_horizon, night);
+		ground = mix(mix(ground, dusk_reflect_ground, dusk), night_reflect_ground, night);
+	}
+	vec3 sky = mix(horizon, zenith, smoothstep(0.0, 0.65, r.y));
+	return mix(ground, sky, smoothstep(-0.1, 0.03, r.y));
 }
 
 void vertex() {
@@ -1112,7 +1302,25 @@ void fragment() {
 	float mirror = clamp(s.glass * glass_reflection, 0.0, 1.0) * fresnel;
 	vec3 reflection = sky_reflection(reflect(-world_view, world_normal)) * mirror;
 
-	ALBEDO = s.albedo * (1.0 - 0.6 * mirror);
+	ALBEDO = toon_night_albedo(s.albedo * (1.0 - 0.6 * mirror));
 	EMISSION = ALBEDO * toon_ambient(world_normal, occlusion) + s.emission + reflection;
 	toon_glint = s.glass;
+
+	if (city_lights > 0.0 && (flags & (ROOF | PARAPET_INSIDE)) == 0) {
+		// Street lights on the feet of the walls near them.
+		float reach = 1.0 - smoothstep(street_light_reach.x, street_light_reach.y, UV.y);
+		if (reach > 0.0) {
+			vec3 scene_position = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+			EMISSION += ALBEDO * street_light_at(scene_position.xz, length(VERTEX)) * (reach * city_lights);
+		}
+		// Floodlights on landmarks' masonry setbacks, from the roof below.
+		if ((flags & LANDMARK) != 0 && (archetype == PREWAR_OFFICE || archetype == PREWAR_APARTMENT
+				|| archetype == HOTEL || archetype == INSTITUTION)) {
+			vec2 span = wall_span(wall_moments);
+			if (span.x > floodlight_min_height && span.y < 1e3) {
+				float flood = 1.0 - smoothstep(0.0, floodlight_reach, UV.y - span.x);
+				EMISSION += ALBEDO * srgb(FLOODLIGHT) * (floodlight_strength * flood * city_lights);
+			}
+		}
+	}
 }

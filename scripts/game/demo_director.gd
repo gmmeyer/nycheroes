@@ -1,9 +1,11 @@
 class_name DemoDirector
 extends Node
 ## Plays a scripted tour for recording videos: ?demo shows off the hero's
-## powers, ?demo=fight a street fight. Drives the hero's input and the camera
-## and captions each part. Prints "[demo] start" and "[demo] finished" so a
-## recorder can follow.
+## powers, ?demo=fight a street fight, ?demo=city flies the free camera over
+## the city. Drives the hero's input and the camera and captions each part.
+## Prints "[demo] start" and "[demo] finished" so a recorder can follow, and
+## "[demo] pause" / "[demo] resume" around waits for the city to load (a
+## recorder can pause, so the video has no loading pop-in).
 
 ## Manhattan's avenues run about 29 degrees east of north.
 const AVENUE := Vector3(0.485, 0.0, -0.875)
@@ -11,12 +13,19 @@ const AVENUE := Vector3(0.485, 0.0, -0.875)
 ## meters; dropped onto the street).
 const START := Vector3(420.0, 30.0, -220.0)
 const SETTLE_TIME := 1.0
+## City tour: after a jump, the camera holds still this long once every tile
+## has loaded, before the shot rolls.
+const LOADED_SETTLE := 0.6
 
 @export var game: Game
 @export var hero: Hero
 @export var camera: ThirdPersonCamera
 @export var city: CityStreamer
 @export var encounters: EncounterDirector
+## The city tour's camera.
+@export var free_camera: FreeFlyCamera
+## The city tour sets the clock for its dusk and night shots.
+@export var time_of_day: TimeOfDay
 
 var _shots: Array[Dictionary] = []
 var _index := -1
@@ -26,6 +35,12 @@ var _avenue_yaw := atan2(-AVENUE.x, -AVENUE.z)
 var _yaw := 0.0
 var _pitch := -0.12
 var _caption: Label
+## City tour: the current flight ({from, to}: [world position, yaw, pitch],
+## with yaw and pitch in degrees, like ?cam), and how long the city has been
+## loaded while holding before it.
+var _flight := {}
+var _holding := false
+var _loaded_time := 0.0
 
 
 func _ready() -> void:
@@ -35,7 +50,25 @@ func _ready() -> void:
 	camera.yaw = _yaw
 	camera.pitch = _pitch
 	encounters.max_gangs = 0  # only gangs the tour places itself
-	if LaunchOptions.get_string("demo") == "fight":
+	if LaunchOptions.get_string("demo") == "city":
+		_shots = [
+			_flight_shot("New York City at 1:1 scale", 7.0, [381, 6, -150, -29, 4], [440, 160, -255, -29, -15], true),
+			_flight_shot("Every building from the city's own data", 7.0,
+					[300, 220, 760, 134, -12], [330, 240, 1300, 55, -12]),
+			_flight_shot("3.4 million trees", 7.0, [1150, 340, -800, -29, -32], [1550, 340, -2100, -29, -32]),
+			_flight_shot("Brownstone Brooklyn", 6.0, [500, 75, 9750, -30, -26], [700, 75, 9400, -30, -26]),
+			_flight_shot("Houses with real roofs in Queens", 6.0, [11700, 60, 5050, -30, -22], [11850, 60, 4800, -30, -22]),
+			_flight_shot("Rooftop water towers", 6.0, [-850, 85, 2350, -45, -30], [-600, 85, 2150, -45, -30]),
+			_flight_shot("Crosswalks, street lights, street trees", 6.0, [420, 2.5, -220, -29, -3], [452, 2.5, -278, -29, -3], true),
+			_flight_shot("Sunset", 8.0, [2805, 120, 798, 95, -4], [2650, 110, 760, 88, -3], false, [18.6, 20.1]),
+			_flight_shot("Night falls: lit windows, floodlit towers", 7.0,
+					[0, 400, 1600, 0, -32], [0, 330, 1300, 0, -38], false, [22.5, 22.5]),
+			_flight_shot("Bridges strung with lights", 7.0,
+					[-1462, 45, 6233, -47, 0], [-1300, 50, 6080, -47, 0], false, [22.5, 22.5]),
+			_flight_shot("545,000 street lights", 6.0, [420, 2.5, -220, -29, -3], [452, 2.5, -278, -29, -3], true, [22.5, 22.5]),
+			_shot("", 0.5),
+		]
+	elif LaunchOptions.get_string("demo") == "fight":
 		_yaw = _avenue_yaw
 		camera.yaw = _yaw
 		_shots = [
@@ -74,6 +107,9 @@ func _physics_process(delta: float) -> void:
 		return
 	if _index >= _shots.size():
 		return
+	if _holding:
+		_hold(delta)
+		return
 
 	var shot := _shots[_index]
 	_time += delta
@@ -106,6 +142,70 @@ func _begin(index: int) -> void:
 		_caption.text = _shots[_index].caption
 		if _shots[_index].start.is_valid():
 			_shots[_index].start.call()
+		if _holding:
+			_caption.text = ""
+
+
+# --- City tour ---
+
+## A shot flying the free camera from one pose to another ([x, y, z, yaw,
+## pitch]: world meters and degrees). With `low`, the heights are above the
+## ground at the start instead of above sea level. `clock` ([from, to], in
+## hours) runs the time of day along with it; without, it's day.
+func _flight_shot(text: String, seconds: float, from: Array, to: Array, low := false, clock := []) -> Dictionary:
+	return _shot(text, seconds, Callable(), _fly, _jump.bind(from, to, low, clock))
+
+
+## Starts a flight: jumps the camera to its start and holds until the city
+## there has loaded.
+func _jump(from: Array, to: Array, low: bool, clock: Array) -> void:
+	if not free_camera.current:
+		game.use_free_camera(true)
+		free_camera.set_process(false)  # the tour moves it
+	# The camera jumps a moment after the pause, so a recorder has stopped.
+	_flight = {from = from, to = to, low = low, lift = 0.0, wait = 0.25,
+			clock = clock if not clock.is_empty() else [TimeOfDay.DEFAULT_CLOCK, TimeOfDay.DEFAULT_CLOCK]}
+	_holding = true
+	_loaded_time = 0.0
+	print("[demo] pause")
+
+
+func _hold(delta: float) -> void:
+	if _flight.wait > 0.0:
+		_flight.wait -= delta
+		return
+	_place_camera(0.0)
+	if city.pending_count() > 0:
+		_loaded_time = 0.0
+		return
+	_loaded_time += delta
+	if _loaded_time < LOADED_SETTLE:
+		return
+	if _flight.low and _flight.lift == 0.0:
+		var start := Vector3(_flight.from[0], 0.0, _flight.from[2])
+		var ground := city.ground_height_at(start)
+		_flight.lift = ground if not is_nan(ground) else 0.0
+		_place_camera(0.0)
+	_holding = false
+	_caption.text = _shots[_index].caption
+	print("[demo] resume")
+
+
+func _fly(t: float) -> void:
+	_place_camera(smoothstep(0.0, 1.0, t / _shots[_index].seconds))
+
+
+func _place_camera(blend: float) -> void:
+	var from: Array = _flight.from
+	var to: Array = _flight.to
+	var position := Vector3(from[0], from[1], from[2]).lerp(Vector3(to[0], to[1], to[2]), blend)
+	position.y += _flight.lift
+	free_camera.global_position = WorldOrigin.to_local(position)
+	free_camera.rotation = Vector3(deg_to_rad(lerpf(from[4], to[4], blend)),
+			lerp_angle(deg_to_rad(from[3]), deg_to_rad(to[3]), blend), 0.0)
+	var clock: float = lerpf(_flight.clock[0], _flight.clock[1], blend)
+	if time_of_day and not is_equal_approx(clock, time_of_day.clock):
+		time_of_day.set_clock(clock)
 
 
 # --- Fight tour ---

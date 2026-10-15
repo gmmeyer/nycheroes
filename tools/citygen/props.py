@@ -1,5 +1,5 @@
 """Props standing in the city, one point each (see common.py's props surface):
-trees and rooftop water towers.
+trees, rooftop water towers and street lights.
 
 Trees come from two places:
   street trees: the Parks Department's tree inventory (Forestry Tree Points),
@@ -10,6 +10,8 @@ Water towers: New York's wooden rooftop tanks sit on most older buildings of
 six floors and up (the height city water pressure reaches). Which buildings
 have one is a guess from the building's type, floors and borough, seeded
 per building, and the tank stands at a back corner of the roof.
+Street lights: the city doesn't publish where its lamps are, so they stand
+along every curb at a typical spacing (lamp_spots()).
 
 prepare_trees() makes data/cache/trees.pkl; build_tiles.py does the rest per
 lod0 tile with the helpers here.
@@ -21,8 +23,8 @@ import numpy as np
 import shapely
 
 import facades
-from common import (PROP_CONIFER, PROP_TONE_DARK, PROP_TONE_GREEN, PROP_TONE_LIGHT, PROP_TONE_RED,
-                    PROP_TREE, PROP_TREE_NARROW, RAW_DIR, project)
+from common import (PROP_CONIFER, PROP_STREET_LIGHT, PROP_TONE_DARK, PROP_TONE_GREEN, PROP_TONE_LIGHT,
+                    PROP_TONE_RED, PROP_TREE, PROP_TREE_NARROW, RAW_DIR, project)
 
 # Street trees' shapes and colors by genus (the inventory's species names
 # start with it: "Acer saccharinum - silver maple").
@@ -52,6 +54,18 @@ CANOPY_HEIGHT = (6.0, 18.0)  # meters: a lone tree, and in woods (before jitter)
 CONIFER_PATCH = 150.0
 CONIFER_MAX_SHARE = 0.4
 CANOPY_TONES = ((PROP_TONE_GREEN, 0.55), (PROP_TONE_DARK, 0.3), (PROP_TONE_LIGHT, 0.12), (PROP_TONE_RED, 0.03))
+
+# Street lights: one every LAMP_SPACING meters along every curb (the first
+# half a spacing in), LAMP_SETBACK onto the sidewalk, and none closer than
+# LAMP_MIN_GAP to another. Curbs around road islands shorter than
+# LAMP_MIN_ISLAND get none. In and beside parks they're historic post-tops.
+LAMP_SPACING = 35.0
+LAMP_SETBACK = 0.6
+LAMP_MIN_GAP = 12.0
+LAMP_MIN_ISLAND = 40.0
+LAMP_PARK_REACH = 4.0
+COBRA_HEAD = (9.0, 2.6)  # pole height, arm length (m)
+POST_TOP = (4.4, 0.0)
 
 # Water towers: the chance a building has one, by type and by borough (from
 # borough code), for buildings of at least TOWER_MIN_FLOORS floors and at most
@@ -144,6 +158,55 @@ def canopy_trees(en: np.ndarray, seed: np.ndarray, density: np.ndarray) -> dict:
     trunk = np.clip(height * TRUNK_SHARE, *TRUNK_RANGE) * (0.85 + 0.3 * _hash(seed, 15))
     return {"en": en, "height": height.astype(np.float32), "width": width.astype(np.float32),
             "trunk": trunk.astype(np.float32), "type": kinds, "tone": tones, "seed": seed.astype(np.float32)}
+
+
+def lamp_spots(roads: list, tile_edge) -> tuple[np.ndarray, np.ndarray]:
+    """Street light positions (N, 2) along the curbs of these road polygons
+    (east/north, oriented), and the direction (N, 2) each one's arm reaches,
+    over the road. Curbs along `tile_edge` (where the tile cuts the road)
+    don't count."""
+    points, arms = [], []
+    for poly in roads:
+        for k, ring in enumerate((poly.exterior, *poly.interiors)):
+            if k > 0 and ring.length < LAMP_MIN_ISLAND:
+                continue
+            # Oriented polygons have the road on the left of every ring.
+            for line in shapely.get_parts(shapely.difference(ring, tile_edge)):
+                if line.geom_type != "LineString" or line.length < LAMP_SPACING / 2:
+                    continue
+                s = np.arange(LAMP_SPACING / 2, line.length, LAMP_SPACING)
+                at = shapely.get_coordinates(shapely.line_interpolate_point(line, s))
+                ahead = shapely.get_coordinates(shapely.line_interpolate_point(line, np.minimum(s + 0.5, line.length)))
+                behind = shapely.get_coordinates(shapely.line_interpolate_point(line, np.maximum(s - 0.5, 0.0)))
+                tangent = ahead - behind
+                tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-9)
+                left = np.column_stack([-tangent[:, 1], tangent[:, 0]])
+                points.append(at - left * LAMP_SETBACK)
+                arms.append(left)
+    if not points:
+        return np.zeros((0, 2)), np.zeros((0, 2))
+    points, arms = np.concatenate(points), np.concatenate(arms)
+    # Thin out lamps that ended up close together (corners, narrow islands).
+    keep = np.ones(len(points), dtype=bool)
+    tree = shapely.STRtree(shapely.points(points))
+    pairs = tree.query(shapely.points(points), predicate="dwithin", distance=LAMP_MIN_GAP)
+    for a, b in pairs.T:
+        if a < b and keep[a]:
+            keep[b] = False
+    return points[keep], arms[keep]
+
+
+def street_lights(points: np.ndarray, arms: np.ndarray, in_park: np.ndarray) -> dict:
+    """Props for street lights at these points, with arms reaching along `arms`
+    (east/north), post-tops where in_park."""
+    seed = location_seed(points)
+    height = np.where(in_park, POST_TOP[0], COBRA_HEAD[0]) * (0.95 + 0.1 * _hash(seed, 16))
+    arm = np.where(in_park, POST_TOP[1], COBRA_HEAD[1])
+    # Godot: x east, z south; the arm reaches along (sin yaw, cos yaw) there.
+    yaw = np.arctan2(arms[:, 0], -arms[:, 1])
+    return {"en": points, "height": height, "width": arm, "trunk": np.zeros(len(points)),
+            "type": np.full(len(points), PROP_STREET_LIGHT, dtype=np.int8),
+            "tone": in_park.astype(np.int8), "seed": seed, "yaw": yaw}
 
 
 def tower_mask(archetype, floors, height, borough, seed) -> np.ndarray:

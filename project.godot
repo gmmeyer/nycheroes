@@ -92,6 +92,10 @@ coop_menu={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"device":-1,"physical_keycode":77)]
 }
+time_of_day={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"device":-1,"physical_keycode":84)]
+}
 
 [layer_names]
 
@@ -104,6 +108,33 @@ coop_menu={
 [physics]
 
 3d/physics_engine="Jolt Physics"
+
+[shader_globals]
+
+night={
+"type": "float",
+"value": 0.0
+}
+dusk={
+"type": "float",
+"value": 0.0
+}
+city_lights={
+"type": "float",
+"value": 0.0
+}
+clock_hours={
+"type": "float",
+"value": 15.5
+}
+street_light_map={
+"type": "sampler2D",
+"value": ""
+}
+street_light_rect={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
 
 [rendering]
 

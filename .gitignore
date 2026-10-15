@@ -13,3 +13,6 @@ __pycache__/
 
 # Node
 node_modules/
+
+# Cloudflare: wrangler dev state
+.wrangler/

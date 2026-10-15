@@ -11,7 +11,11 @@
 // CityStreamer) read as woods seen from above: dark, mottled crown clumps,
 // strongest past where the tree props draw, so wooded parks don't end where
 // the near tiles do; up close, just the trees' shade.
-// Lighting is the shared toon model (toon.gdshaderinc).
+// Lighting is the shared toon model (toon.gdshaderinc). At night (see
+// shaders/night.gdshaderinc) street lights' pools light the ground near the
+// camera; further out streets and sidewalks get the lamps' average glow, so
+// the street grid glows from the air; and bridges' main cables carry strings
+// of lights.
 // With an aerial photo (?aerial=1), the flat ground kinds (pavement, road,
 // park, sand, marsh) show it; built things (seawalls, concrete, cables,
 // stone) don't. Close to the camera the ground goes back to its own colors:
@@ -71,6 +75,16 @@ uniform float woods_shade : hint_range(0.0, 1.0) = 0.25;
 // runs 29 degrees east of true north), so the joints line up with the curbs.
 uniform float paving_size = 1.5;
 uniform float paving_angle_degrees = 29.0;
+// Night: the street lights' average light on streets and sidewalks out past
+// the light map (linear, like the map's light times street_light_strength).
+uniform vec3 street_light_average = vec3(0.16, 0.11, 0.06);
+// Street light also shines off the ground a little whatever its color (a
+// sheen), so pools read on dark asphalt too.
+uniform float street_light_sheen = 0.04;
+// Bridges' necklace lights along the main cables: spacing (m), color, glow.
+uniform float cable_light_spacing = 4.0;
+uniform vec3 cable_light_color : source_color = vec3(1.0, 0.92, 0.75);
+uniform float cable_light_glow = 6.0;
 
 vec3 base_color(int kind) {
 	if (kind == ROAD) {
@@ -221,7 +235,26 @@ void fragment() {
 	}
 	bool photographed = (kind <= MARSH && kind != SEAWALL) || kind == YARD;
 	float far_enough = smoothstep(aerial_near_fade.x, aerial_near_fade.y, length(VERTEX));
-	ALBEDO = mix(color, photo, photographed ? aerial_amount(aerial_uv) * far_enough : 0.0);
+	ALBEDO = toon_night_albedo(mix(color, photo, photographed ? aerial_amount(aerial_uv) * far_enough : 0.0));
 	EMISSION = ALBEDO * toon_ambient(world_normal, 1.0);
 	toon_glint = kind == CABLE ? 0.3 : 0.0;
+
+	if (city_lights > 0.0) {
+		float distance_to_camera = length(VERTEX);
+		vec3 scene_position = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+		vec3 lamps = street_light_at(scene_position.xz, distance_to_camera);
+		if (kind == ROAD || kind == PAVEMENT) {
+			lamps += street_light_average * street_light_far(distance_to_camera);
+		}
+		// Walls (curbs, seawalls, bridges' sides) catch less of it, and no sheen.
+		bool level = world_normal.y > 0.7;
+		EMISSION += (level ? ALBEDO + street_light_sheen : ALBEDO * 0.6) * lamps * city_lights;
+		if (kind == CABLE && UV.y < 1.01) {
+			// A main cable (its four faces each run 0..1 across): bulbs along it,
+			// down the middle of each face, a glowing line in the distance.
+			float bulbs = centered_stripes(UV.x / cable_light_spacing, 0.12, footprint.x / cable_light_spacing)
+					* band(UV.y, 0.3, 0.7, footprint.y);
+			EMISSION += cable_light_color * (bulbs * cable_light_glow * city_lights);
+		}
+	}
 }

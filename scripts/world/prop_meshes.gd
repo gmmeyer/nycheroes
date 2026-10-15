@@ -24,6 +24,17 @@ extends RefCounted
 ## Water towers (shaders/water_tower.gdshader):
 ##   UV = (part, 0 at the part's bottom .. 1 at its top)
 ##   UV2.x = around the tank (0..1) on the wall and roof, for staves and seams
+## Street lights (shaders/street_light.gdshader), one mesh with both styles,
+## the other style's parts folded away by the shader, and not at unit size:
+## each part is measured from what the shader stretches it to.
+##   UV = (part, 0 at the part's bottom .. 1 at its top)
+##   cobra-head: the pole's y in its height (0..1); the mast arm's z in its
+##   length (0..1, reaching along +z) and y in meters from the pole's top;
+##   the luminaire (housing and lens) in meters from the arm's end
+##   post-top: everything's y in the lamp's height (0..1), x and z in meters
+## Plus their glows (street_light_glow.gdshader, a quad the shader turns to
+## the camera) and pools of light on the ground (street_light_pool.gdshader,
+## a 2D quad drawn into StreetLightMap).
 
 const PART_TRUNK := 0
 const PART_CROWN := 1
@@ -34,6 +45,19 @@ const PART_ROOF := 2
 const PART_FINIAL := 3
 const PART_STEEL := 4
 const PART_PLATFORM := 5
+
+const PART_POLE := 0
+const PART_ARM := 1
+const PART_HOUSING := 2
+const PART_LENS := 3
+const PART_POST := 4
+const PART_LANTERN := 5
+const PART_CAP := 6
+## The sizes the street light mesh is built at (m): a cobra-head's pole and
+## arm, and a post-top's height.
+const COBRA_HEAD_HEIGHT := 9.0
+const COBRA_HEAD_ARM := 2.6
+const POST_TOP_HEIGHT := 4.4
 
 ## How far blob normals lean toward the whole crown's (0 = each blob its own
 ## ball, 1 = one smooth ball).
@@ -171,6 +195,114 @@ static func water_tower() -> ArrayMesh:
 	return b.commit()
 
 
+## New York's street lights, both styles in one mesh (see above):
+## a cobra-head, a tapered steel pole whose mast arm curves up and out over
+## the street to a long luminaire with a lens underneath (52 triangles); and a
+## historic post-top, a fluted cast-iron post with a glass lantern under a
+## cap (78 triangles).
+static func street_light() -> ArrayMesh:
+	var b := _Builder.new()
+	# Cobra-head: the pole, flaring into a base at the foot.
+	_lathe(b, 6, [Vector2(0.0, 0.16), Vector2(0.55, 0.13), Vector2(COBRA_HEAD_HEIGHT, 0.07)], PART_POLE)
+	# The mast arm, from just below the pole's top, rising to the luminaire.
+	var top := COBRA_HEAD_HEIGHT
+	var arm := [Vector3(0.0, top - 0.6, 0.0), Vector3(0.0, top - 0.2, COBRA_HEAD_ARM * 0.45), Vector3(0.0, top - 0.08, COBRA_HEAD_ARM)]
+	for k in 2:
+		_beam(b, arm[k], arm[k + 1], 0.045, PART_ARM)
+	# The luminaire: a long housing, wider and lower toward its front, with
+	# the lens underneath.
+	var end := Vector3(0.0, top - 0.08, COBRA_HEAD_ARM)
+	var back := [Vector3(-0.13, 0.05, -0.12), Vector3(0.13, 0.05, -0.12), Vector3(0.13, -0.09, -0.12), Vector3(-0.13, -0.09, -0.12)]
+	var front := [Vector3(-0.17, 0.0, 0.62), Vector3(0.17, 0.0, 0.62), Vector3(0.17, -0.12, 0.62), Vector3(-0.17, -0.12, 0.62)]
+	var corners: Array[int] = []
+	for k in 4:
+		var p: Vector3 = back[k]
+		corners.append(b.vertex(end + p, p.normalized(), Vector2(PART_HOUSING, 0.0 if p.y < 0.0 else 1.0)))
+	for k in 4:
+		var p: Vector3 = front[k]
+		corners.append(b.vertex(end + p, p.normalized(), Vector2(PART_HOUSING, 0.0 if p.y < 0.0 else 1.0)))
+	var center := end + Vector3(0.0, -0.04, 0.25)
+	for face in [[0, 1, 5, 4], [1, 2, 6, 5], [3, 0, 4, 7], [0, 3, 2, 1], [4, 5, 6, 7]]:
+		var mid := Vector3.ZERO
+		for k in face:
+			mid += b.positions[corners[k]]
+		b.quad(corners[face[0]], corners[face[1]], corners[face[2]], corners[face[3]], mid / 4.0 - center)
+	var lens: Array[int] = []
+	for k in [2, 3, 7, 6]:
+		var p: Vector3 = (back + front)[k]
+		lens.append(b.vertex(end + p + Vector3(0.0, -0.005, 0.0), Vector3.DOWN, Vector2(PART_LENS, 0.0)))
+	b.quad(lens[0], lens[1], lens[2], lens[3], Vector3.DOWN)
+	# Post-top: a fluted post on a stepped base, a glass lantern, a cap.
+	_lathe(b, 6, [Vector2(0.0, 0.19), Vector2(0.75, 0.14), Vector2(0.9, 0.085), Vector2(3.4, 0.065)], PART_POST)
+	_lathe(b, 6, [Vector2(3.4, 0.09), Vector2(3.75, 0.25), Vector2(4.15, 0.2)], PART_LANTERN)
+	_lathe(b, 6, [Vector2(4.13, 0.23), Vector2(4.3, 0.08), Vector2(POST_TOP_HEIGHT, 0.0)], PART_CAP)
+	# Measured from what the shader stretches them to (see above).
+	for i in b.positions.size():
+		var p := b.positions[i]
+		match int(b.uvs[i].x):
+			PART_POLE:
+				p.y /= COBRA_HEAD_HEIGHT
+			PART_ARM:
+				p.y -= COBRA_HEAD_HEIGHT
+				p.z /= COBRA_HEAD_ARM
+			PART_HOUSING, PART_LENS:
+				p.y -= COBRA_HEAD_HEIGHT
+				p.z -= COBRA_HEAD_ARM
+			_:
+				p.y /= POST_TOP_HEIGHT
+		b.positions[i] = p
+	return b.commit()
+
+
+## A street light's glow: a quad (corners -1..1 in UV) that the shader turns
+## to face the camera at the lamp's head.
+static func street_light_glow() -> ArrayMesh:
+	var b := _Builder.new()
+	var corners: Array[int] = []
+	for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		corners.append(b.vertex(Vector3(c.x, c.y, 0.0), Vector3.BACK, c))
+	b.quad(corners[0], corners[1], corners[2], corners[3], Vector3.BACK)
+	return b.commit()
+
+
+## A street light's pool of light, as a 2D quad from -1 to 1 (StreetLightMap).
+static func light_pool() -> ArrayMesh:
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector2Array([Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)])
+	arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array([Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)])
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 0, 2, 3])
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## A turned shape around the y axis through `profile`'s points (height,
+## radius), bottom to top, with `sides` flat sides; a radius of 0 closes it to
+## a point. UV.y runs 0..1 up it.
+static func _lathe(b: _Builder, sides: int, profile: Array[Vector2], part: int) -> void:
+	var bottom := profile[0].x
+	var height := profile[profile.size() - 1].x - bottom
+	for k in profile.size() - 1:
+		var p0 := profile[k]
+		var p1 := profile[k + 1]
+		# Each side leans out by the profile's slope.
+		var slope := Vector2(p1.x - p0.x, p0.y - p1.y).normalized()
+		for i in sides:
+			var a0 := TAU * i / sides
+			var a1 := TAU * (i + 1) / sides
+			var out := Vector3(cos((a0 + a1) * 0.5), 0.0, sin((a0 + a1) * 0.5))
+			var n := (out * slope.x + Vector3.UP * slope.y).normalized()
+			var v0 := b.vertex(Vector3(cos(a0) * p0.y, p0.x, sin(a0) * p0.y), n, Vector2(part, (p0.x - bottom) / height))
+			var v1 := b.vertex(Vector3(cos(a1) * p0.y, p0.x, sin(a1) * p0.y), n, Vector2(part, (p0.x - bottom) / height))
+			var v2 := b.vertex(Vector3(cos(a1) * p1.y, p1.x, sin(a1) * p1.y), n, Vector2(part, (p1.x - bottom) / height))
+			if p1.y <= 0.0:
+				b.triangle(v0, v1, v2, n)
+			else:
+				var v3 := b.vertex(Vector3(cos(a0) * p1.y, p1.x, sin(a0) * p1.y), n, Vector2(part, (p1.x - bottom) / height))
+				b.quad(v0, v1, v2, v3, n)
+
+
 ## A small pointed cone (a water tower's finial).
 static func _spike(b: _Builder, sides: int, base: Vector3, radius: float, apex_y: float, part: int) -> void:
 	var rim := PackedInt32Array()
@@ -185,7 +317,7 @@ static func _spike(b: _Builder, sides: int, base: Vector3, radius: float, apex_y
 
 
 ## A square steel column from `from` to `to`, open at the ends (8 triangles).
-static func _beam(b: _Builder, from: Vector3, to: Vector3, half: float) -> void:
+static func _beam(b: _Builder, from: Vector3, to: Vector3, half: float, part := PART_STEEL) -> void:
 	var axis := (to - from).normalized()
 	var side := axis.cross(Vector3.FORWARD).normalized()
 	var front := side.cross(axis).normalized()
@@ -194,8 +326,8 @@ static func _beam(b: _Builder, from: Vector3, to: Vector3, half: float) -> void:
 		var c0 := corners[k] * half
 		var c1 := corners[(k + 1) % 4] * half
 		var out := (corners[k] + corners[(k + 1) % 4]).normalized()
-		var uv0 := Vector2(PART_STEEL, 0.0)
-		var uv1 := Vector2(PART_STEEL, 1.0)
+		var uv0 := Vector2(part, 0.0)
+		var uv1 := Vector2(part, 1.0)
 		b.quad(b.vertex(from + c0, out, uv0), b.vertex(from + c1, out, uv0), b.vertex(to + c1, out, uv1), b.vertex(to + c0, out, uv1), out)
 
 

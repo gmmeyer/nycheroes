@@ -5,8 +5,8 @@ City, surrounded by ocean like a GTA map, where players fly, web-swing,
 super-speed and super-jump around the city and fight thugs on the street.
 
 **Platform:** Godot 4.7 web export (Compatibility renderer, WebGL 2). Every
-feature has to run in a browser; see "Constraints" below. Mac and Windows
-versions come last (step 8).
+feature has to run in a browser, on computers and on phones (step 7); see
+"Constraints" below. Mac and Windows versions come last (step 9).
 
 | Step | What | Status |
 |------|------|--------|
@@ -14,10 +14,11 @@ versions come last (step 8).
 | 2 | Hero with superpowers | Done (`fd9c7ff`) |
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
-| 5 | Co-op multiplayer | Done (`c1e717a`); public hosting still to do |
-| 6 | Realism from open data | In progress (real shape, stylized facades, trees, water towers, street paint and roofs done) |
-| 7 | Overpasses and missing bridges | Planned |
-| 8 | Mac and Windows versions | Planned (last) |
+| 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
+| 6 | Realism from open data | In progress (real shape, stylized facades, trees, water towers, street paint, roofs and night done) |
+| 7 | Phones and tablets | In progress |
+| 8 | Overpasses and missing bridges | Planned |
+| 9 | Mac and Windows versions | Planned (last) |
 
 ## 1. Manhattan you can fly around (done)
 
@@ -64,7 +65,7 @@ peer can drive one later. Nearby tiles get collision.
   (Brooklyn, Manhattan, Williamsburg, Verrazzano, Throgs Neck and Whitestone)
   have towers and cables, spaced by their real main spans. Without depth data
   each main span is centered over the water, which puts the Throgs Neck
-  towers off from where they really stand (fixed in step 7). Bridges to New
+  towers off from where they really stand (fixed in step 8). Bridges to New
   Jersey and Nassau County are left out (ocean in this world).
 - **Results:** in the browser every spot tested loads in 1.5–3.5 s (8–10 s
   for a cold first load), at 150 FPS with under 1M triangles. The headless
@@ -76,10 +77,10 @@ peer can drive one later. Nearby tiles get collision.
 - **Ceiling:** nobody goes above 1 km (`WorldOrigin.CEILING`, about twice
   the height of One World Trade Center), including the free camera. The ocean
   fades into the haze before its edge, so the edge of the world never shows.
-- **Known gaps (step 7):** overpasses on land stay at street level, and a
+- **Known gaps (step 8):** overpasses on land stay at street level, and a
   few bridges are missing from the data.
 
-## 5. Co-op multiplayer (done; public hosting still to do)
+## 5. Co-op multiplayer (done)
 
 - **Joining:** press M for the co-op menu. "Host a game" gives a 4-letter
   room code and an invite link (`?join=CODE`); friends join with either.
@@ -104,9 +105,13 @@ peer can drive one later. Nearby tiles get collision.
   (desktop has no WebRTC) and checks positions, thugs showing up and fighting
   both ways, and players far apart. Two headless Chrome instances also
   connected over WebRTC through the signaling server.
-- **Still to do:** host the game, its tiles and the signaling server publicly
-  (with `wss://`), and add a TURN relay for players whose networks block
-  direct connections. If the host leaves, the game ends for everyone.
+- **Public (2026-10-15):** https://nycheroes.party on Cloudflare: the game,
+  its tiles and signaling (a Durable Object at `/signal`) from one Worker
+  (`tools/deploy_cloudflare.ps1`, see "Working on the project"); published
+  after every step.
+- **Still to do:** a TURN relay for players whose networks block direct
+  connections (only STUN today). If the host leaves, the game ends for
+  everyone.
 
 ## 6. Realism from open data (in progress)
 
@@ -122,7 +127,7 @@ The aerial photos stay only as a comparison (`?aerial=1`).
 In order:
 
 1. **Real shape (done, below):** terrain, building shapes, curbs and
-   medians. (Bridges and overpasses come in step 7.)
+   medians. (Bridges and overpasses come in step 8.)
 2. **Real view from above (done, below, now opt-in):** the city's 2024
    aerial photos draped over streets, parks and roofs; replaced by the
    stylized look by default.
@@ -293,7 +298,7 @@ In order:
   towers 74, paint 76), plus the 3.9 MB canopy map; 3.4 million trees and
   9,637 water towers citywide. About +0.3-0.8 ms per frame (draw calls in
   midtown 190 to 290); every view still at the 145 FPS cap.
-- Still to do: night lighting, other street furniture.
+- Still to do: other street furniture.
 
 **Roofs: parapets and pitched roofs (done):**
 - Up close, flat roofs get 1 m parapets: the walls rise above the roof
@@ -307,18 +312,69 @@ In order:
   follow the eaves. Other houses keep flat roofs.
 - Cost: full-detail tiles 1,201 MB (+113 MB); frame rate unchanged.
 
+**Night: time of day, street lights, lit windows (done):**
+- `scripts/world/time_of_day.gd` owns the clock: the sun follows New York's
+  real arc (through azimuth 235°, elevation 42° at 15:30; sunset about
+  19:25), a full moon takes over the light at night, and the sky, fog,
+  ambient light and exposure blend from day through dusk to night. Shader
+  globals (`night`, `dusk`, `city_lights`, `clock_hours`, the street light
+  map) reach every city shader through `shaders/night.gdshaderinc`; with
+  them at 0, the day looks exactly as before.
+- **T** steps to the next of dawn, day, dusk and night; `?time=HH:MM` sets
+  the clock, `?daylength=MINUTES` runs it.
+- 545,000 street lights (new prop type 4): the city publishes no lamp
+  positions, so they stand along every curb about every 35 m, 0.6 m onto
+  the sidewalk, arms over the street; historic post-tops in and beside
+  parks. Drawn instanced (52- and 78-triangle lamps), with glowing lenses
+  and halos that turn into dots in the distance.
+- Light pools: each near tile adds its lamps to a 2 km street light map
+  (a SubViewport, 2 m pixels, redrawn only when tiles change or the camera
+  moves 256 m) that the ground, paint, wall feet, tree crowns and posts
+  sample; beyond about 650 m streets get an average glow instead.
+- Lit windows hashed per window by building type and hour (homes busy in
+  the evening, offices emptying late), warm with some cool and the odd TV;
+  shops glow and pull down roll gates after 21:00; lobbies glow; masonry
+  landmarks' setbacks above 40 m are floodlit (the Empire State and
+  Chrysler tops). Far away, windows settle into an even glow.
+- Night sky with stars, a moon and city-lit clouds; dusk and dawn colors;
+  bridge cables strung with lights; moonlit, darker water.
+- Cost: about one more draw call per near tile at night; frame rate the
+  same as by day.
+- `?demo=city` flies the camera over the city, day into night, for videos
+  (with "[demo] pause"/"resume" around loading, so recordings skip it).
+
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
 for background decoding, and quality presets for weaker laptops.
 
 **Decisions to make before step 6:**
-- Whether the Mac and Windows versions (step 8) get extra looks from
+- Whether the Mac and Windows versions (step 9) get extra looks from
   Godot's Forward+ renderer (ambient occlusion, reflections, volumetric fog,
   which WebGL lacks), or match the browser exactly.
 - Budget for landmark models (buy/commission vs. free and self-made).
 - How large the browser download may grow.
 
-## 7. Overpasses and missing bridges (planned)
+## 7. Phones and tablets (in progress)
+
+Added 2026-10-15 at the user's request: the game should be playable on a
+phone, in the phone's browser, at https://nycheroes.party.
+
+- **Touch controls:** a virtual stick to move, dragging anywhere else to
+  turn the camera, and buttons for jump (hold for a super jump), punch
+  (in the air: dive attack), web swing, fly (with up and down), super speed
+  and the co-op menu. They show up on touch screens only; a keyboard and
+  mouse keep working as before.
+- **The page:** landscape (asking to turn the phone otherwise), fullscreen
+  where the browser allows it, no page scrolling, pinch zoom or text
+  selection getting in the way of the controls.
+- **Performance:** a phone quality preset picked automatically (lower
+  render resolution, shorter view distances, fewer shadows, smaller
+  crowds), within phone browsers' memory limits (iOS Safari is the
+  tightest).
+- **Testing:** Chrome's phone emulation (touch events, a phone-sized
+  screen) in the automated checks, and real phones on the public site.
+
+## 8. Overpasses and missing bridges (planned)
 
 Comes after step 6 because it needs step 6's real ground heights.
 
@@ -339,7 +395,7 @@ Comes after step 6 because it needs step 6's real ground heights.
 - **Tower positions:** place suspension towers where they really stand
   instead of centering them over the water (the Throgs Neck is off today).
 
-## 8. Mac and Windows versions (planned, last)
+## 9. Mac and Windows versions (planned, last)
 
 Downloadable versions of the game for Windows and macOS, alongside the
 browser version. Godot exports both from the same project; the export
@@ -395,6 +451,15 @@ templates for both are already installed.
 - Web build: `tools/build_web.ps1` (add `-Serve` to play at
   http://localhost:8060; it also runs the co-op signaling server on port
   8070, after `npm install` in `tools/signaling`).
+- Public site: `tools/deploy_cloudflare.ps1 [-Build]` publishes the web
+  build to https://nycheroes.party (`tools/cloudflare`): one Worker serves the game and
+  tiles as static assets (only changed files upload), `index.wasm` (over
+  the 25 MiB asset limit) from the R2 bucket `nyc-hero-files`, and co-op
+  signaling at `/signal` from a Durable Object (the game uses it by
+  default over https). Needs `npx wrangler login` once, or a Cloudflare
+  CLI login (`cf auth login`), which it lends to Wrangler; `npx wrangler dev`
+  in `tools/cloudflare` runs it locally. First load: the 39.5 MB engine
+  arrives brotli-compressed (9.6 MB).
 - Tests (headless): `godot --headless --path . res://tests/hero_moves_test.tscn`,
   `res://tests/combat_test.tscn`, `res://tests/streaming_test.tscn` and
   `res://tests/coop_test.tscn`.

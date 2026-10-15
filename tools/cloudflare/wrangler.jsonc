@@ -1,0 +1,21 @@
+// The public web build at https://nycheroes.party (see worker.mjs and
+// tools/deploy_cloudflare.ps1).
+{
+  "name": "nyc-hero",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-01",
+  "routes": [
+    { "pattern": "nycheroes.party", "custom_domain": true },
+    { "pattern": "www.nycheroes.party", "custom_domain": true }
+  ],
+  // The game and its tiles, staged by deploy_cloudflare.ps1 (no aerial
+  // photos, no index.wasm: that's over the 25 MiB asset limit, so it's in R2).
+  "assets": {
+    "directory": "../../build/cloudflare",
+    "binding": "ASSETS",
+    "run_worker_first": ["/signal", "/index.wasm"]
+  },
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "nyc-hero-files" }],
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Rooms" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Rooms"] }]
+}

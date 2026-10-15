@@ -5,9 +5,16 @@
 //
 // Use it in a spatial shader with render_mode ambient_light_disabled, and in
 // fragment():
+//   ALBEDO = toon_night_albedo(color);
 //   EMISSION += ALBEDO * toon_ambient(world_normal, occlusion);
 //   toon_glint = 1.0 where the surface is glass (sun glints), else 0.0.
-// The sun itself comes through light() below.
+// The sun (at night, the moon: TimeOfDay turns the one light) comes through
+// light() below. At dusk and dawn the shade turns lavender against the low
+// sun, and at night a moonlit sky's cool light from above and the city's warm
+// glow from below take over, as colors fade toward gray (night.gdshaderinc has
+// the time of day).
+
+#include "res://shaders/night.gdshaderinc"
 
 // Ambient light from the sky (faces pointing up) and bounced off the ground
 // (faces pointing down); walls get the mix.
@@ -17,6 +24,16 @@ uniform float ambient_energy = 0.75;
 // Extra fill on walls (up to this much more at vertical), standing in for
 // the light that sunlit streets and facades bounce into the shade.
 uniform float ambient_wall_bounce = 0.5;
+// At night: the night sky's light from above, the city's sodium-and-neon
+// glow from below, and their strength. At dusk and dawn the day's ambient is
+// tinted by dusk_ambient: shade goes lavender against the low sun's orange.
+uniform vec3 night_ambient_sky : source_color = vec3(0.28, 0.42, 0.68);
+uniform vec3 night_ambient_ground : source_color = vec3(0.45, 0.38, 0.32);
+uniform float night_ambient_energy = 0.32;
+uniform vec3 dusk_ambient : source_color = vec3(0.74, 0.72, 0.90);
+// At night surface colors fade this far toward gray, as they do to the eye,
+// so the moonlit city reads cool blue and its lights stand out.
+uniform float night_desaturation : hint_range(0.0, 1.0) = 0.45;
 // Width of the soft edge between sunlit and shaded faces, in N.L units.
 uniform float toon_softness : hint_range(0.0, 1.0) = 0.1;
 // How much plain Lambert falloff is kept on the sunlit side, so lit faces at
@@ -30,10 +47,23 @@ uniform float glint_power = 400.0;
 
 varying float toon_glint;
 
+vec3 toon_night_albedo(vec3 albedo) {
+	if (night <= 0.0) {
+		return albedo;
+	}
+	return mix(albedo, vec3(dot(albedo, vec3(0.2126, 0.7152, 0.0722))), night * night_desaturation);
+}
+
 vec3 toon_ambient(vec3 world_normal, float occlusion) {
 	vec3 hemisphere = mix(ambient_ground, ambient_sky, world_normal.y * 0.5 + 0.5);
 	float bounce = 1.0 + ambient_wall_bounce * (1.0 - abs(world_normal.y));
-	return hemisphere * (ambient_energy * occlusion * bounce);
+	vec3 ambient = hemisphere * (ambient_energy * occlusion * bounce);
+	if (dusk > 0.0 || night > 0.0) {
+		vec3 night_hemisphere = mix(night_ambient_ground, night_ambient_sky, world_normal.y * 0.5 + 0.5);
+		ambient = mix(ambient * mix(vec3(1.0), dusk_ambient, dusk),
+				night_hemisphere * (night_ambient_energy * occlusion * bounce), night);
+	}
+	return ambient;
 }
 
 void light() {

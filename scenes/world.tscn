@@ -22,6 +22,10 @@
 [ext_resource type="Shader" path="res://shaders/tree.gdshader" id="20_tree"]
 [ext_resource type="Shader" path="res://shaders/water_tower.gdshader" id="21_water_tower"]
 [ext_resource type="Shader" path="res://shaders/markings.gdshader" id="22_markings"]
+[ext_resource type="Script" path="res://scripts/world/time_of_day.gd" id="23_time_of_day"]
+[ext_resource type="Shader" path="res://shaders/street_light.gdshader" id="24_street_light"]
+[ext_resource type="Shader" path="res://shaders/street_light_glow.gdshader" id="25_street_light_glow"]
+[ext_resource type="Shader" path="res://shaders/street_light_pool.gdshader" id="26_street_light_pool"]
 
 [sub_resource type="ShaderMaterial" id="SkyMaterial_sky"]
 shader = ExtResource("19_sky")
@@ -54,12 +58,22 @@ shader = ExtResource("6_ground")
 shader = ExtResource("20_tree")
 shader_parameter/toon_softness = 0.3
 shader_parameter/toon_lambert = 0.3
+shader_parameter/night_ambient_energy = 0.55
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_water_tower"]
 shader = ExtResource("21_water_tower")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_markings"]
 shader = ExtResource("22_markings")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_street_light"]
+shader = ExtResource("24_street_light")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_street_light_glow"]
+shader = ExtResource("25_street_light_glow")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_street_light_pool"]
+shader = ExtResource("26_street_light_pool")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ocean"]
 shader = ExtResource("7_ocean")
@@ -70,7 +84,7 @@ size = Vector2(80000, 80000)
 [sub_resource type="SphereShape3D" id="SphereShape3D_camera"]
 radius = 0.25
 
-[node name="World" type="Node3D" node_paths=PackedStringArray("hero", "hero_camera", "free_camera", "player_input", "city", "encounters", "players", "hud", "coop_panel")]
+[node name="World" type="Node3D" node_paths=PackedStringArray("hero", "hero_camera", "free_camera", "player_input", "city", "encounters", "players", "hud", "coop_panel", "time_of_day")]
 script = ExtResource("9_game")
 hero = NodePath("Hero")
 hero_camera = NodePath("HeroCamera")
@@ -81,6 +95,7 @@ encounters = NodePath("Encounters")
 players = NodePath("Players")
 hud = NodePath("HUD")
 coop_panel = NodePath("HUD/CoopPanel")
+time_of_day = NodePath("TimeOfDay")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." node_paths=PackedStringArray("sun", "city")]
 environment = SubResource("Environment_world")
@@ -95,6 +110,12 @@ light_energy = 1.15
 shadow_enabled = true
 directional_shadow_max_distance = 1500.0
 
+[node name="TimeOfDay" type="Node" parent="." node_paths=PackedStringArray("sun", "world_environment", "city")]
+script = ExtResource("23_time_of_day")
+sun = NodePath("../Sun")
+world_environment = NodePath("../WorldEnvironment")
+city = NodePath("../City")
+
 [node name="City" type="Node3D" parent="."]
 script = ExtResource("1_city")
 building_material = SubResource("ShaderMaterial_building")
@@ -103,6 +124,9 @@ water_material = SubResource("ShaderMaterial_ocean")
 markings_material = SubResource("ShaderMaterial_markings")
 tree_material = SubResource("ShaderMaterial_tree")
 water_tower_material = SubResource("ShaderMaterial_water_tower")
+street_light_material = SubResource("ShaderMaterial_street_light")
+street_light_glow_material = SubResource("ShaderMaterial_street_light_glow")
+street_light_pool_material = SubResource("ShaderMaterial_street_light_pool")
 
 [node name="Ocean" type="MeshInstance3D" parent="."]
 cast_shadow = 0
@@ -175,7 +199,7 @@ encounters = NodePath("../../Encounters")
 players = NodePath("../../Players")
 city = NodePath("../../City")
 
-[node name="DebugLabel" type="Label" parent="HUD" node_paths=PackedStringArray("city", "hero", "free_camera")]
+[node name="DebugLabel" type="Label" parent="HUD" node_paths=PackedStringArray("city", "hero", "free_camera", "time_of_day")]
 offset_left = 12.0
 offset_top = 10.0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
@@ -185,6 +209,7 @@ script = ExtResource("4_hud")
 city = NodePath("../../City")
 hero = NodePath("../../Hero")
 free_camera = NodePath("../../FreeCamera")
+time_of_day = NodePath("../../TimeOfDay")
 
 [node name="CoopPanel" type="Control" parent="HUD"]
 layout_mode = 3

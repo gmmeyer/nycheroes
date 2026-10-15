@@ -5,9 +5,11 @@ extends Node
 ## ground around the camera is covered by some drawn tile (no holes). Also
 ## checks that every loaded tile with an aerial photo shows it, that the
 ## photos of tiles that have unloaded are freed, that near tiles have their
-## trees and water towers (as many as the tile holds) and road markings, and
-## that the tree canopy map has reached the ground material (if the city has
-## one).
+## trees, water towers and street lights (as many as the tile holds), the
+## street lights' glows, and road markings, that each near tile with street
+## lights has its pools in the street light map (and none are left of tiles
+## that have gone), and that the tree canopy map has reached the ground
+## material (if the city has one).
 ## Run: godot --headless --path . res://tests/streaming_test.tscn
 
 ## [name, world position of the camera]
@@ -113,33 +115,47 @@ func _check() -> void:
 		if ref.get_ref():
 			leaked += 1
 	# Near tiles: their props drawn as MultiMeshes holding every one of them,
-	# and road markings. Every spot with near tiles has streets and trees.
+	# street lights with as many glows, their pools in the light map, and road
+	# markings. Every spot with near tiles has streets, trees and street lights.
 	var props := 0
 	var water_towers := 0
+	var street_lights := 0
 	var with_markings := 0
+	var with_lamps := 0
 	var miscounted := 0
 	for tile in _city._levels[CityStreamer.LEVEL_NEAR]["tiles"]:
 		if tile.node == null:
 			continue
 		var instances := 0
+		var lamps := 0
+		var glows := 0
 		for child in tile.node.get_children():
-			if child is MultiMeshInstance3D and not String(child.name).ends_with("Shadows"):
+			if child is MultiMeshInstance3D and String(child.name) in CityProps.GROUP_NAMES:
 				instances += child.multimesh.instance_count
 				if child.name == "WaterTowers":
 					water_towers += child.multimesh.instance_count
+				elif child.name == "StreetLights":
+					lamps = child.multimesh.instance_count
+			elif child.name == CityProps.GLOW_NAME:
+				glows = child.multimesh.instance_count
 			elif child.name == "Markings":
 				with_markings += 1
-		if instances != tile.prop_count:
+		if instances != tile.prop_count or glows != lamps:
 			miscounted += 1
 		props += instances
-	var near_ok: bool = loaded[CityStreamer.LEVEL_NEAR] == 0 or (props > 0 and with_markings > 0 and miscounted == 0)
+		street_lights += lamps
+		with_lamps += 1 if lamps > 0 else 0
+	var pools: int = _city.light_pool_count()
+	var near_ok: bool = loaded[CityStreamer.LEVEL_NEAR] == 0 or (props > 0 and street_lights > 0
+			and with_markings > 0 and miscounted == 0)
+	near_ok = near_ok and pools == with_lamps
 	var canopy_ok: bool = _city.canopy_loaded or not _expects_canopy
 	var ok := doubled == 0 and holes == 0 and missing == 0 and leaked == 0 and near_ok and canopy_ok and _time < MAX_WAIT
 	if not ok:
 		_problems += 1
-	print("%-24s %5.1fs  loaded %s  drawn %s  doubled %d  holes %d  photos %d (missing %d, leaked %d)  props %d (%d water towers, %d miscounted)  markings in %d  canopy %s  %s" % [
-		SPOTS[_spot][0], _time, loaded, visible, doubled, holes, photos, missing, leaked, props, water_towers, miscounted,
-		with_markings, "ok" if canopy_ok else "MISSING", "ok" if ok else "PROBLEM"])
+	print("%-24s %5.1fs  loaded %s  drawn %s  doubled %d  holes %d  photos %d (missing %d, leaked %d)  props %d (%d water towers, %d street lights, %d miscounted)  light pools in %d of %d  markings in %d  canopy %s  %s" % [
+		SPOTS[_spot][0], _time, loaded, visible, doubled, holes, photos, missing, leaked, props, water_towers, street_lights,
+		miscounted, pools, with_lamps, with_markings, "ok" if canopy_ok else "MISSING", "ok" if ok else "PROBLEM"])
 
 
 ## The aerial photo a tile's node is showing, or null.

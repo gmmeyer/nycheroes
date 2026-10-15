@@ -9,11 +9,15 @@ extends RefCounted
 ## sidewalks, separated by index 0xFFFFFFFF. The props surface (near tiles) is
 ## one vertex per prop, sorted by type, and no indices:
 ##   position  where it stands (a tree's trunk on the ground, a water tower's
-##             legs on the roof), tile-local
+##             legs on the roof, a street light's pole on the sidewalk),
+##             tile-local
 ##   normal    (height m, width m, yaw radians): total height to the top; the
-##             crown's or tank's diameter; rotation about +Y
+##             crown's or tank's diameter, or a street light's arm length;
+##             rotation about +Y (a street light's arm reaches along
+##             (sin yaw, 0, cos yaw), over the street)
 ##   uv        (variant, trunk diameter m): trees' foliage tone (TONE_*) and
-##             trunk; water towers' tank (0 wood, 1 steel) and 0
+##             trunk; water towers' tank (0 wood, 1 steel) and 0; street
+##             lights' style (STREET_LIGHT_*) and 0
 ##   uv2       (PROP_* type, seed 0..1)
 
 const MAGIC := "NYCT"
@@ -25,7 +29,7 @@ const SURFACE_LANES := 2
 const SURFACE_STRUCTURES := 3
 ## Lakes, reservoirs and creeks above sea level (sea-level water is the ocean plane).
 const SURFACE_WATER := 4
-## Trees and rooftop water towers, one point each (near tiles only).
+## Trees, rooftop water towers and street lights, one point each (near tiles only).
 const SURFACE_PROPS := 5
 ## Paint on the streets (near tiles only): strips a few centimeters above the
 ## road, without collision. UV is local to each strip in meters (x along the
@@ -45,12 +49,16 @@ const PROP_TREE := 0          ## broadleaf, round crown
 const PROP_TREE_NARROW := 1   ## columnar or oval crown (Callery pear, ginkgo)
 const PROP_CONIFER := 2       ## pine, spruce, fir, cedar
 const PROP_WATER_TOWER := 3   ## rooftop water tank on a steel stand
-const PROP_TYPE_COUNT := 4
+const PROP_STREET_LIGHT := 4  ## lamp post at the curb, its arm over the street
+const PROP_TYPE_COUNT := 5
 ## Trees' foliage tones (uv.x of the props surface).
 const TONE_GREEN := 0
 const TONE_LIGHT := 1  ## yellow-green: honeylocust, ginkgo, birch, willow
 const TONE_DARK := 2   ## oaks, lindens, conifers
 const TONE_RED := 3    ## purple-leaf plum, copper beech
+## Street lights' styles (uv.x of the props surface).
+const STREET_LIGHT_COBRA_HEAD := 0  ## modern: a 9 m pole, a 2.6 m arm
+const STREET_LIGHT_POST_TOP := 1    ## historic: a 4.4 m post with a lantern, by parks
 
 
 ## Returns one dictionary per surface: {kind, mesh: ArrayMesh} for meshes,

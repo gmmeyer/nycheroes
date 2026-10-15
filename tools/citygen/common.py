@@ -24,7 +24,8 @@ The props surface (lod0) is one point per prop, no indices:
   normal   = (height m, width m, yaw radians): total height to the top; the
              crown's or tank's diameter; rotation about +Y
   uv       = (variant, trunk): trees' foliage tone (PROP_TONE_*) and trunk
-             diameter (m); water towers' tank (0 wood, 1 steel) and 0
+             diameter (m); water towers' tank (0 wood, 1 steel) and 0;
+             street lights' style (see PROP_STREET_LIGHT) and 0
   uv2      = (PROP_* type, seed 0..1)
 Props are sorted by type. The manifest's "canopy" entry is a citywide map of
 tree canopy (landcover.write_canopy_map) for the ground shader.
@@ -74,6 +75,9 @@ PROP_TREE = 0         # broadleaf tree, round crown
 PROP_TREE_NARROW = 1  # columnar or oval crown (Callery pear, ginkgo, columnar oaks)
 PROP_CONIFER = 2      # pine, spruce, fir, cedar
 PROP_WATER_TOWER = 3  # rooftop water tank on legs
+PROP_STREET_LIGHT = 4  # lamp post at the curb: its normal is (pole height, arm
+                       # length, yaw); the arm reaches along (sin yaw, 0, cos yaw),
+                       # over the street; uv.x 0 cobra-head, 1 historic post-top
 # Trees' foliage tones (uv.x of the props surface).
 PROP_TONE_GREEN = 0
 PROP_TONE_LIGHT = 1   # yellow-green: honeylocust, ginkgo, birch, willow

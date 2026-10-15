@@ -3,7 +3,7 @@ extends Node3D
 ## Streams the city around the camera from a three-level tile tree, built by
 ## tools/citygen/build_tiles.py into data/tiles/<region>/:
 ##   lod0: 500 m tiles, full detail, with collision, walking lanes, road
-##         markings, trees and rooftop water towers
+##         markings, trees, rooftop water towers and street lights
 ##   lod1: 1 km tiles, simplified
 ##   lod2: 4 km tiles, coarse, out to the horizon
 ## A level's tiles load when their parent tile is near the camera. A tile is
@@ -13,8 +13,11 @@ extends Node3D
 ## Web builds fetch tiles over HTTP from tiles/<region>/ next to index.html
 ## (tools/build_web.ps1 copies them there).
 ## Buildings and ground are drawn by their own shaders (stylized facades from
-## the tiles' per-building data), and so are road markings; trees and water
-## towers are a few MultiMeshes per tile (CityProps). The manifest's citywide
+## the tiles' per-building data), and so are road markings; trees, water
+## towers and street lights are a few MultiMeshes per tile (CityProps). At
+## night (city_lights, from TimeOfDay) street lights glow, and their pools of
+## light go into a map around the camera that the shaders look up
+## (StreetLightMap). The manifest's citywide
 ## tree canopy map (how much of each 8 m square is under trees) loads once at
 ## the start; the ground shader paints woods from it on parks and yards, out
 ## past where tree props draw. For comparison,
@@ -76,6 +79,12 @@ const PHOTO_OPTIONS := {"aerial_shadow": "aerial_shadow_softening", "aerial_brig
 ## water_tower.gdshader).
 @export var tree_material: Material
 @export var water_tower_material: Material
+## Street lights, their glows at night, and their pools of light in the
+## street light map (shaders/street_light.gdshader, street_light_glow.gdshader
+## and street_light_pool.gdshader).
+@export var street_light_material: Material
+@export var street_light_glow_material: Material
+@export var street_light_pool_material: Material
 
 var loaded_counts: Array[int] = [0, 0, 0]
 ## World positions that need the ground loaded around them besides the
@@ -84,7 +93,7 @@ var loaded_counts: Array[int] = [0, 0, 0]
 var extra_foci: Array[Vector3] = []
 ## Time the last tile took to turn into meshes and collision, in milliseconds.
 var last_build_msec := 0.0
-## Trees and water towers in loaded near tiles.
+## Trees, water towers and street lights in loaded near tiles.
 var prop_count := 0
 ## Loaded tiles that are showing their aerial photo.
 var photo_count := 0
@@ -92,6 +101,9 @@ var photo_count := 0
 var last_photo_msec := 0.0
 ## Whether the tree canopy map has loaded and gone to the ground material.
 var canopy_loaded := false
+## How far the city's lights are on (0..1, set by TimeOfDay): street lights'
+## glows and their light map only draw while they are.
+var city_lights := 0.0: set = set_city_lights
 
 var _levels: Array[Dictionary] = []  # {name, size, tiles: Array[Tile], by_coord: {Vector2i: Tile}}
 var _queue: Array[Array] = []  # [priority, tile, is_photo], sorted
@@ -100,6 +112,7 @@ var _ready_photos: Array[Array] = []  # [tile, node instance id, bytes]
 var _photos_enabled := false
 var _merged_building_material: ShaderMaterial
 var _props: CityProps
+var _light_map: StreetLightMap
 var _in_flight := 0
 var _base_url := ""  # web only
 var _idle_requests: Array[HTTPRequest] = []
@@ -121,7 +134,7 @@ class Tile:
 	var children: Array[Tile] = []
 	## Sidewalk walking lanes (world-space polylines), lod0 only, while loaded.
 	var lanes: Array[PackedVector3Array] = []
-	## Trees and water towers, lod0 only, while loaded.
+	## Trees, water towers and street lights, lod0 only, while loaded.
 	var prop_count := 0
 	## The aerial photo's state for the current node.
 	var photo := Photo.NONE
@@ -143,13 +156,20 @@ func _ready() -> void:
 	if building_material is ShaderMaterial:
 		_merged_building_material = building_material.duplicate()
 		_merged_building_material.set_shader_parameter("merged_blocks", true)
-	_props = CityProps.new(tree_material, water_tower_material)
+	_props = CityProps.new(tree_material, water_tower_material, street_light_material, street_light_glow_material)
 	_props.tree_shadows = LaunchOptions.get_string("tree_shadows", "1") != "0"
+	_light_map = StreetLightMap.new(street_light_pool_material)
+	add_child(_light_map)
+	_props.light_map = _light_map
+	set_city_lights(city_lights)
 	if OS.has_feature("web"):
 		var page_dir := str(JavaScriptBridge.eval("location.href.split(/[?#]/)[0].replace(/[^/]*$/, '')"))
 		_base_url = page_dir + "tiles/%s/" % region
 		for n in max_requests:
 			var request := HTTPRequest.new()
+			# The browser's fetch already undoes any compression the host
+			# applied (Cloudflare does); Godot would unzip it a second time.
+			request.accept_gzip = false
 			add_child(request)
 			_idle_requests.append(request)
 	_load_file("manifest.json", _on_manifest_loaded)
@@ -163,6 +183,9 @@ func _process(delta: float) -> void:
 		_update_cooldown = UPDATE_INTERVAL
 		_update_wanted_tiles()
 		_refresh_visibility()
+		var camera := get_viewport().get_camera_3d()
+		if camera:
+			_light_map.follow(WorldOrigin.to_world(camera.global_position))
 	while _in_flight < max_requests and not _queue.is_empty():
 		var entry: Array = _queue.pop_front()
 		var tile: Tile = entry[1]
@@ -171,6 +194,22 @@ func _process(delta: float) -> void:
 		elif tile.photo == Photo.WANTED:
 			_request_photo(tile)
 	_build_ready_tiles()
+
+
+func set_city_lights(amount: float) -> void:
+	city_lights = amount
+	var on := amount > 0.0
+	if _props == null or on == _props.lights_on:
+		return
+	# Only when they switch on or off: each near tile's glows show or hide.
+	_props.lights_on = on
+	_light_map.on = on
+	get_tree().call_group(CityProps.GLOW_GROUP, "set_visible", on)
+
+
+## The street light map's pools: one MultiMeshInstance2D per near tile with lamps.
+func light_pool_count() -> int:
+	return _light_map.get_child_count() if _light_map else 0
 
 
 func pending_count() -> int:

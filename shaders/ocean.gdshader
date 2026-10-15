@@ -3,7 +3,15 @@
 // broad patches of calmer and choppier water break up their regular stripes.
 // Toward the edge of the plane the ocean fades fully into the fog (which
 // matches the sky below the horizon), so the edge never shows.
+// With the time of day (shaders/night.gdshaderinc) it takes on the low sun's
+// warmth at dusk; at night it goes dark, the moon (the one light at night)
+// glitters on the waves, and the city's lights shine faintly off it at
+// grazing angles.
 shader_type spatial;
+
+global uniform float night;
+global uniform float dusk;
+global uniform float city_lights;
 
 uniform vec3 deep_color : source_color = vec3(0.04, 0.17, 0.25);
 uniform vec3 sky_tint : source_color = vec3(0.62, 0.76, 0.90);
@@ -17,6 +25,13 @@ uniform vec3 fog_color = vec3(0.45, 0.55, 0.69);
 uniform float fog_density = 0.00005;
 uniform float fade_start = 24000.0;
 uniform float fade_end = 38000.0;
+// The water's color and the sky in it, at dusk and at night; the city's
+// lights at grazing angles at night.
+uniform vec3 dusk_sky_tint : source_color = vec3(0.95, 0.66, 0.52);
+uniform vec3 night_deep_color : source_color = vec3(0.01, 0.03, 0.06);
+uniform vec3 night_sky_tint : source_color = vec3(0.10, 0.13, 0.24);
+uniform vec3 city_light_tint : source_color = vec3(1.0, 0.62, 0.32);
+uniform float city_light_strength = 0.25;
 
 varying vec2 world_xz;
 
@@ -59,8 +74,17 @@ void fragment() {
 	vec3 world_normal = normalize(vec3(-slope.x, 1.0, -slope.y));
 	NORMAL = normalize((VIEW_MATRIX * vec4(world_normal, 0.0)).xyz);
 	float fresnel = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 5.0);
-	ALBEDO = deep_color;
-	EMISSION = sky_tint * fresnel * 0.5;
+	vec3 deep = deep_color;
+	vec3 tint = sky_tint;
+	if (dusk > 0.0 || night > 0.0) {
+		deep = mix(deep_color, night_deep_color, night);
+		tint = mix(mix(sky_tint, dusk_sky_tint, dusk), night_sky_tint, night);
+	}
+	ALBEDO = deep;
+	EMISSION = tint * fresnel * 0.5;
+	if (city_lights > 0.0) {
+		EMISSION += city_light_tint * (city_light_strength * city_lights * fresnel * (0.6 + 0.4 * value_noise(world_xz * 0.05)));
+	}
 	ROUGHNESS = 0.06;
 	SPECULAR = 0.6;
 
