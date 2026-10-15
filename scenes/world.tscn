@@ -18,12 +18,10 @@
 [ext_resource type="Script" path="res://scripts/ui/game_hud.gd" id="16_game_hud"]
 [ext_resource type="Script" path="res://scripts/net/player_sync.gd" id="17_player_sync"]
 [ext_resource type="Script" path="res://scripts/ui/coop_panel.gd" id="18_coop_panel"]
+[ext_resource type="Shader" path="res://shaders/sky.gdshader" id="19_sky"]
 
-[sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_sky"]
-sky_top_color = Color(0.3, 0.5, 0.78, 1)
-sky_horizon_color = Color(0.7, 0.77, 0.85, 1)
-ground_bottom_color = Color(0.7, 0.77, 0.85, 1)
-ground_horizon_color = Color(0.7, 0.77, 0.85, 1)
+[sub_resource type="ShaderMaterial" id="SkyMaterial_sky"]
+shader = ExtResource("19_sky")
 
 [sub_resource type="Sky" id="Sky_sky"]
 sky_material = SubResource("SkyMaterial_sky")
@@ -32,13 +30,16 @@ sky_material = SubResource("SkyMaterial_sky")
 background_mode = 2
 sky = SubResource("Sky_sky")
 ambient_light_source = 2
-ambient_light_color = Color(0.6, 0.66, 0.75, 1)
-ambient_light_energy = 0.8
+ambient_light_color = Color(0.7, 0.72, 0.8, 1)
+ambient_light_energy = 0.6
 tonemap_mode = 4
+tonemap_agx_contrast = 1.05
 fog_enabled = true
-fog_light_color = Color(0.7, 0.77, 0.85, 1)
+fog_light_color = Color(0.76, 0.83, 0.9, 1)
 fog_density = 5e-05
-fog_sky_affect = 0.2
+fog_sky_affect = 0.0
+adjustment_enabled = true
+adjustment_saturation = 1.1
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_building"]
 shader = ExtResource("5_building")
@@ -67,15 +68,16 @@ players = NodePath("Players")
 hud = NodePath("HUD")
 coop_panel = NodePath("HUD/CoopPanel")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." node_paths=PackedStringArray("sun")]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." node_paths=PackedStringArray("sun", "city")]
 environment = SubResource("Environment_world")
 script = ExtResource("8_lighting")
 sun = NodePath("../Sun")
+city = NodePath("../City")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-rotation = Vector3(-0.72, 0.6, 0)
-light_color = Color(1, 0.96, 0.9, 1)
-light_energy = 1.3
+rotation = Vector3(-0.733, -0.96, 0)
+light_color = Color(1, 0.95, 0.87, 1)
+light_energy = 1.15
 shadow_enabled = true
 directional_shadow_max_distance = 1500.0
 

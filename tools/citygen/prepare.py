@@ -15,6 +15,7 @@ import numpy as np
 import shapely
 from shapely.geometry import shape
 
+import facades
 import terrain
 from common import (CACHE_DIR, FEET, facade_style, load_features, polygons_of, project)
 
@@ -131,7 +132,12 @@ def load_terrain() -> None:
         terrain.prepare(load("ground")["land"].bounds)
 
 
-PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": prepare_water}
+def prepare_facades() -> dict:
+    return facades.prepare(load("buildings"))
+
+
+PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": prepare_water,
+             "facades": prepare_facades}
 
 
 def load(name: str) -> dict:

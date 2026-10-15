@@ -1,8 +1,10 @@
 # Exports the web build to build/web and copies the city tiles next to it.
-# Usage: tools\build_web.ps1 [-Serve] [-Port 8060]
+# Usage: tools\build_web.ps1 [-Serve] [-Port 8060] [-Aerial]
 # -Serve also runs the co-op signaling server (tools/signaling, needs Node.js).
+# -Aerial also copies the aerial photos (1.2 GB; the game only shows them with
+# ?aerial=1, for comparison).
 # Set $env:GODOT to use a different Godot executable.
-param([switch]$Serve, [int]$Port = 8060)
+param([switch]$Serve, [int]$Port = 8060, [switch]$Aerial)
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path $PSScriptRoot -Parent
@@ -18,8 +20,9 @@ New-Item -ItemType Directory -Force $out | Out-Null
 & $godot --headless --path $root --export-release "Web" "build/web/index.html"
 if ($LASTEXITCODE -ne 0) { throw "Godot export failed (exit code $LASTEXITCODE)" }
 
-# Mirror the tiles (copies only what changed; the full city is several hundred MB).
-robocopy $tiles (Join-Path $out "tiles") /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+# Mirror the tiles (copies only what changed; the full city is about 1 GB).
+$skip = if ($Aerial) { @() } else { @("/XD", (Join-Path $tiles "nyc\aerial")) }
+robocopy $tiles (Join-Path $out "tiles") /MIR /NFL /NDL /NJH /NJS /NP @skip | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "Copying tiles failed (robocopy exit code $LASTEXITCODE)" }
 $global:LASTEXITCODE = 0
 Write-Host "Web build ready in $out"

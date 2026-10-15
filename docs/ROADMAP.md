@@ -15,7 +15,7 @@ versions come last (step 8).
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public hosting still to do |
-| 6 | Realism from open data | In progress (real shape and aerial photos done) |
+| 6 | Realism from open data | In progress (real shape and stylized facades done) |
 | 7 | Overpasses and missing bridges | Planned |
 | 8 | Mac and Windows versions | Planned (last) |
 
@@ -114,15 +114,23 @@ Chosen over Google's Photorealistic 3D Tiles, which can't run in our browser
 game without switching engines, cost money per player session, can't be
 cached, and have unclear terms for game use.
 
+**Art direction (decided 2026-10-15): cartoony but real.** Real shapes and
+real building types from the data, drawn in a stylized way (curated
+palettes, soft toon shading, bold simple details) rather than with photos.
+The aerial photos stay only as a comparison (`?aerial=1`).
+
 In order:
 
 1. **Real shape (done, below):** terrain, building shapes, curbs and
    medians. (Bridges and overpasses come in step 7.)
-2. **Real view from above (done, below):** the city's 2024 aerial photos
-   draped over streets, parks and roofs.
-3. **Real architecture:** styles chosen from city tax-lot data (PLUTO:
-   building class, year, floors, landmark status) with real photo textures
-   (CC0 libraries); storefronts, fire escapes, cornices, rooftop water towers.
+2. **Real view from above (done, below, now opt-in):** the city's 2024
+   aerial photos draped over streets, parks and roofs; replaced by the
+   stylized look by default.
+3. **Real architecture (facades done, below):** every building's type from
+   the city's tax lot data (PLUTO: building class, year, floors, retail
+   space, landmark status), drawn as stylized facades: real floor counts,
+   storefronts, fire escapes, cornices, blank side walls. Rooftop water
+   towers to follow.
 4. **Street life:** street trees (tree census), hydrants, bus shelters,
    LinkNYC kiosks, benches, bike parking, parking meters, subway entrances,
    street and traffic lights; parked cars and traffic.
@@ -184,7 +192,7 @@ In order:
   median deck height is 2.1 m).
 - Cost: full-detail tiles grew to 852 MB in total.
 
-**Aerial photos (done):**
+**Aerial photos (done; opt-in since the cartoony-but-real decision):**
 - The city's 2024 orthoimagery (NYC OTI with the NYS Statewide Digital
   Orthoimagery Program, 6-inch, flown March 2024). The city's metadata gives
   CC BY 4.0, though its map service points to the general NYC.gov terms;
@@ -207,6 +215,36 @@ In order:
 - `?aerial=0` turns photos off; `?aerial_shadow=` and `?aerial_brightness=`
   tune them. Photo textures take about 150-230 MB of GPU memory; decoding a
   close-up photo takes about 7 ms on the web, at most one per frame.
+
+**Stylized facades and ground (done):**
+- `tools/citygen/facades.py` joins every building to its tax lot (PLUTO,
+  via the footprints' `mappluto_bbl`; 99.97% match) and picks one of 16
+  New York types: house, rowhouse/brownstone, walk-up, prewar / postwar /
+  modern apartments, prewar / midcentury / modern offices, cast-iron loft
+  (also any prewar building in the SoHo cast-iron and Tribeca districts),
+  store, industrial, institution, hotel, other. Plus details: storefronts
+  where there's retail space, fire escapes on walk-ups built before 1930,
+  cornices before 1940, landmarks; and the floor height from the real floor
+  count.
+- Tiles carry this per face (uv2.x = type + 64 x flags, uv2.y = floor height
+  in dm + seed). `build_tiles.py` marks walls that face a street (fronts get
+  windows, shops and fire escapes; side and back walls are mostly blank
+  brick), and paved ground away from streets near homes as yards. Merged
+  far blocks take the type of most of their buildings.
+- The look (`shaders/building.gdshader`, `ground.gdshader`, `toon.gdshaderinc`,
+  `patterns.gdshaderinc`, `sky.gdshader`): stylized realism with curated
+  palettes per type, soft toon lighting (warm afternoon sun from the
+  south-west, cool sky shadows, warm bounce on shaded walls), bold simple
+  details (lintels, AC units, fire escapes, awnings, lit shop windows,
+  cornices, cast-iron arches, glass that reflects the sky), sidewalk flags,
+  asphalt patches, mottled grass, lawns and patios in yards, cartoon clouds.
+  Details fade to their average color in the distance.
+- `?sun_dir=az,el`, `?saturation=`, `?sh_<uniform>=<value>` and friends
+  tune the look from the URL (`scripts/world/lighting_overrides.gd`).
+- Still to do: rooftop water towers, street trees and other props, road
+  markings and crosswalks, roof parapets, colors for famous landmarks (the
+  Empire State Building picks a random brick today), night lighting.
+- Cost: full-detail tiles 938 MB in total (mid 225 MB); frame rate unchanged.
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
@@ -286,9 +324,10 @@ templates for both are already installed.
 
 - Rebuild city data: `tools/citygen/fetch_data.py` (NYC Open Data, the
   USGS elevation tiles and the 3-D building model), then `build_tiles.py`,
-  then `aerial.py` (downloads and lays out the aerial photos; it adds them
-  to the manifest, so run it after every `build_tiles.py`). Python venv in
-  `tools/citygen/.venv`, `requirements.txt` alongside.
+  then, only for the photo comparison, `aerial.py` (downloads and lays out
+  the aerial photos once; after later `build_tiles.py` runs, `aerial.py
+  mark` re-adds them to the manifest). Python venv in `tools/citygen/.venv`,
+  `requirements.txt` alongside.
   Prepared geometry is cached in `data/cache`; delete it after changing
   `prepare.py` or re-downloading.
 - Web build: `tools/build_web.ps1` (add `-Serve` to play at

@@ -1,8 +1,9 @@
 """Download the raw data used to build the city tiles (all five boroughs): NYC
-Open Data vector datasets, cached as GeoJSON in data/raw/; the USGS ground
-elevation model, cached as GeoTIFFs in data/raw/elevation/; and the city's
-3-D Building Model (CityGML, 0.9 GB zip) in data/raw/buildings3d/. Delete a
-file to re-download it.
+Open Data vector datasets, cached as GeoJSON in data/raw/; tables (the tax
+lot database PLUTO, and which tax lot each building is on) as JSON in
+data/raw/; the USGS ground elevation model, cached as GeoTIFFs in
+data/raw/elevation/; and the city's 3-D Building Model (CityGML, 0.9 GB zip)
+in data/raw/buildings3d/. Delete a file to re-download it.
 
 Usage: python fetch_data.py
 """
@@ -64,6 +65,21 @@ BUILDING_MODEL_URL = "https://s-media.nyc.gov/agencies/oti/DA_WISE_GML.zip"
 BUILDING_MODEL_PATH = RAW_DIR / "buildings3d" / "DA_WISE_GML.zip"
 
 
+# Tables without geometry, as JSON rows.
+TABLES = {
+    "pluto": (
+        "64uk-42ks",  # Primary Land Use Tax Lot Output (PLUTO): per tax lot
+        {"$select": "bbl,borough,bldgclass,numfloors,yearbuilt,landmark,histdist,"
+                    "retailarea,comarea,officearea,resarea,unitsres"},
+    ),
+    "building_lots": (
+        "5zhs-2jue",  # Building Footprints: each building's PLUTO tax lot
+        {"$select": "bin,mappluto_bbl"},
+    ),
+}
+TABLE_PAGE_SIZE = 50000
+
+
 def fetch_page(dataset_id: str, params: dict) -> dict:
     url = f"{API}/{dataset_id}.geojson?{urllib.parse.urlencode(params)}"
     request = urllib.request.Request(url, headers={"User-Agent": "new-game-citygen/1.0"})
@@ -102,6 +118,35 @@ def fetch_dataset(name: str, dataset_id: str, params: dict) -> None:
     tmp_path.replace(out_path)
 
 
+def fetch_table(name: str, dataset_id: str, params: dict) -> None:
+    out_path = RAW_DIR / f"{name}.json"
+    if out_path.exists():
+        print(f"{name}: cached at {out_path}")
+        return
+    rows = []
+    while True:
+        query = urllib.parse.urlencode({**params, "$order": ":id", "$limit": TABLE_PAGE_SIZE, "$offset": len(rows)})
+        request = urllib.request.Request(f"{API}/{dataset_id}.json?{query}", headers={"User-Agent": "new-game-citygen/1.0"})
+        for attempt in range(6):
+            try:
+                with urllib.request.urlopen(request, timeout=300) as response:
+                    page = json.load(response)
+                break
+            except Exception as error:
+                if attempt == 5:
+                    raise
+                print(f"  retrying after error: {error}")
+                time.sleep(10 * (attempt + 1))
+        rows.extend(page)
+        print(f"{name}: {len(rows)} rows", flush=True)
+        if len(page) < TABLE_PAGE_SIZE:
+            break
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_path = out_path.with_suffix(".tmp")
+    tmp_path.write_text(json.dumps(rows))
+    tmp_path.replace(out_path)
+
+
 def fetch_file(label: str, url: str, out_path: Path) -> None:
     if out_path.exists():
         print(f"{label}: cached at {out_path}")
@@ -126,6 +171,8 @@ def fetch_file(label: str, url: str, out_path: Path) -> None:
 def main() -> None:
     for name, (dataset_id, params) in DATASETS.items():
         fetch_dataset(name, dataset_id, params)
+    for name, (dataset_id, params) in TABLES.items():
+        fetch_table(name, dataset_id, params)
     for tile in ELEVATION_TILES:
         fetch_file(f"elevation {tile}", ELEVATION_URL.format(tile=tile), ELEVATION_DIR / f"USGS_13_{tile}.tif")
     fetch_file("3-D building model", BUILDING_MODEL_URL, BUILDING_MODEL_PATH)

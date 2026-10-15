@@ -62,6 +62,7 @@ GROUND_MARSH = 5
 STRUCTURE_CONCRETE = 6
 STRUCTURE_CABLE = 7
 STRUCTURE_STONE = 8
+GROUND_YARD = 9  # back yards, gardens and lawns around homes
 
 # Facade styles, stored in uv2.x and read by shaders/building.gdshader. Roof
 # surfaces add ROOF to their building's style.
@@ -192,8 +193,9 @@ class MeshBuilder:
     def add_walls(self, ring_coords, bottom_y, top_y, uv2, ground_y=0.0):
         """Vertical walls along a line; the outward side is right of travel.
 
-        bottom_y/top_y are scalars or per-point arrays. uv = (meters along the
-        line, meters above ground_y).
+        bottom_y/top_y are scalars or per-point arrays; uv2 is one pair, or one
+        per segment ((N - 1, 2)). uv = (meters along the line, meters above
+        ground_y).
         """
         pts = np.asarray(ring_coords)[:, :2]
         bottom = np.broadcast_to(np.asarray(bottom_y, np.float64), len(pts))
@@ -205,6 +207,9 @@ class MeshBuilder:
             return
         u_end = np.cumsum(length)
         u0, u1 = (u_end - length)[keep], u_end[keep]
+        uv2 = np.asarray(uv2, np.float64)
+        if uv2.ndim == 2:
+            uv2 = np.repeat(uv2[keep], 2, axis=0)[:, None, :]  # two triangles per segment
         a, b, seg, length = pts[:-1][keep], pts[1:][keep], seg[keep], length[keep]
         ab_y, bb_y = bottom[:-1][keep], bottom[1:][keep]
         at_y, bt_y = top[:-1][keep], top[1:][keep]

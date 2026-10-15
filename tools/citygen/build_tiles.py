@@ -36,10 +36,11 @@ from shapely.geometry import Polygon
 
 import bridges
 import buildings3d
+import facades
 import prepare
-from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT, GROUND_ROAD,
-                    GROUND_SAND, GROUND_SEAWALL, LANE_BREAK, ORIGIN_LAT, ORIGIN_LON, PROJECTION, ROOF,
-                    SEAWALL_BOTTOM_Y, STRUCTURE_CONCRETE, STYLE_BRICK, STYLE_POSTWAR, SURFACE_BUILDINGS, SURFACE_GROUND,
+from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_YARD, GROUND_PARK, GROUND_PAVEMENT, GROUND_ROAD,
+                    GROUND_SAND, GROUND_SEAWALL, LANE_BREAK, ORIGIN_LAT, ORIGIN_LON, PROJECTION,
+                    SEAWALL_BOTTOM_Y, STRUCTURE_CONCRETE, SURFACE_BUILDINGS, SURFACE_GROUND,
                     SURFACE_LANES, SURFACE_STRUCTURES, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile,
                     lines_of, polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangulate_planar)
 from terrain import Terrain
@@ -80,6 +81,14 @@ LANE_STEP = 10.0  # points along a lane at least this often, to follow the terra
 # Gaps between road pieces narrower than twice this (meters) are filled.
 ROAD_GAP = 0.25
 
+# Yards: paved ground further than SIDEWALK_WIDTH from any street and within
+# YARD_REACH of a home is a yard (back yards, gardens, lawns around housing
+# towers). Lots, plazas, rail yards and airports away from homes stay paved.
+SIDEWALK_WIDTH = 6.0
+YARD_REACH = 25.0
+HOMES = (facades.HOUSE, facades.ROWHOUSE, facades.WALKUP, facades.PREWAR_APARTMENT,
+         facades.POSTWAR_APARTMENT, facades.MODERN_RESIDENTIAL)
+
 # Raised lakes: the bed sits this far below the surface, and their shore walls
 # reach a little below the bed.
 LAKE_DEPTH = 2.5
@@ -94,6 +103,12 @@ SHORE_PROBE = 4.0
 SHAPE_MIN_OVERLAP = 0.6
 SHAPE_HEIGHT_TOLERANCE = (6.0, 0.25)  # meters, fraction of the height
 
+# A wall faces a street (gets a storefront, fire escapes, more windows) if a
+# road is within FRONT_REACH of a point this far in front of it; two points,
+# so setback walls above a lower roof count too.
+FRONT_PROBES = (6.0, 15.0)
+FRONT_REACH = 4.0
+
 _W = {}  # per-worker data, filled by _init_worker
 
 
@@ -106,6 +121,7 @@ def main() -> None:
     buildings = prepare.load("buildings")
     ground = prepare.load("ground")
     prepare.load("water")
+    prepare.load("facades")
     prepare.load_terrain()
     buildings3d.load()
     print(f"{len(buildings['geoms']):,} buildings", flush=True)
@@ -130,9 +146,10 @@ def main() -> None:
     del buildings, ground, land_parts, land_tree
     print(f"{len(tasks):,} tiles to build with {args.workers} workers", flush=True)
 
-    if OUT_DIR.exists():
-        shutil.rmtree(OUT_DIR)
+    # Only our own folders: the aerial photos (aerial.py) live alongside.
     for level in LEVELS:
+        if (OUT_DIR / level).exists():
+            shutil.rmtree(OUT_DIR / level)
         (OUT_DIR / level).mkdir(parents=True)
 
     entries = defaultdict(list)
@@ -159,6 +176,8 @@ def main() -> None:
     manifest = {
         "version": FORMAT_VERSION,
         "region": REGION,
+        # Building faces carry archetype, flags and floor height (facades.py).
+        "facades": 1,
         "origin": {"lat": ORIGIN_LAT, "lon": ORIGIN_LON},
         "projection": PROJECTION,
         "bounds": {"min_x": min_e, "max_x": max_e, "min_z": -max_n, "max_z": -min_n},
@@ -210,6 +229,8 @@ def _init_worker() -> None:
     _W["creeks"] = {level: _W["terrain"].lattice(settings["ground_cell"], raw=True) for level, settings in LEVELS.items()}
     _W["water"] = prepare.load("water")
     _W["shapes"] = buildings3d.load()
+    _W["facades"] = prepare.load("facades")
+    _W["building_index_tree"] = shapely.STRtree(buildings["geoms"])
     _W["water_tree"] = shapely.STRtree(_W["water"]["geoms"])
 
 
@@ -222,6 +243,7 @@ def _build_tile(task):
 
     building_mesh, ground_mesh, structure_mesh, water_mesh = MeshBuilder(), MeshBuilder(), MeshBuilder(), MeshBuilder()
     _W["level"] = level
+    _W["streets"] = _streets_near(bounds)
     indices = _W["groups"][level].get((i, j), np.array([], dtype=np.int64))
     if settings.get("blocks"):
         _add_blocks(building_mesh, indices, settings)
@@ -261,15 +283,53 @@ def _build_tile(task):
     return level, {"i": i, "j": j, "bytes": len(packed), "raw_bytes": len(raw), **stats}
 
 
-def _add_prism(builder: MeshBuilder, poly, height: float, style: int, seed: float) -> None:
+def _streets_near(bounds):
+    """The road surface around a tile, for telling which walls face a street."""
+    area = shapely.buffer(bounds, max(FRONT_PROBES) + FRONT_REACH + 10.0, join_style="mitre")
+    nearby = _W["g"]["roads"][_W["road_tree"].query(area)]
+    streets = shapely.union_all(nearby) if len(nearby) else Polygon()
+    shapely.prepare(streets)
+    return streets
+
+
+def _faces_street(middles: np.ndarray, outward: np.ndarray) -> np.ndarray:
+    """For walls with these (N, 2) midpoints and outward unit normals (east/north),
+    whether each faces a street."""
+    streets = _W["streets"]
+    if streets.is_empty or len(middles) == 0:
+        return np.zeros(len(middles), dtype=bool)
+    near = np.zeros(len(middles), dtype=bool)
+    for reach in FRONT_PROBES:
+        probes = middles + outward * reach
+        near |= shapely.dwithin(streets, shapely.points(probes), FRONT_REACH)
+    return near
+
+
+def _facade(index: int) -> tuple[int, int, int, float]:
+    """A building's (archetype, flags, floor height in dm, seed)."""
+    f, b = _W["facades"], _W["b"]
+    return int(f["archetype"][index]), int(f["flags"][index]), int(f["floor_dm"][index]), float(b["seed"][index])
+
+
+def _add_prism(builder: MeshBuilder, poly, height: float, facade: tuple, fronts: bool = True) -> None:
     """A building standing on its lowest corner (heights are measured from
-    there); uphill, its walls run into the ground."""
+    there); uphill, its walls run into the ground. Walls facing a street are
+    marked FRONT (unless `fronts` is off, for merged blocks)."""
+    archetype, flags, floor_dm, seed = facade
     poly = shapely.orient_polygons(poly)
     ground = _footprint_ground(poly)
     top = ground + height
     for ring in (poly.exterior, *poly.interiors):
-        builder.add_walls(ring.coords, ground - 1.0, top, (style, seed), ground_y=ground)
-    builder.add_flat([poly], top, (style + ROOF, seed))
+        coords = np.asarray(ring.coords)[:, :2]
+        uv2 = np.tile(facades.encode(archetype, flags, floor_dm, seed), (len(coords) - 1, 1))
+        if fronts and len(coords) > 1:
+            seg = coords[1:] - coords[:-1]
+            length = np.maximum(np.hypot(seg[:, 0], seg[:, 1]), 1e-9)
+            outward = np.column_stack([seg[:, 1], -seg[:, 0]]) / length[:, None]  # right of travel
+            front = _faces_street((coords[1:] + coords[:-1]) * 0.5, outward)
+            uv2[front, 0] += facades.FLAG_SCALE * facades.FRONT
+        builder.add_walls(coords, ground - 1.0, top, uv2, ground_y=ground)
+    builder.add_flat([poly], top, facades.encode(archetype, flags | facades.ROOF, floor_dm, seed))
 
 
 def _footprint_ground(geom) -> float:
@@ -283,14 +343,13 @@ def _add_building(builder: MeshBuilder, index: int, settings: dict) -> None:
     height = float(b["height"][index])
     shape = _W["shapes"].get(int(b["bin"][index])) if height >= settings["shapes_from"] else None
     if shape is not None and _shape_matches(shape, b["geoms"][index], height):
-        _add_shape(builder, shape, _footprint_ground(b["geoms"][index]), int(b["style"][index]),
-                   float(b["seed"][index]))
+        _add_shape(builder, shape, _footprint_ground(b["geoms"][index]), _facade(index))
         return
     geom = shapely.simplify(b["geoms"][index], settings["building_tolerance"], preserve_topology=True)
     for poly in polygons_of(geom, settings["min_area"]):
         if not settings["keep_holes"]:
             poly = Polygon(poly.exterior)
-        _add_prism(builder, poly, float(b["height"][index]), int(b["style"][index]), float(b["seed"][index]))
+        _add_prism(builder, poly, float(b["height"][index]), _facade(index))
 
 
 def _shape_matches(shape, footprint, height: float) -> bool:
@@ -306,10 +365,11 @@ def _shape_matches(shape, footprint, height: float) -> bool:
     return abs(model_height - height) <= max(meters, fraction * height)
 
 
-def _add_shape(builder: MeshBuilder, shape, ground: float, style: int, seed: float) -> None:
+def _add_shape(builder: MeshBuilder, shape, ground: float, facade: tuple) -> None:
     """A building from the 3-D model, moved to stand on our ground at `ground`.
     Walls get facade coordinates (meters along the wall, meters above the
-    ground); roofs are marked as roofs."""
+    ground) and are marked FRONT if they face a street; roofs are marked ROOF."""
+    archetype, flags, floor_dm, seed = facade
     vertices, offsets, ring_polygon, kinds, model_ground = shape
     points = vertices.astype(np.float64)
     points[:, 2] += ground - float(model_ground)
@@ -327,13 +387,18 @@ def _add_shape(builder: MeshBuilder, shape, ground: float, style: int, seed: flo
             if normal[2] < 0.0:
                 normal = -normal
             uv = np.stack([tris[..., 0], -tris[..., 1]], axis=-1)
-            uv2 = (style + ROOF, seed)
+            uv2 = facades.encode(archetype, flags | facades.ROOF, floor_dm, seed)
         else:
             along = np.array([-normal[1], normal[0]])
             length = np.linalg.norm(along)
             along = along / length if length > 1e-6 else np.array([1.0, 0.0])
             uv = np.stack([tris[..., 0] * along[0] + tris[..., 1] * along[1], tris[..., 2] - ground], axis=-1)
-            uv2 = (style, seed)
+            wall_flags = flags
+            if length > 1e-6:
+                middle = rings[0][:, :2].mean(axis=0)
+                if _faces_street(middle[None], (normal[:2] / length)[None])[0]:
+                    wall_flags |= facades.FRONT
+            uv2 = facades.encode(archetype, wall_flags, floor_dm, seed)
         pos = np.stack([tris[..., 0], tris[..., 2], -tris[..., 1]], axis=-1)
         builder.add(pos, uv, uv2, (normal[0], normal[2], -normal[1]))
 
@@ -348,10 +413,12 @@ def _add_blocks(builder: MeshBuilder, indices: np.ndarray, settings: dict) -> No
     for index in indices[heights >= blocks["individual_from"]]:
         _add_building(builder, index, settings)
     gap = blocks["merge_gap"]
+    archetypes = _W["facades"]["archetype"]
     for low, high, block_height in blocks["bands"]:
         band = indices[(heights >= low) & (heights < high)]
         if len(band) == 0:
             continue
+        band_tree = shapely.STRtree(b["geoms"][band])
         grown = shapely.buffer(b["geoms"][band], gap, join_style="mitre")
         try:
             merged = shapely.union_all(grown)
@@ -359,11 +426,19 @@ def _add_blocks(builder: MeshBuilder, indices: np.ndarray, settings: dict) -> No
             merged = shapely.union_all(shapely.set_precision(grown, 0.01))  # see _add_ground
         merged = shapely.buffer(merged, -gap, join_style="mitre")
         merged = shapely.simplify(merged, blocks["tolerance"], preserve_topology=True)
-        style = STYLE_BRICK if block_height < 12.0 else STYLE_POSTWAR
         for poly in polygons_of(merged, blocks["min_area"]):
             center = poly.centroid
             seed = float((hash((round(center.x), round(center.y))) % 1000) / 1000.0)
-            _add_prism(builder, Polygon(poly.exterior), block_height, style, seed)
+            # The block looks like most of the buildings in it (by area).
+            members = band[band_tree.query(poly, predicate="intersects")]
+            if len(members):
+                votes = np.bincount(archetypes[members], weights=shapely.area(b["geoms"][members]), minlength=16)
+                archetype = int(np.argmax(votes))
+            else:
+                archetype = facades.UNKNOWN
+            floor_dm = int(round(np.clip(block_height / max(1, round(block_height / facades.DEFAULT_FLOOR)),
+                                         facades.MIN_FLOOR, facades.MAX_FLOOR) * 10))
+            _add_prism(builder, Polygon(poly.exterior), block_height, (archetype, 0, floor_dm, seed), fronts=False)
 
 
 def _add_ground(builder: MeshBuilder, bounds, settings: dict) -> None:
@@ -451,7 +526,8 @@ def _add_raised_water(water: MeshBuilder, ground: MeshBuilder, bounds, settings:
 
 
 def _ground_layers(bounds, settings: dict, grid: float) -> list:
-    """The tile's land split into [(kind, geometry)]: pavement, roads, parks, sand, marsh.
+    """The tile's land split into [(kind, geometry)]: pavement, roads, parks, sand,
+    marsh and yards (only where streets are drawn, so yards can tell sidewalks apart).
 
     With `grid`, inputs are snapped to that precision first.
     """
@@ -485,8 +561,24 @@ def _ground_layers(bounds, settings: dict, grid: float) -> list:
     pavement_t = land_t
     for other in (roads_t, parks_t, sand_t, marsh_t):
         pavement_t = shapely.difference(pavement_t, other)
+    yards_t = _yards(bounds, pavement_t, roads_t) if settings["roads"] else Polygon()
+    pavement_t = shapely.difference(pavement_t, yards_t)
     return [(GROUND_PAVEMENT, pavement_t), (GROUND_ROAD, roads_t), (GROUND_PARK, parks_t),
-            (GROUND_SAND, sand_t), (GROUND_MARSH, marsh_t)]
+            (GROUND_SAND, sand_t), (GROUND_MARSH, marsh_t), (GROUND_YARD, yards_t)]
+
+
+def _yards(bounds, pavement, roads):
+    """The part of the paved ground that's yards (see YARD_REACH)."""
+    if pavement.is_empty:
+        return Polygon()
+    near = _W["building_index_tree"].query(shapely.buffer(bounds, YARD_REACH, join_style="mitre"))
+    homes = near[np.isin(_W["facades"]["archetype"][near], HOMES)]
+    if len(homes) == 0:
+        return Polygon()
+    zone = shapely.buffer(shapely.union_all(_W["b"]["geoms"][homes]), YARD_REACH, quad_segs=2)
+    if not roads.is_empty:
+        zone = shapely.difference(zone, shapely.buffer(roads, SIDEWALK_WIDTH, quad_segs=2))
+    return _polygonal(shapely.intersection(pavement, zone))
 
 
 def _polygonal(geom):

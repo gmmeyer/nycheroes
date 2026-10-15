@@ -19,7 +19,8 @@ Pixel sizes nest (0.5, 2 and 16 m), so each coarser level is made by
 averaging the finer level's pixels exactly (the ground only exists on land,
 and every bit of land has a full-detail tile).
 
-Usage: python aerial.py [fetch|build|all] [--area i0,j0,i1,j1] (lod0 tiles)
+Usage: python aerial.py [fetch|build|mark|all] [--area i0,j0,i1,j1] (lod0 tiles)
+("mark" only re-marks existing images after build_tiles.py rewrites the manifest.)
 """
 
 import argparse
@@ -52,7 +53,7 @@ WEB_TILE = 256
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("step", nargs="?", default="all", choices=["fetch", "build", "all"])
+    parser.add_argument("step", nargs="?", default="all", choices=["fetch", "build", "mark", "all"])
     parser.add_argument("--area", help="only lod0 tiles i0,j0,i1,j1 (inclusive), for trying things out")
     parser.add_argument("--workers", type=int, default=14)
     args = parser.parse_args()
@@ -61,6 +62,8 @@ def main() -> None:
         fetch(area)
     if args.step in ("build", "all"):
         build(area, args.workers)
+    if args.step == "mark":
+        mark()
 
 
 def _manifest() -> dict:
@@ -185,6 +188,20 @@ def build(area=None, workers: int = 14) -> None:
 def _pixels(size: float, level: str) -> int:
     pixel, margin = LEVELS[level]
     return int(round((size + 2 * margin) / pixel))
+
+
+def mark() -> None:
+    """Marks the tiles that already have images in a freshly built manifest
+    (build_tiles.py writes it without them), without rebuilding any."""
+    manifest = _manifest()
+    for level in manifest["levels"]:
+        level["aerial_size"] = _pixels(level["tile_size"], level["name"])
+        level["aerial_margin"] = LEVELS[level["name"]][1]
+        for tile in level["tiles"]:
+            if (OUT_DIR / level["name"] / f"{tile['i']}_{tile['j']}.jpg").exists():
+                tile["aerial"] = 1
+    (TILES_DIR / REGION / "manifest.json").write_text(json.dumps(manifest, separators=(",", ":")))
+    print("aerial images marked in the manifest", flush=True)
 
 
 def _build_lod0(key, size: float):

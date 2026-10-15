@@ -11,9 +11,11 @@ extends Node3D
 ## from lod0 tiles whether or not they're drawn.
 ## Web builds fetch tiles over HTTP from tiles/<region>/ next to index.html
 ## (tools/build_web.ps1 copies them there).
-## Tiles marked "aerial" in the manifest also get an aerial photo draped over
-## their ground and roofs (aerial/<level>/<i>_<j>.jpg), fetched once the tile is
-## built. ?aerial=0 on the page URL (--aerial=0 on desktop) turns photos off;
+## Buildings and ground are drawn by their own shaders (stylized facades from
+## the tiles' per-building data). For comparison, ?aerial=1 on the page URL
+## (--aerial=1 on desktop) drapes the city's aerial photos over the ground and
+## roofs of tiles marked "aerial" in the manifest (aerial/<level>/<i>_<j>.jpg,
+## fetched once the tile is built; web builds need tools/build_web.ps1 -Aerial);
 ## ?aerial_shadow=0.75&aerial_brightness=0.7 tune their look (see
 ## shaders/aerial.gdshaderinc).
 
@@ -53,6 +55,8 @@ const PHOTO_OPTIONS := {"aerial_shadow": "aerial_shadow_softening", "aerial_brig
 @export var max_requests := 6
 ## Time per frame spent turning downloaded tiles into meshes.
 @export var build_budget_msec := 6.0
+## Buildings in full-detail tiles; coarser tiles get a copy with merged_blocks
+## set, since their merged blocks have no street fronts marked.
 @export var building_material: Material
 @export var ground_material: Material
 @export var water_material: Material
@@ -73,7 +77,8 @@ var _levels: Array[Dictionary] = []  # {name, size, tiles: Array[Tile], by_coord
 var _queue: Array[Array] = []  # [priority, tile, is_photo], sorted
 var _ready_to_build: Array[Array] = []  # [tile, bytes]
 var _ready_photos: Array[Array] = []  # [tile, node instance id, bytes]
-var _photos_enabled := true
+var _photos_enabled := false
+var _merged_building_material: ShaderMaterial
 var _in_flight := 0
 var _base_url := ""  # web only
 var _idle_requests: Array[HTTPRequest] = []
@@ -107,11 +112,14 @@ class Tile:
 func _ready() -> void:
 	add_to_group("floating")
 	_start_msec = Time.get_ticks_msec()
-	_photos_enabled = LaunchOptions.get_string("aerial") != "0"
+	_photos_enabled = LaunchOptions.get_string("aerial") == "1"
 	for option: String in PHOTO_OPTIONS:
 		if LaunchOptions.has(option):
 			for material: ShaderMaterial in [ground_material, building_material]:
 				material.set_shader_parameter(PHOTO_OPTIONS[option], LaunchOptions.get_string(option).to_float())
+	if building_material is ShaderMaterial:
+		_merged_building_material = building_material.duplicate()
+		_merged_building_material.set_shader_parameter("merged_blocks", true)
 	if OS.has_feature("web"):
 		var page_dir := str(JavaScriptBridge.eval("location.href.split(/[?#]/)[0].replace(/[^/]*$/, '')"))
 		_base_url = page_dir + "tiles/%s/" % region
@@ -374,7 +382,7 @@ func _build_tile_node(tile: Tile, bytes: PackedByteArray) -> Node3D:
 		var is_buildings: bool = surface.kind == CityTileDecoder.SURFACE_BUILDINGS
 		var instance := MeshInstance3D.new()
 		instance.mesh = surface.mesh
-		instance.material_override = building_material if is_buildings else ground_material
+		instance.material_override = _building_material(tile.level) if is_buildings else ground_material
 		var casts_shadow: bool = near and surface.kind != CityTileDecoder.SURFACE_GROUND
 		if not casts_shadow:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -407,8 +415,9 @@ func _apply_photo(item: Array) -> bool:
 	var texture := ImageTexture.create_from_image(image)
 	# The tile gets its own copies of the shared materials, holding its photo;
 	# they (and the photo) are freed with the tile's node.
+	var shared_buildings := _building_material(tile.level)
 	var ground := ground_material.duplicate() as ShaderMaterial
-	var buildings := building_material.duplicate() as ShaderMaterial
+	var buildings := shared_buildings.duplicate() as ShaderMaterial
 	var margin: float = _levels[tile.level]["aerial_margin"]
 	for material: ShaderMaterial in [ground, buildings]:
 		material.set_shader_parameter("aerial", texture)
@@ -422,12 +431,18 @@ func _apply_photo(item: Array) -> bool:
 		# Water keeps the shared water material.
 		if instance.material_override == ground_material:
 			instance.material_override = ground
-		elif instance.material_override == building_material:
+		elif instance.material_override == shared_buildings:
 			instance.material_override = buildings
 	tile.photo = Photo.SHOWN
 	photo_count += 1
 	last_photo_msec = (Time.get_ticks_usec() - start) / 1000.0
 	return true
+
+
+func _building_material(level: int) -> Material:
+	if level == LEVEL_NEAR or _merged_building_material == null:
+		return building_material
+	return _merged_building_material
 
 
 ## A raised lake's surface, which heroes can find (but not stand on) up close.
