@@ -27,7 +27,7 @@ OVERVIEW_LEVEL = 2  # the source's overviews are 2x, 4x, 8x, ...: the 8x one
 GRID_PATH = CACHE_DIR / "landcover.npy"
 SPACING = 2.0  # meters
 BLOCK = 2000  # cells per side, sampled at a time
-CANOPY_MAP_PIXEL = 8.0  # meters, for write_canopy_map()
+CANOPY_MAP_PIXEL = 16.0  # meters, for write_canopy_map() (phones decode it, so not finer)
 
 NO_DATA = 0
 CANOPY = 1

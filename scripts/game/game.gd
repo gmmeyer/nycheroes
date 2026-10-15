@@ -10,6 +10,10 @@ extends Node3D
 ## (invite links use it). Players who join start next to the host's hero.
 ## T steps the time of day on to the next of dawn, day, dusk and night
 ## (TimeOfDay; ?time=HH:MM and ?daylength=MINUTES set the clock).
+##
+## Phones and tablets: touch screens get on-screen controls (TouchControls;
+## ?touch=1 or ?touch=0 forces them on or off, see Device), and a graphics
+## quality preset is picked for the device (Quality; ?quality=low|medium|high).
 
 ## Times Square, facing north up Broadway (world meters; dropped onto the ground).
 const DEFAULT_SPAWN := Vector3(0.0, 15.0, 0.0)
@@ -31,6 +35,12 @@ const DROP_TRIES := 30
 var _free_camera_on := false
 var _drop_to_ground := false
 var _drop_tries := 0
+var _touch_controls: TouchControls
+
+
+func _enter_tree() -> void:
+	# Before the city and crowd start and read their launch options.
+	Quality.set_launch_defaults()
 
 
 func _ready() -> void:
@@ -44,6 +54,12 @@ func _ready() -> void:
 	players.placed_by_host.connect(place_hero)
 	coop_panel.toggled.connect(func(_open: bool) -> void: _update_controls())
 	Net.state_changed.connect(_on_net_state_changed)
+	var quality := Quality.new()
+	quality.name = "Quality"
+	add_child(quality)
+	quality.apply(time_of_day.sun, get_world_3d().environment, city, get_node("Crowd") as CrowdManager, encounters)
+	if Device.wants_touch_controls() and not LaunchOptions.has("demo"):
+		_add_touch_controls(false)
 	if LaunchOptions.has("demo"):
 		_start_demo()
 	elif LaunchOptions.has("host"):
@@ -81,6 +97,9 @@ func place_hero(world_position: Vector3, facing: float, drop := false) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and _touch_controls == null and Device.touch_allowed() \
+			and not LaunchOptions.has("demo"):
+		_add_touch_controls(true)  # a touch screen the browser didn't tell us about
 	if event.is_action_pressed("coop_menu") and not coop_panel.is_typing():
 		coop_panel.toggle()
 		get_viewport().set_input_as_handled()
@@ -132,3 +151,28 @@ func _set_free_camera(on: bool) -> void:
 
 func _update_controls() -> void:
 	player_input.enabled = not _free_camera_on and not coop_panel.visible
+
+
+## On-screen controls for touch screens. The UI is then measured in CSS
+## pixels, which browsers keep about the same physical size on every phone.
+func _add_touch_controls(started_by_touch: bool) -> void:
+	get_window().content_scale_factor = Device.touch_ui_scale()
+	_touch_controls = TouchControls.new()
+	_touch_controls.name = "TouchControls"
+	_touch_controls.hero = hero
+	_touch_controls.camera_rig = hero_camera
+	_touch_controls.coop_panel = coop_panel
+	_touch_controls.started_by_touch = started_by_touch
+	hud.add_child(_touch_controls)
+	hud.move_child(_touch_controls, coop_panel.get_index())  # under the co-op menu
+	var game_hud := hud.get_node_or_null("GameHud") as GameHud
+	if game_hud:
+		game_hud.touch_controls = _touch_controls
+	coop_panel.use_touch_layout()
+	var debug_label := hud.get_node_or_null("DebugLabel") as Label
+	if debug_label:
+		# Only with ?stats, small, under the health bar.
+		debug_label.visible = LaunchOptions.has("stats")
+		debug_label.add_theme_font_size_override("font_size", 10)
+		debug_label.position = Vector2(_touch_controls.safe_insets.x + 20.0, _touch_controls.safe_insets.y + 56.0)
+	Device.set_page_touch_mode(true)

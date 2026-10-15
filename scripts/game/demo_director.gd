@@ -60,12 +60,14 @@ func _ready() -> void:
 			_flight_shot("Houses with real roofs in Queens", 6.0, [11700, 60, 5050, -30, -22], [11850, 60, 4800, -30, -22]),
 			_flight_shot("Rooftop water towers", 6.0, [-850, 85, 2350, -45, -30], [-600, 85, 2150, -45, -30]),
 			_flight_shot("Crosswalks, street lights, street trees", 6.0, [420, 2.5, -220, -29, -3], [452, 2.5, -278, -29, -3], true),
+			_flight_shot("Times Square", 6.0, [-55, 3, 120, -20, 4], [-25, 3, 40, -20, 4], true),
 			_flight_shot("Sunset", 8.0, [2805, 120, 798, 95, -4], [2650, 110, 760, 88, -3], false, [18.6, 20.1]),
 			_flight_shot("Night falls: lit windows, floodlit towers", 7.0,
 					[0, 400, 1600, 0, -32], [0, 330, 1300, 0, -38], false, [22.5, 22.5]),
 			_flight_shot("Bridges strung with lights", 7.0,
 					[-1462, 45, 6233, -47, 0], [-1300, 50, 6080, -47, 0], false, [22.5, 22.5]),
-			_flight_shot("545,000 street lights", 6.0, [420, 2.5, -220, -29, -3], [452, 2.5, -278, -29, -3], true, [22.5, 22.5]),
+			_flight_shot("581,000 street lights", 6.0, [420, 2.5, -220, -29, -3], [452, 2.5, -278, -29, -3], true, [22.5, 22.5]),
+			_flight_shot("Times Square at night", 7.0, [-55, 3, 120, -20, 4], [-25, 3, 40, -20, 4], true, [22.5, 22.5]),
 			_shot("", 0.5),
 		]
 	elif LaunchOptions.get_string("demo") == "fight":

@@ -16,7 +16,7 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
 | 6 | Realism from open data | In progress (real shape, stylized facades, trees, water towers, street paint, roofs and night done) |
-| 7 | Phones and tablets | In progress |
+| 7 | Phones and tablets | Done in emulation; real phones to check |
 | 8 | Overpasses and missing bridges | Planned |
 | 9 | Mac and Windows versions | Planned (last) |
 
@@ -285,7 +285,7 @@ In order:
   shader, with wind sway), one for its water towers (140 triangles: staved
   wood or steel tank, hoops, roof, legs), and cheap 30-triangle stand-ins
   for tree shadows. Trees fade out by about 850 m; beyond that, a
-  citywide canopy map (8 m pixels, 3.9 MB, from the land cover map) darkens
+  citywide canopy map (16 m pixels, 1.8 MB, from the land cover map) darkens
   wooded parks and yards in the ground shader, so woods still read from the
   air. Paint has its own shader (`shaders/markings.gdshader`): dashes,
   double lines and crosswalk bars drawn from the strip coordinates,
@@ -295,7 +295,7 @@ In order:
   as landmarks) get limestone, granite or terracotta instead of brick: the
   Empire State, Chrysler and Woolworth buildings read as stone.
 - Cost: full-detail tiles 1,088 MB in total (+150 MB: trees and water
-  towers 74, paint 76), plus the 3.9 MB canopy map; 3.4 million trees and
+  towers 74, paint 76), plus the 1.8 MB canopy map; 3.4 million trees and
   9,637 water towers citywide. About +0.3-0.8 ms per frame (draw calls in
   midtown 190 to 290); every view still at the 145 FPS cap.
 - Still to do: other street furniture.
@@ -327,6 +327,11 @@ In order:
   the sidewalk, arms over the street; historic post-tops in and beside
   parks. Drawn instanced (52- and 78-triangle lamps), with glowing lenses
   and halos that turn into dots in the distance.
+- More lamps (581,000 in all): cobra-heads every 30 m along both edges of
+  every bridge deck, at the deck's height (`bridges.py`), and post-tops on
+  park paths, wherever the land cover map shows paving in a park, at
+  least 22 m apart (paths under tree canopy are hidden in that map, so
+  open paths and plazas get most of them).
 - Light pools: each near tile adds its lamps to a 2 km street light map
   (a SubViewport, 2 m pixels, redrawn only when tiles change or the camera
   moves 256 m) that the ground, paint, wall feet, tree crowns and posts
@@ -343,6 +348,22 @@ In order:
 - `?demo=city` flies the camera over the city, day into night, for videos
   (with "[demo] pause"/"resume" around loading, so recordings skip it).
 
+**Times Square's signs (done):**
+- Street walls in the sign district (42nd to about 50th Street around
+  Broadway and Seventh Avenue, a box in `tools/citygen/props.py`) carry a
+  new face flag, SIGNS (256).
+- `building.gdshader` covers them, from above the shopfronts up to 40-60 m,
+  with invented, animated billboards: bays of big screens, tall banners,
+  dark steel frames, neon outlines and chasing bulbs, a scrolling news
+  ticker; slides (color gradients, typed-out text, sunbursts, waves, giant
+  glowing words, cartoon cans) change every 6-12 s. No real brands. Lit by
+  day, blazing at night; far away a wall settles into one bright color.
+  Only SIGNS walls pay for it.
+- At night the streets and sidewalks there glow in slowly drifting pink,
+  cyan and amber (`ground.gdshader`, whose box must match `props.py`).
+- Frame rate unchanged (within noise; the screens fill about 40% of the
+  frame at street level).
+
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
 for background decoding, and quality presets for weaker laptops.
@@ -354,25 +375,60 @@ for background decoding, and quality presets for weaker laptops.
 - Budget for landmark models (buy/commission vs. free and self-made).
 - How large the browser download may grow.
 
-## 7. Phones and tablets (in progress)
+## 7. Phones and tablets (done in emulation; real phones to check)
 
 Added 2026-10-15 at the user's request: the game should be playable on a
 phone, in the phone's browser, at https://nycheroes.party.
 
-- **Touch controls:** a virtual stick to move, dragging anywhere else to
-  turn the camera, and buttons for jump (hold for a super jump), punch
-  (in the air: dive attack), web swing, fly (with up and down), super speed
-  and the co-op menu. They show up on touch screens only; a keyboard and
-  mouse keep working as before.
-- **The page:** landscape (asking to turn the phone otherwise), fullscreen
-  where the browser allows it, no page scrolling, pinch zoom or text
-  selection getting in the way of the controls.
-- **Performance:** a phone quality preset picked automatically (lower
-  render resolution, shorter view distances, fewer shadows, smaller
-  crowds), within phone browsers' memory limits (iOS Safari is the
-  tightest).
-- **Testing:** Chrome's phone emulation (touch events, a phone-sized
-  screen) in the automated checks, and real phones on the public site.
+- **Touch controls** (`scripts/ui/touch_controls.gd`, drawn in code): a
+  floating stick on the left 42% of the screen (it follows the thumb past
+  its rim; walking speed follows how far it's pushed), dragging anywhere
+  else turns the camera, and buttons on the right: PUNCH (DIVE in the air),
+  JUMP (hold for a super jump; UP while flying), DOWN (flying), WEB (hold),
+  FLY, SPEED (a toggle, off 0.8 s after the stick is let go), CO-OP and
+  fullscreen. Holding WEB or JUMP and sliding also turns the camera. They
+  press the same input actions as the keyboard, so the hero is unchanged.
+  The UI is measured in CSS pixels, so it's the same physical size on
+  every phone.
+- **Detection** (`scripts/util/device.gd`): on when the browser's main
+  pointer is a finger, or at the first real touch; `?touch=1` / `?touch=0`
+  force it. Off on desktop and in headless tests.
+- **Co-op on a phone:** a Close button, 44 px controls, and a real HTML
+  text box over the room-code field so the phone's keyboard comes up
+  (`scripts/ui/web_text_field.gd`; Godot's experimental virtual keyboard
+  doesn't work on iOS).
+- **The page** (the export's head include): covers the notch, no zoom,
+  scrolling, pull-to-refresh, selection or long-press menu; a "turn your
+  phone sideways" overlay in portrait; fullscreen and landscape lock on the
+  first tap where browsers allow it (iPhones can't; the overlay suggests
+  Add to Home Screen, which runs without browser bars).
+- **Quality presets** (`scripts/util/quality.gd`; `?quality=low|medium|high`,
+  else phones low, tablets medium, computers high):
+
+  | | low | medium | high |
+  |---|---|---|---|
+  | 3-D resolution | 540 lines | 720 lines | full |
+  | MSAA | off | 2x | 4x |
+  | Sun shadows | off | 2 splits, 300 m | 4 splits, 1500 m |
+  | Tree shadows | off | off | on |
+  | Load distances (m) | 350 / 800 / 7000 | 500 / 1100 / 12000 | 700 / 1500 / 30000 |
+  | Pedestrians, gangs | 12, 1 | 24, 2 | 45, 2 |
+
+  Denser fog on low and medium hides where the city stops. Measured in
+  Chrome at Times Square (the worst spot) with a 3x phone screen: about
+  0.75 GB for the whole tab on low (iOS Safari kills tabs at about
+  1-1.5 GB); the canopy map was then cut to 16 m pixels, which saves about
+  100 MB more.
+- **Tested** with Chrome's phone emulation and scripted multi-touch
+  (moving while looking, super speed, jumps, swinging, flying, punching and
+  diving, typing a room code) on 844x390 and 667x375 screens, with notch
+  insets; desktop unchanged.
+- **Still to check on real phones:** frame rate and heat on low (and
+  whether tablets should get medium), whether iOS Safari keeps the tab
+  alive, fullscreen and landscape lock on Android, Add to Home Screen on
+  iPhone, the keyboard for room codes, notch and home-bar spacing, how the
+  stick, look speed and buttons feel, "Copy link" on iOS, and whether edge
+  swipes (back gestures) leave the game. `?stats` shows FPS on a phone.
 
 ## 8. Overpasses and missing bridges (planned)
 

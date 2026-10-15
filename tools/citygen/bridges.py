@@ -15,6 +15,7 @@ import numpy as np
 import shapely
 from shapely.geometry import shape
 
+import props
 from common import (CURB_HEIGHT, GROUND_ROAD, STRUCTURE_CABLE, STRUCTURE_CONCRETE, STRUCTURE_STONE,
                     MeshBuilder, lines_of, load_features, polygons_of, project, triangles_of)
 
@@ -65,6 +66,7 @@ def build(land, terrain, level_sizes: dict) -> dict:
     geoms = shapely.make_valid(project(np.array([shape(f["geometry"]) for f in features], dtype=object)))
 
     builders = {level: MeshBuilder() for level in ALL_LEVELS}
+    builders["lamps"] = []  # (positions, heights, arm directions) per deck
     built = []
     for feat, geom in zip(features, geoms):
         name = feat["properties"].get("name") or "NO NAME"
@@ -77,7 +79,24 @@ def build(land, terrain, level_sizes: dict) -> dict:
     buckets = {}
     for level, size in level_sizes.items():
         buckets[level] = _bucket(builders[level], size)
+    buckets["lamps"] = _bucket_lamps(builders["lamps"], level_sizes["lod0"])
     return buckets
+
+
+def _bucket_lamps(found: list, size: float) -> dict:
+    """Deck lamps by lod0 tile: {(i, j): (positions (N, 2), heights, arms (N, 2))}."""
+    if not found:
+        return {}
+    en = np.concatenate([f[0] for f in found])
+    y = np.concatenate([f[1] for f in found])
+    arms = np.concatenate([f[2] for f in found])
+    ii = np.floor(en[:, 0] / size).astype(np.int64)
+    jj = np.floor(-en[:, 1] / size).astype(np.int64)
+    out = {}
+    for key in set(zip(ii.tolist(), jj.tolist())):
+        mask = (ii == key[0]) & (jj == key[1])
+        out[key] = (en[mask], y[mask], arms[mask])
+    return out
 
 
 def _bucket(builder: MeshBuilder, size: float) -> dict:
@@ -148,6 +167,7 @@ def _build_bridge(poly, name: str, land, terrain, builders: dict) -> bool:
         return y
 
     _add_deck(poly, deck_y, builders)
+    builders["lamps"].append(props.deck_lamps(np.asarray(poly.exterior.coords)[:, :2], deck_y))
     suspended = style.endswith("suspension") and span_length > 100.0
     if suspended:
         main_span_length = min(main_span_length, span_length * MAX_SPAN_OF_WATER)

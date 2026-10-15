@@ -2,7 +2,9 @@ class_name CoopPanel
 extends Control
 ## The co-op menu (M): host a game and send friends its link or room code, or
 ## join a friend's game with theirs. Shows who's playing. Dims the game behind
-## it and takes the mouse while open.
+## it and takes the mouse while open. On touch screens (use_touch_layout) it
+## gets a Close button and bigger buttons, and the room code box becomes a
+## browser text box, so the phone's keyboard comes up.
 
 signal toggled(open: bool)
 
@@ -18,6 +20,10 @@ var _room: Label
 var _link_edit: LineEdit
 var _players: Label
 var _leave_button: Button
+var _panel: PanelContainer
+var _column: VBoxContainer
+var _close_button: Button
+var _hint: Label
 
 
 func _ready() -> void:
@@ -53,6 +59,25 @@ func toggle() -> void:
 		close()
 	else:
 		open()
+
+
+## Set up for fingers: a Close button instead of the M/Esc hint, buttons
+## and boxes tall enough to tap, a tighter fit for phones' short screens, and
+## the room code typed into a browser text box (WebTextField) in the browser.
+func use_touch_layout() -> void:
+	_close_button.visible = true
+	_hint.visible = false
+	_column.add_theme_constant_override("separation", 9)
+	(_panel.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(16.0)
+	var tappable: Array = [_close_button, _host_button, _leave_button]
+	tappable.append_array(_join_row.get_children())
+	tappable.append_array(_link_edit.get_parent().get_children())
+	for control: Control in tappable:
+		control.custom_minimum_size.y = 44.0
+	if OS.has_feature("web"):
+		var field := WebTextField.new()
+		field.line_edit = _code_edit
+		add_child(field)
 
 
 ## True while typing in the menu, so its keys aren't game controls.
@@ -112,6 +137,7 @@ func _refresh() -> void:
 
 func _build() -> void:
 	var panel := PanelContainer.new()
+	_panel = panel
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -125,13 +151,22 @@ func _build() -> void:
 	add_child(panel)
 
 	var column := VBoxContainer.new()
+	_column = column
 	column.add_theme_constant_override("separation", 12)
 	panel.add_child(column)
 
+	var title_row := HBoxContainer.new()
+	column.add_child(title_row)
 	var title := Label.new()
 	title.text = "CO-OP"
 	title.add_theme_font_size_override("font_size", 26)
-	column.add_child(title)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_row.add_child(title)
+	_close_button = Button.new()
+	_close_button.text = "Close"
+	_close_button.visible = false  # touch screens only (no M or Esc there)
+	_close_button.pressed.connect(close)
+	title_row.add_child(_close_button)
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -190,11 +225,11 @@ func _build() -> void:
 	_leave_button.pressed.connect(func() -> void: Net.leave())
 	column.add_child(_leave_button)
 
-	var hint := Label.new()
-	hint.text = "M or Esc closes this menu"
-	hint.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.5))
-	hint.add_theme_font_size_override("font_size", 13)
-	column.add_child(hint)
+	_hint = Label.new()
+	_hint.text = "M or Esc closes this menu"
+	_hint.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.5))
+	_hint.add_theme_font_size_override("font_size", 13)
+	column.add_child(_hint)
 
 
 ## Buttons that stand out from the dark panel.

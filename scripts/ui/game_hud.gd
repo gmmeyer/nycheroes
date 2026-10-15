@@ -10,6 +10,8 @@ const NEAR_ENOUGH := 35.0
 ## Other players have name tags; on screen and closer than this, that's enough.
 const PLAYER_NEAR_ENOUGH := 120.0
 const EDGE_MARGIN := 48.0
+## On touch screens, markers keep this far from the right edge, off the buttons.
+const TOUCH_BUTTONS_WIDTH := 100.0
 const MARKER_COLOR := Color(1.0, 0.35, 0.25)
 ## The license (CC BY 4.0) asks for this whenever the photos are shown.
 const AERIAL_CREDIT := "Aerial imagery: NYC OTI / NYS Orthoimagery Program 2024 (CC BY 4.0)"
@@ -18,6 +20,11 @@ const AERIAL_CREDIT := "Aerial imagery: NYC OTI / NYS Orthoimagery Program 2024 
 @export var encounters: EncounterDirector
 @export var players: PlayerSync
 @export var city: CityStreamer
+
+## Set on touch screens (by Game): the health bar moves to the top left, out
+## of the thumbs' way, and the HUD keeps clear of the screen's notches and of
+## the touch buttons in the top right.
+var touch_controls: TouchControls
 
 var _font: Font
 
@@ -34,6 +41,9 @@ func _process(_delta: float) -> void:
 
 func _draw() -> void:
 	var bar := Rect2(24.0, size.y - 44.0, 260.0, 18.0)
+	if touch_controls:
+		var insets := touch_controls.safe_insets
+		bar = Rect2(insets.x + 20.0, insets.y + 32.0, 180.0, 14.0)
 	draw_rect(bar.grow(3.0), Color(0.0, 0.0, 0.0, 0.55))
 	var health := hero.health / Hero.MAX_HEALTH
 	var fill := Color(0.85, 0.15, 0.12).lerp(Color(0.2, 0.8, 0.3), health)
@@ -45,7 +55,10 @@ func _draw() -> void:
 	_draw_coop_status()
 	if city and city.photo_count > 0:
 		var width := _font.get_string_size(AERIAL_CREDIT, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12).x
-		_text(Vector2(size.x - width - 16.0, size.y - 12.0), AERIAL_CREDIT, 12, Color(1.0, 1.0, 1.0, 0.8))
+		var at := Vector2(size.x - width - 16.0, size.y - 12.0)
+		if touch_controls:  # bottom middle, between the thumbs
+			at = Vector2((size.x - width) * 0.5, size.y - touch_controls.safe_insets.w - 8.0)
+		_text(at, AERIAL_CREDIT, 12, Color(1.0, 1.0, 1.0, 0.8))
 	var thug := encounters.nearest_thug(hero.world_position())
 	if thug:
 		_draw_marker(thug.global_position + Vector3.UP * 2.2, "THUGS", MARKER_COLOR, NEAR_ENOUGH)
@@ -68,7 +81,10 @@ func _draw_coop_status() -> void:
 			line = "Co-op: room %s  ·  %s" % [Net.room_code, people]
 	if line:
 		var width := _font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16).x
-		_text(Vector2(size.x - width - 24.0, 30.0), line, 16)
+		var at := Vector2(size.x - width - 24.0, 30.0)
+		if touch_controls:  # under the co-op button
+			at = Vector2(size.x - touch_controls.safe_insets.z - width - 16.0, touch_controls.safe_insets.y + 78.0)
+		_text(at, line, 16)
 
 
 ## A marker pointing at a scene position, labeled with the distance to it.
@@ -81,11 +97,15 @@ func _draw_marker(target: Vector3, label: String, color: Color, near_enough: flo
 	var behind := camera.is_position_behind(target)
 	var point := camera.unproject_position(target)
 	var area := Rect2(Vector2.ZERO, size).grow(-EDGE_MARGIN)
+	if touch_controls:
+		# Clear of notches, and left of the column of touch buttons.
+		var insets := touch_controls.safe_insets + Vector4(0.0, 0.0, TOUCH_BUTTONS_WIDTH, 0.0)
+		area = Rect2(area.position + Vector2(insets.x, insets.y), area.size - Vector2(insets.x + insets.z, insets.y + insets.w))
 	var on_screen := not behind and area.has_point(point)
 	if on_screen and distance < near_enough:
 		return
 
-	var center := size * 0.5
+	var center := area.get_center()  # the screen's middle, less any notches
 	var direction := (point - center).normalized()
 	if behind:
 		direction = -direction

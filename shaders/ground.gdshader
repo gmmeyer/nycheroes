@@ -14,8 +14,8 @@
 // Lighting is the shared toon model (toon.gdshaderinc). At night (see
 // shaders/night.gdshaderinc) street lights' pools light the ground near the
 // camera; further out streets and sidewalks get the lamps' average glow, so
-// the street grid glows from the air; and bridges' main cables carry strings
-// of lights.
+// the street grid glows from the air; bridges' main cables carry strings of
+// lights; and Times Square's screens tint the streets around them.
 // With an aerial photo (?aerial=1), the flat ground kinds (pavement, road,
 // park, sand, marsh) show it; built things (seawalls, concrete, cables,
 // stone) don't. Close to the camera the ground goes back to its own colors:
@@ -85,6 +85,34 @@ uniform float street_light_sheen = 0.04;
 uniform float cable_light_spacing = 4.0;
 uniform vec3 cable_light_color : source_color = vec3(1.0, 0.92, 0.75);
 uniform float cable_light_glow = 6.0;
+// Times Square's screens light the streets and sidewalks around them at
+// night, in slowly drifting colors: over its sign district (as in
+// tools/citygen/props.py: meters along and across Manhattan's avenues from
+// 46th Street and Broadway), fading out over sign_glow_fade meters around it.
+uniform vec2 sign_district_along = vec2(-330.0, 420.0);
+uniform vec2 sign_district_across = vec2(-120.0, 110.0);
+uniform float sign_glow_fade = 60.0;
+uniform float sign_glow_strength = 0.85;
+
+// The screens' light (linear, before city_lights) on flat ground at world x/z.
+vec3 sign_glow(vec2 xz) {
+	// Godot's x is east and z south; the avenues run 29 degrees east of north.
+	vec2 m = vec2(0.485 * xz.x - 0.875 * xz.y, 0.875 * xz.x + 0.485 * xz.y);
+	vec2 lo = vec2(sign_district_along.x, sign_district_across.x);
+	vec2 hi = vec2(sign_district_along.y, sign_district_across.y);
+	float outside = length(max(max(lo - m, m - hi), 0.0));
+	float amount = 1.0 - smoothstep(0.0, sign_glow_fade, outside);
+	if (amount <= 0.0) {
+		return vec3(0.0);
+	}
+	// Soft pink and cyan patches drifting across the street, with amber
+	// washes, over the white of all the screens together.
+	float n = value_noise(xz * 0.03 + vec2(TIME * 0.07, -TIME * 0.05));
+	float n2 = value_noise(xz * 0.011 - vec2(TIME * 0.03, 0.0) + 17.0);
+	vec3 color = mix(srgb(vec3(1.0, 0.35, 0.68)), srgb(vec3(0.3, 0.72, 1.0)), smoothstep(0.2, 0.8, n));
+	color = mix(color, srgb(vec3(1.0, 0.72, 0.3)), 0.6 * smoothstep(0.45, 0.85, n2));
+	return mix(color, vec3(0.9), 0.2) * (amount * sign_glow_strength);
+}
 
 vec3 base_color(int kind) {
 	if (kind == ROAD) {
@@ -249,6 +277,10 @@ void fragment() {
 		// Walls (curbs, seawalls, bridges' sides) catch less of it, and no sheen.
 		bool level = world_normal.y > 0.7;
 		EMISSION += (level ? ALBEDO + street_light_sheen : ALBEDO * 0.6) * lamps * city_lights;
+		if (level && (kind == ROAD || kind == PAVEMENT)) {
+			// Times Square's screens (flat ground's UV is its world x/z).
+			EMISSION += (ALBEDO + street_light_sheen) * sign_glow(UV) * city_lights;
+		}
 		if (kind == CABLE && UV.y < 1.01) {
 			// A main cable (its four faces each run 0..1 across): bulbs along it,
 			// down the middle of each face, a glowing line in the distance.

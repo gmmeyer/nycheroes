@@ -67,6 +67,25 @@ LAMP_PARK_REACH = 4.0
 COBRA_HEAD = (9.0, 2.6)  # pole height, arm length (m)
 POST_TOP = (4.4, 0.0)
 
+# Times Square's sign district: street walls in this box get billboards
+# (facades.SIGNS). Meters along Manhattan's avenues (29 degrees east of north,
+# from the origin at 46th St and Broadway; south is negative) and across them
+# (east is positive): 42nd to about 50th Street (as far as the real signs
+# go), Broadway and Seventh Avenue with the fronts facing them. The ground
+# shader's sign_district_along/_across must match.
+SIGN_ALONG = (-330.0, 420.0)
+SIGN_ACROSS = (-120.0, 110.0)
+AVENUE_ALONG = np.array([0.485, 0.875])   # east/north
+AVENUE_ACROSS = np.array([0.875, -0.485])
+
+# Lamps on bridge decks (cobra-heads along both edges, arms over the deck)
+# and on park paths (post-tops where the land cover shows paving in a park).
+DECK_LAMP_SPACING = 30.0
+DECK_LAMP_INSET = 0.8
+PATH_LAMP_TRY = 7.0  # one try per cell of this size; it lands on a path or not
+PATH_LAMP_GAP = 22.0  # then lamps closer than this are thinned out
+PATH_LAMP_STREET_GAP = 8.0  # streets already have their own lamps
+
 # Water towers: the chance a building has one, by type and by borough (from
 # borough code), for buildings of at least TOWER_MIN_FLOORS floors and at most
 # TOWER_MAX_HEIGHT meters (skyscrapers keep their tanks inside).
@@ -187,26 +206,60 @@ def lamp_spots(roads: list, tile_edge) -> tuple[np.ndarray, np.ndarray]:
         return np.zeros((0, 2)), np.zeros((0, 2))
     points, arms = np.concatenate(points), np.concatenate(arms)
     # Thin out lamps that ended up close together (corners, narrow islands).
-    keep = np.ones(len(points), dtype=bool)
-    tree = shapely.STRtree(shapely.points(points))
-    pairs = tree.query(shapely.points(points), predicate="dwithin", distance=LAMP_MIN_GAP)
-    for a, b in pairs.T:
-        if a < b and keep[a]:
-            keep[b] = False
+    keep = spread(points, LAMP_MIN_GAP)
     return points[keep], arms[keep]
 
 
-def street_lights(points: np.ndarray, arms: np.ndarray, in_park: np.ndarray) -> dict:
-    """Props for street lights at these points, with arms reaching along `arms`
-    (east/north), post-tops where in_park."""
+def spread(points: np.ndarray, gap: float) -> np.ndarray:
+    """Which of these (N, 2) points to keep so none are closer than `gap`
+    (earlier ones win)."""
+    keep = np.ones(len(points), dtype=bool)
+    if len(points) < 2:
+        return keep
+    pairs = shapely.STRtree(shapely.points(points)).query(shapely.points(points), predicate="dwithin", distance=gap)
+    pairs = pairs[:, pairs[0] < pairs[1]]
+    for a, b in pairs[:, np.lexsort((pairs[1], pairs[0]))].T:
+        if keep[a]:
+            keep[b] = False
+    return keep
+
+
+def in_sign_district(en: np.ndarray) -> np.ndarray:
+    """Which (N, 2) east/north points are in Times Square's sign district."""
+    en = np.asarray(en, np.float64).reshape(-1, 2)
+    along, across = en @ AVENUE_ALONG, en @ AVENUE_ACROSS
+    return ((along >= SIGN_ALONG[0]) & (along <= SIGN_ALONG[1])
+            & (across >= SIGN_ACROSS[0]) & (across <= SIGN_ACROSS[1]))
+
+
+def deck_lamps(ring: np.ndarray, deck_y) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Lamps along a bridge deck's outline (an oriented exterior ring, deck on
+    its left): positions (N, 2), heights (N,) and arm directions (N, 2)."""
+    line = shapely.LineString(ring)
+    if line.length < DECK_LAMP_SPACING:
+        return np.zeros((0, 2)), np.zeros(0), np.zeros((0, 2))
+    s = np.arange(DECK_LAMP_SPACING / 2, line.length, DECK_LAMP_SPACING)
+    at = shapely.get_coordinates(shapely.line_interpolate_point(line, s))
+    ahead = shapely.get_coordinates(shapely.line_interpolate_point(line, np.minimum(s + 0.5, line.length)))
+    behind = shapely.get_coordinates(shapely.line_interpolate_point(line, np.maximum(s - 0.5, 0.0)))
+    tangent = ahead - behind
+    tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-9)
+    left = np.column_stack([-tangent[:, 1], tangent[:, 0]])
+    points = at + left * DECK_LAMP_INSET
+    return points, np.asarray(deck_y(points), np.float64), left
+
+
+def lamps(points: np.ndarray, arms: np.ndarray, post_top: np.ndarray) -> dict:
+    """Street light props at these points: cobra-heads reaching along `arms`
+    (east/north), or post-tops where post_top."""
     seed = location_seed(points)
-    height = np.where(in_park, POST_TOP[0], COBRA_HEAD[0]) * (0.95 + 0.1 * _hash(seed, 16))
-    arm = np.where(in_park, POST_TOP[1], COBRA_HEAD[1])
+    height = np.where(post_top, POST_TOP[0], COBRA_HEAD[0]) * (0.95 + 0.1 * _hash(seed, 16))
+    arm = np.where(post_top, POST_TOP[1], COBRA_HEAD[1])
     # Godot: x east, z south; the arm reaches along (sin yaw, cos yaw) there.
     yaw = np.arctan2(arms[:, 0], -arms[:, 1])
     return {"en": points, "height": height, "width": arm, "trunk": np.zeros(len(points)),
             "type": np.full(len(points), PROP_STREET_LIGHT, dtype=np.int8),
-            "tone": in_park.astype(np.int8), "seed": seed, "yaw": yaw}
+            "tone": post_top.astype(np.int8), "seed": seed, "yaw": yaw}
 
 
 def tower_mask(archetype, floors, height, borough, seed) -> np.ndarray:

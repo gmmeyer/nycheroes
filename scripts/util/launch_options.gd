@@ -16,6 +16,14 @@ static func get_string(name: String, default := "") -> String:
 	return _options.get(name, default)
 
 
+## Gives an option a value unless the page URL (or command line) has it:
+## quality presets use this for options that other nodes read at startup.
+static func set_default(name: String, value: String) -> void:
+	_parse()
+	if not _options.has(name):
+		_options[name] = value
+
+
 ## Comma-separated numbers, e.g. "1,2.5,3"; empty if the option isn't set.
 static func get_floats(name: String) -> PackedFloat64Array:
 	var values := PackedFloat64Array()

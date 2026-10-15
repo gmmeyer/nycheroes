@@ -18,7 +18,7 @@ extends Node3D
 ## night (city_lights, from TimeOfDay) street lights glow, and their pools of
 ## light go into a map around the camera that the shaders look up
 ## (StreetLightMap). The manifest's citywide
-## tree canopy map (how much of each 8 m square is under trees) loads once at
+## tree canopy map (how much of each 16 m square is under trees) loads once at
 ## the start; the ground shader paints woods from it on parks and yards, out
 ## past where tree props draw. For comparison,
 ## ?aerial=1 on the page URL (--aerial=1 on desktop) drapes the city's aerial

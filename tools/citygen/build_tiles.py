@@ -215,7 +215,7 @@ def main() -> None:
         "origin": {"lat": ORIGIN_LAT, "lon": ORIGIN_LON},
         "projection": PROJECTION,
         "bounds": {"min_x": min_e, "max_x": max_e, "min_z": -max_n, "max_z": -min_n},
-        # How much of each 8 m square is tree canopy, citywide (landcover.py).
+        # How much of each 16 m square is tree canopy, citywide (landcover.py).
         "canopy": canopy,
         "levels": [
             {"name": level, "tile_size": s["size"],
@@ -400,8 +400,11 @@ def _wall_uv2(coords: np.ndarray, facade: tuple, fronts: bool) -> np.ndarray:
         seg = coords[1:] - coords[:-1]
         length = np.maximum(np.hypot(seg[:, 0], seg[:, 1]), 1e-9)
         outward = np.column_stack([seg[:, 1], -seg[:, 0]]) / length[:, None]  # right of travel
-        front = _faces_street((coords[1:] + coords[:-1]) * 0.5, outward)
+        middles = (coords[1:] + coords[:-1]) * 0.5
+        front = _faces_street(middles, outward)
         uv2[front, 0] += facades.FLAG_SCALE * facades.FRONT
+        signs = front & props.in_sign_district(middles)
+        uv2[signs, 0] += facades.FLAG_SCALE * facades.SIGNS
     return uv2
 
 
@@ -576,6 +579,8 @@ def _add_shape(builder: MeshBuilder, shape, ground: float, facade: tuple) -> Non
                 middle = rings[0][:, :2].mean(axis=0)
                 if _faces_street(middle[None], (normal[:2] / length)[None])[0]:
                     wall_flags |= facades.FRONT
+                    if props.in_sign_district(middle[None])[0]:
+                        wall_flags |= facades.SIGNS
             uv2 = facades.encode(archetype, wall_flags, floor_dm, seed)
         pos = np.stack([tris[..., 0], tris[..., 2], -tris[..., 1]], axis=-1)
         builder.add(pos, uv, uv2, (normal[0], normal[2], -normal[1]))
@@ -790,15 +795,14 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     street = _street_trees(i, j)
     canopy = _canopy_trees(i, j, bounds, street["en"])
     towers = _water_towers(indices)
-    lamps = _street_lights(bounds)
+    lamps = _street_lights(i, j, bounds)
     parts = [street, canopy, towers, lamps]
     en = np.concatenate([p["en"] for p in parts])
     if len(en) == 0:
         return None, {}
     trees = len(street["en"]) + len(canopy["en"])
     ground = _W["ground"]["lod0"]
-    y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]), towers["y"],
-                        ground.height(lamps["en"])])
+    y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]), towers["y"], lamps["y"]])
     seed = np.concatenate([p["seed"] for p in parts])
     # Trees and towers face any way; lamps reach over the street.
     yaw = np.concatenate([p["yaw"] if "yaw" in p else props.location_seed(p["en"] * 3.7) * (2 * np.pi)
@@ -816,8 +820,17 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
                      "street_lights": len(lamps["en"])}
 
 
-def _street_lights(bounds) -> dict:
-    """Lamps along the tile's curbs (props.lamp_spots), on open ground."""
+def _street_lights(i: int, j: int, bounds) -> dict:
+    """The tile's lamps: along its curbs (props.lamp_spots), on bridge decks,
+    and on park paths; each with its base height in "y"."""
+    parts = [_curb_lamps(bounds), _deck_lamps(i, j), _path_lamps(bounds)]
+    parts = [p for p in parts if len(p["en"])]
+    if not parts:
+        return _no_props()
+    return {key: np.concatenate([p[key] for p in parts]) for key in parts[0]}
+
+
+def _curb_lamps(bounds) -> dict:
     roads = _W.pop("tile_roads", [])
     if not roads:
         return _no_props()
@@ -831,12 +844,58 @@ def _street_lights(bounds) -> dict:
     near_park = np.zeros(len(points), dtype=bool)
     hits = _W["park_tree"].query(shapely.points(points), predicate="dwithin", distance=props.LAMP_PARK_REACH)
     near_park[hits[0]] = True
-    return props.street_lights(points, arms, near_park)
+    found = props.lamps(points, arms, near_park)
+    found["y"] = _W["ground"]["lod0"].height(points)
+    return found
+
+
+def _deck_lamps(i: int, j: int) -> dict:
+    deck = _W["bridges"]["lamps"].get((i, j))
+    if deck is None:
+        return _no_props()
+    points, heights, arms = deck
+    found = props.lamps(points, arms, np.zeros(len(points), dtype=bool))
+    found["y"] = heights
+    return found
+
+
+def _path_lamps(bounds) -> dict:
+    """Post-tops where a try per PATH_LAMP_SPACING cell lands on paving in a
+    park, away from streets (which have their own lamps) and buildings."""
+    parks = _W["g"]["parks"][_W["park_tree"].query(bounds)]
+    if not len(parks):
+        return _no_props()
+    min_e, min_n, max_e, max_n = bounds.bounds
+    s = props.PATH_LAMP_TRY
+    ii, jj = np.meshgrid(np.arange(np.floor(min_e / s), np.ceil(max_e / s)),
+                         np.arange(np.floor(min_n / s), np.ceil(max_n / s)))
+    seed = props.location_seed(np.column_stack([ii.ravel(), jj.ravel()]) * 7.0)
+    en = (np.column_stack([ii.ravel(), jj.ravel()]) + 0.15 + 0.7 * np.column_stack(
+        [seed, props.location_seed(np.column_stack([jj.ravel(), ii.ravel()]) * 5.0)])) * s
+    inside = (en[:, 0] >= min_e) & (en[:, 0] < max_e) & (en[:, 1] >= min_n) & (en[:, 1] < max_n)
+    en = en[inside]
+    en = en[_W["landcover"].classes(en) == landcover.PAVED]
+    if len(en) == 0:
+        return _no_props()
+    park = shapely.union_all(parks)
+    shapely.prepare(park)
+    en = en[shapely.contains_xy(park, en[:, 0], en[:, 1])]
+    if len(en) == 0:
+        return _no_props()
+    keep = _on_open_ground(en)
+    if not _W["streets"].is_empty:
+        keep &= ~shapely.dwithin(_W["streets"], shapely.points(en), props.PATH_LAMP_STREET_GAP)
+    en = en[keep]
+    en = en[props.spread(en, props.PATH_LAMP_GAP)]
+    found = props.lamps(en, np.tile([1.0, 0.0], (len(en), 1)), np.ones(len(en), dtype=bool))
+    found["y"] = _W["ground"]["lod0"].height(en)
+    return found
 
 
 def _no_props() -> dict:
     return {"en": np.zeros((0, 2)), "height": np.zeros(0), "width": np.zeros(0), "trunk": np.zeros(0),
-            "type": np.zeros(0, np.int8), "tone": np.zeros(0, np.int8), "seed": np.zeros(0), "y": np.zeros(0)}
+            "type": np.zeros(0, np.int8), "tone": np.zeros(0, np.int8), "seed": np.zeros(0), "y": np.zeros(0),
+            "yaw": np.zeros(0)}
 
 
 def _on_open_ground(en: np.ndarray) -> np.ndarray:
