@@ -75,8 +75,9 @@ GUGGENHEIM = 41      # white painted concrete: 0 the spiral's bands, 1 the glass
                      # them, 2 plain walls with window bands (the name on the bridge), 3 the
                      # annex's limestone grid; uv on the spiral = (m around, z)
 NYPL = 42            # Vermont marble: 0 the walls, 1 the Fifth Avenue portico, 2 the attic
-CATHEDRAL = 43       # white marble Gothic: 0 aisles and chapels, 1 the clerestory and gables,
-                     # 2 the west front, 3 the towers, lanterns and spires
+CATHEDRAL = 43       # gray-tan marble Gothic: 0 aisles and chapels, 1 the clerestory and
+                     # gables, 2 the west front's central wall (and plates: its gable), 3 the
+                     # towers, lanterns and spires (uv on spires = (share across a face * 3.6, z))
 SLATE = 44           # slate roofs; on pitched roofs uv = (m along the eaves, m up the slope)
 UN_GLASS = 45        # the Secretariat's blue-green curtain walls and mechanical floors
 UN_MARBLE = 46       # 0 white marble and limestone, 1 glass between marble piers, 2 the
@@ -101,6 +102,10 @@ RIDE = 57            # painted steel: 0 white, 1 blue, 2 red with LED lights (uv
                      # m along)), 3 the Wonder Wheel's cars and its sign
 MARQUEE = 58         # Radio City Music Hall: 0 the marquee (4.4 to 7.4 m up), 1 the vertical
                      # sign (uv = m across its face, m above its foot)
+GOTHIC = 59          # St. Patrick's carved work, in CATHEDRAL's marble: 0 plain (reveals,
+                     # buttresses, parapets), 1 pinnacles, crockets and gables, 2 a window's
+                     # glass and tracery (the rose window on the central front), 3 a portal's
+                     # bronze doors under its tympanum; walls' uv on the face they're set in
 # Materials from here on are painted by shaders/landmark.gdshader, in the tiles'
 # landmarks surface (the buildings' shader would grow too big to compile fast).
 OWN_SHADER = GUGGENHEIM
@@ -996,22 +1001,24 @@ def _quads(m, corners, uv, material, param, flags=0, normals=None):
 
 def _guggenheim(m: Model, ctx: Context) -> None:
     """Solomon R. Guggenheim Museum (Frank Lloyd Wright, 1959). The rotunda:
-    white bands spiraling up around the ramp (432 m at a 5% grade), each band
-    leaning out over a glass strip, the whole an inverted ziggurat 38 m
-    across at the top (the footprint data; about 30 m at the bottom, from
-    photos), its roof at 29.7 m and the skylight's twelve-sided dome to 37.5 m
-    (the city's 3-D model); the Monitor (the small rotunda, four stories) to
-    the north, the bridge band along Fifth Avenue with the museum's name, and
-    Gwathmey Siegel's ten-story annex (1992), a limestone grid, behind.
-    Wikipedia, "Solomon R. Guggenheim Museum". Local x runs west to Fifth
-    Avenue, y south; the rotunda is centered at (0.2, 11.1), the Monitor at
-    (7.7, -22.0)."""
+    on a base drum that carries the bridge's band round its front over the
+    lobby's glass (set back under it), white-gray bands spiraling up around
+    the ramp (432 m at a 5% grade), each band leaning out over a glass strip,
+    the whole an inverted ziggurat 38 m across at the top (the footprint
+    data; the drum about 35 m and the lowest band 31 m, from photos), its roof
+    at 29.7 m and the skylight's twelve-sided dome to 37.5 m (the city's 3-D
+    model); the Monitor (the small rotunda, four stories) to the north, the
+    bridge band along Fifth Avenue with the museum's name, and Gwathmey
+    Siegel's ten-story annex (1992), a limestone grid, behind. Wikipedia,
+    "Solomon R. Guggenheim Museum". Local x runs west to Fifth Avenue, y
+    south; the rotunda is centered at (0.2, 11.1), the Monitor at (7.7,
+    -22.0)."""
     d = m.detail
     cx, cy = 0.2, 11.1
-    top, z0, pitch, band, tuck = 29.7, 1.85, 5.1, 4.0, 0.35
+    top, z0, pitch, band, tuck, drum = 29.7, 9.6, 5.6, 4.4, 0.35, 10.9
 
     def radius(z):  # the bands' outer face
-        return 15.0 + 4.0 * np.clip((z - z0) / (top - z0), 0.0, 1.0)
+        return 15.4 + 3.6 * np.clip((z - z0) / (top - z0), 0.0, 1.0)
 
     def inner(z):  # the glass strips
         return radius(z) - 1.5
@@ -1026,15 +1033,23 @@ def _guggenheim(m: Model, ctx: Context) -> None:
     m.prism(annex, -1.0, 44.0, GUGGENHEIM, variant=3)
     if d == 2:
         # Far away: a frustum with its bands painted, and the Monitor.
-        tower(m, cx, cy, [(-1.0, 15.0), (top, 19.0)], 10, GUGGENHEIM, close_top=False)
-        m.cap(Polygon(circle(cx, cy, 19.0, 10, start=np.pi / 10)[:, :2]), top, PAVING)
+        tower(m, cx, cy, [(-1.0, 15.0), (top, 19.0)], 16, GUGGENHEIM, close_top=False)
+        m.cap(Polygon(circle(cx, cy, 19.0, 16, start=np.pi / 16)[:, :2]), top, PAVING)
         tower(m, 7.7, -22.0, [(-1.0, 7.5), (18.5, 7.7)], 8, GUGGENHEIM, variant=2)
         return
+    # The ground floor: the lobby's glass, set back under the base drum.
+    n = (72, 32)[d]
+    _surface_of_revolution(m, cx, cy, [(-1.0, 14.2), (4.4, 14.2)], n, GUGGENHEIM, 1, 2 * np.pi * 14.2)
+    m.cap(shapely.difference(shapely.Point(cx, cy).buffer(17.2, quad_segs=n // 4),
+                             shapely.Point(cx, cy).buffer(14.2, quad_segs=n // 4)), 4.4, GUGGENHEIM, flags=0, down=True)
+    _surface_of_revolution(m, cx, cy, [(4.4, 17.2), (drum, 17.8)], n, GUGGENHEIM, 0, 2 * np.pi * 17.5)
+    m.cap(shapely.difference(shapely.Point(cx, cy).buffer(17.8, quad_segs=n // 4),
+                             shapely.Point(cx, cy).buffer(float(inner(z0)) - 0.05, quad_segs=n // 4)), drum, GUGGENHEIM)
     # The spiral: one long strip of band (its face, underside and top ledge)
     # and the glass strip under it, around and up from the back (east). Its
     # bottom edge rises `pitch` a turn until the band reaches the roof, then
     # runs level for a last turn; each band stops short of the one above.
-    per_turn = (24, 12)[d]
+    per_turn = (72, 32)[d]
     turns = (top - band - z0) / pitch + 1.0
     theta = np.linspace(0.0, 2 * np.pi * turns, int(per_turn * turns) + 1)
 
@@ -1045,7 +1060,7 @@ def _guggenheim(m: Model, ctx: Context) -> None:
         above = np.where(t + 2 * np.pi <= theta[-1] + 1e-9, bottom_at(t + 2 * np.pi), top)
         return np.minimum(bottom_at(t) + band, above)
     lo, hi = bottom_at(theta), top_at(theta)
-    below = np.where(theta >= 2 * np.pi - 1e-9, top_at(theta - 2 * np.pi), -1.0)
+    below = np.minimum(np.where(theta >= 2 * np.pi - 1e-9, top_at(theta - 2 * np.pi), drum - 0.1), lo)
     phi = np.pi + theta
     c, s = np.cos(phi), np.sin(phi)
 
@@ -1053,19 +1068,25 @@ def _guggenheim(m: Model, ctx: Context) -> None:
         return np.stack([cx + r * c, cy + r * s, z], -1)
     arc = theta * 17.0  # m around, at a middle radius
 
-    def strip(p, q, variant, flags=0):
-        # Quads between consecutive samples of the lower ring p and the upper q.
+    def strip(p, q, variant, normal, flags=0):
+        # Quads between consecutive samples of the lower ring p and the upper q,
+        # normal = (out, up) at each sample for smooth shading round the turn.
         a0, a1, b1, b0 = p[:-1], p[1:], q[1:], q[:-1]
         if flags & ROOF:
             uv = np.stack([a0[:, :2], a1[:, :2], b1[:, :2], b0[:, :2]], 1)
         else:
             uv = np.stack([np.column_stack([arc[:-1], a0[:, 2]]), np.column_stack([arc[1:], a1[:, 2]]),
                            np.column_stack([arc[1:], b1[:, 2]]), np.column_stack([arc[:-1], b0[:, 2]])], 1)
-        _quads(m, np.stack([a0, a1, b1, b0], 1), uv, GUGGENHEIM, 4 * 380 + variant, flags)
-    strip(at(inner(below), below), at(inner(lo), lo), 1)
-    strip(at(inner(lo), lo), at(radius(lo) - tuck, lo), 0)
-    strip(at(radius(lo) - tuck, lo), at(radius(hi), hi), 0)
-    strip(at(radius(hi), hi), at(inner(hi), hi), 0, flags=ROOF)
+        normal = np.broadcast_to(np.asarray(normal, np.float64), (len(c), 2))
+        normal = normal / np.linalg.norm(normal, axis=-1, keepdims=True)
+        n3 = np.stack([normal[:, 0] * c, normal[:, 0] * s, normal[:, 1]], -1)
+        _quads(m, np.stack([a0, a1, b1, b0], 1), uv, GUGGENHEIM, 4 * 380 + variant, flags,
+               normals=np.stack([n3[:-1], n3[1:], n3[1:], n3[:-1]], 1))
+    lean = np.column_stack([hi - lo, -(radius(hi) - radius(lo) + tuck)])
+    strip(at(inner(below), below), at(inner(lo), lo), 1, (1.0, 0.0))
+    strip(at(inner(lo), lo), at(radius(lo) - tuck, lo), 0, (0.0, -1.0))
+    strip(at(radius(lo) - tuck, lo), at(radius(hi), hi), 0, lean)
+    strip(at(radius(hi), hi), at(inner(hi), hi), 0, (0.0, 1.0), flags=ROOF)
     # The band's first end, at the back, facing back along the spiral.
     def first(r, z):
         return (cx + r * c[0], cy + r * s[0], z)
@@ -1155,27 +1176,313 @@ def _lion(m, base, d):
         m.box((x + 1.0, y, z + 0.35), (0.9, 1.2, 0.7), GC_SCULPTURE)         # haunches
 
 
+class _Face:
+    """A vertical face from a to b (local x/y), its outside right of travel (as
+    in Model.walls): u runs m from a (its left end seen from outside), z up,
+    and `depth` m into it."""
+
+    def __init__(self, a, b):
+        self.a = np.asarray(a, np.float64)
+        d = np.asarray(b, np.float64) - self.a
+        self.width = float(np.linalg.norm(d))
+        self.along = d / self.width
+        self.out = np.array([self.along[1], -self.along[0]])
+
+    def point(self, u, z, depth=0.0):
+        u, z, depth = np.broadcast_arrays(np.asarray(u, np.float64), np.asarray(z, np.float64),
+                                          np.asarray(depth, np.float64))
+        xy = self.a + u[..., None] * self.along - depth[..., None] * self.out
+        return np.concatenate([xy, z[..., None]], axis=-1)
+
+    def direction(self, du, dz, dout=0.0):
+        """A 3-D direction from its parts along the face, up and out of it."""
+        return np.array([du * self.along[0] + dout * self.out[0], du * self.along[1] + dout * self.out[1], dz])
+
+
+def _arch(u0, u1, sill, apex, rise=None, n=6):
+    """A pointed arch's opening as a (u, z) polygon: upright sides from `sill`,
+    then two arcs meeting at `apex`, `rise` above the springing (by default an
+    equilateral arch's, 0.866 of its width; half its width makes it round);
+    n points to an arc."""
+    w = u1 - u0
+    rise = min(0.866 * w if rise is None else rise, apex - sill)
+    spring = apex - rise
+    r = (rise * rise + w * w / 4.0) / w
+    top = math.acos(max(-1.0, min(1.0, (w / 2.0 - r) / r)))  # the apex, seen from the left arc's center
+    right = [(u1 - r + r * math.cos(a), spring + r * math.sin(a)) for a in np.linspace(0.0, math.pi - top, n + 1)]
+    left = [(u0 + r + r * math.cos(a), spring + r * math.sin(a)) for a in np.linspace(top, math.pi, n + 1)[1:]]
+    return Polygon([(u0, sill), (u1, sill)] + right + left)
+
+
+def _face_poly(m, face, poly, material, variant=0, depth=0.0, facing=1.0):
+    """(u, z) polygons (holes allowed) on `face`, `depth` m in, facing out (or
+    in, facing=-1); uv = (u, z), param's width the face's."""
+    for part in polygons_of(poly, 0.01):
+        tris = triangles_of(part)
+        if tris is not None:
+            m.add(face.point(tris[..., 0], tris[..., 1], depth), tris, material,
+                  round(face.width * 10.0) * 4 + variant, (facing * face.out[0], facing * face.out[1], 0.0))
+
+
+def _face_sides(m, face, poly, d0, d1, material, variant=0, inward=True):
+    """The sides of a (u, z) polygon's outline on `face` from depth d0 to d1:
+    facing into the polygon (a recess's reveals) or out of it (a projecting
+    block's). uv = (m along the outline and in, z)."""
+    ring = np.asarray(shapely.orient_polygons(poly).exterior.coords)
+    p, q = ring[:-1], ring[1:]
+    e = q - p
+    length = np.hypot(e[:, 0], e[:, 1])
+    keep = length > 1e-3
+    p, q, e, length = p[keep], q[keep], e[keep], length[keep]
+    s = np.concatenate([[0.0], np.cumsum(length)[:-1]])
+    side = np.column_stack([-e[:, 1], e[:, 0]]) / length[:, None] * (1.0 if inward else -1.0)
+    normal = np.column_stack([side[:, 0] * face.along[0], side[:, 0] * face.along[1], side[:, 1]])
+    corners = np.stack([face.point(p[:, 0], p[:, 1], d0), face.point(q[:, 0], q[:, 1], d0),
+                        face.point(q[:, 0], q[:, 1], d1), face.point(p[:, 0], p[:, 1], d1)], 1)
+    uv = np.stack([np.column_stack([s + d0, p[:, 1]]), np.column_stack([s + length + d0, q[:, 1]]),
+                   np.column_stack([s + length + d1, q[:, 1]]), np.column_stack([s + d1, p[:, 1]])], 1)
+    halves = [[0, 1, 2], [0, 2, 3]]
+    m.add(corners[:, halves].reshape(-1, 3, 3), uv[:, halves].reshape(-1, 3, 2), material, 4 * 10 + variant,
+          np.repeat(normal, 2, axis=0))
+
+
+def _face_recess(m, face, opening, depth, orders, inset, base=0.0, keep_sill=False):
+    """Sets an opening ((u, z) polygon) into `face` from `base` to `depth` m
+    in, in `orders` steps each `inset` m narrower (a Gothic portal's or
+    window's orders): the reveals and the steps between them, plain stone.
+    With keep_sill the orders keep the opening's foot (a doorway). Returns
+    the innermost opening."""
+    current = opening
+    step = (depth - base) / orders
+    for k in range(orders):
+        d1 = base + step * (k + 1)
+        _face_sides(m, face, current, base + step * k, d1, GOTHIC)
+        if k + 1 == orders:
+            break
+        inner = shapely.buffer(current, -inset, join_style="mitre")
+        if keep_sill:
+            bounds = inner.bounds
+            inner = shapely.union(inner, rect(bounds[0], current.bounds[1], bounds[2], bounds[1] + 0.01))
+        inner = max(polygons_of(inner, 0.01), key=lambda poly: poly.area)
+        _face_poly(m, face, shapely.difference(current, inner), GOTHIC, 0, d1)
+        current = inner
+    return current
+
+
+def _crocket(m, p, up, out, size):
+    """A crocket: a stone leaf curling up and out from an edge at p (3-D),
+    `up` along the edge, `out` away from it (unit vectors)."""
+    m.tri_plate(p, p + up * size * 1.3, p + up * size * 0.9 + out * size, size * 0.5, GOTHIC, variant=1)
+
+
+def _crockets(m, a, b, out, size, spacing):
+    """Crockets every `spacing` m up the edge from a to b (3-D points), their
+    leaves toward `out` (made square to the edge)."""
+    a, b = np.asarray(a, np.float64), np.asarray(b, np.float64)
+    length = float(np.linalg.norm(b - a))
+    up = (b - a) / length
+    out = np.asarray(out, np.float64) - up * (up @ np.asarray(out, np.float64))
+    out /= np.linalg.norm(out)
+    for t in np.arange(spacing * 0.6, length - size * 1.4, spacing):
+        _crocket(m, a + up * t, up, out, size)
+
+
+def _pinnacle(m, x, y, z0, z1, half, start=np.pi / 4):
+    """A Gothic pinnacle on (x, y) from z0 to its tip at z1: a square shaft
+    `half` m from its axis, a ledge, and a spirelet (its crockets painted)."""
+    c = half * math.sqrt(2.0)
+    zs = z0 + 0.4 * (z1 - z0)
+    tower(m, x, y, [(z0, c), (zs, c), (zs, c * 1.2), (zs + 0.12 * (z1 - z0), c * 1.2), (zs + 0.12 * (z1 - z0), c),
+                    (z1, 0.03)], 4, GOTHIC, smooth=False, variant=1, start=start)
+
+
+def _gabled_frame(m, face, center, half, foot, eaves, apex, opening, out, d):
+    """A Gothic portal's or window's frame: a block `out` m proud of `face`,
+    `half` m either side of `center`, from `foot` up to a gable (`eaves` to
+    `apex`), the opening cut through it; crockets up the gable's rakes and a
+    finial on near tiles."""
+    house = Polygon([(center - half, foot), (center + half, foot), (center + half, eaves), (center, apex),
+                     (center - half, eaves)])
+    _face_poly(m, face, shapely.difference(house, opening), GOTHIC, 1, -out)
+    _face_poly(m, face, shapely.difference(house, opening), GOTHIC, 1, 0.0, facing=-1.0)
+    _face_sides(m, face, house, -out, 0.0, GOTHIC, 1, inward=False)
+    if d == 0:
+        top = face.point(center, apex, -out / 2)
+        for side in (-1.0, 1.0):
+            foot_point = face.point(center + side * half, eaves, -out / 2)
+            rake = np.array([-side * half, apex - eaves])
+            _crockets(m, foot_point, top, face.direction(side * rake[1], abs(rake[0])), 0.45, 1.1)
+        tower(m, top[0], top[1], [(apex - 0.3, 0.32), (apex + 1.4, 0.03)], 4, GOTHIC, smooth=False, variant=1,
+              start=np.pi / 4)
+
+
+def _openwork_spire(m, cx, cy, z0, z1, r0, r1, d, start=np.pi / 8):
+    """An octagonal spire from z0 (corners r0 from its axis) to z1 (r1), in
+    tiers of tracery (painted: uv = (share across a face * 3.6, z)), with
+    crockets up its eight edges on near tiles."""
+    tiers = (12, 4, 1)[d]
+    z = np.linspace(z0, z1, tiers + 1)
+    r = r0 + (r1 - r0) * (z - z0) / (z1 - z0)
+    a = start + np.arange(9) * (np.pi / 4)
+    c, s = np.cos(a), np.sin(a)
+    quads, uvs = [], []
+    for i in range(tiers):
+        for k in range(8):
+            quads.append([(cx + r[i] * c[k], cy + r[i] * s[k], z[i]), (cx + r[i] * c[k + 1], cy + r[i] * s[k + 1], z[i]),
+                          (cx + r[i + 1] * c[k + 1], cy + r[i + 1] * s[k + 1], z[i + 1]),
+                          (cx + r[i + 1] * c[k], cy + r[i + 1] * s[k], z[i + 1])])
+            uvs.append([(0.0, z[i]), (3.6, z[i]), (3.6, z[i + 1]), (0.0, z[i + 1])])
+    _quads(m, np.array(quads), np.array(uvs), CATHEDRAL, round(28.8 * 10) * 4 + 3)
+    if d == 0:
+        for k in range(8):
+            foot = np.array([cx + r0 * c[k], cy + r0 * s[k], z0])
+            tip = np.array([cx + r1 * c[k], cy + r1 * s[k], z1])
+            _crockets(m, foot, tip, (c[k], s[k], 0.0), 0.55, 1.65)
+
+
+def _st_patricks_front(m, d, front):
+    """St. Patrick's west front on near and mid tiles (see _st_patricks)."""
+    orders = 3 if d == 0 else 1
+    # The central wall: the main portal (9.4 x 16 m, set back 3.7 m in orders
+    # to the bronze doors) under its gablet, the rose window (7.9 m) in its
+    # arch above, the gable over all.
+    face = _Face((front, -7.4), (front, 8.0))
+    mid = face.width / 2
+    portal = _arch(mid - 4.7, mid + 4.7, -1.0, 16.0, rise=6.0)
+    rose_arch = _arch(mid - 6.4, mid + 6.4, 18.5, 33.0)
+    _face_poly(m, face, shapely.difference(rect(0.0, -1.0, face.width, 34.0), shapely.union(portal, rose_arch)),
+               CATHEDRAL, 2)
+    doors = _face_recess(m, face, portal, 3.7, orders, 0.55, base=-0.7, keep_sill=True)
+    _face_poly(m, face, doors, GOTHIC, 3, 3.7)
+    _gabled_frame(m, face, mid, 5.7, -1.0, 12.0, 22.5, portal, 0.7, d)
+    back = _face_recess(m, face, rose_arch, 1.1, max(orders - 1, 1), 0.5)
+    rose = shapely.Point(mid, 26.0).buffer(4.25, quad_segs=(8, 4, 2)[d])
+    _face_poly(m, face, shapely.difference(back, rose), GOTHIC, 0, 1.1)
+    _face_poly(m, face, _face_recess(m, face, rose, 1.7, 1, 0.0, base=1.1), GOTHIC, 2, 1.7)
+    m.cap(rect(front - 3.6, -7.4, front, 8.0), 34.0, SLATE)
+    gable = Polygon([(0.0, 34.0), (face.width, 34.0), (mid, 47.5)])
+    _face_poly(m, face, gable, CATHEDRAL, 2)
+    _face_poly(m, face, gable, CATHEDRAL, 2, 2.7, facing=-1.0)
+    _face_sides(m, face, gable, 0.0, 2.7, GOTHIC, 1, inward=False)
+    if d == 0:
+        top = face.point(mid, 47.5, 1.2)
+        for side in (-1.0, 1.0):
+            _crockets(m, face.point(mid + side * mid, 34.0, 1.2), top, face.direction(side * 13.5, mid), 0.8, 1.6)
+    # The cross on the gable.
+    cx, cy, _ = face.point(mid, 0.0, 1.2)
+    m.box((cx, cy, 49.0), (0.5, 0.5, 3.0), GOTHIC)
+    m.box((cx, cy, 49.6), (0.5, 2.0, 0.45), GOTHIC)
+    # The towers.
+    for y0, y1, sign in ((-17.2, -7.4, -1.0), (8.0, 17.8, 1.0)):
+        outer, inner = (y0, y1) if sign < 0 else (y1, y0)
+        tx, ty = (42.5 + front) / 2, (y0 + y1) / 2
+        faces = [(_Face((front, y0), (front, y1)), True)]
+        side = _Face((42.5, outer), (front, outer)) if sign < 0 else _Face((front, outer), (42.5, outer))
+        faces.append((side, False))
+        for face, has_portal in faces:
+            c = face.width / 2
+            low = (_arch(c - 2.0, c + 2.0, -1.0, 10.0) if has_portal else _arch(c - 1.2, c + 1.2, 3.0, 11.0))
+            window = _arch(c - 1.9, c + 1.9, 16.0, 28.0)
+            _face_poly(m, face, shapely.difference(rect(0.0, -1.0, face.width, 41.5), shapely.union(low, window)),
+                       CATHEDRAL, 3)
+            if has_portal:
+                _face_poly(m, face, _face_recess(m, face, low, 1.6, orders, 0.45, base=-0.5, keep_sill=True),
+                           GOTHIC, 3, 1.6)
+                _gabled_frame(m, face, c, 2.8, -1.0, 8.0, 14.5, low, 0.5, d)
+            else:
+                _face_poly(m, face, _face_recess(m, face, low, 0.6, 1, 0.0), GOTHIC, 2, 0.6)
+            _face_poly(m, face, _face_recess(m, face, window, 0.9, max(orders - 1, 1), 0.3, base=-0.35), GOTHIC, 2,
+                       0.9)
+            _gabled_frame(m, face, c, 2.6, 15.0, 24.5, 31.0, window, 0.35, d)
+        # The back and the inner side, plain; the top, its pierced battlement.
+        if sign < 0:
+            m.walls([(42.5, y1), (42.5, y0)], -1.0, 41.5, CATHEDRAL, 3, closed=False)
+            m.walls([(front, y1), (42.5, y1)], -1.0, 41.5, CATHEDRAL, 3, closed=False)
+        else:
+            m.walls([(42.5, y1), (42.5, y0)], -1.0, 41.5, CATHEDRAL, 3, closed=False)
+            m.walls([(42.5, y0), (front, y0)], -1.0, 41.5, CATHEDRAL, 3, closed=False)
+        square = rect(42.5, y0, front, y1)
+        m.cap(square, 41.5, PAVING)
+        m.prism(shapely.difference(square, shapely.buffer(square, -0.4, join_style="mitre")), 41.5, 43.0, GOTHIC,
+                roof=GOTHIC)
+        # Buttresses at the corners, stepping back in three stages, small
+        # pinnacles on the setbacks and clustered ones on top.
+        stages = ((-1.0, 15.0, 1.6), (15.0, 28.0, 1.1), (28.0, 41.5, 0.6))
+        for k, (z0, z1, p) in enumerate(stages):
+            for box in (rect(front - 2.0, min(outer + sign * p, outer - sign * 1.8), front + p,
+                             max(outer + sign * p, outer - sign * 1.8)),
+                        rect(front - 0.5, min(inner - sign * 1.8, inner + sign * 0.8), front + p,
+                             max(inner - sign * 1.8, inner + sign * 0.8)),
+                        rect(42.5, min(outer + sign * p, outer - sign * 1.2), 44.5,
+                             max(outer + sign * p, outer - sign * 1.2))):
+                m.prism(box, z0, z1, GOTHIC, roof=GOTHIC)
+            if d == 0 and k < 2:
+                nxt = stages[k + 1][2]
+                for y in (outer - sign * 0.8, inner - sign * 0.5):
+                    _pinnacle(m, front + (p + nxt) / 2, y, z1, z1 + 4.0, 0.22)
+        if d < 2:
+            for x, y, h in ((front - 0.7, outer - sign * 0.6, 0.8), (front, inner - sign * 0.5, 0.75),
+                            (43.5, outer - sign * 0.3, 0.75), (43.2, inner + sign * 0.7, 0.6)):
+                _pinnacle(m, x, y, 41.5, 53.5, h)
+        if d == 0:
+            for x, y in ((front - 0.3, ty), (tx, outer - sign * 0.3), (tx, inner + sign * 0.3), (42.8, ty)):
+                _pinnacle(m, x, y, 43.0, 48.5, 0.35)
+        # The octagonal lantern with gablets and pinnacles round its top, the
+        # spire, its molding between the two tiers, and the cross.
+        tower(m, tx, ty, [(41.5, 4.75), (57.6, 4.75)], 8, CATHEDRAL, close_top=False, smooth=False, variant=3,
+              start=np.pi / 8)
+        tower(m, tx, ty, [(57.6, 5.1), (59.0, 5.1), (59.0, 4.7)], 8, CATHEDRAL, close_top=False, smooth=False,
+              variant=3, start=np.pi / 8)
+        corners = [(tx + 4.75 * math.cos(np.pi / 8 + k * np.pi / 4), ty + 4.75 * math.sin(np.pi / 8 + k * np.pi / 4))
+                   for k in range(9)]
+        if d < 2:
+            for k in range(8):
+                lantern = _Face(corners[k], corners[k + 1])
+                _gabled_frame(m, lantern, lantern.width / 2, lantern.width / 2 - 0.25, 54.0, 56.5, 61.5,
+                              Polygon(), 0.45, d)
+                a = np.pi / 8 + k * np.pi / 4
+                _pinnacle(m, tx + 5.2 * math.cos(a), ty + 5.2 * math.sin(a), 53.0, 63.0, 0.38)
+        _openwork_spire(m, tx, ty, 59.0, 98.6, 4.7, 0.25, d)
+        tower(m, tx, ty, [(78.4, 2.75), (79.6, 2.75)], 8, GOTHIC, close_top=False, smooth=False, variant=1,
+              start=np.pi / 8)
+        m.box((tx, ty, 99.5), (0.3, 0.3, 1.9), GOTHIC)
+        m.box((tx, ty, 99.8), (0.3, 1.1, 0.25), GOTHIC)
+
+
 def _st_patricks(m: Model, ctx: Context) -> None:
-    """St. Patrick's Cathedral (James Renwick Jr., 1878; spires 1888): white
-    marble Gothic on a Latin cross. The aisles and chapels to 20.5 m over the
-    footprint data's plan, the nave (15 m across, the clerestory's top at
-    32 m) and transepts (53 m across) under steep slate roofs to the city's
-    3-D model's ridge at 42.6 m, the apse; on Fifth Avenue the central gable
-    (48 m, with the rose window, 7.9 m) between two towers 9.8 m square:
-    square to 41 m, then octagonal lanterns (16 m) and spires (43 m) to
-    100.4 m. Wikipedia, "St. Patrick's Cathedral (Manhattan)". Local x runs
-    west to Fifth Avenue, y south; the nave's axis is y = 0.4."""
+    """St. Patrick's Cathedral (James Renwick Jr., 1878; spires 1888): Tuckahoe
+    and Lee marble Gothic on a Latin cross, weathered gray-tan. The aisles and
+    chapels to 20.5 m over the footprint data's plan, the nave (15 m across,
+    the clerestory's top at 32 m) and transepts (53 m across) under steep
+    slate roofs to the city's 3-D model's ridge at 42.6 m, the apse. The west
+    front on Fifth Avenue: the central gable (156 ft, 48 m, crocketed, with its
+    cross) over the main portal (31 ft wide and 51 ft high, set back 12 ft in
+    orders to the bronze doors, 16.5 ft high) and its gablet, and the rose
+    window (26 ft) in a pointed arch; two towers 32 ft (9.8 m) square to
+    136 ft (41.5 m), each with a portal and gablet, a window under a gable,
+    four small windows to a side under a pierced battlement, buttresses at the
+    corners stepping back in three stages, and clustered pinnacles on top; the
+    octagonal lanterns (54 ft) with gablets and pinnacles round their tops,
+    and the spires (140 ft) in two tiers of tracery, crockets up their edges,
+    to 100.4 m. Wikipedia, "St. Patrick's Cathedral (Manhattan)". Local x runs
+    west to Fifth Avenue, y south; the nave's axis is y = 0.4, the front at
+    x = 52.3."""
     d = m.detail
-    yc, eaves, ridge, aisle = 0.4, 32.0, 42.6, 20.5
+    yc, eaves, ridge, aisle, front = 0.4, 32.0, 42.6, 20.5, 52.3
     plan = shapely.simplify(_local_footprint(ctx), TOLERANCE[d])
     nave = rect(-35.0, yc - 8.0, 49.6, yc + 8.0)
     transept = rect(-13.8, -22.2, 2.5, 23.8)
     apse = shapely.intersection(shapely.Point(-35.0, yc).buffer(8.0, quad_segs=4),
                                 rect(-44.0, yc - 8.0, -35.0, yc + 8.0))
     cross = shapely.union_all([nave, transept, apse])
-    towers = [rect(42.5, -17.2, 52.3, -7.4), rect(42.5, 8.0, 52.3, 17.8)]
+    towers = [rect(42.5, -17.2, front, -7.4), rect(42.5, 8.0, front, 17.8)]
     # Aisles and chapels, then the clerestory over the cross.
-    low = shapely.difference(plan, shapely.union_all(towers))
+    # (Near, the west front between the towers is built on its own.)
+    if d < 2:
+        towers_and_front = shapely.union_all(towers + [rect(48.0, -7.4, front + 10.0, 8.0)])
+    else:
+        towers_and_front = shapely.union_all(towers)
+    low = shapely.difference(plan, towers_and_front)
     for poly in polygons_of(low, 1.0):
         poly = shapely.orient_polygons(poly)
         m.walls(np.asarray(poly.exterior.coords), -1.0, aisle, CATHEDRAL, 0)
@@ -1196,22 +1503,20 @@ def _st_patricks(m: Model, ctx: Context) -> None:
         if normal[2] < 0:
             tri, normal = tri[[0, 2, 1]], -normal
         m.add(tri[None], tri[None, :, :2], SLATE, 0.0, normal / np.linalg.norm(normal), flags=ROOF)
-    # The west front between the towers: its wall and the central gable.
-    m.prism(rect(49.6, -7.4, 52.3, 8.0), -1.0, 34.0, CATHEDRAL, variant=2, roof=SLATE)
-    m.tri_plate((51.1, -7.4, 34.0), (51.1, 8.0, 34.0), (51.1, yc, 47.5), 2.4, CATHEDRAL, variant=2)
-    # The towers, their lanterns and spires.
-    for tw in towers:
-        tx, ty = tw.centroid.x, tw.centroid.y
-        m.prism(tw, -1.0, 41.5, CATHEDRAL, variant=3, roof=PAVING)
-        tower(m, tx, ty, [(41.5, 4.75), (57.6, 4.75)], 8, CATHEDRAL, close_top=False, smooth=False, variant=3,
-              start=np.pi / 8)
-        tower(m, tx, ty, [(57.6, 5.1), (59.0, 5.1), (59.0, 4.7), (100.4, 0.15)], 8, CATHEDRAL, smooth=False,
-              variant=3, start=np.pi / 8)
-        if d < 2:
-            for sx in (-1, 1):
-                for sy in (-1, 1):
-                    tower(m, tx + sx * 4.2, ty + sy * 4.2, [(41.5, 0.7), (43.5, 0.7), (48.0, 0.05)], 4, CATHEDRAL,
-                          smooth=False, variant=3, start=np.pi / 4)
+    if d < 2:
+        _st_patricks_front(m, d, front)
+    else:
+        # Far away: the central wall and gable, the towers, lanterns and spires.
+        m.prism(rect(49.6, -7.4, front, 8.0), -1.0, 34.0, CATHEDRAL, variant=2, roof=SLATE)
+        m.tri_plate((51.1, -7.4, 34.0), (51.1, 8.0, 34.0), (51.1, yc, 47.5), 2.4, CATHEDRAL, variant=2)
+        for tw in towers:
+            tx, ty = tw.centroid.x, tw.centroid.y
+            m.prism(tw, -1.0, 41.5, CATHEDRAL, variant=3, roof=PAVING)
+            tower(m, tx, ty, [(41.5, 4.75), (57.6, 4.75)], 8, CATHEDRAL, close_top=False, smooth=False, variant=3,
+                  start=np.pi / 8)
+            tower(m, tx, ty, [(57.6, 5.1), (59.0, 5.1), (59.0, 4.7)], 8, CATHEDRAL, close_top=False, smooth=False,
+                  variant=3, start=np.pi / 8)
+            _openwork_spire(m, tx, ty, 59.0, 100.4, 4.7, 0.15, d)
     # Pinnacles on the buttresses along the aisles and on the transepts' corners.
     if d == 0:
         for x in np.arange(-31.0, 42.0, 7.2):
@@ -1219,12 +1524,10 @@ def _st_patricks(m: Model, ctx: Context) -> None:
                 continue
             for y in (yc - 21.0, yc + 21.0):
                 if shapely.contains_xy(plan, x, y + (0.8 if y < yc else -0.8)):
-                    tower(m, x, y, [(aisle - 0.5, 0.6), (aisle + 1.2, 0.6), (aisle + 5.0, 0.05)], 4, CATHEDRAL,
-                          smooth=False, variant=3, start=np.pi / 4)
+                    _pinnacle(m, x, y, aisle - 0.5, aisle + 5.0, 0.42)
         for x in (-13.8, 2.5):
             for y in (-22.2, 23.8):
-                tower(m, x, y, [(eaves - 1.0, 0.8), (eaves + 2.0, 0.8), (eaves + 8.0, 0.05)], 4, CATHEDRAL,
-                      smooth=False, variant=3, start=np.pi / 4)
+                _pinnacle(m, x, y, eaves - 1.0, eaves + 8.0, 0.57)
 
 
 def _gable(m, a, b, half, eaves, ridge, roof, wall, ends=(True, True), wall_variant=1):
