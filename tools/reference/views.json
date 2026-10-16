@@ -118,7 +118,7 @@
     {
       "name": "brooklyn_bridge",
       "title": "Brooklyn Bridge promenade by the Brooklyn tower, looking toward Lower Manhattan",
-      "cam": "-809,46.0,5924,42.2,1.5",
+      "cam": "-761,43.5,5975,42.2,1.5",
       "photo": {
         "file": "File:Brooklyn Bridge, New York City, 20231005 0939 2163.jpg",
         "page": "https://commons.wikimedia.org/wiki/File:Brooklyn_Bridge,_New_York_City,_20231005_0939_2163.jpg",
@@ -130,8 +130,8 @@
         "hfov": 54.4
       },
       "camera_lat_lon": [40.70422432, -73.99446815],
-      "spawn": "-782,2,5953",
-      "pose_note": "On the deck's center line, 70 m Manhattan-side of the geotag: the game's Brooklyn tower stands where the photographer did, so the camera is moved just past it. 5 m above the 41 m deck (the photo is from the raised promenade, which the game doesn't have)."
+      "spawn": "-731,2,6001",
+      "pose_note": "Geotag moved 3 m to the promenade's south edge (the photo looks down on the roadway at left), 16 m Manhattan-side of the Brooklyn tower (now where OpenStreetMap has it), at eye height over the promenade (5.5 m above the 36.35 m roadway)."
     },
     {
       "name": "dumbo",

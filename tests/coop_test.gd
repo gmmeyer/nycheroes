@@ -53,9 +53,11 @@ func _host_steps() -> Array[Dictionary]:
 			if Net.host_enet(PORT) != OK:
 				_fail("couldn't host on port %d" % PORT)
 			_client_log = ProjectSettings.globalize_path("user://coop_test_client.log")
+			# The second game reads the city from the same place (--tiles=).
+			var tiles := Array(OS.get_cmdline_user_args()).filter(func(arg: String) -> bool: return arg.begins_with("--tiles="))
 			_client_pid = OS.create_process(OS.get_executable_path(), [
 				"--headless", "--log-file", _client_log, "--path", ProjectSettings.globalize_path("res://"),
-				"res://tests/coop_test.tscn", "--", "--role=client"]),
+				"res://tests/coop_test.tscn", "--", "--role=client"] + tiles),
 			func() -> bool: return Net.peers().size() == 1),
 		_step("their hero appears next to ours", 30.0, Callable(), func() -> bool:
 			var other := _other_hero()

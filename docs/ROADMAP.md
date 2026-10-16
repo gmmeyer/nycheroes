@@ -144,7 +144,8 @@ In order:
 4. **Street life:** trees, street paint, street lights and street
    furniture (done, below); parked cars and traffic.
 5. **Landmarks:** about 25 hand-made iconic buildings and bridges (first
-   batch of 8 done, below; self-made and free, decided 2026-10-15).
+   batch of 8 done, and four bridges, below; self-made and free, decided
+   2026-10-15).
 6. **Light and atmosphere:** sun position for NYC, clouds, haze, glass
    reflections, night mode with lit windows and street lights.
 7. **Check against reality:** about 10 reference viewpoints compared side by
@@ -491,7 +492,55 @@ In order:
   more landmarks: the Guggenheim, the Unisphere, the Public Library, St.
   Patrick's, Citigroup Center, the Met, the UN Secretariat, the Hearst
   Tower, 432 Park, the Vessel and Edge, the Oculus, the Wonder Wheel and
-  Parachute Jump, Yankee Stadium; the Brooklyn and Manhattan Bridges.
+  Parachute Jump, Yankee Stadium.
+
+**Landmark bridges (done, 2026-10-16):**
+- `tools/citygen/bridge_landmarks.py` builds four bridges by hand at their
+  real dimensions over their main spans (anchorage to anchorage, or between
+  the towers); `bridges.py`'s generic deck, columns and lamps stay on their
+  approaches. Positions from OpenStreetMap; dimensions from NYC DOT, the
+  HAER records and the figures Wikipedia cites.
+  - The Brooklyn Bridge: granite towers to 84.3 m, each with two pointed
+    arches 35.7 m high over the roadway, the piers standing proud, a string
+    course and cornice; four cables over four stiffening trusses (open up
+    close, with crossbeams over the roadways), suspenders every 2.8 m and
+    the diagonal stays fanning from the tower tops; the wooden promenade
+    5.5 m above the roadways, widening around the towers' central piers,
+    with historic lanterns instead of cobra-heads; limestone anchorages;
+    the roadway cambered from 36.35 m at the towers to 41.1 m mid-river;
+    granite sides and piers on the approaches.
+  - The Manhattan Bridge: blue steel towers of four tapering columns on
+    masonry piers, X bracing, arched portals under the top girder and under
+    the deck, finials; four cables over four 7.3 m trusses; the upper
+    roadways over the subway tracks (two each side), the lower roadway 6.2 m
+    down between the inner trusses (climbing to the upper level at the
+    anchorages), the walkway and bikeway outside; granite anchorages.
+  - The Hell Gate Bridge (newly built, from the railroad structures): the
+    two-hinged arch with its humped upper chord, hangers and posts, four
+    tracks, granite towers with arched passages, Hell Gate Red; its 3.3 km
+    viaduct as a generic deck with a ballast bed.
+  - The High Bridge (newly built, from the pedestrian structures): granite
+    arches on their piers, the 1928 steel arch over the Harlem River, the
+    brick walkway level from bluff to bluff, lampposts.
+- Drawn in the structures surface like the other bridges (no extra draw
+  calls, collision up close): new structure kinds (painted steel, walkways,
+  track beds) and per-bridge palettes in uv2.y, painted in
+  `ground.gdshader`; far off, steel bands are painted as open trusses.
+  At night the towers (and the High Bridge's arches) are floodlit and the
+  cables keep their necklace lights.
+- Traffic follows the decks (lanes and paint read the road tops). Paths
+  the data codes as bridges without lanes (the promenade, the Manhattan
+  Bridge's walkway and bikeway, the High Bridge) no longer get cars, and
+  raised-road decks stay off the hand-made bridges (a phantom deck under
+  the High Bridge is gone).
+- Cost: triangles near / mid / far: Brooklyn 31.2k / 8.9k / 3.9k (was
+  7.9k / 6.1k / 4.5k), Manhattan 23.5k / 7.6k / 2.6k (was 6.9k / 5.4k /
+  3.8k), Hell Gate with its viaduct 16.7k / 12.2k / 6.3k, the High Bridge
+  2.3k / 1.3k / 0.5k. Tiles +1.6 MB near, +0.5 MB mid, +0.2 MB far.
+- Next: the Manhattan Bridge's arch and colonnade, the anchorages' arched
+  vaults, the Williamsburg and Queensboro by hand, the Hell Gate viaduct's
+  real heights over Wards and Randalls Islands (it stays at the arch's
+  44 m there).
 
 **Sound (done; added 2026-10-15 at the user's request):**
 - The hero: footsteps on the run animation's foot contacts (grass, boards,
@@ -625,8 +674,9 @@ Comes after step 6 because it needs step 6's real ground heights.
 - **Cost:** near tiles about +25 MB (+2%), mid +7 MB, far +1.8 MB; 2-12%
   more draw calls in viaduct views.
 - **Still to do:** the roadbed drawn on the ground under viaducts, elevated
-  subway lines, rail and pedestrian bridges over water (Hell Gate, the High
-  Bridge), sunken roads (the triple cantilever), walking lanes on decks,
+  subway lines, rail and pedestrian bridges over water (the Hell Gate and
+  High Bridge are built by hand, see "Landmark bridges"), sunken roads
+  (the triple cantilever), walking lanes on decks,
   signal phases where ramps meet streets; tall viaducts come out lower
   than real (7 m per level).
 

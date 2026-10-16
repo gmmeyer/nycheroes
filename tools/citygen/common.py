@@ -121,10 +121,16 @@ GROUND_SEAWALL = 3
 GROUND_SAND = 4
 GROUND_MARSH = 5
 STRUCTURE_CONCRETE = 6
-STRUCTURE_CABLE = 7
+STRUCTURE_CABLE = 7    # main cables (uv.y 0..1 across each face: necklace lights) and ropes
 STRUCTURE_STONE = 8
 GROUND_YARD = 9  # back yards, gardens and lawns around homes
-# Markings surface kinds; uv = (meters along, meters across).
+# Hand-made bridges' structures (bridge_landmarks.py). Their uv2.y (and that
+# of concrete, cables and stone there) is a palette and flags, see
+# bridge_landmarks.PALETTES; 0 elsewhere.
+STRUCTURE_STEEL = 14    # painted steel: towers, trusses, arches
+STRUCTURE_WALKWAY = 15  # walkways: uv = (meters along, meters across)
+STRUCTURE_RAIL = 16     # track beds: uv = (meters along, meters from the track's middle)
+# Markings surface kinds (10-13, another surface); uv = (meters along, meters across).
 GROUND_MARKING_WHITE = 10      # solid white: stop lines, highway edge lines
 GROUND_MARKING_YELLOW = 11     # double yellow center line: a 0.45 m strip, uv.y -0.225..0.225,
                                # painted where |uv.y| >= 0.075

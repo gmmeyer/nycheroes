@@ -4,9 +4,17 @@
 // that fade to their average color in the distance.
 // UV2.x: 0 pavement, 1 road, 2 park, 3 seawall, 4 sand, 5 marsh,
 //        6 concrete (curbs, bridge deck sides, columns, steel towers), 7 cable, 8 stone (towers),
-//        9 yard (back yards, gardens, lawns around homes).
+//        9 yard (back yards, gardens, lawns around homes),
+//        14 painted steel, 15 walkway, 16 track bed (the hand-made bridges,
+//        tools/citygen/bridge_landmarks.py).
 //        Bridge deck tops are road.
-// UV: world x/z on flat ground; (meters along, meters up) on walls.
+// UV2.y: structures on the hand-made bridges carry palette + 8 * flags (the
+//        bridge's colors: 1 Brooklyn, 2 Manhattan, 3 Hell Gate, 4 High Bridge;
+//        flags 1 lattice: steel painted as an open truss, its UV.y 0..1 up
+//        the band; 2 floodlit at night; 4 ballast: a track bed without
+//        ties); 0 everywhere else.
+// UV: world x/z on flat ground; (meters along, meters up) on walls; walkways
+//     and track beds (meters along, meters across; a track's from its middle).
 // Parks, yards and marshes under trees (the citywide canopy map, see
 // CityStreamer) read as woods seen from above past where the tree props
 // draw, so wooded parks don't end where the near tiles do: round crowns in
@@ -41,6 +49,30 @@ const int CONCRETE = 6;
 const int CABLE = 7;
 const int STONE = 8;
 const int YARD = 9;
+const int STEEL = 14;
+const int WALKWAY = 15;
+const int RAIL = 16;
+const int BROOKLYN = 1;
+const int HIGH_BRIDGE = 4;
+const int LATTICE = 1;
+const int FLOODLIT = 2;
+const int BALLAST = 4;
+
+// The hand-made bridges' palettes (sRGB), by UV2.y % 8: none (steel
+// otherwise unused), Brooklyn (Brooklyn Bridge Tan steel and cables, buff
+// granite towers and limestone anchorages, wooden promenade), Manhattan
+// (blue steel, gray granite, blue-gray cables), Hell Gate (Hell Gate Red,
+// light granite), High Bridge (gray steel, weathered granite, brick walk).
+const vec3 STEEL_COLORS[5] = vec3[](vec3(0.56, 0.57, 0.6), vec3(0.6, 0.55, 0.49), vec3(0.34, 0.54, 0.76),
+		vec3(0.58, 0.23, 0.2), vec3(0.44, 0.49, 0.47));
+const vec3 STONE_COLORS[5] = vec3[](vec3(0.76, 0.68, 0.53), vec3(0.71, 0.67, 0.6), vec3(0.68, 0.65, 0.61),
+		vec3(0.72, 0.7, 0.65), vec3(0.62, 0.58, 0.52));
+const vec3 CABLE_COLORS[5] = vec3[](vec3(0.8, 0.82, 0.85), vec3(0.5, 0.45, 0.39), vec3(0.6, 0.66, 0.74),
+		vec3(0.5, 0.22, 0.2), vec3(0.44, 0.49, 0.47));
+const vec3 WALKWAY_COLORS[5] = vec3[](vec3(0.55, 0.42, 0.3), vec3(0.52, 0.45, 0.38), vec3(0.55, 0.55, 0.52),
+		vec3(0.5, 0.5, 0.48), vec3(0.6, 0.33, 0.25));
+// A truss panel's length (m) per palette, for lattice-painted steel.
+const float TRUSS_PANELS[5] = float[](5.0, 5.54, 7.5, 12.9, 7.0);
 
 // The photo fades out between these distances from the camera (meters).
 uniform vec2 aerial_near_fade = vec2(25.0, 110.0);
@@ -112,6 +144,13 @@ uniform vec2 sign_district_along = vec2(-330.0, 420.0);
 uniform vec2 sign_district_across = vec2(-120.0, 110.0);
 uniform float sign_glow_fade = 60.0;
 uniform float sign_glow_strength = 0.85;
+// Floodlit structures at night (the Brooklyn Bridge's towers, the Manhattan
+// Bridge's, the High Bridge's arches): light color and strength.
+uniform vec3 floodlight_color : source_color = vec3(1.0, 0.88, 0.7);
+uniform float floodlight_strength = 1.3;
+// Lattice-painted steel: how dark the gaps between the members read (the
+// shade inside a deck seen through its truss).
+uniform float truss_gap_shade = 0.32;
 
 // The screens' light (linear, before city_lights) on flat ground at world x/z.
 vec3 sign_glow(vec2 xz) {
@@ -133,7 +172,29 @@ vec3 sign_glow(vec2 xz) {
 	return mix(color, vec3(0.9), 0.2) * (amount * sign_glow_strength);
 }
 
-vec3 base_color(int kind) {
+vec3 base_color(int kind, int palette) {
+	if (palette > 0 || kind >= STEEL) {
+		// The hand-made bridges' structures.
+		int p = clamp(palette, 0, 4);
+		if (kind == STEEL) {
+			return srgb(STEEL_COLORS[p]);
+		}
+		if (kind == STONE) {
+			return srgb(STONE_COLORS[p]);
+		}
+		if (kind == CABLE) {
+			return srgb(CABLE_COLORS[p]);
+		}
+		if (kind == WALKWAY) {
+			return srgb(WALKWAY_COLORS[p]);
+		}
+		if (kind == RAIL) {
+			return srgb(vec3(0.45, 0.42, 0.39));  // ballast
+		}
+		if (kind == CONCRETE) {
+			return srgb(STEEL_COLORS[p]) * 0.7;  // floors among the steel
+		}
+	}
 	if (kind == ROAD) {
 		return road_color;
 	}
@@ -310,6 +371,77 @@ vec3 woods(vec3 color, vec2 p, vec2 footprint, float cover, vec2 canopy_uv, vec2
 	return mix(color, woods_color, woods_amount);
 }
 
+// The hand-made bridges' flat structures: walkways (planks across a wooden
+// promenade, brick paving, or concrete slabs) and track beds (ballast, ties, rails). `p` is
+// (meters along, meters across), world x/z on ballast-only beds.
+vec3 structure_flat(int kind, int palette, int flags, vec2 p, vec2 footprint, vec3 color) {
+	float pixel = max(footprint.x, footprint.y);
+	if (kind == WALKWAY) {
+		if (palette == HIGH_BRIDGE) {
+			// Brick pavers in pairs, alternating direction (0.2 m squares).
+			vec2 q = p / 0.2;
+			vec2 cell = floor(q);
+			float joints = max(centered_stripes(q.x, 0.08, footprint.x / 0.2), centered_stripes(q.y, 0.08, footprint.y / 0.2));
+			float split = mod(cell.x + cell.y, 2.0) < 0.5 ? centered_stripes(q.y + 0.5, 0.08, footprint.y / 0.2)
+					: centered_stripes(q.x + 0.5, 0.08, footprint.x / 0.2);
+			float detail = visible(0.1, pixel);
+			float tint = (hash(floor(q * vec2(1.0, 2.0))) - 0.5) * 0.16 * detail;
+			return color * (1.0 + tint) * (1.0 - 0.35 * max(joints, split) * detail);
+		}
+		if (palette != BROOKLYN) {
+			// Concrete slabs with joints across, every 3 m.
+			float slab = p.x / 3.0;
+			float joints = centered_stripes(slab, 0.01, footprint.x / 3.0);
+			float tint = (hash(vec2(floor(slab), 9.1)) - 0.5) * 0.08 * visible(3.0, pixel);
+			return color * (1.0 + tint) * (1.0 - 0.3 * joints);
+		}
+		// Boards laid across, each a little different, dark seams between.
+		float board = p.x / 0.15;
+		float seams = centered_stripes(board, 0.1, footprint.x / 0.15);
+		float detail = visible(0.15, pixel);
+		float tint = (hash(vec2(floor(board), 3.7)) - 0.5) * 0.22 * detail;
+		float worn = value_noise(p * vec2(0.3, 1.5)) * 0.12;
+		return color * (1.0 + tint - worn) * (1.0 - 0.45 * seams * detail);
+	}
+	if (kind == RAIL) {
+		float detail = visible(0.6, pixel);
+		vec3 ballast = color * (0.85 + 0.3 * value_noise(p * 7.0) * visible(0.15, pixel) + 0.1 * value_noise(p * 0.4));
+		if ((flags & BALLAST) != 0) {
+			return ballast;
+		}
+		// Ties every 0.6 m, standard gauge rails (1.435 m) on them.
+		float ties = stripes(p.x / 0.6 + 0.2, 0.4, footprint.x / 0.6) * band(abs(p.y), 0.0, 1.3, footprint.y);
+		vec3 bed = mix(ballast, srgb(vec3(0.33, 0.26, 0.2)), ties * mix(0.4, 1.0, detail));
+		float rails = band(abs(p.y), 0.68, 0.78, footprint.y);
+		return mix(bed, srgb(vec3(0.62, 0.62, 0.64)), rails * mix(0.3, 1.0, visible(0.1, footprint.y)));
+	}
+	return color;
+}
+
+// Painted steel on walls: plain plates with faint seams, or (lattice) an open
+// truss's chords, posts and crossed diagonals over the deep shade behind,
+// along a band whose UV.y runs 0..1 from its foot to its top.
+vec3 steel_wall(int palette, int flags, vec2 p, vec2 footprint, vec3 color) {
+	if ((flags & LATTICE) != 0) {
+		float panel = TRUSS_PANELS[clamp(palette, 0, 4)];
+		float q = p.x / panel;
+		float fq = footprint.x / panel;
+		float r = p.y;
+		float chords = max(band(r, -1.0, 0.14, footprint.y), band(r, 0.86, 2.0, footprint.y));
+		float posts = centered_stripes(q, 0.07, fq);
+		float f = fract(q);
+		float d = min(abs(r - f), abs(r - (1.0 - f)));
+		float aa = max(max(fq, footprint.y), 1e-4);
+		float diagonals = 1.0 - smoothstep(0.05 - aa, 0.05 + aa, d);
+		float member = max(max(chords, posts), diagonals);
+		// Too small to see: the average of steel and shade.
+		member = mix(0.5, member, visible(panel * 0.3, footprint.x));
+		return mix(color * truss_gap_shade, color, member);
+	}
+	float seams = max(centered_stripes(p.x / 3.0, 0.015, footprint.x / 3.0), centered_stripes(p.y / 1.5, 0.02, footprint.y / 1.5));
+	return color * (1.0 - 0.12 * seams);
+}
+
 vec3 wall_surface(int kind, vec2 p, vec2 footprint, vec3 color) {
 	if (kind == SEAWALL) {
 		return color * (1.0 - 0.3 * block_joints(p, footprint, vec2(1.4, 0.7), 0.03));
@@ -344,8 +476,14 @@ void fragment() {
 
 	// Broad, soft variation so large areas don't look flat.
 	float variation = value_noise(UV * 0.04) * 0.6 + value_noise(UV * 0.31) * 0.4;
-	vec3 color = base_color(kind) * mix(0.92, 1.06, variation);
-	if (world_normal.y > 0.7) {
+	int structure_code = int(UV2.y + 0.5);
+	int palette = structure_code % 8;
+	int structure_flags = structure_code / 8;
+	vec3 color = base_color(kind, palette) * mix(0.92, 1.06, variation);
+	if (kind >= STEEL) {
+		color = kind == STEEL ? steel_wall(palette, structure_flags, UV, footprint, color)
+				: structure_flat(kind, palette, structure_flags, UV, footprint, color);
+	} else if (world_normal.y > 0.7) {
 		color = flat_ground(kind, UV, footprint, color);
 		if (kind == PARK || kind == YARD || kind == MARSH) {
 			vec3 ray = (INV_VIEW_MATRIX * vec4(VERTEX, 0.0)).xyz;
@@ -366,7 +504,7 @@ void fragment() {
 	float far_enough = smoothstep(aerial_near_fade.x, aerial_near_fade.y, length(VERTEX));
 	ALBEDO = toon_night_albedo(mix(color, photo, photographed ? aerial_amount(aerial_uv) * far_enough : 0.0));
 	EMISSION = ALBEDO * toon_ambient(shading_normal, 1.0);
-	toon_glint = kind == CABLE ? 0.3 : 0.0;
+	toon_glint = kind == CABLE ? 0.3 : (kind == STEEL ? 0.12 : 0.0);
 
 	if (city_lights > 0.0) {
 		float distance_to_camera = length(VERTEX);
@@ -388,6 +526,9 @@ void fragment() {
 			float bulbs = centered_stripes(UV.x / cable_light_spacing, 0.12, footprint.x / cable_light_spacing)
 					* band(UV.y, 0.3, 0.7, footprint.y);
 			EMISSION += cable_light_color * (bulbs * cable_light_glow * city_lights);
+		}
+		if ((structure_flags & FLOODLIT) != 0) {
+			EMISSION += ALBEDO * floodlight_color * (floodlight_strength * city_lights);
 		}
 	}
 }
