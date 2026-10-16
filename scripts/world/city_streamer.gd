@@ -63,7 +63,8 @@ const PHOTO_PRIORITY := 300.0
 ## camera (m); shaders/markings.gdshader fades the paint out before that.
 const MARKINGS_RANGE := 1100.0
 ## Rowhouse fronts' railings, fences, shrubs and awnings stop drawing beyond
-## this (their tile's center from the camera, m), where they're specks.
+## this (their tile's center from the camera, m), where they're specks
+## (Quality shortens it on phones and tablets: fronts_range).
 const FRONTS_RANGE := 600.0
 
 ## Where a loaded tile's aerial photo is: NONE if it has none (or photos are
@@ -138,6 +139,8 @@ var _merged_building_material: ShaderMaterial
 ## The second batch of landmarks' own materials (the landmarks surface).
 var landmark_material := _new_landmark_material()
 ## Churches' own material (the churches surface), and rowhouse fronts' small parts'.
+## How far rowhouse fronts draw (m, see FRONTS_RANGE); set before tiles load.
+var fronts_range := FRONTS_RANGE
 var church_material := _new_material(preload("res://shaders/church.gdshader"))
 var fronts_material := _new_material(preload("res://shaders/fronts.gdshader"))
 var _props: CityProps
@@ -578,12 +581,15 @@ func _build_tile_node(tile: Tile, data: PackedByteArray) -> Node3D:
 			node.add_child(markings)
 			continue
 		if surface.kind == CityTileDecoder.SURFACE_FRONTS:
-			# Railings, fences, shrubs and awnings: no collision, and only up close.
+			# Railings, fences, shrubs and awnings: no collision, and only up close;
+			# no shadows (thin, and the sun's splits would draw them up to four
+			# more times).
 			var fronts := MeshInstance3D.new()
 			fronts.name = "Fronts"
 			fronts.mesh = surface.mesh
 			fronts.material_override = fronts_material
-			fronts.visibility_range_end = FRONTS_RANGE
+			fronts.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			fronts.visibility_range_end = fronts_range
 			node.add_child(fronts)
 			continue
 		var is_buildings: bool = surface.kind == CityTileDecoder.SURFACE_BUILDINGS
