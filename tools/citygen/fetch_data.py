@@ -82,6 +82,14 @@ DATASETS = {
         "k5k6-6jex",  # NYC DOT Pedestrian Plazas
         {"$select": "the_geom,plazaname"},
     ),
+    "railroad_lines": (
+        "anc7-97cy",  # Planimetric Database: Railroad Line (track centerlines: elevated, embankment, ...)
+        {"$select": "the_geom,feat_code,name"},
+    ),
+    "railroad_structures": (
+        "dwer-xbgx",  # Planimetric Database: Railroad Structure (elevated and other stations)
+        {"$select": "the_geom,feat_code", "$where": "feat_code in ('2140','2160')"},
+    ),
 }
 
 

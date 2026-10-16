@@ -46,8 +46,8 @@ import bridges
 import markings
 import props
 import traffic
-from common import (CURB_HEIGHT, FEET, GROUND_ROAD, MARKING_LIFT, STRUCTURE_CONCRETE, STRUCTURE_WALKWAY, MeshBuilder,
-                    lines_of, load_features, polygons_of, project)
+from common import (CURB_HEIGHT, FEET, GROUND_ROAD, MARKING_LIFT, STRUCTURE_CONCRETE, STRUCTURE_RAIL, STRUCTURE_STEEL,
+                    STRUCTURE_WALKWAY, MeshBuilder, lines_of, load_features, polygons_of, project)
 from markings import AT_GRADE, BOTH, HIGHWAY, STREET
 
 BRIDGE_CODE = "2300"
@@ -100,11 +100,21 @@ MEDIAN = 1.0               # columns may stand this close to a two-way street's 
 CAP_DEPTH = 1.2            # the pier cap under the deck
 WIDE_DECK = 16.0           # wider roads stand on two columns
 COLUMN_STREET_GAP = 4.0    # columns keep this far from streets crossing underneath
+# The city's roadbed outlines take in raised roads too, so they'd draw road on
+# the ground under viaducts and bridge approaches: under decks at least this
+# high, away from the streets at grade (their width and this margin), the
+# roadbed isn't road (roads_under_decks).
+GHOST_GAP = 3.0
+STREET_MARGIN = 1.0
 # How finely decks follow their heights, per level (meters between points),
 # and the smallest decks the far tiles keep (m^2).
 DECK_SPACING = {"lod0": 10.0, "lod1": 20.0, "lod2": 40.0}
 FAR_MIN_AREA = 3000.0
 DETAILED = ("lod0", "lod1")
+
+# What props mustn't reach up into: decks' and bridges' tops, and the hand-made
+# bridges' and the els' (els.py).
+OVERHEAD = (GROUND_ROAD, STRUCTURE_CONCRETE, STRUCTURE_STEEL, STRUCTURE_RAIL, STRUCTURE_WALKWAY)
 
 # Node ids for raised roads' ends that aren't at a street-level node:
 # above any street node id (markings.prepare), below 2^24 (exact as floats).
@@ -156,6 +166,18 @@ def rise(level) -> np.ndarray:
     return np.maximum(np.asarray(level, np.float64) - int(AT_GRADE), 0.0) / LEVEL_STEP * LEVEL_RISE
 
 
+def _inward(lines: np.ndarray) -> np.ndarray:
+    """Unit directions into each line from its start, then from its end
+    (2N, 2), as markings.prepare measures them."""
+    length = shapely.length(lines)
+    step = np.minimum(3.0, length / 2)
+    starts = shapely.get_coordinates(shapely.get_point(lines, 0))
+    ends = shapely.get_coordinates(shapely.get_point(lines, -1))
+    inward = np.vstack([shapely.get_coordinates(shapely.line_interpolate_point(lines, step)) - starts,
+                        shapely.get_coordinates(shapely.line_interpolate_point(lines, length - step)) - ends])
+    return inward / np.maximum(np.linalg.norm(inward, axis=1, keepdims=True), 1e-9)
+
+
 class Network:
     """The raised roads (and the street-level ramps and bridges that link them
     to the streets): their heights, their decks' groups, and their attributes
@@ -190,6 +212,13 @@ class Network:
         self.under_half = np.concatenate([street_half, self.width[level] / 2.0])
         self.under_two_way = np.concatenate([streets["trafdir"] == BOTH, data["trafdir"][level] == BOTH])
         self.under_tree = shapely.STRtree(self.under_lines)
+        # Half the width of their travel lanes (markings.lane_layout), for
+        # keeping columns out of them (els.py).
+        lanes = np.where(streets["lanes"] > 0, streets["lanes"],
+                         np.where((streets["trafdir"] == BOTH) & (streets["width"] >= markings.CENTER_LINE_MIN_WIDTH), 2, 1))
+        lane = np.where(streets["width"] > 0, np.clip((streets["width"] - streets["parking"] * markings.PARKING_WIDTH) /
+                                                      lanes, markings.MIN_LANE, markings.MAX_LANE), markings.LANE_WIDTH)
+        self.under_travel = np.concatenate([lanes * lane / 2.0, np.maximum(self.width[level] / 2.0 - 1.0, 1.5)])
 
     def _widths(self) -> np.ndarray:
         d = self.data
@@ -223,6 +252,14 @@ class Network:
             node_of[(x, y)] = node
             crossing_at[node] = crossing_at.get(node, False) or bool(c)
             setback_at[node] = max(setback_at.get(node, 0.0), float(s))
+        # Signalized nodes' approaches: (direction away from the node, phase).
+        approaches, major_at = {}, {}
+        street_inward = _inward(street_lines)
+        for node, phase, direction, major in zip(flat.tolist(), streets["phase"].T.reshape(-1).tolist(), street_inward,
+                                                 streets["major"].T.reshape(-1).tolist()):
+            major_at[node] = major_at.get(node, False) or bool(major)
+            if phase >= 0.0:
+                approaches.setdefault(node, []).append((direction, phase))
 
         mine = np.vstack([shapely.get_coordinates(shapely.get_point(self.lines, 0)),
                           shapely.get_coordinates(shapely.get_point(self.lines, -1))])
@@ -231,6 +268,10 @@ class Network:
         nodes = np.zeros(len(mine), dtype=np.int64)
         ends_setback = np.zeros(len(mine), dtype=np.float32)
         ends_crossing = np.zeros(len(mine), dtype=bool)
+        ends_signal = np.zeros(len(mine), dtype=bool)
+        ends_major = np.zeros(len(mine), dtype=bool)
+        ends_phase = np.full(len(mine), -1.0, dtype=np.float32)
+        my_inward = _inward(self.lines)
         others = {}
         for e, ((x, y), level) in enumerate(zip(my_keys.tolist(), my_levels.tolist())):
             street = node_of.get((x, y)) if level == int(AT_GRADE) else None
@@ -238,6 +279,14 @@ class Network:
                 nodes[e] = street
                 ends_crossing[e] = crossing_at[street]
                 ends_setback[e] = setback_at[street] if crossing_at[street] else 0.0
+                if crossing_at[street] and street in approaches:
+                    # A ramp or bridge arriving at a signal goes with the
+                    # street approach most in line with it, or the others.
+                    direction, phase = max(approaches[street], key=lambda a: abs(float(a[0] @ my_inward[e])))
+                    in_line = abs(float(direction @ my_inward[e])) >= markings.CROSSING_ANGLE
+                    ends_phase[e] = phase if in_line else (phase + 0.5) % 1.0
+                    ends_signal[e] = True
+                    ends_major[e] = major_at[street]
             else:
                 nodes[e] = others.setdefault((x, y, level), NODE_BASE + len(others))
         n = self.count
@@ -249,9 +298,9 @@ class Network:
             "parking": np.zeros(n, dtype=np.int16),  # no parking on raised roads
             "width": d["width"],
             "setback": ends_setback.reshape(2, n).T,
-            "major": np.zeros((n, 2), dtype=bool),
-            "signal": np.zeros((n, 2), dtype=bool),
-            "phase": np.full((n, 2), -1.0, dtype=np.float32),
+            "major": ends_major.reshape(2, n).T,
+            "signal": ends_signal.reshape(2, n).T,
+            "phase": ends_phase.reshape(2, n).T,
             "nodes": nodes.reshape(2, n).T.astype(np.int32),
             "crossing": ends_crossing.reshape(2, n).T,
             "priority": np.zeros((n, 2), dtype=bool),
@@ -369,11 +418,13 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
     over_water += buckets.get("hand_made", [])
     keep_out = shapely.union_all(shapely.buffer(over_water, 1.0)) if over_water else shapely.Polygon()
     shapely.prepare(keep_out)
+    network.keep_out = keep_out  # the bridges' outlines (els.py leaves them alone too)
     wet_outlines = shapely.union_all(wet_outlines) if wet_outlines else shapely.Polygon()
 
     roads = np.flatnonzero(network.raised)
     builders = {level: MeshBuilder() for level in level_sizes}
     lamps = []
+    overhead = _bridge_overhead(buckets.get("lod0", {}), network, land)  # what's high over the ground
     street_decks = []  # lod0 tops of decks that carry a street over a dip (OnDecks)
 
     # Which outlines raised roads run through, and at which level.
@@ -409,7 +460,9 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
 
             def deck_y(en, segs=segs):
                 return network.field(en, segs)
-            if _add_deck(poly, deck_y, network, builders, top_kind=GROUND_ROAD) is not None:
+            top = _add_deck(poly, deck_y, network, builders, top_kind=GROUND_ROAD)
+            if top is not None:
+                overhead.append(_overhead(top, network))
                 decks += 1
                 _add_road_columns(poly, segs, deck_y, network, builders)
                 lamps.append(_deck_lamps(poly, deck_y, network))
@@ -446,6 +499,57 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
     if found:
         _merge_lamps(buckets.setdefault("lamps", {}), found, level_sizes["lod0"])
     buckets["street_decks"] = street_decks
+    buckets["overhead"] = [o for o in overhead if o is not None and not o.is_empty]
+
+
+def _overhead(top: np.ndarray, network: Network):
+    """The part of a deck's top (lod0 triangles, Godot space) at least
+    GHOST_GAP above the street under it, or None."""
+    en = top[:, :, [0, 2]] * np.array([1.0, -1.0])
+    gap = top[:, :, 1] - network.street(en.reshape(-1, 2)).reshape(-1, 3)
+    high = (gap >= GHOST_GAP).all(axis=1)
+    if not high.any():
+        return None
+    return shapely.union_all(shapely.polygons(np.concatenate([en[high], en[high][:, :1]], axis=1)), grid_size=0.01)
+
+
+def _bridge_overhead(found: dict, network: Network, land) -> list:
+    """_overhead for the bridges' decks over land (their approaches), per tile."""
+    out = []
+    for pos, _, uv2, front in found.values():
+        top = pos[(uv2[:, 0, 0] == GROUND_ROAD) & (front[:, 1] > 0.9)]
+        if len(top) == 0:
+            continue
+        middle = top.mean(axis=1)
+        top = top[shapely.contains_xy(land, middle[:, 0], -middle[:, 2])]
+        if len(top):
+            out.append(_overhead(top, network))
+    return out
+
+
+def roads_under_decks(network: Network, overhead: list, roads: np.ndarray) -> dict:
+    """The roadbed polygons (prepare's ground["roads"]) that reach under
+    decks away from the streets at grade (see GHOST_GAP), cut back to the
+    streets: {index: what's left}."""
+    pieces = [p for o in overhead for p in polygons_of(o, 1.0)]
+    if not pieces:
+        return {}
+    area = shapely.union_all(pieces, grid_size=0.01)
+    near = network.under_tree.query(area, predicate="dwithin", distance=40.0)
+    corridors = shapely.union_all(shapely.buffer(network.under_lines[near], network.under_half[near] + STREET_MARGIN,
+                                                 quad_segs=4)) if len(near) else shapely.Polygon()
+    ghost = np.array(polygons_of(shapely.difference(area, corridors), 4.0), dtype=object)
+    if len(ghost) == 0:
+        return {}
+    tree = shapely.STRtree(ghost)
+    hits = tree.query(roads, predicate="intersects")
+    out = {}
+    for k in np.unique(hits[0]):
+        cut = shapely.union_all(ghost[hits[1][hits[0] == k]])
+        left = shapely.make_valid(shapely.difference(roads[k], cut))
+        if roads[k].area - left.area > 1.0:
+            out[int(k)] = shapely.MultiPolygon(polygons_of(left, 0.5)) if polygons_of(left, 0.5) else shapely.Polygon()
+    return out
 
 
 def _deck_lamps(poly, deck_y, network: Network):
@@ -792,10 +896,12 @@ def _bucket(builder: MeshBuilder, size: float) -> dict:
     centroid = pos.mean(axis=1)
     ii = np.floor(centroid[:, 0] / size).astype(np.int64)
     jj = np.floor(centroid[:, 2] / size).astype(np.int64)
+    # Grouped by sorting (a mask per tile is slow with the els' many tiles).
+    order = np.lexsort((jj, ii))
+    breaks = np.flatnonzero((np.diff(ii[order]) != 0) | (np.diff(jj[order]) != 0)) + 1
     out = {}
-    for key in set(zip(ii.tolist(), jj.tolist())):
-        mask = (ii == key[0]) & (jj == key[1])
-        out[key] = (pos[mask], uv[mask], uv2[mask], front[mask])
+    for group in np.split(order, breaks):
+        out[(int(ii[group[0]]), int(jj[group[0]]))] = (pos[group], uv[group], uv2[group], front[group])
     return out
 
 
@@ -918,7 +1024,7 @@ def clear_of_decks(buckets: dict, bounds, en: np.ndarray, base: np.ndarray, heig
     """Which props (standing at (N, 2) points, from heights `base`, `height`
     tall) don't reach up into a deck or bridge overhead."""
     keep = np.ones(len(en), dtype=bool)
-    surface = surface_for(buckets, bounds, (GROUND_ROAD, STRUCTURE_CONCRETE))
+    surface = surface_for(buckets, bounds, OVERHEAD)
     if surface.tree is None or len(en) == 0:
         return keep
     hits = surface.tree.query(shapely.points(en), predicate="intersects")

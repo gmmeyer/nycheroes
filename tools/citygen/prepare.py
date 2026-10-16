@@ -15,6 +15,7 @@ import numpy as np
 import shapely
 from shapely.geometry import shape
 
+import els
 import facades
 import ground_details
 import landcover
@@ -155,7 +156,7 @@ def prepare_ground_details() -> dict:
 PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": prepare_water,
              "facades": prepare_facades, "trees": props.prepare_trees, "centerline": markings.prepare,
              "furniture": props.prepare_furniture, "overpasses": overpasses.prepare,
-             "ground_details": prepare_ground_details}
+             "ground_details": prepare_ground_details, "els": els.prepare}
 
 
 def load(name: str) -> dict:

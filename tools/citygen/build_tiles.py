@@ -38,6 +38,7 @@ from shapely.geometry import Polygon
 
 import bridges
 import buildings3d
+import els
 import facades
 import fronts
 import ground_details
@@ -326,6 +327,11 @@ def _build_bridges(ground) -> dict:
     network = overpasses.Network(prepare.load("overpasses"), prepare.load("centerline"), terrain)
     buckets = bridges.build(ground["land"], terrain, sizes, approach=network.approach)
     overpasses.build(network, ground["land"], buckets, sizes)
+    # Elevated railways over (and around) both (els.py).
+    els.build(prepare.load("els"), network, ground["land"], buckets, sizes)
+    # No roadbed drawn on the ground under them where no street is.
+    buckets["roads_under_decks"] = overpasses.roads_under_decks(network, buckets.pop("overhead", []), ground["roads"])
+    print(f"  {len(buckets['roads_under_decks'])} roadbed outlines cut back from under decks", flush=True)
     BRIDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(BRIDGE_PATH, "wb") as f:
         pickle.dump(buckets, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -374,6 +380,9 @@ def _init_worker() -> None:
     ground = prepare.load("ground")
     with open(BRIDGE_PATH, "rb") as f:
         _W["bridges"] = pickle.load(f)
+    # Roadbed under raised roads and bridges, away from streets, isn't road (overpasses.py).
+    for index, left in _W["bridges"].get("roads_under_decks", {}).items():
+        ground["roads"][index] = left
     _W["b"] = buildings
     _W["groups"] = {}
     for level, settings in LEVELS.items():
@@ -1017,8 +1026,9 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     # Centimeters, except signals' phases (exact 1024ths, see markings.prepare).
     uv = np.where((kinds == PROP_TRAFFIC_SIGNAL)[:, None], uv, np.round(uv, 2))
     uv2 = np.column_stack([kinds, np.minimum(np.round(seed, 3), 0.999)])
-    # Nothing stands up through a deck overhead (overpasses.py).
+    # Nothing stands up through a deck overhead (overpasses.py), or in an el's columns (els.py).
     keep = overpasses.clear_of_decks(_W["bridges"]["lod0"], bounds, en, y, normals[:, 0])
+    keep &= els.clear_of_columns(_W["bridges"].get("el_columns", {}), i, j, en, kinds == PROP_PARKED_CAR)
     order = np.flatnonzero(keep)[np.argsort(kinds[keep], kind="stable")]  # grouped by type, for the game
     surface = (positions[order], np.round(normals, 2).astype(np.float32)[order],
                uv.astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
