@@ -199,7 +199,7 @@ const OVERCAST_MATERIALS := {
 	"ambient_energy": 1.12,
 	"ambient_wall_bounce": 0.4,
 	"canyon_occlusion": 0.65,
-	"sky_light": Vector2(0.92, 0.8),
+	"sky_light": Vector2(0.95, 0.85),
 	"reflect_zenith": Color(0.60, 0.63, 0.68),
 	"reflect_horizon": Color(0.77, 0.79, 0.82),
 	"sky_tint": Color(0.50, 0.53, 0.57),

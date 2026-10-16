@@ -14,9 +14,10 @@ extends RefCounted
 ## with shaders/street_extras.gdshader: sidewalk sheds (many, so on a small
 ## mesh of their own), and the bike share's docks with plaza furniture. Draw
 ## calls are what props cost most on the web (measured), hence so few. Woods
-## seen from afar are clumps of crowns, in tiles of every level (mid and far
-## tiles have nothing else): one more MultiMesh, drawn by the trees' shader,
-## which grows them in where the trees shrink away.
+## seen from afar are clumps of crowns, in tiles of every level: one more
+## MultiMesh, drawn by the trees' shader, which grows them in where the trees
+## shrink away. Mid tiles also have water towers (on the buildings they draw
+## one by one); far tiles have nothing else.
 ##
 ## At night street lights add a MultiMesh of glows around their heads (shown
 ## only while the city's lights are on: set lights_on), and their pools of
@@ -153,9 +154,9 @@ var canopy_ranges: Array[float] = [6000.0, 6000.0, 9000.0]
 var canopy_range_begin := 240.0
 ## Water towers, few and big, draw a little further than trees; mid tiles'
 ## (on the buildings they draw one by one) as far as the roofs read from the
-## air (tile center to camera, m).
+## air (tile center to camera, m), without shadows (a pixel or two out there).
 var water_tower_range := 1600.0
-var mid_water_tower_range := 3500.0
+var mid_water_tower_range := 2500.0
 ## Street lights shrink away before 650 m (street_light.gdshader); their glows
 ## go on to 1500 m (street_light_glow.gdshader).
 var street_light_range := 1050.0
@@ -287,6 +288,7 @@ func add_to(parent: Node3D, props: Dictionary, level := 0) -> int:
 		var instance := _instance(group, share, _meshes[group])
 		if group == WATER_TOWERS and level > 0:
 			instance.visibility_range_end = mid_water_tower_range
+			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		parent.add_child(instance)
 		if group == CANOPY:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

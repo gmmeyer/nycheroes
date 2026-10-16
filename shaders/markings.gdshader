@@ -7,7 +7,8 @@
 //         11 double yellow center line (a 0.45 m strip, UV.y -0.225..0.225:
 //         two 0.15 m lines with a 0.15 m gap), 12 white dashed lane line
 //         (3 m dashes, 9 m gaps), 13 high-visibility crosswalk (UV.y meters
-//         from one curb: 0.6 m bars, 0.6 m gaps)
+//         from one curb: 0.6 m bars, 0.6 m gaps); past the kind, the sky the
+//         paint sees, like the road's (ground.gdshader)
 // Unpainted parts are discarded. The patterns are box-filtered over the
 // pixel: a partly painted pixel blends paint into asphalt, so edges stay
 // smooth, and dashes and bars smaller than a pixel settle into their average

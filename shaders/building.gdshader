@@ -6,7 +6,9 @@
 //         the slope). Up close, flat roofs have parapets: the walls rise
 //         PARAPET_HEIGHT above the roof, with inner faces.
 //   UV2.x archetype + 64 * flags, a whole number (see the constants below).
-//   UV2.y floor height in decimeters + the building's random seed (0..0.999).
+//   UV2.y floor height in decimeters + the building's random seed (0..0.999);
+//         on walls plus 64 * the sky they see (tools/citygen/shade.py:
+//         darker at their feet down narrow, tall streets; see vertex()).
 // Each building type picks a palette and a window system (punched windows with
 // lintels, arched loft windows, ribbon windows, curtain walls); street fronts
 // add storefronts with awnings, fire escapes and cornices (rows' and
@@ -326,8 +328,10 @@ uniform float canyon_occlusion : hint_range(0.0, 1.0) = 0.85;
 uniform float canyon_height = 25.0;
 // Lit shop windows glow a little even by day.
 uniform float shop_glow = 0.35;
-// How far tiny far-off window grids are pulled toward their average color.
-uniform float distance_calm : hint_range(0.0, 1.0) = 0.6;
+// How far tiny far-off window grids are pulled toward their average color
+// (little: their box-filtered floors and windows keep the far city's
+// texture, as in photos from Top of the Rock).
+uniform float distance_calm : hint_range(0.0, 1.0) = 0.1;
 // Night: how bright lit windows, shop windows (times their day glow), lit
 // signs, lobbies and front doors are.
 uniform float window_glow = 1.0;

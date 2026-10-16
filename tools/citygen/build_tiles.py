@@ -10,10 +10,12 @@ and writes data/tiles/nyc/:
                        signs and awnings, sidewalk sheds, bike share docks and
                        plaza furniture (props.py)
   lod1/<i>_<j>.nyct    1 km tiles: buildings under 20 m merged into blocks,
-                       taller ones simplified; simplified ground
+                       taller ones simplified, with their water towers;
+                       simplified ground
   lod2/<i>_<j>.nyct    4 km tiles: everything under 60 m merged into blocks by
                        height band, skyscrapers simplified, ground without streets
 The game shows a tile's children instead of the tile once they've all loaded.
+Every level's ground and walls carry the share of the sky they see (shade.py).
 The ground follows the real terrain (terrain.py); buildings stand on it.
 
 Tile (i, j) of size T covers x in [i*T, (i+1)*T) and z in [j*T, (j+1)*T) in
@@ -87,7 +89,7 @@ LEVELS = {
              "shapes_from": 0.0, "curbs": True, "roofs": True},
     "lod1": {"size": 1000.0, "building_tolerance": 3.0, "ground_tolerance": 2.5, "keep_holes": False,
              "min_area": 60.0, "roads": True, "min_ground_area": 20.0, "ground_cell": 40.0,
-             "shapes_from": 20.0,
+             "shapes_from": 40.0,
              # Buildings lower than `individual_from` are merged into blocks, one
              # per height band (min height, max height, block height).
              "blocks": {"individual_from": 20.0, "bands": ((0.0, 12.0, 8.0), (12.0, 20.0, 15.0)),
@@ -100,9 +102,10 @@ LEVELS = {
                         "merge_gap": 3.0, "tolerance": 10.0, "min_area": 1000.0}},
 }
 
-# Mid tiles have the water towers of the buildings they draw one by one
-# (from the 3-D model, with its roofs' bulkheads and penthouses: lod1's
-# "shapes_from"), so the roofs seen from afar keep their clutter.
+# Mid tiles have the water towers of the buildings they draw one by one, so
+# roofs seen from afar keep some clutter (the 3-D model's, from lod1's
+# "shapes_from" up, has their bulkheads and penthouses; drawing the 20-40 m
+# buildings from it too made mid tiles 24% bigger for nothing to see).
 MID_TOWERS = ("lod1",)
 
 # Walking lanes for pedestrians: lines along every sidewalk.
@@ -954,10 +957,12 @@ def _add_shape(builder: MeshBuilder, shape, ground: float, facade: tuple) -> Non
                         span = rings[0][:, :2] @ along
                         if span.max() - span.min() >= SIGN_FACE_MIN:
                             uv[..., 0] -= span.min()
-            if wall_flags & facades.RETAIL and wall_flags & facades.FRONT and not wall_flags & facades.SIGNS                     and _shop_slots() is not None:
+            slots = _shop_slots()
+            shops = wall_flags & facades.RETAIL and wall_flags & facades.FRONT and not wall_flags & facades.SIGNS
+            if shops and slots is not None:
                 # Shops along part of the front (see STORE_WIDTH): cut the wall between them.
                 span = rings[0][:, :2] @ along
-                runs = _shop_runs(float(span.min()), float(span.max()), _shop_slots())
+                runs = _shop_runs(float(span.min()), float(span.max()), slots)
                 if len(runs) > 1 and abs(normal[2]) < 0.05:
                     _add_shop_runs(builder, rings, runs, along, normal, ground, (archetype, wall_flags, floor_dm, seed))
                     continue
@@ -1443,9 +1448,9 @@ def _street_walls(index: int, shops: bool = False) -> list:
             coords = np.asarray(shapely.orient_polygons(poly).exterior.coords)[:, :2]
             seg = coords[1:] - coords[:-1]
             length = np.hypot(seg[:, 0], seg[:, 1])
-            along = np.concatenate([[0.0], np.cumsum(length)[:-1]])  # (the mesh's uv.x)
+            u_start = np.concatenate([[0.0], np.cumsum(length)[:-1]])  # (the mesh's uv.x)
             for k in np.flatnonzero(length > 1.0):
-                walls.append((coords[k], coords[k + 1], np.array([seg[k, 1], -seg[k, 0]]) / length[k], along[k]))
+                walls.append((coords[k], coords[k + 1], np.array([seg[k, 1], -seg[k, 0]]) / length[k], u_start[k]))
     if not walls or _W["streets"].is_empty:
         return []
     middles = np.array([(a + e) / 2 for a, e, _, _ in walls])

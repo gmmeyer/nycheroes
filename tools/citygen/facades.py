@@ -6,7 +6,8 @@ city's tax lot database (PLUTO) joined to the building footprints by tax lot.
 The game's building shader draws them (shaders/building.gdshader). In the
 tiles, building surfaces carry, per vertex:
   uv2.x = archetype + FLAG_SCALE * flags   (a whole number in a float)
-  uv2.y = floor height in decimeters + the building's random seed (0..0.999)
+  uv2.y = floor height in decimeters + the building's random seed (0..0.999),
+          plus on walls 64 * the sky they see (shade.py)
 Flags are per face: ROOF, FRONT (the wall faces a street), PARAPET,
 PARAPET_INSIDE, SIGNS, STOOP and the FRONT_PART field are set by
 build_tiles.py (and fronts.py, times_square.py); the rest, including the

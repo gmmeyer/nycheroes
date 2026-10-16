@@ -1002,6 +1002,78 @@ and 29):**
   interleaved pairs on a busy machine; 1.4-1.8 s to 1.9-2.0 s in two
   quieter ones); building.gdshader unchanged.
 
+**Facades, third pass: party walls, lofts' shops, shade and the far city
+(done; reference round 3's 21, 25 and the rest of 23):**
+- Party walls: a wall faces a street only if the street is in sight, with
+  no other building (20 m2 or more, so not kiosks or sheds) between them;
+  the facade code had marked party walls as fronts where a street lay
+  beyond a narrow neighbor (14% of the street-level shop walls in dense
+  tiles, 21% in SoHo and Chinatown: shop fronts, doors and signs inside or
+  through the neighbor). The building's mesh, stoops, cornices, bow fronts,
+  shop signs and sidewalk sheds all ask the same `_faces_street()`.
+- Lofts' shops (`facades.prepare_retail()`, `data/cache/retail.pkl`): shops
+  fill the share of a building's street front that PLUTO's retail area is
+  of its lot's ground floor (the lot's footprints; all of it from three
+  quarters up, or where PLUTO has none), lofts and warehouses (LOFT,
+  INDUSTRIAL, and prewar buildings in the old warehouse districts, a
+  condominium's lot taking its neighbors' district) at most 30%: their
+  photos show mostly loading docks, entrances and a few shops, whatever the
+  retail area says (often a whole floor or two). The front is cut into
+  slots one store wide, as building.gdshader's storefront() draws them (its
+  bay by building type; not stores, hotels or unknown types), the shops
+  evenly spread among them; the walls between are cut apart and lose
+  RETAIL (doors, loading doors), and the signs keep to the shops. 25,214
+  of the 85,033 shop buildings, 2,348 of them lofts and warehouses. Masonry
+  offices' street fronts have doors and windows between shops instead of a
+  glass lobby all along.
+- Shade in canyons and under decks (`tools/citygen/shade.py`): each tile's
+  walls, ground and street paint carry the share of the sky they can't
+  see, worked out as the tile is built: rays (12 around flat ground, 8
+  across the half in front of a wall, stepping out to 120 m near, further
+  in mid and far tiles) over a height field of the ground, the buildings'
+  tops (rasterized, 1.5 m cells near) and the decks' tops; a wall's own
+  building isn't in its way; under a deck the sky shows only past its edge,
+  plus half of what it hides (the els' open steel, light off its
+  underside). Walls get their foot's share and the height up to which their
+  canyon reaches (measured at seven heights), in UV2.y's high bits (64 *
+  (share in 15ths + 16 * reach step)); the ground and paint get it past
+  their kind in UV2.x ((1 + share) / 40). The shared toon ambient
+  (`toon.gdshaderinc`'s `sky_light`) turns it into light, 1.15 with all of
+  the sky in view to 0.6 with none (a street seeing three quarters of it
+  keeps the light it had); building.gdshader works the wall's term out once
+  before its facade branches (landmarks' faces and older tiles keep
+  canyon_occlusion), so the sun and its shadows are untouched. An overcast
+  scales it by (0.95, 0.85).
+- The far city: window grids stay, as the facades' box-filtered floors and
+  windows are pulled only 10% toward their average when they're a few
+  pixels (was 60%); the haze of a clear day is half the dusk's on high
+  (0.8 of it on medium; low's fog hides where its tiles stop), while dusk,
+  night and an overcast keep theirs (each of TimeOfDay's looks has its
+  share, `Quality.clear_fog()` the clear day's); mid tiles have the water
+  towers of the buildings they draw one by one (162-256 in a Manhattan mid
+  tile), drawn to 2.5 km without shadows, and their roofs' bulkheads and
+  penthouses where the 3-D model draws them (from 40 m; the 20-40 m
+  buildings from the model too made mid tiles 24% bigger for nothing to see
+  from Top of the Rock).
+- Measured (`build/reference/compare/f3-after` in the facades-3 worktree,
+  against master 1828499): means of the 13 views: lower half 0.381 to 0.361
+  (photos 0.366), contrast 0.161 to 0.164 (0.201), strong edges 0.084 to
+  0.100 (0.222). Times Square 0.265 to 0.240 (0.269), Fifth Avenue 0.312 to
+  0.285 (0.293), Park Avenue 0.283 to 0.263 (0.248), DUMBO 0.305 to 0.226
+  (0.381, a bright morning on wet cobbles); from Top of the Rock south 0.407
+  to 0.351 (0.357) with edges 0.060 to 0.104 (0.367), north 0.485 to 0.438
+  (0.417) and 0.167 to 0.279 (0.336). Overcast (five views) 0.368 to 0.363,
+  dusk from Top of the Rock 0.398 to 0.390. The Promenade's camera stands
+  behind its fence now (2.4 m higher; `views.json` still had it inside).
+- Cost: the 578 tiles the reference views load: near +4.4%, mid +6.2%, far
+  +6.5% (a full build: all levels change); about 0.3 s more per tile to
+  build (+9% on dense near tiles). +5-6 draw calls and +0.2-0.3 M
+  triangles at Times Square and Top of the Rock (a water tower MultiMesh
+  per mid tile). Shader compile time unchanged: building.gdshader's color
+  variant 10.96 s on master and 10.73 s now (medians of nine interleaved
+  compiles of the captured programs on a quiet machine; 261,465 to 261,407
+  characters), ground.gdshader 1.72 and 1.74 s, markings 0.16 s.
+
 **Landmarks, first batch (done):**
 - `tools/citygen/landmarks.py` builds eight landmarks by hand, at their real
   dimensions, in place of their data buildings (by BIN):

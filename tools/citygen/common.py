@@ -15,10 +15,12 @@ The water surface is inland water above sea level (lakes, reservoirs, creeks);
 sea-level water is the game's ocean plane.
 The markings surface (lod0) is paint on the streets: a triangle mesh
 MARKING_LIFT above the road, with no collision. Its uv2.x is a GROUND_MARKING_*
-kind, uv is local to each strip of paint in meters (x along the street, y
-across it; see the kinds for what the shader paints), normals face up and
-positions are rounded to 1 cm.
-The props surface (lod0; mid and far tiles too, with clumps of crowns only)
+kind (and past it the sky it sees, like the ground's: shade.py), uv is local
+to each strip of paint in meters (x along the street, y across it; see the
+kinds for what the shader paints), normals face up and positions are
+rounded to 1 cm.
+The props surface (lod0; mid and far tiles too, with clumps of crowns only,
+and mid tiles' water towers)
 is one point per prop, no indices:
   position = where it stands (a tree's trunk on the ground, a water tower's
              legs on the roof)
