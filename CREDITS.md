@@ -13,6 +13,10 @@ lines below wherever a license asks for one (the aerial photos do).
   Credited in the game's HUD.
 - **Building shapes:** NYC 3-D Building Model (LoD2 CityGML), NYC Office of
   Technology and Innovation, via NYC Open Data (tnru-abg2).
+- **Building types, wall materials, stoops and churches:** the Department
+  of City Planning's Primary Land Use Tax Lot Output (PLUTO, 64uk-42ks:
+  building class, floors, year built, historic districts, landmarks), joined
+  to the footprints by tax lot (5zhs-2jue), via NYC Open Data.
 - **Building footprints and heights, borough outlines, parks, roadbed,
   hydrography, piers (and the ferry slips' fender racks and the marinas'
   docks) and bridge structures:** NYC Open Data (datasets 5zhs-2jue,
