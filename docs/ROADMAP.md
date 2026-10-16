@@ -1333,6 +1333,15 @@ and 29):**
   `tools/audio/build_sounds.py` rebuilds them. Cost: about 0.05-0.1 ms a
   frame; in the browser 25-60 MB of decoded samples (Godot's web build keeps
   them as float at the mix rate, set to 32 kHz on the web to save a third).
+- The headless test (`tests/audio_test.tscn`) no longer depends on luck.
+  While it checks the engines on the cars it drives past the hero, Traffic
+  is paused: its reports of the real cars, ten times a second, took the
+  engines off the test's cars, and they all faded out together and came
+  back, so a check landing in that moment read "0 engines" (2 runs of 4 on
+  a loaded machine). The four engines must now stay on their cars the whole
+  way. And thugs still walking up look at the hero again until one has
+  shouted: each shouts only half the time it spots the hero, so all four
+  kept quiet about 1 run in 16.
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
@@ -1636,6 +1645,18 @@ Comes after step 6 because it needs step 6's real ground heights.
 - **Speed limits from the point before:** a point's curve limit now holds
   from the point before it, so trains brake for it in time (before, a
   train placed between two points could run over the next point's limit).
+- **Never through each other:** a train no longer appears (nor is put, by
+  a test) on or close before a junction or a terminal's track that another
+  train has claimed: that one is crossing it, or about to, and doesn't stop
+  for the new one. The trains test put its express train on the switch at
+  the end of the 7's express track, its front where the switch meets the
+  local track, and in 1 run of 3 a local train was coming up to that point
+  too close to stop. And a train that has run into another (its front past
+  the other's back) now stops at once; before, it took no notice of the
+  train it overlapped, and the two ran on through each other for good
+  (10,742 frames of overlap in that run). The test now puts its express
+  train on a running piece of the express track, not on the switch (it
+  had run on as a local).
 - **Cost:** about 0.1 ms of script a frame in Chrome with 4 trains near the
   camera (drawing 0.07-0.09 ms, running 0.06 ms a physics tick; trains out
   of view, far off or standing are drawn less often), 1 draw call, 2,700
