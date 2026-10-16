@@ -3,9 +3,9 @@
 Step 6, item 7 ("check against reality"). Sixteen viewpoints a player
 actually sees, each a free-licensed photo from Wikimedia Commons next to the
 game at the same camera pose. Re-run after each phase; the differences below
-drive the next work. Newest round first: round 3 (2026-10-16) and its
-improvements table, then round 1 (2026-10-15) and its table, now nearly all
-done.
+drive the next work. Newest round first: round 4 (2026-10-16, closing step
+6) and its backlog of remaining gaps, then round 3 (2026-10-16) and its
+improvements table, all done, then round 1 (2026-10-15) and its table.
 
 ## How to run
 
@@ -106,7 +106,16 @@ Runs (labels under `build/reference/compare/` and `shots/`):
 - round 3, `live-20261016`: the live site on 2026-10-16 (tile format v7,
   build `6ad1e882`), its sheets photo | round 1 | round 2 | round 3, plus
   `live-20261016-overcast` (the gray-day photos with `weather=overcast`)
-  and `live-20261016-sunset` (totr_north with `time=19:00`).
+  and `live-20261016-sunset` (totr_north with `time=19:00`);
+- round 4, `live-20261016-r4`: the live site on the evening of 2026-10-16
+  (tile format v7, build `6ad29c41`), its sheets photo | round 1 | round 3 |
+  round 4 (round 2's measures are in round 3's `measures.json`: same
+  crops), plus `live-20261016-r4-overcast` (photo | round 3 overcast |
+  round 4 | round 4 overcast) and `live-20261016-r4-sunset` (totr_north at
+  the photo's own sun, `date=2022-08-10&time=19:36`: photo | round 3 at
+  19:00 | round 4 | round 4 at dusk). The promenade and queens_ridgewood
+  poses changed after round 3's shots (see the table), so those two views'
+  earlier columns stand a little differently.
 
 The last three views were added in round 3 (an el street with Queens shops,
 and two landmarks); their photos are also listed in `CREDITS.md`.
@@ -132,6 +141,287 @@ and two landmarks); their photos are also listed in `CREDITS.md`.
 
 The images are for comparison only. If any are ever shown publicly, credit
 them as in this table (and `CREDITS.md`) and keep the share-alike terms.
+
+## Round 4 (2026-10-16, closing step 6)
+
+The live site after all of round 3's improvements (16-31: the color pass,
+dressed pedestrians, dusk and overcast light, busy streets, canopy from
+afar, shade in canyons and under decks, landmarks in stone, shop signs,
+awnings and sheds, detail at a distance, the els' steel and stairs,
+churches, waterfront landmarks, rowhouse fronts, utility poles and wires,
+bike docks and plaza furniture), plus step 8's trains on the els, the BQE's
+triple cantilever, sunken roads and viaduct heights from the lidar. Of
+step 8's work only the cantilever is in a view (the promenade camera stands
+on it, behind its fence); four trains ran on the 7 near Roosevelt Avenue,
+none overhead when it was shot. Images:
+`build/reference/compare/live-20261016-r4/<name>.jpg` (photo | round 1 |
+round 3 | round 4), measures in `measures.md` there; the gray-day and dusk
+runs in `live-20261016-r4-overcast` and `live-20261016-r4-sunset`.
+
+### Measured
+
+Means over the 13 views every round has (the "distance" rows are the mean,
+over the views, of each view's difference from its own photo, so errors
+can't cancel out):
+
+| Measure | Photos | Round 1 | Round 2 | Round 3 | Round 4 |
+|---------|--------|---------|---------|---------|---------|
+| Lower half, mean value | 0.37 | 0.45 | 0.42 | 0.41 | 0.36 |
+| Lower half, distance from each photo | | 0.086 | 0.088 | 0.075 | 0.056 |
+| Views within 0.03 of their photo | | 3 | 1 | 2 | 7 |
+| Lower half, contrast (spread of value) | 0.20 | 0.17 | 0.17 | 0.17 | 0.17 |
+| Lower half, saturation | 0.27 | 0.33 | 0.29 | 0.31 | 0.28 |
+| Masonry (warm pixels), saturation | 0.27 | 0.36 | 0.27 | 0.30 | 0.26 |
+| Masonry saturation, distance from each photo | | 0.14 | 0.10 | 0.11 | 0.06 |
+| Masonry share of the lower half | 0.30 | 0.30 | 0.28 | 0.33 | 0.28 |
+| Strong-edge share (detail, clutter) | 0.222 | 0.108 | 0.094 | 0.091 | 0.101 |
+| Clear sky at the top (promenade) | #6C8BCD | #7C9EBE | #769CCE | #769CCE | #769CCE |
+
+Over all 16 views, round 3 to round 4: lower half 0.42 to 0.37 (photos
+0.39; within 0.03 of its photo: 2 views to 8), saturation 0.30 to 0.28
+(0.25), masonry saturation 0.29 to 0.27 (0.26), strong edges 0.095 to
+0.104 (0.212).
+
+The four gray-day photos (fifth_ave_esb, totr_south, grand_concourse,
+st_george) against `weather=overcast`: lower half 0.41 in the photos, 0.50
+in round 3's overcast, 0.40 now (0.42 on the clear day); contrast 0.20,
+0.13, 0.16; the top of the frame #D4D8DE-#E1DED5 in the photos,
+#9DA1A8-#B4B7BA in round 3, #C8CACF-#D8D8D8 now.
+
+Dusk: totr_north at the photo's own sun (`date=2022-08-10&time=19:36`),
+against round 3's `time=19:00` (the same sun height): the top of the frame
+#948187 (mauve) to #9BB1CC (the photo's top is cloud, #CACABD; its blue sky
+about #95B7CD), lower half 0.36 to 0.39 (0.42), contrast 0.14 to 0.17
+(0.20), warm share 0.70 to 0.38 (0.21), strong edges 0.064 to 0.153
+(0.336), but saturation 0.24 to 0.17 (0.33).
+
+### What improved since round 3
+
+- **Light and shade** (16, 18, 21, 25): the lower half's mean now matches
+  the photos' (0.36 vs 0.37), and not by errors cancelling: seven of the 13
+  views are within 0.03 of their photo (two in round 3). Times Square 0.32
+  to 0.26 (the photo 0.27), Fifth Avenue 0.37 to 0.28 (0.29), Park Avenue
+  0.31 to 0.25 (0.25), Top of the Rock south 0.41 to 0.35 (0.36) and north
+  0.49 to 0.44 (0.42), the Brooklyn Bridge 0.33 to 0.30 (0.33), the Grand
+  Concourse 0.46 to 0.45 (0.45). The overcast deck is as bright as the
+  photos' and the street under it darker, as in them; dusk keeps a blue sky
+  over gold light and blue-gray shade.
+- **Color by material** (16): masonry saturation in Park Slope 0.61 to
+  0.24 (the photo 0.26), DUMBO 0.51 to 0.40 (0.36), the Brooklyn Bridge
+  0.55 to 0.26 (0.28; its lower half 0.46 to 0.21, 0.29), Roosevelt Avenue
+  0.43 to 0.29 (0.14); the Manhattan Bridge's tower blue-gray, the 7's
+  steel dark green-gray (green share 0.38 to 0.05, the photo 0.04), the
+  Waldorf in limestone, the Flatiron and St. Patrick's gray-beige.
+- **The far city** (20, 25): from Top of the Rock Central Park is dark
+  canopy edge to edge (pale lawn and paths in all three earlier rounds),
+  and window grids carry to the horizon under less haze: strong edges
+  south 0.061 to 0.104 (0.367), north 0.169 to 0.279 (0.336). Staten
+  Island's hill is wooded behind St. George.
+- **Street life** (17, 19, 23, 24, 31): pedestrians in dark coats, jeans
+  and a few bright tops instead of one-color mannequins; a row of cars and
+  a cab at Fifth Avenue's crossing, three cabs and a bus at the Flatiron, a
+  dozen cars and a bus on the Grand Concourse; planters, bistro chairs and
+  umbrellas on the Flatiron plaza, tables and chairs in Times Square; a
+  green sidewalk shed on DUMBO's Washington Street, a bike dock on the
+  Grand Concourse, named shop signs and awnings under the 7 (a pharmacy, a
+  dry cleaner, a noodle house).
+- **Churches and landmarks** (22, 27): Marble Collegiate is a gray stone
+  Gothic church with its tower, belfry and spire where the photo has them
+  (the beige apartment block is gone); St. Patrick's front is built, in
+  gray-tan marble (lower half 0.64 to 0.50, the photo 0.35; warm share 0.21
+  to 0.64, 0.45); the Guggenheim's bands are smooth and its shaded side
+  gray (warm share 0.16 to 0.07, 0.11).
+- **The els** (26): under the 7 the steel is riveted lattice over a dark
+  deck (the top of the frame #23331E to #050807, the photo #0D100F), and
+  the stair up to the 82nd Street station stands where the photo's does.
+- **Waterfront** (28): St. George has its slips, terminal and two orange
+  ferries where it had a red-brick block (lower half 0.67 to 0.61, the
+  photo 0.56; strong edges 0.025 to 0.037, 0.107); from the Promenade, the
+  marina's docks and pilings, the piers and a ferry at Whitehall.
+- **Rowhouse fronts** (29, 30): Ridgewood's bow fronts, deep painted
+  cornices, brick posts with white pyramid caps, striped door awnings and a
+  service drop; iron railings on Park Slope's stoops.
+
+### What still differs most, view by view
+
+**times_square**
+- The screens are still flat fields of saturated color with invented
+  glyphs (lower half saturation 0.36, the photo's 0.18); real screens show
+  photographs, most of them dark.
+- The shaded plaza pavers are navy blue (#232836, saturation 0.5; the
+  photo's pavement is gray). The west side's towers are tan stone where the
+  photo's are dark glass; no food kiosk or newsstand in view.
+
+**fifth_ave_esb**
+- Marble Collegiate's spire is a short, dark slate pyramid; the real one is
+  pale stone, taller, over a clock stage with corner pinnacles.
+- The neighbors are red brick and tan where the photo's are dark brown
+  brick and brownstone; the warm share fell to 0.21 (the photo 0.68) as the
+  church went gray (in the photo's sun it is warm brown-gray stone).
+- Full green trees against bare March ones; a white sidewalk shed at the
+  left edge where the photo has a green construction fence.
+
+**flatiron**
+- Too bright (0.35 vs 0.23): the photo is backlit, the Flatiron's west face
+  in shade, while the game's 15:30 sun lights it. The stone is smooth pale
+  gray without the real one's rustication and terracotta; the tower at the
+  left is red-brown brick (dark gray-brown, with balconies).
+- The plaza has its furniture, but not the photo's bike dock (the feed puts
+  it along the plaza's west curb, just right of the view) or its crowd.
+
+**park_ave**
+- MetLife is a plain gray box (an elongated octagon with its name on top);
+  the Racquet Club is a beige office grid (a rusticated palazzo with tall
+  arched windows).
+- A few parked cars where the photo has unbroken rows on both curbs; navy
+  asphalt in the shade. Midtown's stone is now a little too gray (masonry
+  saturation 0.09 vs 0.25).
+
+**totr_south**
+- Smoother than the photo (strong edges 0.104 vs 0.367): mid-distance roofs
+  are bare (the photo's bulkheads, mechanical floors and terraces), and
+  towers are similar gray and tan boxes where real ones run from black
+  glass to white stone; the Bank of America Tower is dark gray (pale,
+  reflective glass in the photo).
+
+**totr_north**
+- 111 West 57th is a pale stick (from the south it is dark glass with
+  bronze bands); 53 West 53rd is wide and blocky (slender, with its
+  diagonal exterior grid); Rockefeller Center's roof gardens, the photo's
+  foreground, are missing.
+- At dusk 53 West 53rd's glass breaks into a checkerboard of gold and blue
+  squares, and the city is pale and hazy (saturation 0.17 vs 0.33): the
+  photo's gold light is vivid.
+
+**brooklyn_bridge**
+- The trusses between the promenade and the roadways are solid brown
+  walls; the real ones are open lattice, with the roadway and its cars seen
+  below. The nearest cables still read as planks. Strong edges 0.041 vs
+  0.298, the biggest gap of any view; the frame is all brown (warm share
+  0.86 vs 0.49).
+
+**dumbo**
+- Now too dark (0.24 vs 0.38; round 3 0.33): canyon shade at 15:30 and
+  maroon brick, where the photo has morning sun on orange-red brick.
+- Windows are flat rectangles (segmental arches in deep reveals); no fire
+  escapes (the right building has a full stack); a crosswalk painted on the
+  cobbles; a few pedestrians where the photo has a crowd of tourists.
+
+**promenade**
+- The park below is light paving with lamps and a lone conifer where the
+  photo has the berm's dense trees and shrubs (green share 0.08 vs 0.21).
+- The river is light blue with even ripples (dark gray-blue); the skyline
+  is uniform gray boxes (strong edges 0.083 vs 0.313).
+
+**park_slope**
+- The brownstone is right in color (masonry saturation 0.24 vs 0.26), but
+  the camera stands at a stoop's foot and the stoop's shaded side fills the
+  lower half (0.27 vs 0.46); the photo has low stone yard walls and
+  plantings between the sidewalk and the stoops. Check the yards' depth
+  and the pose.
+- Trees are full, low, green crowns (tall bare planes); fronts are smooth
+  (bays, window hoods, deep bracketed cornices).
+
+**queens_ridgewood**
+- All the parts are there now. The hedges behind the posts are flat
+  dark-green slabs that hide the iron pickets, and the brick is a little
+  orange (lower half saturation 0.45 vs 0.23, masonry 0.42 vs 0.37); the
+  cornices are plain boxes (pressed metal with ornament). Still bright and
+  close (0.44 vs 0.33).
+
+**grand_concourse**
+- The closest street view (lower half 0.45 vs 0.45, contrast 0.18 vs
+  0.21). The brick is one mauve-red (dark brown and tan in the photo, with
+  carved entrances); single lanterns where the real posts are tall and
+  ornate, twin-armed; full, bright trees.
+
+**st_george**
+- The slip houses read low and pale (tall dark brick with dark mouths), and
+  the ferries are orange drums in two slips; at 2 km the town is still
+  smooth (strong edges 0.037 vs 0.107). The overcast tones match (the deck
+  #D8D8D8 vs #E1DED5).
+
+**roosevelt_ave**
+- The corner building in front is a brown office front where the photo has
+  a bakery's awning and lit window (PLUTO lists no retail there); the shop
+  signs are fewer, smaller and unlit (a wall of bright signs, lit at dusk);
+  a few pedestrians against a crowd; the deck's underside is a flat dark
+  slab with painted lattice (deep beams with light between them); navy
+  asphalt (lower half saturation 0.38 vs 0.11). The photo's street is wet
+  and lit (0.59): compare by eye.
+
+**st_patricks**
+- The front is in the 15:30 sun (0.50 vs 0.35; in shade in the photo). The
+  ornament is still sparse: the spires read as stepped cones, with few
+  pinnacles and crockets. The Olympic Tower at the left is white with blue
+  bands (dark glass).
+
+**guggenheim**
+- The slots between the bands are shallow window strips (deep, dark
+  recesses); the museum's name on the base band is missing; navy asphalt in
+  the shade.
+
+### Across all views
+
+- **Brightness** is right on average and in seven of the 13 views. Most of
+  the rest is the photos' light: the Flatiron and St. Patrick's photos are
+  in shade, DUMBO's in morning sun, where the game's 15:30 sun lights or
+  shades them the other way. A next round should shoot each view at its
+  photo's date and hour too (a view's `extra_query`).
+- **Contrast** stayed at 0.17 (photos 0.20) through four rounds. Lit faces
+  are flat, and the photos' spread comes from small dark details: deep
+  window reveals, the shadows between the Guggenheim's bands, people,
+  awnings, the el's beams.
+- **Color**: the means match (saturation 0.28 vs 0.27, masonry 0.26 vs
+  0.27), and each view's masonry is 0.06 from its photo's on average (0.14
+  in round 1). Two errors are left: Times Square's screens, and the shade
+  on the ground, which is navy blue (saturation 0.46-0.51 on Park Avenue,
+  in Times Square and under the 7, where the photos' shaded pavement is
+  about 0.08). The toon ambient lights faces that point up with
+  `ambient_sky` (0.66, 0.72, 0.86), on a bluish asphalt.
+- **Detail**: the strong-edge share rose for the first time (0.091 to
+  0.101; photos 0.222), all of it in the far views (Top of the Rock, the
+  Promenade, St. George). Street views stayed flat or fell (Fifth Avenue
+  0.116 to 0.095, as the church's walls replaced an office grid). At street
+  level the photos' detail is crowds, parked cars, sign clutter and
+  ornament.
+- **Street life**: moving and parked cars read right by eye; pedestrians
+  are dressed now, but few in view, and there are no crowds.
+- **Landmarks** stand in the right place, at the right size, in the right
+  material. Up close their ornament is still sparse, and a few (MetLife,
+  the Racquet Club, 53 West 53rd, 111 West 57th) are still plain boxes.
+
+## Remaining gaps after round 4: backlog for after step 9
+
+Step 6 closes with this round, so nothing here is scheduled: the user
+decides what comes next. Ranked as before, by how far each would move the
+look toward the photos for its effort; numbered on from round 3's table.
+Shader compile time (ROADMAP "Shader compile time"): Times Square about
+20 s to ready on the dev machine, building.gdshader's color variant under
+about 10 s (it is at about 10.7 s), every other shader under about 2 s
+(landmark.gdshader is at about 2.4 s). **Compile time** marks the items
+that would grow a shader at or over its budget.
+
+| # | What | Effort | Where |
+|---|------|--------|-------|
+| 32 | **Gray shade on the ground**: shaded asphalt and pavers are navy (#151B27-#232836, saturation 0.46-0.51 on Park Avenue, in Times Square and under the 7) where the photos' shaded pavement is neutral gray (about 0.08); it is much of the excess lower-half saturation in Times Square (0.36 vs 0.18) and on Roosevelt Avenue (0.38 vs 0.11). Grayer sky light on faces that point up, or a grayer asphalt palette; keep the walls' shade as it is (round 3's 18: bluer wall shade turned brownstone gray). Compile time: values only. | small | `shaders/toon.gdshaderinc` (`ambient_sky`), `ground.gdshader` palette |
+| 33 | **Times Square's screens as photos**: still flat fields of saturated color and invented glyphs; real screens show photographs (faces, products, dark backgrounds). A small atlas of painted, photo-like ads (made for the game, no brands) sampled by the screens in place of the drawn fields, mostly dark. **Compile time**: the screens are building.gdshader's `screen()`; a texture lookup in place of drawn content need not grow it, but measure (`tools/shader_compile_check.mjs`), or give the sign district's screens a surface and shader of their own. | medium | `shaders/building.gdshader` (`screen()`), an ad atlas in `assets/` |
+| 34 | **Crowds**: DUMBO's corner, Roosevelt Avenue's sidewalks, the Flatiron plaza and the Guggenheim's front have 15-30 people each in the photos' frames, the game a handful (Times Square's crowd is there; busy streets left the rest open, as it wants people cheaper than skinned characters). People past 10-15 m as an instanced crowd, a walk cycle baked into a texture and played in the vertex shader (or impostors), dressed like the pedestrians, placed by the busyness grid. Compile time: one new small shader, not skinned (no ANGLE skinning variant); keep it under 2 s. | medium-large | `scripts/npc/crowd_manager.gd`, a new crowd mesh and shader |
+| 35 | **The far city's contrast and roofs**: from Top of the Rock and the Promenade the strong-edge share is 0.104 and 0.083 against 0.367 and 0.313: towers are similar gray-blue and tan boxes where real ones run from black glass to white limestone, and roofs are bare where the photos show bulkheads, mechanical floors and terraces. First a wider far palette (darker dark glass, brighter limestone, more tower-to-tower variation); then roof clutter, as cheap props on mid tiles' prisms like the water towers (round 3's 25 drew the 20-40 m buildings from the 3-D model instead: mid tiles 24% bigger and no visible change from Top of the Rock, so measure before keeping it). **Compile time**: palette values in building.gdshader's far path are free; new code there counts against its budget. | medium | `building.gdshader` far palette, `tools/citygen/build_tiles.py` mid-tile roofs, `scripts/world/city_props.gd` |
+| 36 | **The Brooklyn Bridge's open trusses**: the stiffening trusses between the promenade and the roadways are solid brown walls; the real ones are open lattice with the roadway and its cars below, and the nearest suspenders and stays read as planks. Strong edges 0.041 vs 0.298, the biggest gap of any view. Chords, posts and diagonals as geometry; thinner near cables. Compile time: none (geometry; the lattice paint is already in landmark.gdshader). | small-medium | `tools/citygen/bridge_landmarks.py` |
+| 37 | **Facade relief up close**: windows are flat rectangles flush with the wall, where DUMBO's lofts have segmental arches in deep reveals, Park Slope bays and window hoods, Ridgewood pressed-metal cornices with ornament, the Grand Concourse carved entrances; DUMBO's loft has no fire escape where the photo's has a full stack. Contrast has stayed at 0.17 (photos 0.20) for four rounds, and much of the photos' comes from these small shadows. **Compile time**: building.gdshader's facade code is at its budget, so do it as geometry in near tiles (window insets and arch heads, like the stoops and cornices) or on fronts.gdshader's surface (0.3-0.4 s); tiles grow. | medium-large | `tools/citygen/facades.py`, `fronts.py`, `build_tiles.py` |
+| 38 | **Brooklyn Bridge Park's foreground and the river**: from the Promenade the park below is light paving with lamps and one conifer where the photo has the Pier 3 berm's dense trees and shrubs (green share 0.08 vs 0.21); Piers 3 and 5 need hand-made lawn and field outlines (round 3's 28); the river is light blue with even ripples (dark gray-blue in the photo). Compile time: none (ground classes and trees; ocean values). | small-medium | `tools/citygen/ground_details.py`, `landmarks.py`, `shaders/ocean.gdshader` |
+| 39 | **Landmarks, a third look**: MetLife's elongated octagon and name; the Racquet Club's rusticated arcade; Marble Collegiate's pale stone spire over a clock stage; the Guggenheim's deep, dark slots between the bands and its name; 111 West 57th's dark south face; 53 West 53rd's slender taper and diagonal grid; Rockefeller Center's roof gardens; St. Patrick's denser pinnacles and crockets. **Compile time**: landmark.gdshader is already over 2 s (it compiles only with a landmark in view); prefer geometry and church.gdshader (0.4-0.6 s), and measure. | medium | `tools/citygen/landmarks.py`, `towers.py`, `churches.py` |
+| 40 | **Glass and haze at dusk**: at the photo's dusk 53 West 53rd's glass breaks into a checkerboard of gold and blue window squares where the real dark glass stays dark with a gold edge, and the city is pale (saturation 0.17 vs 0.33): dusk keeps the full haze that the clear day halved. **Compile time**: the window reflections are building.gdshader's; values are free, new code counts against its budget. The haze is values in `time_of_day.gd`. | small | `building.gdshader` window reflection, `scripts/world/time_of_day.gd` |
+| 41 | **Street trees by season**: five of the sixteen photos (four from March and April, Park Avenue's from late November) show bare or budding trees with tall, clear trunks; the game's trees are full, round and green all year, and start low. With `?date=` already moving the sun, trees could follow it: bare branches from about November to April. Compile time: tree.gdshader (0.3-0.4 s) gets a branch look, or a second mesh; keep it under 2 s. | medium | `scripts/world/prop_meshes.gd`, `shaders/tree.gdshader`, `time_of_day.gd` |
+
+Smaller things seen once: Park Slope's camera at a stoop's foot (check the
+yards' depth and the pose); DUMBO's canyon too dark (lighter, more orange
+brick, or check it at the photo's morning hour); Roosevelt Avenue's corner
+building, which PLUTO gives no retail, and its unlit shops at dusk;
+Ridgewood's hedges hiding the iron fences; the overcast Grand Concourse a
+little darker than its photo (0.36 vs 0.45: the photo's clouds are broken,
+with sun on the street).
 
 ## Round 3 (2026-10-16)
 
