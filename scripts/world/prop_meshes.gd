@@ -812,8 +812,8 @@ static func _end(k: _Kit, x: float, outline: Array[Vector2], part: int) -> void:
 ## stretches, how z stretches: SHOP_METERS, SHOP_BY_WIDTH or SHOP_BY_REACH).
 ##   UV = (part (ShopPart), 0); UV2 = 0..1 across a face (as _box() has it)
 ## Signs: a board (its face, edges round it), a deeper light box, channel
-## letters (two copies of the name, the back one dark: their sides from an
-## angle), a vinyl banner, and a blade sign standing out from the wall on a
+## letters (the name cut out of a quad standing off a plain fascia), a vinyl
+## banner, and a blade sign standing out from the wall on a
 ## bracket, its faces both ways along the wall. Awnings, BY_REACH deep: a
 ## sloped cloth one with a valance and closed ends, a flatter ribbed
 ## aluminum one with a fascia, and a quarter-round dome. 158 vertices, 86

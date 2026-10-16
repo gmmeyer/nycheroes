@@ -569,10 +569,9 @@ reference round 3's 23, 24 and 31):**
   district), as drawn (the 3-D model's walls where it draws the building),
   are split into shops 5-8.5 m wide (7-12 m in towers). Each gets, over the
   sign band the building shader paints:
-  - a sign: a painted board across the whole shop, 0.8-1.3 m tall, a light
+  - a sign across the whole shop: a painted board 0.8-1.3 m tall, a light
     box (lit from inside, softly by day and brightly at night), or channel
-    letters (cut out, with a dark copy behind them standing for their sides;
-    lit at night);
+    letters (cut out, standing off a dark or pale fascia; lit at night);
   - on 20-45% of shops an awning under it (cloth with a valance, ribbed
     aluminum, or a quarter-round dome), reaching 0.9-1.5 m out but never
     closer than 0.7 m to the curb, its lowest edge at least 2.2 m up; cloth

@@ -659,9 +659,9 @@ def shop_fronts(walls: list, ground: float, floor_height: float, height: float, 
                 tall_as = ((0.8, 1.3), (0.7, 1.0), (0.4, 0.75))[kind]
                 size_h = min(tall_as[0] + (tall_as[1] - tall_as[0]) * r[3], ceiling - bottom)
                 if size_h >= 0.4:
-                    # Boards and light boxes cover the painted sign band from
-                    # end to end; letters stand on it.
-                    size_w = width - 0.1 if kind < 2 else width * (0.7 + 0.2 * r[4])
+                    # Every kind covers the painted sign band from end to end
+                    # (channel letters with their fascia).
+                    size_w = width - 0.1
                     add(PROP_SHOP_SIGN, (SIGN_BOARD, SIGN_LIGHT_BOX, SIGN_LETTERS)[kind], middle, outward, bottom,
                         (size_w, size_h), name, s)
             if not shed and r[5] < awning_chance:

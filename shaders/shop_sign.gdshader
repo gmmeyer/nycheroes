@@ -21,8 +21,7 @@
 // close and get outlines for free. The look: boards in a bold color with
 // light letters, or light with colored letters, or dark with yellow ones;
 // light boxes glow (softly by day, brightly at night), channel letters are
-// cut out of their quad with a dark copy behind (their sides, seen from an
-// angle) and light up at night; blade signs carry their name up the panel;
+// cut out of their quad, standing off a plain fascia, and light up at night; blade signs carry their name up the panel;
 // banners are vinyl with grommets. Awnings are cloth (some striped, the
 // valance or dome carrying the shop's name) or ribbed aluminum, darker
 // underneath, where shop windows light them at night. At night pieces near a
@@ -238,15 +237,20 @@ void fragment() {
 		margin = vec2(0.3, 0.06);
 	}
 	vec2 text = sign_face || part == VALANCE || dome_front ? name_coverage(name, text_uv, text_size, margin) : vec2(0.0);
+	bool pale_fascia = rnd(seed, 9.0) >= 0.6;
 
-	if (sign_face && variant == CHANNEL_LETTERS) {
-		// Letters alone, cut out; the back copy dark (their sides).
+	if (sign_face && variant == CHANNEL_LETTERS && part == LETTERS) {
+		// Letters alone, cut out, standing off a plain fascia.
 		if (text.x < 0.5) {
 			discard;
 		}
-		color = part == LETTER_BACKS ? srgb(vec3(0.12)) : srgb(scheme > 0.68 && scheme <= 0.88 ? ink : face);
-		lit = part == LETTERS ? mix(letters_glow.x, letters_glow.y, city_lights) : 0.0;
+		color = srgb(pale_fascia ? bold * 0.75 : (scheme > 0.68 && scheme <= 0.88 ? ink : mix(bold, light, 0.25)));
+		lit = mix(letters_glow.x, letters_glow.y, city_lights);
 		glint = 0.2;
+	} else if (sign_face && variant == CHANNEL_LETTERS) {
+		// The fascia (over the painted sign band): dark, or pale stone.
+		color = srgb(pale_fascia ? vec3(0.72, 0.70, 0.65) : vec3(0.11, 0.11, 0.12));
+		lit = 0.0;
 	} else if (sign_face) {
 		// A frame round the face (a banner's hem, with grommets).
 		vec2 edge = min(p, face_size - p);
