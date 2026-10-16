@@ -164,12 +164,42 @@ CURBSIDE_REACH = 6.0
 CANOPY_CLEARANCE = 4.5
 CANOPY_REACH = 6.0
 
+# Each worker holds the whole city (about 3.5 GB in October 2026), so the
+# default worker count also leaves this much memory per worker, plus
+# MEMORY_SPARE for everything else.
+WORKER_MEMORY_GB = 4.0
+MEMORY_SPARE_GB = 12.0
+
 _W = {}  # per-worker data, filled by _init_worker
+
+
+def _default_workers() -> int:
+    """All cores but two, as many as fit in memory."""
+    cores = max(1, (os.cpu_count() or 4) - 2)
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class MemoryStatus(ctypes.Structure):
+                _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong),
+                            ("total", ctypes.c_ulonglong), ("available", ctypes.c_ulonglong),
+                            ("total_page", ctypes.c_ulonglong), ("available_page", ctypes.c_ulonglong),
+                            ("total_virtual", ctypes.c_ulonglong), ("available_virtual", ctypes.c_ulonglong),
+                            ("available_extended", ctypes.c_ulonglong)]
+            status = MemoryStatus(length=ctypes.sizeof(MemoryStatus))
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
+            total = status.total
+        else:
+            total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (AttributeError, OSError, ValueError):
+        return cores
+    return max(1, min(cores, int((total / 2**30 - MEMORY_SPARE_GB) / WORKER_MEMORY_GB)))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) - 2))
+    parser.add_argument("--workers", type=int, default=_default_workers(),
+                        help="processes building tiles (default: all cores but two, as memory allows)")
     parser.add_argument("--out", type=Path, help="build into this tiles directory instead of data/tiles/nyc")
     parser.add_argument("--only", nargs="+", metavar="LEVEL:I,J",
                         help="rebuild just these tiles (e.g. lod0:0,-1) in an existing build in --out, "
