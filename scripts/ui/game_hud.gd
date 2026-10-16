@@ -1,9 +1,10 @@
 class_name GameHud
 extends Control
 ## Player HUD: health bar, thugs taken down, a marker pointing to the nearest
-## thug, and in co-op a marker for each other player and the game's status
-## (markers sit at the screen edge when what they point at is off screen),
-## plus the aerial photos' credit while any are shown.
+## thug, and in co-op a marker for each other player (markers sit at the
+## screen edge when what they point at is off screen), the game's status and
+## short notices ("Player 2 is now the host"), plus the aerial photos' credit
+## while any are shown.
 
 ## Thugs closer than this and on screen don't need a marker.
 const NEAR_ENOUGH := 35.0
@@ -13,6 +14,9 @@ const EDGE_MARGIN := 48.0
 ## On touch screens, markers keep this far from the right edge, off the buttons.
 const TOUCH_BUTTONS_WIDTH := 100.0
 const MARKER_COLOR := Color(1.0, 0.35, 0.25)
+## Co-op notices show for this long (seconds).
+const NOTICE_TIME := 6.0
+const NOTICE_COLOR := Color(1.0, 0.9, 0.45)
 ## The license (CC BY 4.0) asks for this whenever the photos are shown.
 const AERIAL_CREDIT := "Aerial imagery: NYC OTI / NYS Orthoimagery Program 2024 (CC BY 4.0)"
 
@@ -27,12 +31,31 @@ const AERIAL_CREDIT := "Aerial imagery: NYC OTI / NYS Orthoimagery Program 2024 
 var touch_controls: TouchControls
 
 var _font: Font
+var _notices: Array = []  # [text, msec when it goes]
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_font = ThemeDB.fallback_font
+	Net.left_room.connect(func(id: int) -> void:
+		if Net.is_online():
+			notify("%s left" % Net.player_name(id)))
+	Net.host_changed.connect(func(id: int) -> void:
+		if Net.state == Net.State.JOINED:  # the host left (not: we joined, or left)
+			notify("You're the host now" if id == Net.local_id() else "%s is now the host" % Net.player_name(id)))
+
+
+## Shows a line near the top of the screen for a few seconds.
+func notify(text: String) -> void:
+	_notices.append([text, Time.get_ticks_msec() + int(NOTICE_TIME * 1000.0)])
+
+
+## The notices showing now.
+func current_notices() -> PackedStringArray:
+	var now := Time.get_ticks_msec()
+	_notices = _notices.filter(func(notice: Array) -> bool: return notice[1] > now)
+	return PackedStringArray(_notices.map(func(notice: Array) -> String: return notice[0]))
 
 
 func _process(_delta: float) -> void:
@@ -85,6 +108,12 @@ func _draw_coop_status() -> void:
 		if touch_controls:  # under the co-op button
 			at = Vector2(size.x - touch_controls.safe_insets.z - width - 16.0, touch_controls.safe_insets.y + 78.0)
 		_text(at, line, 16)
+	# Notices: centered, under the debug text in the top left.
+	var y := maxf(size.y * 0.2, 130.0)
+	for text in current_notices():
+		var width := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 22).x
+		_text(Vector2((size.x - width) * 0.5, y), text, 22, NOTICE_COLOR)
+		y += 30.0
 
 
 ## A marker pointing at a scene position, labeled with the distance to it.

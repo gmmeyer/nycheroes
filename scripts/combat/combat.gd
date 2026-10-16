@@ -6,7 +6,8 @@ extends Node
 ## A player hitting a thug in someone else's game sees the hit at once (the
 ## thug there is a copy) and reports it to the host, which applies it and tells
 ## everyone else. Thugs hitting another player's hero are sent to that player,
-## whose game owns their hero.
+## whose game owns their hero. When the host changes, so does who may send
+## the host's messages (the node's multiplayer authority).
 ##
 ## Positions passed in are scene space (see WorldOrigin) unless named world_*;
 ## positions sent between games are always world space.
@@ -35,6 +36,10 @@ var effects: CombatEffects
 var _thugs_by_id := {}
 var _attackers := {}  # hero instance id -> thugs swinging at it
 var _hit_stop_end_msec := 0
+
+
+func _ready() -> void:
+	Net.host_changed.connect(func(id: int) -> void: set_multiplayer_authority(id, false))
 
 
 func _process(_delta: float) -> void:
@@ -178,8 +183,8 @@ func _hit_thugs(hits: Array) -> void:
 		else:
 			reports.append([thug.net_id, hit[1], hit[2], hit[3]])
 		thug.take_hit(hit[1], hit[2], hit[3])
-	if not reports.is_empty():
-		_report_hits.rpc_id(Net.HOST_ID, reports)
+	if not reports.is_empty() and Net.peers().has(Net.host_id):
+		_report_hits.rpc_id(Net.host_id, reports)
 
 
 func _tell_hit(thug: Thug, push: Vector3, launch: bool, attacker: int) -> void:

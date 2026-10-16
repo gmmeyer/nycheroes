@@ -2,9 +2,20 @@
 // to each other directly over WebRTC. Game traffic never passes through here.
 //
 // The host asks for a room and gets a short code; friends join with the code.
-// The server then relays WebRTC offers, answers and network candidates between
-// the host and each player (players only ever talk to the host, so they never
-// learn each other's addresses).
+// Every player connects to every other (a full mesh), so the server relays
+// WebRTC offers, answers and network candidates between any two players in a
+// room: the players already there each send the newcomer an offer.
+//
+// One player is the room's host (the one whose game runs the thugs): first
+// the one who opened it. When the host leaves, the player who has been in the
+// room longest takes over (passing over any who stopped pinging: their
+// connection may be dead, or the game paused in a background tab); everyone
+// is told in the peer_left message. The room and its code last until the last
+// player leaves.
+//
+// Players ping ("ping", answered "pong") every 10 s. A player who loses touch
+// with another tells the server ("lost"); if that one hasn't pinged for
+// PING_TIMEOUT_MS, its connection is taken for dead and it leaves the room.
 //
 // Usage: npm install && node server.mjs
 // Environment:
@@ -14,12 +25,13 @@
 //                      {"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}]
 //   ALLOWED_ORIGINS   comma-separated page origins allowed to connect (default: any)
 //
-// Protocol (JSON text messages):
-//   player -> server  {type: "host"}                     server -> {type: "hosted", code, id: 1, ice}
-//   player -> server  {type: "join", code}               server -> {type: "joined", code, id, ice}
-//                                                        host   <- {type: "peer_joined", id}
-//   player -> server  {type: "signal", to, data}         to     <- {type: "signal", from, data}
-//   host   <- {type: "peer_left", id}   players <- {type: "room_closed"}   anyone <- {type: "error", message}
+// Protocol (JSON text messages, plus "ping"/"pong" as plain text):
+//   player -> server  {type: "host"}               server -> {type: "hosted", code, id: 1, ice}
+//   player -> server  {type: "join", code}         server -> {type: "joined", code, id, host, peers, ice}
+//                                                  others <- {type: "peer_joined", id}
+//   player -> server  {type: "signal", to, data}   to     <- {type: "signal", from, data}
+//   player -> server  {type: "lost", id}           (drops player id if it stopped pinging)
+//   others <- {type: "peer_left", id, host}        anyone <- {type: "error", message}
 
 import { createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
@@ -30,13 +42,15 @@ const ICE_SERVERS = process.env.ICE_SERVERS
   : [{ urls: ['stun:stun.l.google.com:19302'] }];
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean);
 const MAX_PLAYERS = 8;
-const HOST_ID = 1;
+const FIRST_HOST = 1;
 // No 0/O, 1/I/L: codes get read out loud and typed.
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const HEARTBEAT_MS = 30000;
+// Players ping every 10 s; one that hasn't for this long is gone.
+const PING_TIMEOUT_MS = 25000;
 
-/** code -> {code, players: Map<id, socket>} */
+/** code -> {code, host, players: Map<id, socket>}, players in the order they came */
 const rooms = new Map();
 
 const http = createServer((request, response) => {
@@ -52,8 +66,11 @@ const wss = new WebSocketServer({
 
 wss.on('connection', (socket) => {
   socket.alive = true;
+  socket.seen = Date.now();
   socket.on('pong', () => { socket.alive = true; });
   socket.on('message', (raw, isBinary) => {
+    socket.seen = Date.now();
+    if (!isBinary && raw.toString() === 'ping') return socket.send('pong');
     let message;
     try {
       message = JSON.parse(isBinary ? '' : raw.toString());
@@ -69,10 +86,10 @@ function handle(socket, message) {
   switch (message?.type) {
     case 'host': {
       if (socket.room) return send(socket, { type: 'error', message: 'Already in a game' });
-      const room = { code: newCode(), players: new Map([[HOST_ID, socket]]) };
+      const room = { code: newCode(), host: FIRST_HOST, players: new Map([[FIRST_HOST, socket]]) };
       rooms.set(room.code, room);
-      Object.assign(socket, { room, id: HOST_ID });
-      send(socket, { type: 'hosted', code: room.code, id: HOST_ID, ice: ICE_SERVERS });
+      Object.assign(socket, { room, id: FIRST_HOST });
+      send(socket, { type: 'hosted', code: room.code, id: FIRST_HOST, ice: ICE_SERVERS });
       log(`room ${room.code} opened`);
       break;
     }
@@ -82,23 +99,29 @@ function handle(socket, message) {
       const room = rooms.get(code);
       if (!room) return send(socket, { type: 'error', message: `No game with code ${code}` });
       // The lowest free number, so player numbers (and colors) stay small.
-      let id = HOST_ID + 1;
+      let id = FIRST_HOST;
       while (room.players.has(id)) id++;
       if (id > MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full' });
+      const peers = [...room.players.keys()];
       room.players.set(id, socket);
       Object.assign(socket, { room, id });
-      send(socket, { type: 'joined', code, id, ice: ICE_SERVERS });
-      send(room.players.get(HOST_ID), { type: 'peer_joined', id });
+      send(socket, { type: 'joined', code, id, host: room.host, peers, ice: ICE_SERVERS });
+      for (const peer of peers) send(room.players.get(peer), { type: 'peer_joined', id });
       log(`room ${code}: player ${id} joined (${room.players.size} players)`);
       break;
     }
     case 'signal': {
-      const room = socket.room;
-      const to = Number(message.to);
-      // Only host <-> player pairs talk.
-      if (!room || (socket.id !== HOST_ID && to !== HOST_ID)) return;
-      const target = room.players.get(to);
-      if (target) send(target, { type: 'signal', from: socket.id, data: message.data });
+      const target = socket.room?.players.get(Number(message.to));
+      if (target && target !== socket) send(target, { type: 'signal', from: socket.id, data: message.data });
+      break;
+    }
+    case 'lost': {
+      const target = socket.room?.players.get(Number(message.id));
+      if (target && target !== socket && Date.now() - target.seen > PING_TIMEOUT_MS) {
+        log(`room ${socket.room.code}: player ${target.id} stopped pinging`);
+        leave(target);
+        target.terminate();
+      }
       break;
     }
     default:
@@ -111,17 +134,24 @@ function leave(socket) {
   if (!room) return;
   socket.room = null;
   room.players.delete(socket.id);
-  if (socket.id === HOST_ID) {
-    for (const player of room.players.values()) {
-      send(player, { type: 'room_closed' });
-      player.room = null;
-    }
+  if (room.players.size === 0) {
     rooms.delete(room.code);
     log(`room ${room.code} closed`);
-  } else {
-    send(room.players.get(HOST_ID), { type: 'peer_left', id: socket.id });
-    log(`room ${room.code}: player ${socket.id} left`);
+    return;
   }
+  const wasHost = room.host === socket.id;
+  if (wasHost) room.host = nextHost(room);
+  for (const player of room.players.values()) send(player, { type: 'peer_left', id: socket.id, host: room.host });
+  log(`room ${room.code}: player ${socket.id} left${wasHost ? `, player ${room.host} hosts now` : ''}`);
+}
+
+/** The player who has been in the room longest, of those still pinging if any. */
+function nextHost(room) {
+  const now = Date.now();
+  for (const [id, player] of room.players) {
+    if (now - player.seen <= PING_TIMEOUT_MS) return id;
+  }
+  return room.players.keys().next().value;
 }
 
 function newCode() {

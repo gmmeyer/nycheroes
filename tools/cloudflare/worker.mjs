@@ -6,11 +6,14 @@
 // direct connections). Deploy with tools/deploy_cloudflare.ps1.
 
 const MAX_PLAYERS = 8;
-const HOST_ID = 1;
+const FIRST_HOST = 1;
 // No 0/O, 1/I/L: codes get read out loud and typed.
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const MAX_MESSAGE = 64 * 1024;
+// Players ping ("ping", answered "pong" without waking the object) every 10 s;
+// one that hasn't for this long is gone, if another player says it lost touch.
+const PING_TIMEOUT_MS = 25000;
 // STUN only: what players get when the TURN relay isn't available.
 const ICE_SERVERS = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
 // Cloudflare's TURN relay (Realtime TURN), from the TURN key in the Worker
@@ -60,13 +63,19 @@ async function wasm(request, env) {
   return new Response(object.body, { headers });
 }
 
-// Rooms of players, kept in the sockets' attachments ({code, id}) so they
-// survive the Durable Object sleeping between messages.
+// Rooms of players, kept in the sockets' attachments ({code, id, since, host})
+// so they survive the Durable Object sleeping between messages. Players
+// connect to each other in a full mesh. One is the host (`host` is set on it):
+// first the one who opened the room; when the host leaves, the player who has
+// been in the room longest takes over, passing over any who stopped pinging
+// (see tools/signaling/server.mjs for the protocol). A room and its code last
+// until its last player leaves.
 export class Rooms {
   constructor(ctx, env) {
     this.ctx = ctx;
     this.env = env;
     this.ice = null; // {servers: Promise, until}: the ICE servers being handed out
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
 
   async fetch() {
@@ -77,6 +86,7 @@ export class Rooms {
   }
 
   async webSocketMessage(socket, raw) {
+    if (raw === 'ping') return send(socket, 'pong'); // (normally answered without waking us)
     let message;
     try {
       if (typeof raw !== 'string' || raw.length > MAX_MESSAGE) throw new Error();
@@ -92,30 +102,43 @@ export class Rooms {
       case 'host': {
         if (me.code) return send(socket, { type: 'error', message: 'Already in a game' });
         const code = this.newCode();
-        socket.serializeAttachment({ code, id: HOST_ID });
-        send(socket, { type: 'hosted', code, id: HOST_ID, ice });
+        socket.serializeAttachment({ code, id: FIRST_HOST, since: Date.now(), host: true });
+        send(socket, { type: 'hosted', code, id: FIRST_HOST, ice });
         break;
       }
       case 'join': {
         if (me.code) return send(socket, { type: 'error', message: 'Already in a game' });
         const code = String(message.code ?? '').trim().toUpperCase();
         const players = this.players(code);
-        if (!players.has(HOST_ID)) return send(socket, { type: 'error', message: `No game with code ${code}` });
+        if (players.size === 0) return send(socket, { type: 'error', message: `No game with code ${code}` });
         // The lowest free number, so player numbers (and colors) stay small.
-        let id = HOST_ID + 1;
+        let id = FIRST_HOST;
         while (players.has(id)) id++;
         if (id > MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full' });
-        socket.serializeAttachment({ code, id });
-        send(socket, { type: 'joined', code, id, ice });
-        // The host's credentials may be older than a long game; these are fresh.
-        send(players.get(HOST_ID), { type: 'peer_joined', id, ice });
+        socket.serializeAttachment({ code, id, since: Date.now() });
+        send(socket, { type: 'joined', code, id, host: this.hostOf(players), peers: [...players.keys()], ice });
+        // Everyone there sends the newcomer an offer. Their credentials may be
+        // older than a long game; these are fresh.
+        for (const player of players.values()) send(player, { type: 'peer_joined', id, ice });
         break;
       }
       case 'signal': {
-        const to = Number(message.to);
-        // Only host <-> player pairs talk.
-        if (!me.code || (me.id !== HOST_ID && to !== HOST_ID)) return;
-        send(this.players(me.code).get(to), { type: 'signal', from: me.id, data: message.data });
+        const target = me.code && this.players(me.code).get(Number(message.to));
+        if (target && target !== socket) send(target, { type: 'signal', from: me.id, data: message.data });
+        break;
+      }
+      case 'lost': {
+        // Someone lost touch with this player: if it stopped pinging too, its
+        // connection died without closing.
+        const target = me.code && this.players(me.code).get(Number(message.id));
+        if (target && target !== socket && Date.now() - this.lastSeen(target) > PING_TIMEOUT_MS) {
+          this.leave(target);
+          try {
+            target.close(1001, 'Stopped pinging');
+          } catch {
+            // Already closed.
+          }
+        }
         break;
       }
       default:
@@ -131,29 +154,47 @@ export class Rooms {
     this.leave(socket);
   }
 
+  /** Takes a player out of their room, handing it to a new host if they hosted. */
   leave(socket) {
     const me = socket.deserializeAttachment() ?? {};
     if (!me.code) return;
     socket.serializeAttachment({});
     const players = this.players(me.code);
-    if (me.id === HOST_ID) {
-      for (const player of players.values()) {
-        send(player, { type: 'room_closed' });
-        player.serializeAttachment({});
-      }
-    } else {
-      send(players.get(HOST_ID), { type: 'peer_left', id: me.id });
+    if (players.size === 0) return;
+    if (me.host) {
+      // The player who has been in the room longest, of those still pinging if any.
+      const now = Date.now();
+      const next = [...players.values()].find((player) => now - this.lastSeen(player) <= PING_TIMEOUT_MS)
+        ?? players.values().next().value;
+      next.serializeAttachment({ ...next.deserializeAttachment(), host: true });
     }
+    const host = this.hostOf(players);
+    for (const player of players.values()) send(player, { type: 'peer_left', id: me.id, host });
   }
 
-  /** The open sockets in room `code`, by player id. */
+  /** The id of the host of a room (its players, from players()). */
+  hostOf(players) {
+    for (const [id, socket] of players) {
+      if (socket.deserializeAttachment()?.host) return id;
+    }
+    return players.keys().next().value;
+  }
+
+  /** The open sockets in room `code`, by player id, in the order they came. */
   players(code) {
-    const found = new Map();
+    const found = [];
     for (const socket of this.ctx.getWebSockets()) {
       const them = socket.deserializeAttachment() ?? {};
-      if (them.code === code) found.set(them.id, socket);
+      if (them.code === code) found.push([them, socket]);
     }
-    return found;
+    found.sort(([a], [b]) => (a.since ?? 0) - (b.since ?? 0) || a.id - b.id);
+    return new Map(found.map(([them, socket]) => [them.id, socket]));
+  }
+
+  /** When a player was last heard from: their last ping, or when they came. */
+  lastSeen(socket) {
+    const pinged = this.ctx.getWebSocketAutoResponseTimestamp(socket)?.getTime() ?? 0;
+    return Math.max(pinged, socket.deserializeAttachment()?.since ?? 0);
   }
 
   newCode() {
@@ -205,7 +246,7 @@ async function turnServers(env) {
 function send(socket, message) {
   if (!socket) return;
   try {
-    socket.send(JSON.stringify(message));
+    socket.send(typeof message === 'string' ? message : JSON.stringify(message));
   } catch {
     // Closed meanwhile.
   }
