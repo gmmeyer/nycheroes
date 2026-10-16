@@ -562,6 +562,109 @@ In order:
   so every stair opens the same way along its curb); wave bike racks are
   drawn as U racks.
 
+**Shop signs, sidewalk sheds, bike docks and plaza furniture (done;
+reference round 3's 23, 24 and 31):**
+- Shop fronts (`props.shop_fronts()`): the street walls of every building
+  with shops (PLUTO's retail area, or a store; not in Times Square's sign
+  district), as drawn (the 3-D model's walls where it draws the building),
+  are split into shops 5-8.5 m wide (7-12 m in towers). Each gets, over the
+  sign band the building shader paints:
+  - a sign: a painted board across the whole shop, 0.8-1.3 m tall, a light
+    box (lit from inside, softly by day and brightly at night), or channel
+    letters (cut out, with a dark copy behind them standing for their sides;
+    lit at night);
+  - on 20-45% of shops an awning under it (cloth with a valance, ribbed
+    aluminum, or a quarter-round dome), reaching 0.9-1.5 m out but never
+    closer than 0.7 m to the curb, its lowest edge at least 2.2 m up; cloth
+    ones and domes carry the shop's name;
+  - on 15-35% a blade sign at one end, by the next floor, its name up the
+    panel;
+  - on low buildings (2-6 floors) with offices (PLUTO's office area, 17,200
+    of the 85,000 shop buildings), boards on the next floor over 55% of
+    shops (dentists, tax services, dance studios), and over 15% on
+    commercial streets without; 6% of shops there hang a vinyl banner
+    (GRAND OPENING, SE RENTA).
+  Commercial streets (at least 12 shop buildings within 60 m: 34,800 of
+  them) get the most signs, light boxes and awnings; towers and newer offices
+  mostly channel letters; lofts and warehouses half as many signs. Walls with
+  another building 0.5 or 1.5 m in front get nothing: they're party walls
+  that the facade code marks as street fronts because a street lies beyond
+  the neighbor (30-50% of shop walls in dense blocks; signs and awnings
+  there poked out of the neighbor, mirrored).
+- Names: 64 invented ones (no real brands: kinds of shops like PIZZA and
+  FARMACIA, family and fancy names like Mama Rosa and LUCKY GARDEN, the
+  upstairs businesses, banners), Spanish ones three times likelier in the
+  Bronx, Brooklyn and Queens, set in four typefaces under the SIL Open Font
+  License (Anton, Lilita One, Alfa Slab One, Pacifico) by
+  `tools/citygen/sign_names.py` into one texture: a signed distance field
+  (`assets/signs/sign_names.png`, 1024 x 2048, one channel, 465 kB in the
+  download, 2.8 MB on the GPU with mipmaps), so letters stay crisp up close
+  and get outlines for free; its bottom row of pixels holds each name's
+  width, which the shader reads to fit the name to the sign. Colors come
+  in schemes: a bold color with light letters, light with colored letters,
+  dark with yellow or white, yellow with red; awnings in the shop's color, a
+  third of them striped.
+- Sidewalk sheds (`props.shed_sections()`): the Department of Buildings'
+  permits (DOB NOW: Build, Approved Permits, work type Sidewalk Shed, issued
+  and not expired or signed off on the day of the download: 7,869 on
+  2026-10-16) put sheds on 6,585 buildings (by BIN, else the nearest building
+  within 20 m). A shed runs along each street wall with at least 2 m of
+  sidewalk, reaching to 0.5 m short of the curb (1.6-3.6 m), its deck
+  3.0-3.5 m up, in sections of up to 3.2 m: plywood in 4 x 8 ft sheets
+  painted hunter green (82%; white, black or blue), steel posts at both
+  sides, a header beam with knee braces, a parapet with stenciled warnings,
+  a white underside with a lamp every 3 m, lit by day and brighter at night,
+  when they light the sidewalk (pools in the street light map). Shops behind
+  a shed keep only their signs above it.
+- The bike share's docks (`props.prepare_bike_docks()`): Citi Bike's 2,518
+  stations from its public GBFS feed (Lyft's data license allows the data
+  inside a product, not as a dataset of its own, and none of the system's
+  names or marks: the bikes are a generic blue, with no logos). Each
+  station's docks stand in a row along the nearest curb: in the parking lane
+  where the station is in the street (1,115; parked cars keep clear), else on
+  the sidewalk or plaza at least 2.4 m from the curb, the bikes toward the
+  street; sections of four docks 0.8 m apart, each holding its own share of
+  bikes (45-100%), a green light on each dock, the station's kiosk (map,
+  screen, solar panel) at one end: 18,900 sections.
+- Plaza furniture (`props.plaza_furniture()`) in the DOT's pedestrian
+  plazas: planters every 7 m along edges by the street (long boxes or round
+  tubs of shrubs and flowers), bistro tables with three chairs on a jittered
+  4 m grid in seating areas (55% of 12 m squares), 30% under an umbrella
+  (none in Times Square's sign district, whose tables stand bare), and a food
+  kiosk in 60% of plazas of 900 m² or more; all 1.6 m from street
+  furniture, trees and lamps.
+- New prop types 17-23 (signs, awnings, shed sections, dock sections and
+  kiosks, tables, planters, food kiosks; older game builds skip them),
+  three MultiMeshes per near tile: shop fronts on one mesh
+  (`PropMeshes.shop_fronts()`, 158 vertices for every shape) with
+  `shaders/shop_sign.gdshader`; sheds on a small mesh of their own (140
+  vertices: Manhattan tiles hold hundreds of sections, and every instance
+  runs all its mesh's vertices) and docks with plaza furniture on another
+  (604 vertices), both with `shaders/street_extras.gdshader`, laid out like
+  the street furniture. Added to `street_furniture.gdshader` instead, they
+  doubled its compile time (0.9 to 1.3-1.7 s: the D3D compiler's time grows
+  with about the square of a shader's code), so they have a shader of their
+  own (0.3-0.4 s). No shadows. Signs and awnings shrink away at 62% of the
+  large furniture's distances (260-360 m on high), sheds at 78%, docks and
+  tables with the small furniture: at the large furniture's they cost about
+  0.5 ms a frame.
+- Data: `fetch_data.py` fetches the shed permits (`sidewalk_sheds.json`) and
+  the stations (`bike_stations.json`); `prepare.py` makes `shops.pkl`,
+  `sheds.pkl` and `bike_docks.pkl`.
+- Cost: tiles about +11 MB (+0.6% in 23 random near tiles: 130 signs and
+  awnings, 24 shed sections and 11 dock sections a tile; +1.6% in the 25
+  tiles around the five views, Midtown's up to +3%). Draw calls +5 to +14 in
+  the five views. Uncapped on the dev machine (1600x900, back and forth with
+  master): within the noise at Roosevelt Avenue, the Flatiron, Fifth Avenue
+  and DUMBO (305 to 303, 303 to 308, 314 to 320, 325 to 312 FPS), Times
+  Square 311 to 291 (+0.2 ms). Shader compile time at Times Square:
+  shop_sign.gdshader 0.2-0.3 s, street_extras.gdshader 0.3-0.5 s, 12 more
+  programs (109 to 121); ready after 24-25 s before, 21.5-22.6 s after (the
+  noise is building.gdshader's). Download +0.5 MB (index.pck, the names).
+- Still to do: fewer continuous storefronts on lofts (round 3's 23 asked
+  for it; it's in `facades.py` and the building shader); the painted sign
+  band shows where a shop has no sign or channel letters.
+
 **Ground details (done):**
 - Planted medians and malls (`tools/citygen/ground_details.py`): of the
   city's 8,048 raised medians (Planimetric Database), 3,727 are planted:
@@ -1429,8 +1532,9 @@ templates for both are already installed.
 ## Working on the project
 
 - Rebuild city data: `tools/citygen/fetch_data.py` (NYC Open Data, the
-  USGS elevation tiles, the 3-D building model and the land cover map, about
-  4 GB with 33 GB unpacked), then `build_tiles.py` (its first run also
+  USGS elevation tiles, the 3-D building model, the land cover map and the
+  bike share's stations, about 4 GB with 33 GB unpacked; the sidewalk shed
+  permits are the ones up on the day of the download), then `build_tiles.py` (its first run also
   fetches the lidar survey's point tiles around raised roads, 830 MB,
   `lidar.py`),
   then, only for the photo comparison, `aerial.py` (downloads and lays out
@@ -1445,6 +1549,9 @@ templates for both are already installed.
   `tiles/`. In a git worktree (no `data/`), set `NYC_DATA_DIR` to the main
   checkout's `data` folder for the tools, and run the game or tests with
   `-- --tiles=<dir>`.
+- Shop signs' names: `python tools/citygen/sign_names.py build` (with the
+  venv's Python) draws them into `assets/signs/sign_names.png`, downloading
+  its fonts to `data/raw/fonts` the first time; the list is in that file.
 - Web build: `tools/build_web.ps1` (add `-Serve` to play at
   http://localhost:8060; it also runs the co-op signaling server on port
   8070, after `npm install` in `tools/signaling`).
