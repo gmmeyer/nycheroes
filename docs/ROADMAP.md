@@ -1118,7 +1118,7 @@ templates for both are already installed.
   and leave with their tiles).
 - Launch options (URL or `-- --name=value` on desktop): `?cam=x,y,z,yaw,pitch`
   free camera, `?spawn=x,y,z,yaw` hero start, `?stats` console stats,
-  `?peds=N`, `?gangs=N`, `?traffic=N` (0: none), `?demo` / `?demo=fight` scripted tours for videos,
+  `?peds=N`, `?gangs=N`, `?traffic=N` (0: none), `?demo` / `?demo=fight` / `?demo=city` / `?demo=new` scripted tours for videos,
   `?host` / `?join=CODE` co-op, `?signal=wss://...` signaling server
   (default: the page's host, port 8070), `?relay=1` co-op only through the
   TURN relay (testing), `?weather=overcast`, `?fog_scatter=` (sun tint of
