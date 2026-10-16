@@ -1505,8 +1505,8 @@ def _curb_lamps(bounds) -> dict:
 def _utility_poles(i: int, j: int) -> tuple[dict, dict, dict]:
     """The tile's utility poles, the street lights on them and the wires
     strung from them (poles.tile_props), leaving out poles that would reach
-    up into a deck overhead or stand among an el's columns or on its stairs,
-    and the wires to them."""
+    up into a deck overhead, stand among an el's columns or on its stairs or
+    in a sunken road's cut, and the wires to them."""
     data = _W["poles"]
     own = _W["pole_groups"].get((i, j))
     if own is None:
@@ -1526,6 +1526,7 @@ def _utility_poles(i: int, j: int) -> tuple[dict, dict, dict]:
         none = np.zeros(len(en), dtype=bool)
         ok &= els.clear_of_columns(_W["bridges"].get("el_columns", {}), *key, en, none)
         ok &= els.clear_of_stairs(_W["bridges"].get("el_stairs", {}), *key, en, none)
+        ok &= ~_W["trenches"].inside(en)  # nor down in a sunken road's cut (trenches.py)
         clear[members[ok]] = True
     own = own[clear[own]]
     spans = spans[clear[data["spans"][spans, 0]] & clear[data["spans"][spans, 1]]]

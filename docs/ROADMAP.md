@@ -1538,6 +1538,49 @@ Comes after step 6 because it needs step 6's real ground heights.
   the four near tiles around it +247 KB (+13%; +15% triangles, a third of
   them paint), the mid ones +89 KB (+10%), the far one +23 KB (+2%); no new
   draw calls.
+- **Sunken roads** (`tools/citygen/trenches.py`): the 200 km of streets,
+  highways and ramps below street level by the centerlines' level codes (9
+  and 5) but the triple cantilever's: the BQE's trench along Hicks Street,
+  the Cross Bronx's cuts through East Tremont and the Trans-Manhattan
+  Expressway's, the Gowanus and Prospect Expressways, the Grand Central, the
+  Long Island and Van Wyck Expressways' depressed stretches, the Central Park
+  transverses, the underpasses. The lidar survey every 10 m along them (300
+  MB more of its point tiles, ground points included): the surfaces over the
+  centerline and the lowest surface across the road, out to 40 m either side.
+  Heights follow the lowest surface the way a road can (climbing at most 8%):
+  one that jumps 3 m above where the road could have come up to is something
+  over it (a bridge, a building, a tunnel's lid), holding the road 5 m under
+  it; then a smoothed least-squares fit over the whole network, like the
+  viaducts'. Covered stretches at least 45 m long where the survey can't see
+  the road are tunnels (20 km: the Battery Park Underpass, under the Bridge
+  Apartments, the First Avenue tunnel); ends at street level stay on the
+  street, and ramps climbing out of a cut onto a viaduct start from its
+  height. A few roads by the water the survey has under sea level stay half
+  a meter above it.
+- **The cuts:** along every sunken road but its tunnels, a strip out to the
+  walls where the survey sees them (else the road's width and a 1.5 m
+  shoulder; medians between carriageways closed; never under a building or a
+  street running along the edge) is cut down, with the road's surface over
+  it (3.3 km²); concrete retaining walls where its edge meets higher ground
+  (side walls where the road runs higher), parapets on those 2 m high or
+  more, and cobra-head lamps along them. The elevation model's 10 m pixels
+  blur the cuts' edges, so the ground within 15 m of a cut at least 1.5 m
+  deep comes up to the ground 15 m out. 408 cross streets and bridge outlines
+  span the cuts on flat decks at the street's height (road and sidewalk on
+  top, fascia and capped parapets over the cut; 198 of the city's outlines,
+  the rest the streets' own width), and 245 tunnel portals open into the
+  walls, the first 25 m of tunnel built, under the ground over them.
+  Generalizes the triple cantilever's cut: its ground wraps the cantilever's,
+  with its deck, underside and wall builders, no road special-cased. Far
+  tiles, which draw no streets, keep their ground whole.
+- **Lanes and paint in the cuts:** the sunken roads join the raised roads'
+  network (same node ids at street-level ends, so traffic drives through the
+  cuts and up their ramps), their driving lanes and paint on the cut's road
+  surface; collision everywhere (a hero lands in a cut, runs along it and up
+  against its walls). Walking lanes, props, trees and utility poles stay out
+  of the cuts but for the bridges. Cost: near tiles with a cut +4.5% bytes
+  (+6% triangles; up to +16% in Washington Heights), mid +7%, far none;
+  0-3% more draw calls in those views; no new shader code.
 - **Trains on the els** (`tools/citygen/trains.py`, `scripts/world/trains.gd`,
   the track graph in `train_tracks.gd`): every subway el track's centerline
   at its rails' height, cut into pieces at switches and junctions and at
@@ -1662,10 +1705,12 @@ Comes after step 6 because it needs step 6's real ground heights.
   of view, far off or standing are drawn less often), 1 draw call, 2,700
   triangles; the trains' tracks, platform edges and signals add about 2.4
   KB to a near tile with an el (+0.35%), about 0.9 MB in all.
-- **Still to do:** other sunken roads (the BQE's trench along Hicks Street,
-  the Cross Bronx's cuts: no lanes or paint below street level yet); the
-  lidar is from 2017 (the Kosciuszko's second span and the Kew Gardens
-  interchange's rebuild came later). Trains: none on the subway's tracks on
+- **Still to do:** sunken roads' cuts are plain concrete (no stone facing
+  on the Cross Bronx's or the Central Park transverses' walls, no fences
+  along the parapets); tunnels go 25 m in, then a wall; where the centerlines
+  draw no carriageway the cut is the road's width; the lidar is from 2017
+  (the Kosciuszko's second span and the Kew Gardens interchange's rebuild
+  came later). Trains: none on the subway's tracks on
   embankments and in cuts (they vanish where an el comes down to them), on
   the Manhattan Bridge (its tracks are at grade in the data, between
   tunnels), or on the Hell Gate's; the J's tracks over the Williamsburg
@@ -1726,8 +1771,8 @@ templates for both are already installed.
   USGS elevation tiles, the 3-D building model, the land cover map and the
   bike share's stations, about 4 GB with 33 GB unpacked; the sidewalk shed
   permits are the ones up on the day of the download), then `build_tiles.py` (its first run also
-  fetches the lidar survey's point tiles around raised roads, 830 MB,
-  `lidar.py`),
+  fetches the lidar survey's point tiles around raised and sunken roads,
+  1.1 GB, `lidar.py`),
   then, only for the photo comparison, `aerial.py` (downloads and lays out
   the aerial photos once; after later `build_tiles.py` runs, `aerial.py
   mark` re-adds them to the manifest). Python venv in `tools/citygen/.venv`,
