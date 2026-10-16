@@ -18,6 +18,9 @@ extends Node
 ##   gone by (m, small/
 ##   large pieces)
 ##   cars gone by (m)    170             320             460
+##   rowhouse fronts     250             400             600
+##   (railings, fences,
+##   by tile center, m)
 ##   woods' clumps of    none            4000, none in   6000, far
 ##   crowns, by tile                     far tiles       tiles' 9000
 ##   center (m)
@@ -51,6 +54,7 @@ const PRESETS := {
 		"load_distances": [350.0, 800.0, 7000.0],
 		"furniture_fade": [Vector2(60.0, 90.0), Vector2(220.0, 300.0)],
 		"car_fade": Vector2(120.0, 170.0),
+		"fronts_range": 250.0,
 		"canopy_ranges": [0.0, 0.0, 0.0],
 		"fog_density": 0.00016,
 		"pedestrians": 12,
@@ -70,6 +74,7 @@ const PRESETS := {
 		"load_distances": [500.0, 1100.0, 12000.0],
 		"furniture_fade": [Vector2(150.0, 220.0), Vector2(360.0, 500.0)],
 		"car_fade": Vector2(220.0, 320.0),
+		"fronts_range": 400.0,
 		"canopy_ranges": [4000.0, 4000.0, 0.0],
 		"fog_density": 0.00013,
 		"pedestrians": 24,
@@ -164,6 +169,7 @@ func apply(sun: DirectionalLight3D, environment: Environment, city: CityStreamer
 		city.load_distances = distances
 		city.set_furniture_fade(_preset.furniture_fade[0], _preset.furniture_fade[1])
 		city.set_car_fade(_preset.car_fade)
+		city.fronts_range = _preset.fronts_range
 		var canopy: Array[float] = []
 		canopy.assign(_preset.canopy_ranges)
 		city.set_canopy_ranges(canopy)
