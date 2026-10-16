@@ -47,7 +47,10 @@ lines below wherever a license asks for one (the aerial photos do).
   at-grade track centerlines, named by line), railroad structures
   (dwer-xbgx: elevated stations) and sidewalks (52n9-sdep: the walkways on
   bridges and raised streets); the rail bridge and railroad viaduct
-  outlines are in the bridge structures above (r9cu-9r7b).
+  outlines are in the bridge structures above (r9cu-9r7b). The stairs up
+  to the elevated stations: the MTA's subway entrances and exits
+  (data.ny.gov, i9wp-a4ja: each entrance's station) and subway stations
+  (data.ny.gov, 39hk-dx4f: which stations are elevated).
 
 `tools/citygen/fetch_data.py` and `tools/citygen/aerial.py` list exactly
 what is downloaded from where.

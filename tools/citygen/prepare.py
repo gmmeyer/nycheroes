@@ -165,7 +165,7 @@ PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": 
              "furniture": props.prepare_furniture, "overpasses": overpasses.prepare,
              "ground_details": prepare_ground_details, "els": els.prepare,
              "deck_sidewalks": overpasses.prepare_sidewalks, "cantilever": cantilever.prepare,
-             "deck_heights": prepare_deck_heights}
+             "deck_heights": prepare_deck_heights, "el_stairs": els.prepare_stairs}
 
 
 def load(name: str) -> dict:

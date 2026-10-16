@@ -1,26 +1,34 @@
-"""The tracks the subway's trains run on over the els (scripts/world/trains.gd),
-from els.py's tracks, for the near tiles' trains surface
+"""The tracks the trains run on over the els (scripts/world/trains.gd): the
+subway's and the commuter railroads' (Metro-North's Park Avenue Viaduct, the
+LIRR's viaducts), from els.py's tracks, for the near tiles' trains surface
 (common.SURFACE_TRAINS).
 
 Each track's centerline, at the height of its rails (the deck's top), is cut
 into pieces where another track joins it (switches and junctions) and at least
 every PIECE, and each piece runs the way trains do on it. Trains keep right:
 a track with tracks alongside to its left runs along its line, one with
-tracks to its right against it, and a middle track (the express track of a
-three-track el, run only in the rush hours) gets no trains. Tracks with none
-alongside (flyovers, switches, crossovers) take their direction from the
+tracks to its right against it. A middle track (the express track of a
+three-track el, run in the rush hours toward Manhattan in the morning and
+away from it in the afternoon) has pieces both ways, flagged EXPRESS_IN and
+EXPRESS_OUT, of which the game runs one (by the time of day). Tracks with
+none alongside (flyovers, switches, crossovers) take their direction from the
 tracks they join. Pieces meet at nodes shared by all tiles, like the driving
 lanes', so trains go on from tile to tile; a piece is in the tile holding its
 middle, whole.
 
 Along each piece: the speed limit at each point (curves are taken at no more
 than CURVE_GRIP sideways), the stops (the middle of each platform beside the
-track, els._add_platforms: tracks between platforms or with none, like
-express tracks, run through), and the line's service (SERVICES: the route
-bullets its trains show). Where no piece goes on, an end is open (into a
-tunnel, down to the ground, onto a bridge built elsewhere: trains run off it
-out of sight and come out of it) or a dead end (bumper blocks at a
-terminal).
+track, els._platforms: tracks between platforms or with none, like express
+tracks between express stations, run through), and the line's service
+(SERVICES: the route bullets its trains show). Where no piece goes on (the
+way trains run), an end is open (into a tunnel, down to the ground, onto a
+bridge built elsewhere: trains run off it out of sight and come out of it)
+or a dead end (bumper blocks at a terminal). At a dead end trains turn back
+(_turn_backs): they run back the way they came, against the track's
+direction, to the first switch at least TURN_MIN back that leads onto a
+track running their new way; the pieces they run back on come again
+reversed (TURN_BACK), and the track between that switch and the bumper is
+TERMINAL: one train in it at a time.
 """
 
 import numpy as np
@@ -54,6 +62,26 @@ OPEN_START = 1  # no piece leads into its start, a track's end going on out of s
 OPEN_END = 2    # no piece goes on from its end, going on out of sight: trains run off it
 DEAD_END = 4    # no piece goes on from its end (bumper blocks, a track trains don't use): trains stop short
 MAIN = 8        # a running track (a long one with tracks alongside): trains may appear on it
+EXPRESS_IN = 16    # a middle track toward Manhattan (the morning's express)
+EXPRESS_OUT = 32   # a middle track away from Manhattan (the afternoon's express)
+TERMINAL = 64      # between a dead end and the switch trains turn back to: one train at a time
+TURN_BACK = 128    # a TERMINAL piece (or that switch) reversed, for trains turning back
+# Pieces go on from one another at least this straight (cosine; the game's
+# TrainTracks.FOLLOW).
+FOLLOW_ON = 0.85
+# Where Manhattan is, for the express tracks' directions: Times Square (the origin).
+MANHATTAN = (0.0, 0.0)
+# Trains turning back at a dead end look for a switch onto a track running
+# their new way at least TURN_MIN back (the longest train fits between it and
+# the bumper) and at most TURN_SEARCH further; else they cross over to the
+# track alongside (TRACK_SPACING away) over CROSSOVER meters at
+# CROSSOVER_SPEED, TURN_MIN back (or further, every 20 m, where the tracks
+# alongside don't fit).
+TURN_MIN = 200.0
+TURN_SEARCH = 150.0
+CROSSOVER = 45.0
+CROSSOVER_SPEED = 8.0
+TRACK_SPACING = (0.5, 8.0)
 # Track ends going on out of sight (els.Tracks.end_kinds): into a tunnel or
 # down to the ground, into a yard, onto a bridge built elsewhere.
 OPEN_KINDS = ("ground", "yard", "excluded")
@@ -84,21 +112,28 @@ SERVICES = {
     "IND K LIBERTY AVE RR": 16,                                   # A
     "BMT P CANARSIE": 17, "BMT Q CANARSIE": 17,                   # L
     "BMT O FRANKLIN AVE": 18,                                     # S
+    # The commuter railroads (by the names' starts): Metro-North, the LIRR.
+    "METRO-NORTH": 19,
+    "LONG ISLAND": 20, "LIRR": 20,
 }
 UNNAMED = "NO NAME"
+RAILROADS = 19  # services from this one on are the railroads' (their names' starts)
 
 
-def pieces(tracks, platforms: list, snap: float) -> list[dict]:
+def pieces(tracks, platforms: list, snap: float, bridges=()) -> list[dict]:
     """The pieces trains run on: {"points" (N, 3) east, north, rail height;
     "speeds" (N,) m/s; "stops" (N,) bool; "from", "to" node ids; "service";
     "flags"}. `platforms` are the els' platform outlines, `snap` how far
-    apart joined track ends may be (els.SNAP)."""
+    apart joined track ends may be (els.SNAP), `bridges` the tracks going on
+    from els' ends over bridges (els._bridge_tracks)."""
     chains = tracks.chains
     if len(chains) == 0:
         return []
     service = _services(tracks)
     direction, voted = _directions(tracks, service)
-    stops = _stops(tracks, platforms, service, direction)
+    # Middle tracks (between tracks either way) are express tracks, run both ways.
+    express = voted & (direction == 0) & (service > 0)
+    stops = _stops(tracks, platforms, service, np.where(express, 1, direction))
 
     # Cuts along every chain: its ends, where other tracks join it, and
     # evenly between, at most PIECE apart.
@@ -145,9 +180,13 @@ def pieces(tracks, platforms: list, snap: float) -> list[dict]:
     node_place[node_id[inner]] = places[inner]
 
     out = []
+    manhattan = shapely.Point(MANHATTAN)
     for c, chain in enumerate(chains):
-        if service[c] <= 0 or direction[c] == 0:
+        if service[c] <= 0 or (direction[c] == 0 and not express[c]):
             continue
+        # An express track's pieces run along it toward Manhattan or away from it.
+        inward = EXPRESS_IN if shapely.distance(manhattan, shapely.Point(chain.coords[-1])) \
+            < shapely.distance(manhattan, shapely.Point(chain.coords[0])) else EXPRESS_OUT
         coords = np.asarray(chain.coords)[:, :2]
         bends = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(coords, axis=0), axis=1))])
         own_stops = stops.get(c, np.zeros(0))
@@ -172,23 +211,56 @@ def pieces(tracks, platforms: list, snap: float) -> list[dict]:
                      "from": int(ends[0]), "to": int(ends[1]), "service": int(service[c]),
                      "flags": MAIN if voted[c] and chain.length >= MAIN_LENGTH else 0,
                      "kinds": (_end_kind(tracks, c, k == 0, 0), _end_kind(tracks, c, k == len(cuts[c]) - 2, 1))}
+            if express[c]:
+                out.append(dict(piece, flags=piece["flags"] | inward))
+                out.append(dict(_reversed(piece), flags=piece["flags"] | (EXPRESS_IN | EXPRESS_OUT) ^ inward))
+                continue
             if direction[c] < 0:
                 piece = _reversed(piece)
             out.append(piece)
 
+    # Over bridges from els' ends, on their decks, the way trains run at those
+    # ends; their far ends go on out of sight (into a tunnel).
+    next_node = int(node_id.max()) + 1
+    for bridge in bridges:
+        c, end = bridge["chain"], bridge["end"]
+        if service[c] <= 0 or direction[c] == 0:
+            continue
+        points = np.array(bridge["points"], np.float64)
+        joint = node_id[first[c] + (0 if end == 0 else len(cuts[c]) - 1)]
+        points[0, :2] = node_place[joint]
+        line = shapely.LineString(points[:, :2])
+        along = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(points[:, :2], axis=0), axis=1))])
+        cut = np.linspace(0.0, line.length, max(1, int(np.ceil(line.length / PIECE))) + 1)
+        nodes = [int(joint)] + list(range(next_node, next_node + len(cut) - 1))
+        next_node += len(cut) - 1
+        onto = (direction[c] > 0) == (end == 1)
+        for k in range(len(cut) - 1):
+            s = np.unique(np.concatenate([[cut[k], cut[k + 1]], along[(along > cut[k]) & (along < cut[k + 1])]]))
+            here = np.column_stack([shapely.get_coordinates(shapely.line_interpolate_point(line, s)),
+                                    np.interp(s, along, points[:, 2])])
+            keep = _simplify(here, TOLERANCE, np.zeros(len(s), dtype=bool))
+            low = np.minimum.reduceat(_speeds(line, s), keep)
+            piece = {"points": here[keep], "speeds": np.minimum(low, np.concatenate([low[:1], low[:-1]])),
+                     "stops": np.zeros(len(keep), dtype=bool), "from": nodes[k], "to": nodes[k + 1],
+                     "service": int(service[c]), "flags": MAIN,
+                     "kinds": (None, "excluded" if k == len(cut) - 2 else None)}
+            out.append(piece if onto else _reversed(piece))
+
     # Tracks that don't reach far (short bits of el where a line on an
     # embankment crosses a street) carry no trains.
     out = _without_scraps(out)
-    # Open and dead ends: nodes no piece leads on from (or into).
-    leaving = {p["from"] for p in out}
-    arriving = {p["to"] for p in out}
+    # Open and dead ends: where no piece goes on from (or leads into) a piece
+    # the way trains run.
+    leaving, arriving = _ends(out)
     for p in out:
-        if p["to"] not in leaving:
+        if not any(_goes_on(p, q) for q in leaving.get(p["to"], [])):
             p["flags"] |= OPEN_END if p["kinds"][1] in OPEN_KINDS else DEAD_END
-        if p["from"] not in arriving and p["kinds"][0] in OPEN_KINDS:
+        if not any(_goes_on(q, p) for q in arriving.get(p["from"], [])) and p["kinds"][0] in OPEN_KINDS:
             p["flags"] |= OPEN_START
         del p["kinds"]
-    return out
+    turned = _turn_backs(out)
+    return out + turned
 
 
 def bucket(found: list, size: float) -> dict:
@@ -220,10 +292,192 @@ def surface(found: list, origin) -> tuple:
             np.concatenate(uv).astype(np.float32), np.concatenate(uv2).astype(np.float32), np.zeros(0, dtype=np.uint32))
 
 
+def _ends(found: list) -> tuple[dict, dict]:
+    """The pieces leaving and arriving at each node: ({node: [piece]}, {node: [piece]})."""
+    leaving, arriving = {}, {}
+    for p in found:
+        leaving.setdefault(p["from"], []).append(p)
+        arriving.setdefault(p["to"], []).append(p)
+    return leaving, arriving
+
+
+def _direction(piece: dict, end: int) -> np.ndarray:
+    """A piece's unit direction (east, north, up) at its start (0) or end (1)."""
+    p = piece["points"]
+    d = p[1] - p[0] if end == 0 else p[-1] - p[-2]
+    return d / max(float(np.linalg.norm(d)), 1e-9)
+
+
+def _goes_on(a: dict, b: dict) -> bool:
+    """Whether trains go on from piece a onto piece b (leaving where a ends)."""
+    return float(_direction(a, 1) @ _direction(b, 0)) >= FOLLOW_ON
+
+
+def _turn_backs(found: list) -> list:
+    """Trains turning back at dead ends (in place in `found`). From each dead
+    end with a stop within TURN_MIN of it (a terminal), back along the track
+    to the first switch at least TURN_MIN back (and at most TURN_SEARCH
+    further) that leads onto a track the way trains then run: a piece going
+    on from there that way, or one leading in there, taken backward. Where
+    there's none, a crossover TURN_MIN back over CROSSOVER meters to the
+    track alongside running the other way (cut there at a new node). The
+    track between there and the bumper becomes TERMINAL (and no longer
+    MAIN); it and the crossover come again reversed, as TURN_BACK pieces
+    without stops."""
+    node = max(max(p["from"], p["to"]) for p in found) + 1 if found else 1
+    turned = {}
+    for dead in [p for p in found if p["flags"] & DEAD_END and not p["flags"] & (EXPRESS_IN | EXPRESS_OUT)]:
+        regular = [p for p in found if not p["flags"] & (EXPRESS_IN | EXPRESS_OUT | TERMINAL)]
+        leaving, arriving = _ends(regular)
+        route, switch, length, terminal, exit_found = [dead], None, 0.0, False, False
+        while True:
+            piece = route[-1]
+            terminal = terminal or (length < TURN_MIN and bool(piece["stops"].any()))
+            length += _length(piece)
+            heading = -_direction(piece, 0)
+            at = piece["from"]
+            if length >= TURN_MIN:
+                if any(_direction(q, 0) @ heading >= FOLLOW_ON for q in leaving.get(at, [])):
+                    exit_found = True
+                    break
+                back = [q for q in arriving.get(at, []) if all(q is not r for r in route)
+                        and -_direction(q, 1) @ heading >= FOLLOW_ON
+                        and any(r is not q and _direction(r, 0) @ -_direction(q, 0) >= FOLLOW_ON
+                                for r in leaving.get(q["from"], []))]
+                if back:
+                    switch, exit_found = back[0], True
+                    break
+            behind = [q for q in arriving.get(at, []) if all(q is not r for r in route) and _goes_on(q, piece)]
+            if not behind or length >= TURN_MIN + TURN_SEARCH:
+                break
+            route.append(max(behind, key=lambda q: (q["service"] == dead["service"],
+                                                    float(_direction(q, 1) @ _direction(piece, 0)))))
+        if not terminal:
+            continue
+        if exit_found:
+            for piece in route + ([switch] if switch is not None else []):
+                piece["flags"] = (piece["flags"] | TERMINAL) & ~MAIN
+                turned[(piece["to"], piece["from"])] = _turned(piece)
+            continue
+        made = next((m for m in (_crossover(route, regular, node, x) for x in np.arange(TURN_MIN, length, 20.0))
+                     if m is not None), None)
+        if made is None:
+            continue
+        back, other, halves, crossover = made
+        node += 2
+        for piece in route:
+            piece["flags"] = (piece["flags"] | TERMINAL) & ~MAIN
+        for piece in back:
+            turned[(piece["from"], piece["to"])] = dict(piece, flags=TURN_BACK)
+        turned[(crossover["from"], crossover["to"])] = crossover
+        if halves is not None:
+            index = next(k for k, p in enumerate(found) if p is other)
+            found[index:index + 1] = list(halves)
+    return list(turned.values())
+
+
+def _turned(piece: dict) -> dict:
+    """A piece reversed, for trains turning back: no stops."""
+    return {"points": piece["points"][::-1], "speeds": piece["speeds"][::-1],
+            "stops": np.zeros(len(piece["stops"]), dtype=bool), "from": piece["to"], "to": piece["from"],
+            "service": piece["service"], "flags": TURN_BACK}
+
+
+def _length(piece: dict) -> float:
+    return float(np.linalg.norm(np.diff(piece["points"][:, :2], axis=0), axis=1).sum())
+
+
+def _crossover(route: list, regular: list, node: int, back_by: float):
+    """A crossover for trains turning back on `route` (pieces from a dead end
+    back along its track) `back_by` meters from the bumper, over CROSSOVER meters
+    onto the track alongside (TRACK_SPACING away) running the way they then
+    run: (the route reversed from the bumper to there, cut at new node
+    `node`; the piece it joins, and its halves cut at new node `node + 1` or
+    None where it joins at a node; the crossover piece), or None."""
+    back, x = [], 0.0
+    for piece in route:
+        turned = _turned(piece)
+        length = _length(piece)
+        if x + length >= back_by:
+            back.append(_split(turned, back_by - x, node)[0])
+            break
+        back.append(turned)
+        x += length
+    else:
+        return None
+    start = back[-1]["points"][-1]
+    heading = _direction(back[-1], 1)[:2]
+    heading /= max(float(np.linalg.norm(heading)), 1e-9)
+    target = start[:2] + heading * CROSSOVER
+    best = None
+    for other in regular:
+        if any(other is r for r in route):
+            continue
+        line = shapely.LineString(other["points"][:, :2])
+        gap = line.distance(shapely.Point(target))
+        if not TRACK_SPACING[0] <= gap <= TRACK_SPACING[1] or (best is not None and gap >= best[0]):
+            continue
+        at = line.project(shapely.Point(target))
+        if (at < 1.0 and other["flags"] & OPEN_START) \
+                or (at > line.length - 1.0 and other["flags"] & (OPEN_END | DEAD_END)):
+            continue
+        ahead = np.asarray(line.interpolate(min(at + 1.0, line.length)).coords)[0] \
+            - np.asarray(line.interpolate(max(at - 1.0, 0.0)).coords)[0]
+        if ahead @ heading < 0.95 * np.linalg.norm(ahead):
+            continue
+        best = (gap, other, at, ahead / np.linalg.norm(ahead))
+    if best is None:
+        return None
+    _, other, at, direction = best
+    if at < 1.0:
+        joint, halves, end = other["points"][0], None, other["from"]
+    elif at > _length(other) - 1.0:
+        joint, halves, end = other["points"][-1], None, other["to"]
+    else:
+        halves = _split(other, at, node + 1)
+        joint, end = halves[0]["points"][-1], node + 1
+    # A smooth S from one track to the other (Hermite), climbing evenly.
+    chord = float(np.linalg.norm(joint[:2] - start[:2]))
+    s = np.linspace(0.0, 1.0, max(3, int(np.ceil(chord / 3.0)) + 1))[:, None]
+    h00, h10, h01, h11 = 2 * s ** 3 - 3 * s ** 2 + 1, s ** 3 - 2 * s ** 2 + s, -2 * s ** 3 + 3 * s ** 2, s ** 3 - s ** 2
+    flat = h00 * start[:2] + h10 * heading * chord + h01 * joint[:2] + h11 * direction * chord
+    points = np.column_stack([flat, start[2] + (joint[2] - start[2]) * s[:, 0]])
+    crossover = {"points": points, "speeds": np.full(len(points), CROSSOVER_SPEED),
+                 "stops": np.zeros(len(points), dtype=bool), "from": node, "to": end,
+                 "service": route[0]["service"], "flags": TURN_BACK}
+    return back, other, halves, crossover
+
+
+def _split(piece: dict, at: float, node: int) -> tuple[dict, dict]:
+    """A piece cut `at` meters along it at a new node: its two halves."""
+    p = piece["points"]
+    steps = np.linalg.norm(np.diff(p[:, :2], axis=0), axis=1)
+    along = np.concatenate([[0.0], np.cumsum(steps)])
+    i = int(np.clip(np.searchsorted(along, at, side="right") - 1, 0, len(p) - 2))
+    t = (at - along[i]) / max(steps[i], 1e-9)
+    speed = min(piece["speeds"][i], piece["speeds"][i + 1])
+    if t < 0.02 and i > 0:
+        first, second = slice(0, i + 1), slice(i, None)
+        points = (p[first], p[second])
+        speeds = (piece["speeds"][first], piece["speeds"][second])
+        stops = (piece["stops"][first].copy(), piece["stops"][second].copy())
+    else:
+        middle = p[i] + (p[i + 1] - p[i]) * min(t, 0.98)
+        points = (np.vstack([p[:i + 1], middle]), np.vstack([middle, p[i + 1:]]))
+        speeds = (np.append(piece["speeds"][:i + 1], speed), np.insert(piece["speeds"][i + 1:], 0, speed))
+        stops = (np.append(piece["stops"][:i + 1], False), np.insert(piece["stops"][i + 1:], 0, False))
+    return (dict(piece, points=points[0], speeds=speeds[0], stops=stops[0], to=node,
+                 flags=piece["flags"] & ~(OPEN_END | DEAD_END)),
+            dict(piece, points=points[1], speeds=speeds[1], stops=stops[1], flags=piece["flags"] & ~OPEN_START,
+                 **{"from": node}))
+
+
 def _services(tracks) -> np.ndarray:
     """Each chain's service; unnamed ones take a joined track's."""
     names = [str(n).strip() for n in tracks.names]
-    service = np.array([SERVICES.get(n, -1 if n == UNNAMED else 0) for n in names])
+    railroads = {name: number for name, number in SERVICES.items() if number >= RAILROADS}
+    service = np.array([SERVICES.get(n, next((s for p, s in railroads.items() if n.startswith(p)),
+                                             -1 if n == UNNAMED else 0)) for n in names])
     for _ in range(50):
         changed = False
         for c, _end, other, _at in tracks.joins:

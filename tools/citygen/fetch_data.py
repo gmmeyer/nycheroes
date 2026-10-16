@@ -144,6 +144,11 @@ TABLES = {
     # Street names for the centerline's segments (ground_details.py picks
     # boulevards and cobbled streets by name).
     "centerline_names": ("inkn-q76z", {"$select": "physicalid,full_street_name,boroughcode"}),
+    # The stations the subway's entrances lead to, and which stations are up
+    # on els (els.py builds the stairs up to their platforms).
+    "station_entrances": ("i9wp-a4ja", {"$select": "station_id,entrance_type,entrance_latitude,entrance_longitude"},
+                          STATE_API),
+    "subway_stations": ("39hk-dx4f", {"$select": "station_id,stop_name,structure"}, STATE_API),
 }
 TABLE_PAGE_SIZE = 50000
 
