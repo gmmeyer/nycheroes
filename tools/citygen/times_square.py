@@ -139,7 +139,10 @@ def plaza_lanes(w: dict, bounds, sidewalks, roads):
     `sidewalks` (the tile's walkable area) and clear of the benches. `roads`
     is the roadbed around the tile. Returns a geometry of lines (maybe empty)."""
     pieces = plazas(w)
-    area = shapely.intersection(shapely.intersection(pieces["walkable"], bounds), sidewalks)
+    area = shapely.intersection(pieces["walkable"], bounds)
+    if area.is_empty:  # (most tiles; GEOS can't overlay an empty collection with a mixed one)
+        return LineString()
+    area = shapely.intersection(area, sidewalks)
     if area.is_empty:
         return LineString()
     near = pieces["bench_tree"].query(shapely.buffer(bounds, 10.0))
