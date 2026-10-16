@@ -25,6 +25,9 @@ extends Node
 ##   crowns, by tile                     far tiles       tiles' 9000
 ##   center (m)
 ##   fog density         0.00016         0.00013         0.0001
+##   (dusk and night)
+##   clear day's fog     1               0.8             0.5
+##   (share; TimeOfDay)
 ##   pedestrians         12              24              45
 ##   moving cars         25              60              120
 ##   trains on the els   2               3               4
@@ -57,6 +60,7 @@ const PRESETS := {
 		"fronts_range": 250.0,
 		"canopy_ranges": [0.0, 0.0, 0.0],
 		"fog_density": 0.00016,
+		"clear_fog": 1.0,
 		"pedestrians": 12,
 		"cars": 25,
 		"trains": 2,
@@ -77,6 +81,7 @@ const PRESETS := {
 		"fronts_range": 400.0,
 		"canopy_ranges": [4000.0, 4000.0, 0.0],
 		"fog_density": 0.00013,
+		"clear_fog": 0.8,
 		"pedestrians": 24,
 		"cars": 60,
 		"trains": 3,
@@ -85,6 +90,10 @@ const PRESETS := {
 		"bodies": 10,
 	},
 }
+## "high"'s share of the fog on a clear day (the others' are in PRESETS):
+## the city stays crisp a few kilometers out; lower presets' fog hides where
+## their tiles stop.
+const HIGH_CLEAR_FOG := 0.5
 ## Never render 3-D at less than this share of the screen's pixels.
 const MIN_RENDER_SCALE := 0.25
 ## After drawing a scaled-down 3-D image, Godot's Compatibility renderer
@@ -133,6 +142,11 @@ static func level() -> Level:
 
 static func level_name() -> String:
 	return NAMES[level()]
+
+
+## How much of the preset's fog a clear day has (TimeOfDay).
+static func clear_fog() -> float:
+	return HIGH_CLEAR_FOG if level() == Level.HIGH else PRESETS[level()].clear_fog
 
 
 ## Launch options that other nodes read when they start (call before they do):

@@ -15,10 +15,12 @@ The water surface is inland water above sea level (lakes, reservoirs, creeks);
 sea-level water is the game's ocean plane.
 The markings surface (lod0) is paint on the streets: a triangle mesh
 MARKING_LIFT above the road, with no collision. Its uv2.x is a GROUND_MARKING_*
-kind, uv is local to each strip of paint in meters (x along the street, y
-across it; see the kinds for what the shader paints), normals face up and
-positions are rounded to 1 cm.
-The props surface (lod0; mid and far tiles too, with clumps of crowns only)
+kind (and past it the sky it sees, like the ground's: shade.py), uv is local
+to each strip of paint in meters (x along the street, y across it; see the
+kinds for what the shader paints), normals face up and positions are
+rounded to 1 cm.
+The props surface (lod0; mid and far tiles too, with clumps of crowns only,
+and mid tiles' water towers)
 is one point per prop, no indices:
   position = where it stands (a tree's trunk on the ground, a water tower's
              legs on the roof)
@@ -403,6 +405,16 @@ class MeshBuilder:
 
     def is_empty(self) -> bool:
         return not self.pos
+
+    def joined(self) -> tuple:
+        """Everything added so far as (pos, uv, uv2, normals), each (T, 3, k),
+        joined into one array per kind (which later adds append to); changing
+        uv2 in place changes the mesh."""
+        if not self.pos:
+            return None
+        for name in ("pos", "uv", "uv2", "front", "normals"):
+            setattr(self, name, [np.ascontiguousarray(np.concatenate(getattr(self, name)))])
+        return self.pos[0], self.uv[0], self.uv2[0], self.normals[0]
 
     def build(self, origin, decimals: int = 3):
         """The mesh arrays relative to origin, with positions and uvs rounded

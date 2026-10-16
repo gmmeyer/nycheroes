@@ -155,7 +155,7 @@
     {
       "name": "promenade",
       "title": "Lower Manhattan across the East River from the Brooklyn Heights Promenade",
-      "cam": "-1086,19.6,6948,38.0,0.0",
+      "cam": "-1086,22.0,6948,38.0,0.0",
       "photo": {
         "file": "File:2024-05-22 13 06 18 View across the East River towards Lower Manhattan from the Brooklyn Heights Promenade in Brooklyn, New York City, New York.jpg",
         "page": "https://commons.wikimedia.org/wiki/File:2024-05-22_13_06_18_View_across_the_East_River_towards_Lower_Manhattan_from_the_Brooklyn_Heights_Promenade_in_Brooklyn,_New_York_City,_New_York.jpg",
@@ -168,7 +168,7 @@
       },
       "camera_lat_lon": [40.69542967, -73.99835389],
       "spawn": "-1062,7,6980",
-      "pose_note": "Geotag, at the promenade's height (19.6 m; the geotag falls over the expressway below it)."
+      "pose_note": "Geotag, at the promenade's height (19.6 m; the geotag falls over the expressway below it); since 2026-10-16 2.4 m higher, behind the Promenade's fence (the triple cantilever's)."
     },
     {
       "name": "park_slope",

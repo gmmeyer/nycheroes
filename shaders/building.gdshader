@@ -6,7 +6,9 @@
 //         the slope). Up close, flat roofs have parapets: the walls rise
 //         PARAPET_HEIGHT above the roof, with inner faces.
 //   UV2.x archetype + 64 * flags, a whole number (see the constants below).
-//   UV2.y floor height in decimeters + the building's random seed (0..0.999).
+//   UV2.y floor height in decimeters + the building's random seed (0..0.999);
+//         on walls plus 64 * the sky they see (tools/citygen/shade.py:
+//         darker at their feet down narrow, tall streets; see vertex()).
 // Each building type picks a palette and a window system (punched windows with
 // lintels, arched loft windows, ribbon windows, curtain walls); street fronts
 // add storefronts with awnings, fire escapes and cornices (rows' and
@@ -98,6 +100,8 @@ const int STOOP = 4096;          // the building has a stoop: its front door is 
 const int FRONT_PART = 8192;     // flags / FRONT_PART: the part of a stoop this face is (0: none)
 // Same as tools/citygen/facades.py.
 const float PARAPET_HEIGHT = 1.0;
+// The lowest a street canyon reaches up a wall (m; tools/citygen/shade.py's).
+const float CANYON_TOP = 8.0;
 
 // Wall materials (facades.py picks one per building by borough, era and
 // historic district; MAT_AUTO leaves it to the type's own mix).
@@ -318,13 +322,16 @@ uniform vec3 reflect_zenith : source_color = vec3(0.36, 0.58, 0.85);
 uniform vec3 reflect_horizon : source_color = vec3(0.80, 0.87, 0.92);
 uniform vec3 reflect_ground : source_color = vec3(0.30, 0.32, 0.36);
 // Walls get less sky light low down in the street canyons: ambient light at
-// the base, rising to full by this height (m).
+// the base, rising to full by this height (m). Walls with their own sky
+// baked in (vertex()) use that instead.
 uniform float canyon_occlusion : hint_range(0.0, 1.0) = 0.85;
 uniform float canyon_height = 25.0;
 // Lit shop windows glow a little even by day.
 uniform float shop_glow = 0.35;
-// How far tiny far-off window grids are pulled toward their average color.
-uniform float distance_calm : hint_range(0.0, 1.0) = 0.6;
+// How far tiny far-off window grids are pulled toward their average color
+// (little: their box-filtered floors and windows keep the far city's
+// texture, as in photos from Top of the Rock).
+uniform float distance_calm : hint_range(0.0, 1.0) = 0.1;
 // Night: how bright lit windows, shop windows (times their day glow), lit
 // signs, lobbies and front doors are.
 uniform float window_glow = 1.0;
@@ -378,6 +385,9 @@ varying vec4 wall_x_moments;
 // parts' flags) put some pixels off by one, into another building type's
 // palette; fragments still round them, to be safe.
 varying flat vec3 building_data;
+// A wall's ambient light at its foot, and the height above the building's
+// base (m) by which it's back to full (see vertex()).
+varying vec2 canyon_shade;
 
 struct Facade {
 	vec3 wall;          // main wall color (linear)
@@ -1351,9 +1361,9 @@ Surface facade(Facade f, vec3 wall, vec2 p, vec2 footprint, int archetype, int f
 			ground_color = shop.albedo;
 			ground_glass = shop.glass;
 			ground_emission = shop.emission;
-		} else if (street && (archetype == PREWAR_OFFICE || archetype == MIDCENTURY_OFFICE || archetype == MODERN_OFFICE
-				|| (f.windows == CURTAIN))) {
-			// Lobby: tall glass in a stone surround.
+		} else if (street && (archetype == MIDCENTURY_OFFICE || archetype == MODERN_OFFICE || f.windows == CURTAIN)) {
+			// Lobby: tall glass in a stone surround (masonry offices have doors
+			// and windows instead, like DUMBO's lofts between their few shops).
 			float top = min(floor_height, 5.0) - 0.45;
 			float lobby = band(p.y, 0.25, top, footprint.y) * (1.0 - centered_stripes(p.x / 1.6, 0.06, footprint.x / 1.6));
 			vec3 surround = f.windows == CURTAIN ? srgb(vec3(0.62, 0.62, 0.60)) : f.base;
@@ -2850,8 +2860,19 @@ void vertex() {
 	float x = (UV.x + 1.0) * 0.01;
 	float x2 = x * x;
 	wall_x_moments = vec4(x, x2, x2 * x, x2 * x2);
-	float floor_dm = floor(UV2.y + 0.0005);
-	building_data = vec3(floor(UV2.x + 0.5), floor_dm, floor(clamp(UV2.y - floor_dm, 0.0, 0.999) * 1024.0));
+	// Walls' sky (tools/citygen/shade.py) in UV2.y's high bits, 64 * (share +
+	// 16 * reach): the share of the sky the wall's foot doesn't see (15ths)
+	// and how high up the street canyon reaches (CANYON_TOP * exp2((reach - 1)
+	// * 0.68) m); landmarks' faces (whose UV2.y is a param) and older tiles
+	// have none, and get canyon_occlusion up to canyon_height.
+	float code = floor(UV2.x + 0.5);
+	float baked = mod(code, 64.0) < float(LM_FIRST) ? floor(UV2.y / 64.0) : 0.0;
+	float rest = UV2.y - 64.0 * baked;
+	float floor_dm = floor(rest + 0.0005);
+	building_data = vec3(code, floor_dm, floor(clamp(rest - floor_dm, 0.0, 0.999) * 1024.0));
+	canyon_shade = baked >= 16.0
+			? vec2(mix(sky_light.x, sky_light.y, mod(baked, 16.0) / 15.0), CANYON_TOP * exp2((floor(baked / 16.0) - 1.0) * 0.68))
+			: vec2(canyon_occlusion, canyon_height);
 }
 
 void fragment() {
@@ -2880,6 +2901,8 @@ void fragment() {
 	}
 
 	Surface s;
+	// Walls' sky light, less low down in a street canyon (vertex()).
+	float canyon = mix(canyon_shade.x, 1.0, smoothstep(0.0, canyon_shade.y, UV.y));
 	float occlusion = 1.0;
 	WindowLight lights = no_window_light();
 	bool landmark = archetype >= LM_FIRST;
@@ -2892,12 +2915,12 @@ void fragment() {
 			s = landmark_wall(archetype, param % 4, UV, footprint, float(param / 4) * 0.1, world_normal, lights);
 			bool height_uv = archetype != LM_CHRYSLER_CROWN && archetype != LM_CLOCK && archetype != LM_LIBERTY
 					&& archetype != LM_GOLD;
-			occlusion = height_uv ? mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y)) : 1.0;
+			occlusion = height_uv ? canyon : 1.0;
 		}
 	} else if ((flags & SIGNS) != 0 && flags >= 2 * FRONT_PART) {
 		// Times Square's own pieces: the TKTS steps, benches, the corner drum.
 		s = plaza_piece(flags / FRONT_PART, UV, footprint, flags, below_top, face);
-		occlusion = (flags & ROOF) != 0 ? 1.0 : mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y));
+		occlusion = (flags & ROOF) != 0 ? 1.0 : canyon;
 	} else if ((flags & ROOF) != 0 && (flags < FRONT_PART || (flags & SIGNS) != 0)) {
 		// Roofs (a stoop's treads are flagged ROOF too, but painted by stoop()).
 		s.albedo = mix(roof(UV, footprint, archetype, seed), photo, aerial_amount(aerial_uv));
@@ -2921,7 +2944,7 @@ void fragment() {
 		vec3 textured = wall_texture(stone, surface, UV * scale, footprint * scale);
 		if (stoop_part) {
 			s = stoop(f, textured, part, UV, footprint, material, seed);
-			occlusion = canyon_occlusion;
+			occlusion = canyon_shade.x;
 		} else if ((flags & PARAPET_INSIDE) != 0) {
 			s = parapet_inside(f, textured, footprint, below_top);
 		} else {
@@ -2942,7 +2965,7 @@ void fragment() {
 				s = sign_wall(s, UV, footprint, seed, zone);
 				lights.amount *= 1.0 - zone.cover;  // as sign_wall() mixes the facade's light
 			}
-			occlusion = mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y));
+			occlusion = canyon;
 		}
 	}
 
