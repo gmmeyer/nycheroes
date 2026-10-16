@@ -267,7 +267,7 @@ def main() -> None:
                 for key in ("bytes", "vertices", "triangles"):
                     totals[f"{level}_{key}"] += entry.pop(key)
                 for key in ("lane_points", "props", "trees", "water_towers", "street_lights", "furniture",
-                            "parked_cars", "traffic_lanes"):
+                            "parked_cars", "canopy_clumps", "traffic_lanes"):
                     totals[key] += entry.pop(key, 0)
             if n % 250 == 0 or n == len(tasks):
                 print(f"  {n:,}/{len(tasks):,} tiles ({time.time() - started:.0f} s)", flush=True)
@@ -301,7 +301,7 @@ def main() -> None:
     print(f"  walking lanes: {totals['lane_points']:,} points")
     print(f"  props: {totals['trees']:,} trees, {totals['water_towers']:,} water towers, "
           f"{totals['street_lights']:,} street lights, {totals['furniture']:,} pieces of street furniture, "
-          f"{totals['parked_cars']:,} parked cars")
+          f"{totals['parked_cars']:,} parked cars; {totals['canopy_clumps']:,} clumps of crowns (woods from afar)")
     print(f"  driving lanes: {totals['traffic_lanes']:,}")
     if failed:
         print(f"  {len(failed)} tiles FAILED and are missing: {failed}")
@@ -514,9 +514,11 @@ def _build_tile(task):
             surfaces.append((SURFACE_TRAFFIC, lanes_surface))
             stats["traffic_lanes"] = int(np.sum(lanes_surface[-1] == LANE_BREAK))
         prop_surface, counts = _build_props(i, j, bounds, indices, origin)
-        if prop_surface is not None:
-            surfaces.append((SURFACE_PROPS, prop_surface))
-            stats.update(counts)
+    else:
+        prop_surface, counts = _build_clumps(level, bounds, origin)
+    if prop_surface is not None:
+        surfaces.append((SURFACE_PROPS, prop_surface))
+        stats.update(counts)
 
     raw = encode_tile(surfaces)
     packed = zstd.compress(raw, level=12)
@@ -1035,14 +1037,39 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     lamps = _street_lights(i, j, bounds)
     furniture = _furniture(i, j, bounds)
     cars = _parked_cars(bounds)
-    parts = [street, canopy, towers, lamps, furniture, cars]
+    clumps = _canopy_clumps("lod0", bounds)
+    parts = [street, canopy, towers, lamps, furniture, cars, clumps]
     en = np.concatenate([p["en"] for p in parts])
     if len(en) == 0:
         return None, {}
     trees = len(street["en"]) + len(canopy["en"])
     ground = _W["ground"]["lod0"]
     y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]), towers["y"], lamps["y"],
-                        furniture["y"], cars["y"]])
+                        furniture["y"], cars["y"], clumps["y"]])
+    kinds = np.concatenate([p["type"] for p in parts])
+    height = np.concatenate([p["height"] for p in parts])
+    # Nothing stands up through a deck overhead (overpasses.py), or in an el's columns (els.py).
+    keep = overpasses.clear_of_decks(_W["bridges"]["lod0"], bounds, en, y, height)
+    keep &= els.clear_of_columns(_W["bridges"].get("el_columns", {}), i, j, en, kinds == PROP_PARKED_CAR)
+    return _props_surface(parts, y, origin, keep), {
+        "props": len(en), "trees": trees, "water_towers": len(towers["en"]), "street_lights": len(lamps["en"]),
+        "furniture": len(furniture["en"]), "parked_cars": len(cars["en"]), "canopy_clumps": len(clumps["en"])}
+
+
+def _build_clumps(level: str, bounds, origin):
+    """A mid or far tile's props surface: just its clumps of crowns (woods
+    seen from afar), or (None, {})."""
+    clumps = _canopy_clumps(level, bounds)
+    keep = overpasses.clear_of_decks(_W["bridges"][level], bounds, clumps["en"], clumps["y"], clumps["height"])
+    if not keep.any():
+        return None, {}
+    return _props_surface([clumps], clumps["y"], origin, keep), {"canopy_clumps": int(keep.sum())}
+
+
+def _props_surface(parts: list, y: np.ndarray, origin, keep: np.ndarray | None = None) -> tuple:
+    """The props surface (see common.py) of these parts' props standing at
+    heights y, those where `keep`, sorted by type."""
+    en = np.concatenate([p["en"] for p in parts])
     seed = np.concatenate([p["seed"] for p in parts])
     # Trees and towers face any way; lamps reach over the street.
     yaw = np.concatenate([p["yaw"] if "yaw" in p else props.location_seed(p["en"] * 3.7) * (2 * np.pi)
@@ -1055,15 +1082,23 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     # Centimeters, except signals' phases (exact 1024ths, see markings.prepare).
     uv = np.where((kinds == PROP_TRAFFIC_SIGNAL)[:, None], uv, np.round(uv, 2))
     uv2 = np.column_stack([kinds, np.minimum(np.round(seed, 3), 0.999)])
-    # Nothing stands up through a deck overhead (overpasses.py), or in an el's columns (els.py).
-    keep = overpasses.clear_of_decks(_W["bridges"]["lod0"], bounds, en, y, normals[:, 0])
-    keep &= els.clear_of_columns(_W["bridges"].get("el_columns", {}), i, j, en, kinds == PROP_PARKED_CAR)
-    order = np.flatnonzero(keep)[np.argsort(kinds[keep], kind="stable")]  # grouped by type, for the game
-    surface = (positions[order], np.round(normals, 2).astype(np.float32)[order],
-               uv.astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
-    return surface, {"props": len(en), "trees": trees, "water_towers": len(towers["en"]),
-                     "street_lights": len(lamps["en"]), "furniture": len(furniture["en"]),
-                     "parked_cars": len(cars["en"])}
+    kept = np.arange(len(en)) if keep is None else np.flatnonzero(keep)
+    order = kept[np.argsort(kinds[kept], kind="stable")]  # grouped by type, for the game
+    return (positions[order], np.round(normals, 2).astype(np.float32)[order],
+            uv.astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
+
+
+def _canopy_clumps(level: str, bounds) -> dict:
+    """Clumps of crowns (props.canopy_clumps) where the land cover shows
+    canopy in the tile, on the level's ground, none out over the water."""
+    cell = props.CLUMP_CELL_FAR if level == "lod2" else props.CLUMP_CELL
+    min_e, min_n, max_e, max_n = bounds.bounds
+    en, share, cells = _W["landcover"].canopy_cells(bounds.bounds, cell)
+    inside = (en[:, 0] >= min_e) & (en[:, 0] < max_e) & (en[:, 1] >= min_n) & (en[:, 1] < max_n)
+    inside[inside] = shapely.contains_xy(_W["g"]["land"], en[inside, 0], en[inside, 1])
+    found = props.canopy_clumps(en[inside], share[inside], cells[inside], cell)
+    found["y"] = overpasses.bare(_W["ground"][level]).height(found["en"])
+    return found
 
 
 def _furniture(i: int, j: int, bounds) -> dict:

@@ -125,3 +125,29 @@ class LandCover:
         offsets = np.stack(np.meshgrid(steps, steps), axis=-1).reshape(-1, 2)
         hits = self.is_canopy((en[:, None, :] + offsets[None]).reshape(-1, 2)).reshape(len(en), -1)
         return hits.mean(axis=1)
+
+    def canopy_cells(self, bounds, cell: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The canopy in each `cell`-meter square of the grid (squares lined up
+        with the canopy map's pixels) around the (min_e, min_n, max_e, max_n)
+        box: the middle of its canopy (east/north), its share of canopy (0..1)
+        and the square's (column, row), for those with any canopy."""
+        k = int(round(cell / self.spacing))
+        rows, columns = self.grid.shape[0] // k, self.grid.shape[1] // k
+        min_e, min_n, max_e, max_n = bounds
+        c0 = max(int(np.floor((min_e - self.min_e) / cell)), 0)
+        c1 = min(int(np.ceil((max_e - self.min_e) / cell)), columns)
+        r0 = max(int(np.floor((self.max_n - max_n) / cell)), 0)
+        r1 = min(int(np.ceil((self.max_n - min_n) / cell)), rows)
+        if c1 <= c0 or r1 <= r0:
+            return np.zeros((0, 2)), np.zeros(0), np.zeros((0, 2), dtype=np.int64)
+        block = (self.grid[r0 * k:r1 * k, c0 * k:c1 * k] == CANOPY).reshape(r1 - r0, k, c1 - c0, k)
+        count = block.sum(axis=(1, 3))
+        # Where in its square the canopy is: the mean of its samples' places.
+        offsets = (np.arange(k) + 0.5) * self.spacing
+        along_e = (block.sum(axis=1) * offsets[None, None, :]).sum(axis=2)
+        along_s = (block.sum(axis=3) * offsets[None, :, None]).sum(axis=1)
+        rr, cc = np.nonzero(count)
+        n = count[rr, cc]
+        e = self.min_e + (c0 + cc) * cell + along_e[rr, cc] / n
+        north = self.max_n - (r0 + rr) * cell - along_s[rr, cc] / n
+        return np.column_stack([e, north]), n / (k * k), np.column_stack([c0 + cc, r0 + rr])
