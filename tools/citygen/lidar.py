@@ -49,6 +49,17 @@ DECK_PERCENTILE = 30.0
 OFFSET_CELL = 50.0
 GATHER = 30.0         # points this close to any station are kept while reading the tiles
 WORKERS = 16
+# Sunken roads (trenches.py): the surfaces over each station as for raised
+# roads, ground included (to the survey, a road in a cut is ground), and the
+# lowest surface across the road (this percentile of the points within
+# ACROSS_ALONG along it, in ACROSS_STEP bins out to ACROSS_REACH either side):
+# where the cut's walls stand, and the ground beyond them.
+SUNKEN_CLASSES = DECK_CLASSES + (GROUND,)
+ACROSS_REACH = 40.0
+ACROSS_STEP = 2.0
+ACROSS_ALONG = 2.5
+ACROSS_PERCENTILE = 20.0
+SUNKEN_GATHER = 45.0
 
 
 def prepare(roads: dict, terrain) -> dict:
@@ -90,6 +101,96 @@ def prepare(roads: dict, terrain) -> dict:
     return out
 
 
+def prepare_sunken(lines: np.ndarray, terrain) -> dict:
+    """{segment key: (distances along, layers (S, MAX_LAYERS) highest first,
+    lowest surfaces across (S, A) at offsets() left of travel)} for road
+    segments below street level (east/north lines), in the elevation model's
+    heights, NaN where the survey has nothing."""
+    started = time.time()
+    stations, owners, along, tangents = [], [], [], []
+    for k, line in enumerate(lines):
+        s = np.linspace(0.0, line.length, max(2, int(np.ceil(line.length / STATION_STEP)) + 1))
+        here = shapely.get_coordinates(shapely.line_interpolate_point(line, s))
+        ahead = shapely.get_coordinates(shapely.line_interpolate_point(line, np.minimum(s + 1.0, line.length)))
+        behind = shapely.get_coordinates(shapely.line_interpolate_point(line, np.maximum(s - 1.0, 0.0)))
+        stations.append(here)
+        tangents.append(ahead - behind)
+        owners.append(np.full(len(s), k))
+        along.append(s)
+    stations, owners, along = np.vstack(stations), np.concatenate(owners), np.concatenate(along)
+    tangents = np.vstack(tangents)
+    tangents /= np.maximum(np.linalg.norm(tangents, axis=1, keepdims=True), 1e-9)
+    to_source = Transformer.from_crs(PROJECTION, SOURCE_CRS, always_xy=True)
+    sx, sy = to_source.transform(stations[:, 0], stations[:, 1])
+    print(f"  lidar: {len(stations):,} stations on {len(lines):,} sunken segments", flush=True)
+
+    points = _gather(np.column_stack([sx, sy]), SUNKEN_GATHER)
+    print(f"  lidar: {len(points):,} points near them ({time.time() - started:.0f} s)", flush=True)
+    to_local = Transformer.from_crs(SOURCE_CRS, PROJECTION, always_xy=True)
+    e, n = to_local.transform(points[:, 0], points[:, 1])
+    en = np.column_stack([e, n])
+    z, cls = points[:, 2], points[:, 3].astype(np.int64)
+    offset = _offsets(en[cls == GROUND], z[cls == GROUND], terrain, stations)
+    keep = np.isin(cls, SUNKEN_CLASSES)
+    en, z, cls = en[keep], z[keep], cls[keep]
+    layers = _layers(stations, en, z, cls) - offset[:, None]
+    across = _across(stations, tangents, en, z) - offset[:, None]
+
+    out = {}
+    for k, line in enumerate(lines):
+        mine = owners == k
+        out[_key(line)] = (along[mine].astype(np.float32), layers[mine].astype(np.float32),
+                           across[mine].astype(np.float32))
+    found = np.isfinite(layers[:, 0])
+    print(f"  lidar: surfaces at {found.mean():.0%} of sunken stations ({time.time() - started:.0f} s)", flush=True)
+    return out
+
+
+def offsets() -> np.ndarray:
+    """prepare_sunken's offsets across the road (m left of travel)."""
+    return np.arange(-ACROSS_REACH, ACROSS_REACH + 0.5 * ACROSS_STEP, ACROSS_STEP)
+
+
+def _across(stations: np.ndarray, tangents: np.ndarray, en: np.ndarray, z: np.ndarray) -> np.ndarray:
+    """(S, A) the lowest surface (ACROSS_PERCENTILE) in each bin across the
+    road at each station, NaN where there are no points."""
+    bins = offsets()
+    out = np.full((len(stations), len(bins)), np.nan)
+    cell = 10.0
+    keys = np.floor(en[:, 0] / cell).astype(np.int64) * 1_000_000 + np.floor(en[:, 1] / cell).astype(np.int64)
+    order = np.argsort(keys)
+    keys, en, z = keys[order], en[order], z[order]
+    reach = int(np.ceil((ACROSS_REACH + ACROSS_STEP) / cell))
+    for i in range(len(stations)):
+        cx, cy = np.floor(stations[i] / cell).astype(np.int64)
+        picks = []
+        for dx in range(-reach, reach + 1):
+            k = (cx + dx) * 1_000_000 + cy
+            lo = np.searchsorted(keys, k - reach, side="left")
+            hi = np.searchsorted(keys, k + reach, side="right")
+            if hi > lo:
+                picks.append(np.arange(lo, hi))
+        if not picks:
+            continue
+        idx = np.concatenate(picks)
+        d = en[idx] - stations[i]
+        t = tangents[i]
+        along = d @ t
+        left = d[:, 1] * t[0] - d[:, 0] * t[1]
+        near = (np.abs(along) <= ACROSS_ALONG) & (np.abs(left) <= ACROSS_REACH + ACROSS_STEP / 2)
+        if not near.any():
+            continue
+        b = np.round((left[near] + ACROSS_REACH) / ACROSS_STEP).astype(np.int64)
+        zz = z[idx][near]
+        order_b = np.lexsort((zz, b))
+        b, zz = b[order_b], zz[order_b]
+        starts = np.flatnonzero(np.r_[True, b[1:] != b[:-1]])
+        counts = np.diff(np.r_[starts, len(b)])
+        pick = starts + np.floor((counts - 1) * ACROSS_PERCENTILE / 100.0).astype(np.int64)
+        out[i, b[starts]] = zz[pick]
+    return out
+
+
 def _key(line) -> tuple:
     """A segment's key: its ends and middle to 0.5 m."""
     middle = shapely.get_coordinates(shapely.line_interpolate_point(line, 0.5, normalized=True))
@@ -121,9 +222,9 @@ def _get(rel: str) -> bytes:
     return path.read_bytes()
 
 
-def _gather(stations: np.ndarray) -> np.ndarray:
+def _gather(stations: np.ndarray, reach: float = GATHER) -> np.ndarray:
     """The survey's points (x, y, z, class; the source's coordinates) within
-    about GATHER of the stations (source coordinates), down to DEPTH."""
+    about `reach` of the stations (source coordinates), down to DEPTH."""
     ept = json.loads(_get("ept.json"))
     bounds = ept["bounds"]
     span = bounds[3] - bounds[0]
@@ -133,8 +234,8 @@ def _gather(stations: np.ndarray) -> np.ndarray:
     for depth in range(DEPTH + 1):
         size = span / 2 ** depth
         cells = set()
-        for dx in (-GATHER, 0.0, GATHER):
-            for dy in (-GATHER, 0.0, GATHER):
+        for dx in (-reach, 0.0, reach):
+            for dy in (-reach, 0.0, reach):
                 cells |= set(zip(np.floor((stations[:, 0] + dx - bounds[0]) / size).astype(int).tolist(),
                                  np.floor((stations[:, 1] + dy - bounds[1]) / size).astype(int).tolist()))
         for key, count in list(hierarchy.items()):
@@ -146,9 +247,9 @@ def _gather(stations: np.ndarray) -> np.ndarray:
                 count = hierarchy[key]
             if count > 0:
                 nodes.append(key)
-    # Points near stations: a grid of GATHER cells around them.
+    # Points near stations: a grid of `reach` cells around them.
     grid = set()
-    cx, cy = np.floor(stations[:, 0] / GATHER).astype(np.int64), np.floor(stations[:, 1] / GATHER).astype(np.int64)
+    cx, cy = np.floor(stations[:, 0] / reach).astype(np.int64), np.floor(stations[:, 1] / reach).astype(np.int64)
     for dx in (-1, 0, 1):
         for dy in (-1, 0, 1):
             grid |= set(((cx + dx) * 1_000_000 + (cy + dy)).tolist())
@@ -158,7 +259,7 @@ def _gather(stations: np.ndarray) -> np.ndarray:
         import laspy
         las = laspy.read(io.BytesIO(_get(f"ept-data/{key}.laz")))
         x, y = np.asarray(las.x), np.asarray(las.y)
-        cell = np.floor(x / GATHER).astype(np.int64) * 1_000_000 + np.floor(y / GATHER).astype(np.int64)
+        cell = np.floor(x / reach).astype(np.int64) * 1_000_000 + np.floor(y / reach).astype(np.int64)
         near = np.isin(cell, grid)
         return np.column_stack([x[near], y[near], np.asarray(las.z)[near],
                                 np.asarray(las.classification)[near]]).astype(np.float64)

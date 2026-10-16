@@ -264,14 +264,19 @@ class Network:
     `terrain` is a terrain.Terrain; `streets` the prepared street centerlines
     (markings.prepare). `structure` (a cantilever.Structure) brings the
     roadways below street level it carries, their heights, and its ground;
-    `decks` the lidar survey's deck heights (lidar.prepare)."""
+    `decks` the lidar survey's deck heights (lidar.prepare); `sunken` (a
+    trenches.Sunken) the streets and highways below street level elsewhere,
+    their heights (self.sunken) and their cuts (self.trenches)."""
 
-    def __init__(self, data: dict, streets: dict, terrain, structure=None, decks=None):
+    def __init__(self, data: dict, streets: dict, terrain, structure=None, decks=None, sunken=None):
         self.structure = structure
         stacked = np.zeros(len(data["lines"]), dtype=bool)
         surveyed = data["lines"]  # as the survey's stations were laid out (lidar.py)
         if structure is not None:
             data, stacked = structure.merged(data, streets)
+        if sunken is not None:
+            data, added = sunken.merged(data)
+            stacked = np.concatenate([stacked, np.zeros(added.sum(), dtype=bool)])
         self.data = data
         self.lines = data["lines"]
         self.count = len(self.lines)
@@ -279,6 +284,8 @@ class Network:
         self.ground_lattice = terrain.lattice(20.0)  # the lod0 ground (build_tiles.LEVELS)
         if structure is not None:
             self.ground_lattice = structure.ground(self.ground_lattice)
+        # The ground before the sunken roads' cuts (roads' heights count from it).
+        self.grade_lattice = self.ground_lattice
         self.levels = data["levels"].astype(np.int64)
         # (Codes past the top level are unknowns: one road has 99.)
         self.levels[self.levels > MAX_LEVEL] = int(AT_GRADE)
@@ -294,12 +301,15 @@ class Network:
         self._stations = [None] * self.count
         self.attrs = self._attributes(streets)
         self.ends = self._end_heights()
+        # Roads below street level, as the survey has them (trenches.fit; the
+        # raised roads leaving them start from their heights).
+        self.sunken = sunken.fit(self) if sunken is not None else {}
         self.fitted = self._fit(decks or {}, surveyed, streets)
         # Raised: above street level, or (at street level in the data) brought
         # up to meet roads that are.
         starts = shapely.get_coordinates(shapely.get_point(self.lines, 0))
         finishes = shapely.get_coordinates(shapely.get_point(self.lines, -1))
-        lifted = (self.ends - np.column_stack([self.street(starts), self.street(finishes)])).max(axis=1) > GRADE_DECK
+        lifted = (self.ends - np.column_stack([self.grade(starts), self.grade(finishes)])).max(axis=1) > GRADE_DECK
         self.raised = (top > int(AT_GRADE)) | stacked | (lifted & (data["rw"] != PATH))
         # Decks are grouped by level, rounded up to whole levels.
         self.group = np.where(self.raised, int(AT_GRADE) + LEVEL_STEP * np.ceil((top - int(AT_GRADE)) / LEVEL_STEP), 0)
@@ -320,6 +330,12 @@ class Network:
         lane = np.where(streets["width"] > 0, np.clip((streets["width"] - streets["parking"] * markings.PARKING_WIDTH) /
                                                       lanes, markings.MIN_LANE, markings.MAX_LANE), markings.LANE_WIDTH)
         self.under_travel = np.concatenate([lanes * lane / 2.0, np.maximum(self.width[level] / 2.0 - 1.0, 1.5)])
+        # The sunken roads' cuts, walls and bridges (trenches.Trenches); from
+        # here on the street under decks is the cuts' floor where they are.
+        self.trenches = None
+        if sunken is not None:
+            self.trenches = sunken.trenches(self, streets)
+            self.ground_lattice = self.trenches.ground(self.ground_lattice)
 
     def _widths(self) -> np.ndarray:
         d = self.data
@@ -418,6 +434,10 @@ class Network:
     def street(self, en: np.ndarray) -> np.ndarray:
         """The street surface's height at (N, 2) points (the ground less the curb)."""
         return self.ground_lattice.height(en) - CURB_HEIGHT
+
+    def grade(self, en: np.ndarray) -> np.ndarray:
+        """street(), but for the sunken roads' cuts (what roads' heights count from)."""
+        return self.grade_lattice.height(en) - CURB_HEIGHT
 
     def low(self, en: np.ndarray) -> np.ndarray:
         """The lowest street height in LOW_RINGS around each point."""
@@ -595,7 +615,7 @@ class Network:
         """Road heights at (N, 2) segment ends at one level code: the street
         at street level (and below, except on the structure), LEVEL_RISE per
         level above the low ground around above it."""
-        street = self.street(en)
+        street = self.grade(en)
         if level > int(AT_GRADE):
             return np.maximum(street, self.low(en) + float(rise(level)))
         if level < int(AT_GRADE) and self.structure is not None:
@@ -645,11 +665,14 @@ class Network:
             length = line.length
             s = np.linspace(0.0, length, max(2, int(np.ceil(length / STATION_STEP)) + 1))
             en = shapely.get_coordinates(shapely.line_interpolate_point(line, s))
-            street = self.street(en)
+            street = self.grade(en)
             l0, l1 = self.levels[k]
             ends = self.ends[k]
             t = s / max(length, 1e-6)
-            if self.stacked[k]:
+            if k in self.sunken:
+                # Below street level, as the survey has it (trenches.fit).
+                s, h = self.sunken[k][:2]
+            elif self.stacked[k]:
                 # On the structure's decks, at its levels' heights.
                 h = self.structure.level(int(l0), en) * (1.0 - t) + self.structure.level(int(l1), en) * t
             elif self.over[k]:
@@ -706,7 +729,7 @@ class Network:
         """Where a bridge's approach (bridges.py) meets the land: the street,
         or the raised road it continues as."""
         en = np.asarray(en, np.float64).reshape(-1, 2)
-        street = self.street(en)
+        street = self.grade(en)
         if len(en) == 0:
             return street
         out = street.copy()
@@ -730,6 +753,9 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
     on_land, names, over_water, wet_outlines = [], [], [], []
     structure = network.structure
     taken = structure.footprint if structure is not None else shapely.Polygon()  # cantilever.build's
+    if network.trenches is not None and network.trenches.claimed:
+        # The bridges over the sunken roads' cuts are trenches.build's.
+        taken = shapely.union_all([taken] + network.trenches.claimed)
     for outline, name in zip(data["outlines"], data["outline_names"]):
         for part in polygons_of(outline, 50.0):
             if shapely.area(shapely.intersection(part, taken)) > 0.5 * part.area:
