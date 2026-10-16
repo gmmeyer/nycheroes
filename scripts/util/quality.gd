@@ -18,6 +18,9 @@ extends Node
 ##   gone by (m, small/
 ##   large pieces)
 ##   cars gone by (m)    170             320             460
+##   woods' clumps of    none            4000, none in   6000, far
+##   crowns, by tile                     far tiles       tiles' 9000
+##   center (m)
 ##   fog density         0.00016         0.00013         0.0001
 ##   pedestrians         12              24              45
 ##   moving cars         25              60              120
@@ -31,7 +34,8 @@ extends Node
 ## where the city stops. Street furniture and cars (parked and moving) shrink
 ## away one by one before those distances (CityStreamer.set_furniture_fade()
 ## and set_car_fade()), and each tile's stop drawing past them, so phones
-## draw them in fewer tiles.
+## draw them in fewer tiles. Without clumps of crowns, woods past the trees
+## are only painted on the ground (CityStreamer.set_canopy_ranges()).
 ## ?fog=, ?peds=, ?traffic=, ?trains= and ?tree_shadows= still override their preset
 ## values.
 
@@ -47,6 +51,7 @@ const PRESETS := {
 		"load_distances": [350.0, 800.0, 7000.0],
 		"furniture_fade": [Vector2(60.0, 90.0), Vector2(220.0, 300.0)],
 		"car_fade": Vector2(120.0, 170.0),
+		"canopy_ranges": [0.0, 0.0, 0.0],
 		"fog_density": 0.00016,
 		"pedestrians": 12,
 		"cars": 25,
@@ -65,6 +70,7 @@ const PRESETS := {
 		"load_distances": [500.0, 1100.0, 12000.0],
 		"furniture_fade": [Vector2(150.0, 220.0), Vector2(360.0, 500.0)],
 		"car_fade": Vector2(220.0, 320.0),
+		"canopy_ranges": [4000.0, 4000.0, 0.0],
 		"fog_density": 0.00013,
 		"pedestrians": 24,
 		"cars": 60,
@@ -158,6 +164,9 @@ func apply(sun: DirectionalLight3D, environment: Environment, city: CityStreamer
 		city.load_distances = distances
 		city.set_furniture_fade(_preset.furniture_fade[0], _preset.furniture_fade[1])
 		city.set_car_fade(_preset.car_fade)
+		var canopy: Array[float] = []
+		canopy.assign(_preset.canopy_ranges)
+		city.set_canopy_ranges(canopy)
 		if environment and not LaunchOptions.has("fog"):
 			environment.fog_density = _preset.fog_density
 		encounters.max_gangs = _preset.gangs

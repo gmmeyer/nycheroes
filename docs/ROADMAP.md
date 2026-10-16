@@ -64,7 +64,7 @@ peer can drive one later. Nearby tiles get collision.
 - **Scale:** `prepare.py` turns the raw data into cached geometry once;
   `build_tiles.py` builds tiles on all cores (about 4 minutes then; now
   about 12 with 20 workers: each holds the whole city, about 3.5 GB, so the
-  default count is what memory allows). Three levels
+  default count is what free memory allows). Three levels
   of detail, each drawn until all of its children have loaded:
   - near: 500 m tiles, full detail, collision and walking lanes, 420 MB
     total;
@@ -655,11 +655,12 @@ In order:
 **Trees, parks and sky after the reference check (done):**
 - Street tree crowns clear a truck (at least 3.4 m up, 40% of the height
   on big trees) and are open clumps that differ per tree, with gaps up
-  close; lighter greens; small flowering trees shorter, Callery pears
-  teardrop-shaped.
-- Woods past the tree distance show round sunlit crowns in the trees'
-  colors, and at a slant trees hide the ground behind them, so Central Park
-  reads as canopy from Top of the Rock.
+  close; lighter greens (darker again after the next check, below); small
+  flowering trees shorter, Callery pears teardrop-shaped.
+- Woods past the tree distance show round sunlit crowns painted on the
+  ground in the trees' colors, and at a slant trees hide the ground behind
+  them. From Top of the Rock that still read as lawn and paths (the next
+  check): woods from afar are now clumps of crowns, below.
 - A deeper blue sky with a horizon haze band; fog 0.0001 on high (medium
   0.00013, low 0.00016) with a warm tint toward the sun.
 - `?weather=overcast`: a grey deck, soft light, faint shadows, grey water
@@ -700,6 +701,66 @@ In order:
 - Cost: values only (keyframes, uniform defaults, environment settings, and
   three material uniforms set once at the start): the compiled shaders are
   byte for byte the same (hashed), so compile time is unchanged.
+
+**Woods from afar, darker street trees (done; reference round 3's 20 and
+16's trees):**
+- Why Central Park still read as lawn and paths from Top of the Rock: the
+  woods were only painted on the ground. They did draw there, out to the
+  park's north end, but from 280 m up the ground 1-4 km away is seen at
+  4-15 degrees, so 8 m crowns are squeezed under a pixel along the view by
+  about 1.5 km (sooner on medium and low, which draw fewer lines) and fade
+  to their average: a flat green a little darker than the lawns (the park's
+  pixels spread 0.023 in value, the photo's 0.11). Drives and paths are
+  pavement and road, which woods don't cover, so they drew through; and flat
+  ground has no tree mass to stand against the sky (Staten Island's hills
+  from the ferry).
+- Now woods past the trees are clumps of crowns that stand up: one for each
+  16 m square of the land cover map (the canopy map's pixels) that is at
+  least 15% canopy, in the middle of its canopy, as wide as that much canopy
+  (1.3 times the side of a square of it: 7-23 m, so woods close over and
+  lone trees stay small), as tall as canopy trees there (8-21 m), in the
+  canopy trees' tones (no red-leaved clumps), conifers in their patches
+  (`props.canopy_clumps()`, `LandCover.canopy_cells()`). Far tiles have one
+  per 32 m square with at least 30% canopy (20-46 m wide). They're a new
+  prop type (16) in tiles of every level, kept clear of decks overhead (mid
+  and far tiles get a props surface with just these; older game builds skip
+  the type): 1.21 million in near tiles, 1.21 million in mid, 0.21 million
+  in far.
+- Each tile's clumps are one more MultiMesh (`PropMeshes.canopy()`: one
+  lumpy blob, 20 triangles, no trunk), drawn by the trees' shader, which grows
+  them in between 600 and 800 m from the camera as the trees shrink away
+  (650-850 m) and shades each clump's lower part as if in its neighbors'
+  shade (`canopy_tint`, `canopy_shading`); no shadows. Near tiles' clumps
+  draw once the tile's center is 240 m away, mid tiles' out to 6 km, far
+  tiles' to 9 km; medium draws them to 4 km and not in far tiles, low not at
+  all (only the ground's painted woods; `CityStreamer.set_canopy_ranges()`,
+  from `Quality`).
+- From Top of the Rock the park is now canopy edge to edge, with the
+  reservoir, the lakes and the biggest lawns showing and the paths hidden;
+  Staten Island's hills and St. George's slope have tree mass. The park's
+  pixels spread 0.050 in value (0.023 before, the photo 0.11) and 0.21 of
+  them sit on a strong edge (0.09; the photo 0.64). What's left is mostly
+  haze: with `?fog=0.00003` the canopy measures (67, 86, 64), value 0.34,
+  saturation 0.29, against the photo's (77, 104, 95), 0.42, 0.34 (round 3's
+  25 is about the haze). Measured before the light change above (18).
+- Street trees, and the woods with them, are darker, less saturated and a
+  little cooler (`tree.gdshader`'s FOLIAGE and CONIFER, the ground shader's
+  woods tones in step). Foliage in six street views (Flatiron, Park Slope,
+  Grand Concourse, Guggenheim, Park and Fifth Avenues): saturation 0.77 to
+  0.60, value 0.29 to 0.19 (the photos 0.44 and 0.18).
+- Cost: tiles +55 MB (near 1,481 MB, +1.6%; mid 275 MB, +11%; far 39 MB,
+  +13%, so about 4 MB more at the start). On the dev machine at 1920x1080,
+  uncapped (back and forth with the build before): Top of the Rock, north,
+  on high 276 to 302 draw calls, 3.1 to 3.8 million triangles, 364 to 338
+  FPS (+0.2 ms a frame); medium 152 to 171 draw calls, 1.6 to 2.0 million,
+  463 to 445 FPS (+0.1 ms); low unchanged (118 draw calls). Staten Island
+  from 300 m, high: 175 to 198 draw calls, 3.0 to 3.9 million triangles,
+  486 to 415 FPS (+0.35 ms); over Central Park from 350 m, 306 to 329,
+  +0.5 ms. Still at the 145 FPS cap. The cost is the clumps' vertices, not
+  their pixels (shrunk to nothing they cost the same), so they're one
+  20-triangle blob: two blobs looked the same and cost twice as much.
+  Shader compile time unchanged (tree.gdshader 0.3-0.4 s; the ground
+  shader only changed values).
 
 **Facade materials and rowhouse fronts (done):**
 - Each masonry building has a wall material from the tax lot data

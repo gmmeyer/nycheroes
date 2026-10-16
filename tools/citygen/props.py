@@ -6,6 +6,8 @@ Trees come from two places:
     with each tree's species and trunk size, which set its shape, color and size;
   everything else (parks, yards, woods): the 2017 land cover map's tree
     canopy (landcover.py), planted on a jittered grid wherever there's canopy.
+Seen from afar, past where those trees are drawn, woods are clumps of crowns
+from the same map (canopy_clumps()), in tiles of every level.
 Water towers: New York's wooden rooftop tanks sit on most older buildings of
 six floors and up (the height city water pressure reaches). Which buildings
 have one is a guess from the building's type, floors and borough, seeded
@@ -18,7 +20,7 @@ the city's inventories put them (prepare_furniture()); traffic signals at
 intersections with a wide street (markings.signals()).
 
 prepare_trees() makes data/cache/trees.pkl; build_tiles.py does the rest per
-lod0 tile with the helpers here.
+lod0 tile with the helpers here (clumps per tile of every level).
 """
 
 import json
@@ -31,7 +33,7 @@ import sign_names
 from common import (AWNING_DOME, DOCK_SPACING, DOCKS_PER_SECTION, PROP_AWNING, PROP_KIOSK, PROP_PLANTER,
                     PROP_PLAZA_TABLE, PROP_SHOP_SIGN, PROP_SIDEWALK_SHED, SIGN_BANNER, SIGN_BLADE, SIGN_BOARD,
                     SIGN_LETTERS, SIGN_LIGHT_BOX, polygons_of)
-from common import (PROP_BENCH, PROP_BIKE_RACK, PROP_BUS_SHELTER, PROP_CONIFER, PROP_HYDRANT,
+from common import (PROP_BENCH, PROP_BIKE_RACK, PROP_BUS_SHELTER, PROP_CANOPY, PROP_CONIFER, PROP_HYDRANT,
                     PROP_LINKNYC, PROP_LITTER_BASKET, PROP_NEWSSTAND, PROP_PARKING_METER, PROP_STREET_LIGHT,
                     PROP_SUBWAY_ENTRANCE, PROP_TONE_DARK, PROP_TONE_GREEN, PROP_TONE_LIGHT, PROP_TONE_RED,
                     PROP_TRAFFIC_SIGNAL, PROP_TREE, PROP_TREE_NARROW, RAW_DIR, project)
@@ -72,6 +74,19 @@ CANOPY_HEIGHT = (6.0, 18.0)  # meters: a lone tree, and in woods (before jitter)
 CONIFER_PATCH = 150.0
 CONIFER_MAX_SHARE = 0.4
 CANOPY_TONES = ((PROP_TONE_GREEN, 0.55), (PROP_TONE_DARK, 0.3), (PROP_TONE_LIGHT, 0.12), (PROP_TONE_RED, 0.03))
+# Woods seen from afar, in every tile level: a clump of crowns (a squat dome)
+# for each CLUMP_CELL-meter square of the land cover map (the canopy map's
+# pixels) that is at least CLUMP_MIN_SHARE canopy, standing where its canopy
+# is, as wide as that much canopy (CLUMP_WIDTH times the side of a square of
+# it: lone trees small, woods closing over each other) and as tall as canopy
+# trees there. Far tiles' squares are CLUMP_CELL_FAR meters and need more
+# canopy. The game grows them in where the trees shrink away
+# (shaders/tree.gdshader), so woods keep their crowns out to the horizon.
+CLUMP_CELL = 16.0
+CLUMP_CELL_FAR = 32.0
+CLUMP_MIN_SHARE = 0.15
+CLUMP_MIN_SHARE_FAR = 0.3
+CLUMP_WIDTH = 1.3
 
 # Street lights: one every LAMP_SPACING meters along every curb (the first
 # half a spacing in), LAMP_SETBACK onto the sidewalk, and none closer than
@@ -213,6 +228,33 @@ def canopy_trees(en: np.ndarray, seed: np.ndarray, density: np.ndarray) -> dict:
     trunk = np.clip(height * TRUNK_SHARE, *TRUNK_RANGE) * (0.85 + 0.3 * _hash(seed, 15))
     return {"en": en, "height": height.astype(np.float32), "width": width.astype(np.float32),
             "trunk": trunk.astype(np.float32), "type": kinds, "tone": tones, "seed": seed.astype(np.float32)}
+
+
+def canopy_clumps(en: np.ndarray, share: np.ndarray, cells: np.ndarray, cell: float) -> dict:
+    """Props for clumps of crowns (PROP_CANOPY) seen from afar, from the land
+    cover's `cell`-meter squares (LandCover.canopy_cells: the middle of each
+    one's canopy, its share of canopy, its column and row). Their "trunk" is
+    1 for conifers (in the canopy trees' patches), else 0."""
+    far = cell > CLUMP_CELL
+    keep = share >= (CLUMP_MIN_SHARE_FAR if far else CLUMP_MIN_SHARE)
+    en, share, cells = en[keep], share[keep], cells[keep]
+    seed = _cell_hash(cells[:, 0] * 2 + int(far), cells[:, 1])
+    low, high = CANOPY_HEIGHT
+    height = (low + (high - low) * share ** 0.7) * (0.9 + 0.25 * _hash(seed, 21))
+    width = CLUMP_WIDTH * np.sqrt(share) * cell * (0.9 + 0.2 * _hash(seed, 22))
+    tone_roll = _hash(seed, 9)
+    tones = np.full(len(en), PROP_TONE_GREEN, dtype=np.int8)
+    edge = 0.0
+    for tone, part in CANOPY_TONES:
+        # A red-leaved tree doesn't color a whole clump.
+        tones[(tone_roll >= edge) & (tone_roll < edge + part)] = PROP_TONE_GREEN if tone == PROP_TONE_RED else tone
+        edge += part
+    patch = _cell_hash(np.floor(en[:, 0] / CONIFER_PATCH), np.floor(en[:, 1] / CONIFER_PATCH))
+    conifer = _hash(seed, 7) < CONIFER_MAX_SHARE * _hash(patch, 6) ** 3
+    tones[conifer] = PROP_TONE_DARK
+    return {"en": en, "height": height.astype(np.float32), "width": width.astype(np.float32),
+            "trunk": conifer.astype(np.float32), "type": np.full(len(en), PROP_CANOPY, dtype=np.int8),
+            "tone": tones, "seed": seed.astype(np.float32), "yaw": _hash(seed, 23) * (2 * np.pi)}
 
 
 def lamp_spots(roads: list, tile_edge) -> tuple[np.ndarray, np.ndarray]:

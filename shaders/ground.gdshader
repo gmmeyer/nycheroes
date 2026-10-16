@@ -26,7 +26,8 @@
 // one side), dark gaps between them, stands of lighter and darker trees, and
 // at a slant the ground behind trees hidden by them (from Top of the Rock,
 // Central Park's canopy closes over most of its lawns); up close, just the
-// trees' shade.
+// trees' shade. Out there the woods' clumps of crowns (tiles' props, drawn
+// by tree.gdshader) stand over them, and over wooded paths and lots.
 // Lighting is the shared toon model (toon.gdshaderinc). At night (see
 // shaders/night.gdshaderinc) street lights' pools light the ground near the
 // camera; further out streets and sidewalks get the lamps' average glow, so
@@ -410,8 +411,8 @@ vec3 ground_detail(int kind, vec2 p, float extra, vec2 footprint, vec3 face, vec
 // The trees' foliage tones (shaders/tree.gdshader's FOLIAGE and CONIFER, in
 // sRGB): mid, dark, light, conifer, red; and the share of a wood's crowns in
 // each (props.py's CANOPY_TONES, with conifers' patches).
-const vec3 WOODS_TONES[5] = vec3[](vec3(0.43, 0.60, 0.25), vec3(0.31, 0.50, 0.22), vec3(0.62, 0.72, 0.31),
-		vec3(0.24, 0.42, 0.30), vec3(0.45, 0.25, 0.29));
+const vec3 WOODS_TONES[5] = vec3[](vec3(0.40, 0.47, 0.32), vec3(0.31, 0.40, 0.26), vec3(0.49, 0.56, 0.34),
+		vec3(0.24, 0.34, 0.29), vec3(0.38, 0.24, 0.26));
 const float WOODS_SHARES[5] = float[](0.5, 0.28, 0.11, 0.08, 0.03);
 
 // Parks, yards and marshes under trees: shade up close, woods seen from
