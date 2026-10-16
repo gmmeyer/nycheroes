@@ -25,8 +25,9 @@ lines below wherever a license asks for one (the aerial photos do).
   (esmy-s8q5), bicycle parking (592z-n7dk), DSNY litter baskets
   (8znf-7b2c), parking meters (693u-uax6) and newsstands (w9zq-xm8b); MTA
   subway entrances and exits (data.ny.gov, i9wp-a4ja).
-- **Bridge tower positions:** © OpenStreetMap contributors (ODbL),
-  https://www.openstreetmap.org/copyright.
+- **Bridge tower positions and some towers' massing** (placement and setback
+  heights for towers newer than the city's 3-D model): © OpenStreetMap
+  contributors (ODbL), https://www.openstreetmap.org/copyright.
 - **Ground elevation:** USGS 3D Elevation Program, 1/3 arc-second DEM
   (public domain, U.S. Government work).
 

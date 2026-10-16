@@ -10,8 +10,9 @@ outline at the ground): on the part of the front set furthest back (beside a
 bay window, if there is one), at the lot line (walk-ups: in the middle),
 narrower where that part is narrow. The steps go straight out toward the
 street; there have to be CURB_CLEAR (4) meters left to the curb (the
-walking lanes run 2.5 m from it) and no other building in the way, so where the
-sidewalk and front yard are shallow the stoop has fewer steps, or none. Its
+walking lanes run 2.5 m from it) and no other building (or the neighbor's stoop) in
+the way, so where the sidewalk and front yard are shallow the stoop has fewer
+steps, or none. Its
 walls are then marked STOOP, so the shader draws the front door up on the
 landing instead of at the sidewalk.
 
@@ -24,10 +25,10 @@ boxed in between stoops, walls and fences.
 A stoop is a few faces of the building's own surface (so it has collision,
 and it's a ramp the hero walks up): the landing and the steps' slope (drawn
 as steps by the shader), each cheek wall's outside reaching down to the
-ground and its inside above the steps (two faces back to back, so they need
-no thickness), and the doorway, a panel standing just off the wall: 20
-triangles, 34 vertices; the areaway wall is two faces back to back, 4
-triangles. The parts are told apart by facades.FRONT_PART in uv2.x; the
+ground and its inside above the steps (THIN apart, without a top: thin walls
+need little more, but faces exactly back to back shadow each other), and the
+doorway, a panel standing just off the wall: 20 triangles, 34 vertices; the
+areaway wall is two faces THIN apart, 4 triangles. The parts are told apart by facades.FRONT_PART in uv2.x; the
 shader (shaders/building.gdshader, stoop()) paints them.
 
 Uv per part (meters; the shader relies on them and on the measures below):
@@ -59,6 +60,7 @@ DOORWAY_WIDTH = 1.5
 DOORWAY_HEIGHT = 3.0
 DOORWAY_OUT = 0.08     # the doorway panel stands this far off the wall
 AREAWAY_HEIGHT = 0.8
+THIN = 0.06            # cheek and areaway walls' thickness
 
 # Stoops are this wide (cheek walls included): brownstones' high stoops,
 # lower ones, walk-ups'.
@@ -133,6 +135,8 @@ def add(builder, index: int, facade: tuple, shape, w: dict, settings: dict, face
     if stoop is None:
         return facade
     flags |= facades.STOOP
+    count, foot, top = stoop
+    _placed(w).append(_rect(door, out, along, width, LANDING + count * RUN))
 
     def uv2_of(part):
         return facades.encode(archetype, flags | part * facades.FRONT_PART, floor_dm, seed)
@@ -234,20 +238,37 @@ def _placement(poly, faces_street, width: float, seed: float, centered: bool):
     return door, out, along, width
 
 
+def _rect(door, out, along, width: float, depth: float, start: float = 0.0):
+    """The ground a stoop covers (east/north), from `start` out from the wall."""
+    return shapely.Polygon([door + along * (width / 2) + out * start, door + along * (width / 2) + out * depth,
+                            door - along * (width / 2) + out * depth, door - along * (width / 2) + out * start])
+
+
+def _placed(w: dict) -> list:
+    """The stoops placed in this tile so far (their ground, as drawn)."""
+    placed = w.get("stoops_placed")
+    if placed is None or placed[0] is not w["streets"]:  # a new tile
+        placed = w["stoops_placed"] = (w["streets"], [])
+    return placed[1]
+
+
 def _fit(w: dict, index: int, own, shift, door, out, along, width: float, steps: int):
     """The most steps (up to `steps`) the stoop can have here, clear of the
-    curb, of the building's own walls (`own`, its outline) and of other
-    buildings (their footprints, `shift` away): (steps, foot height, top
-    height), or None."""
+    curb, of the building's own walls (`own`, its outline), of other
+    buildings (their footprints, `shift` away) and of stoops already placed:
+    (steps, foot height, top height), or None."""
     streets = w["streets"]
     ground = w["ground"]["lod0"]
     own = shapely.buffer(own, -0.05)
+    placed = np.array(_placed(w), dtype=object)
+    if len(placed):
+        placed = placed[shapely.dwithin(placed, shapely.Point(door), 12.0)]
     for count in range(steps, MIN_STEPS - 1, -1):
         depth = LANDING + count * RUN
-        corners = np.array([door + along * (width / 2) + out * 0.05, door + along * (width / 2) + out * depth,
-                            door - along * (width / 2) + out * depth, door - along * (width / 2) + out * 0.05])
-        rect = shapely.Polygon(corners)
+        rect = _rect(door, out, along, width, depth, 0.05)
         if not streets.is_empty and shapely.dwithin(streets, rect, CURB_CLEAR):
+            continue
+        if len(placed) and np.any(shapely.intersects(placed, rect)):
             continue
         moved = shapely.transform(rect, lambda c: c + shift)
         hits = w["building_index_tree"].query(shapely.buffer(moved, -NEIGHBOR_SLACK), predicate="intersects")
@@ -305,8 +326,9 @@ def _build_areaway(builder, door, out, along, areaway: tuple, ground, uv2_of) ->
     uv = np.array([[0.0, -SINK], [length, -SINK], [0.0, AREAWAY_HEIGHT], [length, AREAWAY_HEIGHT]])
     quad = [(0, 1, 3), (0, 3, 2)]
     normal = np.array([out[0], 0.0, -out[1]])
-    for side in (1.0, -1.0):
-        builder.add(pos[quad], uv[quad], uv2_of(AREAWAY), normal * side)
+    builder.add(pos[quad], uv[quad], uv2_of(AREAWAY), normal)
+    inside = pos - normal * THIN
+    builder.add(inside[quad], uv[quad], uv2_of(AREAWAY), -normal)
 
 
 def _build(builder, door, out, along, width: float, stoop: tuple, ground, uv2_of) -> None:
@@ -344,6 +366,7 @@ def _build(builder, door, out, along, width: float, stoop: tuple, ground, uv2_of
         outside = [(-BACK, s, base), (depth, s, base), (depth, s, foot + CHEEK_HEIGHT),
                    (LANDING, s, top + CHEEK_HEIGHT), (-BACK, s, top + CHEEK_HEIGHT)]
         face(outside, [(p[0], p[2] - top) for p in outside], normal, STOOP_SIDE)
+        s -= side * THIN
         for quad in ([(-BACK, s, top), (LANDING, s, top), (LANDING, s, top + CHEEK_HEIGHT),
                       (-BACK, s, top + CHEEK_HEIGHT)],
                      [(LANDING, s, top), (depth, s, foot), (depth, s, foot + CHEEK_HEIGHT),

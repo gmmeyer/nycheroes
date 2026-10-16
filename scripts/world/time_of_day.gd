@@ -108,7 +108,7 @@ const OVERCAST := {
 	"sun_color": Color(1.0, 0.97, 0.92),
 	"sun_glow": 0.0,
 	"cloud_lit": Color(0.82, 0.84, 0.87),
-	"cloud_shade": Color(0.50, 0.53, 0.59),
+	"cloud_shade": Color(0.44, 0.47, 0.53),
 }
 const OVERCAST_DUSK := {
 	"light_color": Color(1.0, 0.78, 0.62),

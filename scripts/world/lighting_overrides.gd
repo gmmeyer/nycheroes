@@ -1,7 +1,7 @@
 class_name LightingOverrides
 extends WorldEnvironment
 ## Lighting overrides from launch options, for tuning without re-exporting:
-## ?ambient=0.5&sun=1.2&tonemap=2&exposure=1&white=1&fog=0.0001&sky=1
+## ?ambient=0.5&sun=1.2&tonemap=2&exposure=1&white=1&fog=0.0001&fog_scatter=0.1&sky=1
 ## ?agx_contrast=1.25&agx_white=16 (AgX tonemapping), ?saturation=1.1
 ## ?sun_dir=235,42 points the sun from that azimuth (degrees clockwise from
 ## north) and elevation (degrees above the horizon); ?sun_color=1,0.93,0.8 (sRGB).
@@ -43,6 +43,8 @@ func _ready() -> void:
 		env.adjustment_saturation = _float("saturation")
 	if LaunchOptions.has("fog"):
 		env.fog_density = _float("fog")
+	if LaunchOptions.has("fog_scatter"):
+		env.fog_sun_scatter = _float("fog_scatter")
 	if LaunchOptions.has("sky"):
 		env.background_energy_multiplier = _float("sky")
 	if LaunchOptions.has("sun"):

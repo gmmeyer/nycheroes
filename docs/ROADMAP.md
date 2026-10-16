@@ -183,7 +183,19 @@ In order:
   footprint heights often measure a podium or stop below a spire (fixed
   2026-10-15 after the reference check: the MetLife Building had been
   Grand Central's 48 m block, and One World Trade Center and the Bank of
-  America Tower lacked their spires). Newer buildings keep their prisms. Some model surfaces face the wrong way;
+  America Tower lacked their spires). Newer buildings keep their prisms.
+- Towers newer than the 3-D model (2014) get massing from a table
+  (`tools/citygen/towers.py`): 32 towers over about 150 m that had no
+  usable model, whose footprint record alone drew a flat box over the
+  whole lot up to the spire's tip (One Vanderbilt, Central Park Tower,
+  111 West 57th, the Shops at Hudson Yards at 386 m) or a stump where the
+  height was measured during construction (55 and 10 Hudson Yards, 56
+  Leonard, 270 Park). Each gets its real place on the lot, podium,
+  setbacks, taper, crown and steel spire at published heights, plus a
+  chosen look (glass tone, limestone, terracotta). Older buildings beside
+  them keep the model's shape (the Dime Savings Bank). Marble Collegiate
+  Church uses the model's 47 m church instead of a 65 m box. About 3,900
+  triangles up close in all. Some model surfaces face the wrong way;
   roofs are turned up and walls toward open air.
 - The model is massing only: roofs are flat levels, not pitched.
 - Mid-detail tiles use real shapes for buildings 40 m and taller, far tiles
@@ -460,6 +472,19 @@ In order:
   Script time about 0.25 ms a frame (driving steps at 30 Hz, far and
   behind-the-camera cars redrawn less often).
 
+**Trees, parks and sky after the reference check (done):**
+- Street tree crowns clear a truck (at least 3.4 m up, 40% of the height
+  on big trees) and are open clumps that differ per tree, with gaps up
+  close; lighter greens; small flowering trees shorter, Callery pears
+  teardrop-shaped.
+- Woods past the tree distance show round sunlit crowns in the trees'
+  colors, and at a slant trees hide the ground behind them, so Central Park
+  reads as canopy from Top of the Rock.
+- A deeper blue sky with a horizon haze band; fog 0.0001 on high (medium
+  0.00013, low 0.00016) with a warm tint toward the sun.
+- `?weather=overcast`: a grey deck, soft light, faint shadows, grey water
+  and fog; dusk and night follow. Same draw calls and triangles.
+
 **Landmarks, first batch (done):**
 - `tools/citygen/landmarks.py` builds eight landmarks by hand, at their real
   dimensions, in place of their data buildings (by BIN):
@@ -721,5 +746,6 @@ templates for both are already installed.
   `?peds=N`, `?gangs=N`, `?traffic=N` (0: none), `?demo` / `?demo=fight` scripted tours for videos,
   `?host` / `?join=CODE` co-op, `?signal=wss://...` signaling server
   (default: the page's host, port 8070), `?relay=1` co-op only through the
-  TURN relay (testing), `?tree_shadows=0` trees without shadows,
+  TURN relay (testing), `?weather=overcast`, `?fog_scatter=` (sun tint of
+  the fog), `?tree_shadows=0` trees without shadows,
   `--tiles=DIR` (desktop and tests) read the city from a tile copy.

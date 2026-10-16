@@ -18,7 +18,7 @@ extends Node
 ##   gone by (m, small/
 ##   large pieces)
 ##   cars gone by (m)    170             320             460
-##   fog density         0.00016         0.0001          0.00005
+##   fog density         0.00016         0.00013         0.0001
 ##   pedestrians         12              24              45
 ##   moving cars         25              60              120
 ##   gangs (thugs; most  1 (2-4; 6)      2 (3-4; 10)     2 (3-5; 16)
@@ -63,7 +63,7 @@ const PRESETS := {
 		"load_distances": [500.0, 1100.0, 12000.0],
 		"furniture_fade": [Vector2(150.0, 220.0), Vector2(360.0, 500.0)],
 		"car_fade": Vector2(220.0, 320.0),
-		"fog_density": 0.0001,
+		"fog_density": 0.00013,
 		"pedestrians": 24,
 		"cars": 60,
 		"gangs": 2,
