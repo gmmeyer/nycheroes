@@ -242,8 +242,11 @@ static func unpack(packed: PackedByteArray, raw_size: int) -> PackedByteArray:
 	return data
 
 
-## decode() for data that unpack() has passed.
-static func decode_unpacked(data: PackedByteArray) -> Array[Dictionary]:
+## decode() for data that unpack() has passed. Without `meshes`, mesh
+## surfaces come as {kind, arrays} (Mesh.ARRAY_* arrays) instead, for mesh()
+## to make into a mesh: worker threads decode tiles that way on desktop, and
+## leave the meshes to the main thread.
+static func decode_unpacked(data: PackedByteArray, meshes := true) -> Array[Dictionary]:
 	var surfaces: Array[Dictionary] = []
 
 	var count := data.decode_u32(8)
@@ -286,10 +289,34 @@ static func decode_unpacked(data: PackedByteArray) -> Array[Dictionary]:
 		arrays[Mesh.ARRAY_TEX_UV] = uv
 		arrays[Mesh.ARRAY_TEX_UV2] = uv2
 		arrays[Mesh.ARRAY_INDEX] = indices
-		var mesh := ArrayMesh.new()
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-		surfaces.append({"kind": kind, "mesh": mesh})
+		var surface := {"kind": kind, "arrays": arrays}
+		if meshes:
+			surface = {"kind": kind, "mesh": mesh(surface)}
+		surfaces.append(surface)
 	return surfaces
+
+
+## A mesh surface's mesh, made from its arrays unless it has it already.
+static func mesh(surface: Dictionary) -> ArrayMesh:
+	if surface.has("mesh"):
+		return surface.mesh
+	var made := ArrayMesh.new()
+	made.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface.arrays)
+	return made
+
+
+## A mesh surface's triangles as a list of corners, three each, for a
+## ConcavePolygonShape3D: what Mesh.create_trimesh_shape() makes, without
+## reading the mesh back from the GPU or building a BVH it throws away (about
+## a fifth of the time).
+static func faces(arrays: Array) -> PackedVector3Array:
+	var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var corners := PackedVector3Array()
+	corners.resize(indices.size())
+	for k in indices.size():
+		corners[k] = positions[indices[k]]
+	return corners
 
 
 ## {kind, lanes: Array[PackedVector3Array] (tile-local), info:

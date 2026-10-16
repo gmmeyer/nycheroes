@@ -67,6 +67,7 @@ func _ready() -> void:
 		elif arg.begins_with("--room="):
 			_room = arg.trim_prefix("--room=")
 	LaunchOptions.set_default("signal", "ws://127.0.0.1:%d" % _port)
+	LaunchOptions.set_default("net", "enet")  # (it drops ENet connections on purpose)
 	# Run before the hero each tick so the scripted input is used right away.
 	process_physics_priority = -20
 	if _role.is_empty():

@@ -180,3 +180,16 @@ Each file's Commons page is in `tools/reference/views.json` (`photo.page`).
 ## Engine
 
 - Godot Engine 4.7 (MIT license), https://godotengine.org.
+- WebRTC for the Windows and Mac versions: webrtc-native 1.2.2 by the Godot
+  Engine contributors (MIT), the official GDExtension, from
+  https://github.com/godotengine/webrtc-native/releases/tag/1.2.2-stable
+  (`godot-extension-webrtc_native.zip`, SHA-256
+  98e9446921740d995bd9ca1be48798dc3c2ceed51e044a25ce18b3cff11f56e5, as
+  GitHub lists it), in `addons/webrtc_native` (its Windows x86_64 and
+  macOS libraries only). It is built with libdatachannel 0.24.6 and libjuice
+  (Paul-Louis Ageneau, Mozilla Public License 2.0; their source:
+  https://github.com/paullouisageneau/libdatachannel and
+  https://github.com/paullouisageneau/libjuice), usrsctp (BSD 3-clause),
+  libsrtp (Cisco, BSD 3-clause), plog (MIT) and Mbed TLS 3.6.7 (Apache 2.0).
+  The licenses are next to it (`LICENSE.*`) and in both downloads'
+  `licenses` folder, with the engine's.

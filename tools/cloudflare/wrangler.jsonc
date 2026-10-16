@@ -9,11 +9,12 @@
     { "pattern": "www.nycheroes.party", "custom_domain": true }
   ],
   // The game and its tiles, staged by deploy_cloudflare.ps1 (no aerial
-  // photos, no index.wasm: that's over the 25 MiB asset limit, so it's in R2).
+  // photos, no index.wasm: that's over the 25 MiB asset limit, so it's in R2,
+  // and so are the desktop versions' zips under downloads/).
   "assets": {
     "directory": "../../build/cloudflare",
     "binding": "ASSETS",
-    "run_worker_first": ["/signal", "/index.wasm"]
+    "run_worker_first": ["/signal", "/index.wasm", "/downloads/*"]
   },
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "nyc-hero-files" }],
   "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Rooms" }] },

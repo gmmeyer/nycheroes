@@ -6,7 +6,9 @@ extends Control
 ## co-op server has been gone for a few seconds). Dims the game behind
 ## it and takes the mouse while open. On touch screens (use_touch_layout) it
 ## gets a Close button and bigger buttons, and the room code box becomes a
-## browser text box, so the phone's keyboard comes up.
+## browser text box, so the phone's keyboard comes up. In a computer's
+## browser it also links to the Windows and Mac versions (download.html, next
+## to the game's page; tools/build_web.ps1 puts it there).
 
 signal toggled(open: bool)
 
@@ -27,6 +29,7 @@ var _panel: PanelContainer
 var _column: VBoxContainer
 var _close_button: Button
 var _hint: Label
+var _download: LinkButton
 
 
 func _ready() -> void:
@@ -72,6 +75,7 @@ func toggle() -> void:
 func use_touch_layout() -> void:
 	_close_button.visible = true
 	_hint.visible = false
+	_download.visible = false  # (no use on a phone or tablet)
 	_column.add_theme_constant_override("separation", 9)
 	(_panel.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(16.0)
 	var tappable: Array = [_close_button, _host_button, _leave_button]
@@ -250,6 +254,15 @@ func _build() -> void:
 	_hint.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.5))
 	_hint.add_theme_font_size_override("font_size", 13)
 	column.add_child(_hint)
+
+	_download = LinkButton.new()
+	_download.text = "Get the game for Windows or Mac"
+	_download.add_theme_font_size_override("font_size", 13)
+	_download.add_theme_color_override("font_color", Color(0.6, 0.75, 1.0))
+	_download.visible = OS.has_feature("web") and not Device.is_mobile()
+	_download.pressed.connect(func() -> void:
+		OS.shell_open(str(JavaScriptBridge.eval("location.href.split(/[?#]/)[0].replace(/[^/]*$/, '')")) + "download.html"))
+	column.add_child(_download)
 
 
 ## Buttons that stand out from the dark panel.

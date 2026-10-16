@@ -6,7 +6,8 @@ super-speed and super-jump around the city and fight thugs on the street.
 
 **Platform:** Godot 4.7 web export (Compatibility renderer, WebGL 2). Every
 feature has to run in a browser, on computers and on phones (step 7); see
-"Constraints" below. Mac and Windows versions come last (step 9).
+"Constraints" below. Windows and Mac versions (step 9) stream the same city
+and play co-op with browser players.
 
 | Step | What | Status |
 |------|------|--------|
@@ -18,7 +19,7 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 6 | Realism from open data | Done (real shape, facades, trees, roofs, night, street furniture, cars, traffic and busy streets, sound, landmarks, churches, waterfront, shop signs, poles and wires; four rounds of photo checks, backlog in REFERENCE.md) |
 | 7 | Phones and tablets | Done in emulation; real phones to check |
 | 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions, elevated railways and their trains) |
-| 9 | Mac and Windows versions | Planned (last) |
+| 9 | Mac and Windows versions | Done (Windows run and tested; the Mac app built and checked, not run: no Mac); notarizing and signing left |
 
 ## 1. Manhattan you can fly around (done)
 
@@ -114,7 +115,7 @@ peer can drive one later. Nearby tiles get collision.
 - **Positions** go between games in world coordinates, since each player has
   their own floating origin.
 - **Tested:** `tests/coop_test.tscn` runs a host and a second game through
-  the signaling server and over ENet (desktop has no WebRTC) and checks
+  the signaling server and over ENet (desktop had no WebRTC then: see step 9) and checks
   positions, thugs showing up and fighting both ways, and players far apart.
   Two headless Chrome instances also connected over WebRTC through the
   signaling server.
@@ -1889,30 +1890,104 @@ Comes after step 6 because it needs step 6's real ground heights.
   express trains' way is set at the start; each co-op player's game runs
   its own trains.
 
-## 9. Mac and Windows versions (planned, last)
+## 9. Mac and Windows versions (done; notarizing, signing and a real Mac left)
 
 Downloadable versions of the game for Windows and macOS, alongside the
-browser version. Godot exports both from the same project; the export
-templates for both are already installed.
+browser version, from the same project. The downloads page is
+`download.html` next to the game (https://nycheroes.party/download.html once
+deployed); in a computer's browser the co-op menu links to it.
 
-- **Builds:** export presets for Windows (64-bit) and macOS (one app for
-  Apple Silicon and Intel), made by a build script like the web one. Desktop
-  versions can drop browser limits: multi-threaded tile loading and more
-  detail drawn further out.
-- **Renderer:** keep the Compatibility renderer so all three look the same,
-  or use Forward+ on desktop for better lighting (decided before step 6).
-- **City tiles:** either ship them with the download (about 550 MB; the game
-  already loads tiles from a `tiles` folder next to the executable), or
-  stream them from the same server as the web version so the download stays
-  small. Streaming also keeps every version on the same city data.
-- **Co-op with browser players:** desktop Godot has no built-in WebRTC, so
-  add the official WebRTC plugin (webrtc-native GDExtension) for Windows and
-  macOS; then desktop and browser players can join the same games.
-- **Signing:** macOS apps need an Apple Developer account ($99/year) for
-  signing and notarization, or Macs warn that the app can't be checked; a Mac
-  is also needed to test the macOS build. Windows builds run unsigned, but
-  SmartScreen warns about them until they're signed with a code-signing
-  certificate.
+- **Builds:** `tools/build_desktop.ps1` exports both into `build/desktop`
+  and zips them: `nyc-heroes-windows.zip` (42 MB: one `NYC Heroes.exe`,
+  113 MB with the game packed in, and the WebRTC extension's DLL beside it)
+  and `nyc-heroes-macos.zip` (63 MB: `NYC Heroes.app`, universal for Apple
+  silicon and Intel, macOS 11 and 10.15 up). Both also hold CREDITS.md and
+  the engine's and the WebRTC extension's licenses. Product name "NYC
+  Heroes", version 0.9.0 (`application/config/version`). The desktop presets
+  carry the feature tag `desktop`, which names the window and keeps the
+  game's files in a folder of its own (`%APPDATA%\NYC Heroes`,
+  `~/Library/Application Support/NYC Heroes`) instead of Godot's. No icon
+  yet (the project has none; both use Godot's). Exporting for Apple silicon
+  needs ETC2/ASTC import on in the project; no texture is VRAM-compressed,
+  so that changes nothing else.
+- **Renderer:** the Compatibility renderer, as on the web (OpenGL 3.3), so
+  all three look the same and every custom shader works unchanged. The
+  page's head_include, the JavaScript calls and the stretched-blit fix only
+  run in the browser. The exe draws Times Square at about 500 FPS at
+  1600x900 on the dev machine.
+- **City tiles:** streamed from https://nycheroes.party/tiles/ like the web
+  build (the build id in the URLs, the same retries; `--tiles_url=URL` for
+  another server). Each tile and the canopy map is kept in
+  `user://tiles/<build>/nyc/`, so places visited once load from disk; a new
+  build id in the manifest starts a new folder and deletes the others (on a
+  worker thread), and a tile broken on disk is deleted and downloaded again.
+  Offline, or when the manifest doesn't come within 10 s, it plays from the
+  newest build kept (the manifest is kept with it). Godot's own gzip
+  handling is right on desktop (Cloudflare gzips the manifest for it; tiles
+  are zstd already). Times Square from the site with nothing kept: 4.6-4.9 s
+  (80 MB: 150 tiles and the canopy map); from disk 1.4 s. The first start of
+  a build also compiles its shaders (about 20 s more on the dev machine,
+  then cached by the driver). `--tiles=DIR`, or a `tiles` folder next to the
+  executable, still reads tiles from disk, and the editor reads `data/tiles`.
+- **Threads:** desktop builds decode tiles on worker threads
+  (WorkerThreadPool, four at once): reading the cache, unpacking, laying out
+  the arrays and the collision faces. The faces now come straight from the
+  tile's arrays, not read back from the GPU by Mesh.create_trimesh_shape()
+  (a fifth of the time, the same triangles); the web build does that too, on
+  its main thread. Meshes, nodes and collision shapes are made on the main
+  thread (headless runs' dummy renderer can't take meshes from other
+  threads). First load at Times Square, from disk: main-thread time 850-894
+  ms before, 402-412 ms now, "ready" 2.1-2.6 s before, 1.6 s now; in Chrome
+  777-782 ms before, 576-583 ms now (4.8-4.9 s to ready, now 4.6-4.7 s).
+  What's left on the main thread is mostly Jolt building each near tile's
+  collision when it enters the world (about 17 ms a tile in midtown).
+  `--decode_threads=0` decodes on the main thread, as the web does.
+- **More detail further out:** measured, and left at the web's "high".
+  Loading tiles further (near and mid tiles at 900/2000 m and 1000/2500 m
+  instead of 700/1500) cost up to 17% more frame time and 15% more
+  main-thread building at the start, in views from the street and from 120,
+  300 and 900 m up, and nothing changed in the screenshots: a tile is drawn
+  only once all its children have loaded, so most of the extra tiles load
+  without showing.
+- **Co-op with browser players:** the official WebRTC plugin, webrtc-native
+  1.2.2 (godotengine/webrtc-native, MIT; libdatachannel 0.24.6, see
+  CREDITS.md), in `addons/webrtc_native` with only its Windows x86_64 and
+  macOS universal libraries. Its exclude tags and the web preset's exclude
+  filter keep it out of the web build, which has WebRTC built in. Desktop
+  builds connect over WebRTC through the public signaling server
+  (`wss://nycheroes.party/signal`), so they join browser players' games and
+  browser players join theirs; a desktop host's invite link opens the game
+  at https://nycheroes.party. The editor still defaults to the local server.
+  The co-op tests keep ENet (they set `--net=enet`; they drop connections
+  on purpose); `--net=webrtc` runs them over WebRTC. Tested: `coop_test`
+  over WebRTC between two desktop games (every check passes), and the
+  Windows build with the web build in headless Chrome through a local
+  signaling server, both ways (the browser hosting and the desktop game
+  joining, then the reverse): each connected and showed the other's hero
+  next to its own.
+- **On desktop also:** F11 switches full screen. `--screenshot=PATH` saves
+  a screenshot a few seconds after the city is ready
+  (`--screenshot_delay=S`, default 5), logs the frame times and quits.
+- **Downloads:** `download.html` (`tools/web`, copied by build_web.ps1)
+  links the two zips and shows their sizes. The Worker serves them from the
+  R2 bucket under `downloads/` (each is over the 25 MiB asset limit;
+  resumable downloads), and `tools/deploy_cloudflare.ps1 -Desktop` uploads
+  the ones that changed. Checked under `wrangler dev`.
+- **Opening the Mac app:** Godot signs it ad hoc (its built-in signing,
+  which works from Windows), and it isn't notarized, so macOS won't open it
+  at first. Mac users open System Settings, then Privacy & Security, and
+  click Open Anyway next to NYC Heroes (macOS 15 and later), or
+  Control-click the app and choose Open (before macOS 15), or run `xattr -dr
+  com.apple.quarantine "/Applications/NYC Heroes.app"`. The download page
+  says so. Library validation is off (`disable_library_validation`), so the
+  ad-hoc signed app may load the WebRTC framework.
+- **Left to do:** notarize the Mac app (the user's call: an Apple Developer
+  account, $99/year, gives the Developer ID certificate and the notary
+  credentials the macOS preset needs) and try it on a real Mac (only the
+  export, the bundle, its Info.plist, both architectures and the ad-hoc
+  signatures and entitlements were checked here); sign the Windows exe with
+  a code-signing certificate, so SmartScreen stops warning ("More info, Run
+  anyway" until then); an icon.
 
 ## Constraints
 
@@ -1920,8 +1995,8 @@ templates for both are already installed.
   official WebGPU support doesn't exist yet. Lighting gotchas we've measured:
   use AgX tonemapping, give meshes real normals, write shader colors in sRGB.
 - **Single-threaded by default.** Tile decoding happens on the main thread
-  within a per-frame budget. A threaded build needs cross-origin isolation
-  headers from the host.
+  within a per-frame budget (desktop builds decode on worker threads). A
+  threaded web build needs cross-origin isolation headers from the host.
 - **Animated characters in Chrome on Windows** go through ANGLE (WebGL on
   Direct3D 11), which treats Godot's skinned-vertex buffers as dynamic and
   stalls on them until a pose stays still for ~30 frames.
@@ -1961,6 +2036,11 @@ templates for both are already installed.
 - Web build: `tools/build_web.ps1` (add `-Serve` to play at
   http://localhost:8060; it also runs the co-op signaling server on port
   8070, after `npm install` in `tools/signaling`).
+- Desktop builds: `tools/build_desktop.ps1` (`-Windows` or `-Mac` for one)
+  makes `build/desktop/nyc-heroes-windows.zip` and `nyc-heroes-macos.zip`
+  (see step 9); `tools/deploy_cloudflare.ps1 -Desktop` publishes them.
+  Run the Windows build with `"NYC Heroes.exe" -- --tiles=DIR ...` to read
+  local tiles; it keeps what it streams in `%APPDATA%\NYC Heroes\tiles`.
 - Shader compile time (measured 2026-10-16): on Windows, browsers (ANGLE on
   D3D11) compile every shader a view needs with the D3D compiler, which
   inlines every function call and takes time growing with about the square
@@ -2014,7 +2094,8 @@ templates for both are already installed.
   `res://tests/coop_test.tscn`, `res://tests/coop_migration_test.tscn` and
   `res://tests/coop_reconnect_test.tscn` (they run the signaling server, so
   `npm install` in `tools/signaling` first; `-- --port=N` picks its port,
-  default 8071),
+  default 8071; they connect over ENet, `coop_test` over WebRTC with
+  `--net=webrtc`),
   `res://tests/audio_test.tscn` and
   `res://tests/traffic_test.tscn` (75 s of
   midtown traffic: no red light run, no overlaps, cars stop for the hero,
@@ -2034,4 +2115,8 @@ templates for both are already installed.
   TURN relay (testing), `?weather=overcast`, `?date=MM-DD` (or
   `YYYY-MM-DD`) the sun's arc on that day, `?fog_scatter=` (sun tint of
   the fog), `?tree_shadows=0` trees without shadows,
-  `--tiles=DIR` (desktop and tests) read the city from a tile copy.
+  `--tiles=DIR` (desktop and tests) read the city from a tile copy;
+  desktop only: `--tiles_url=URL` stream tiles from another server,
+  `--decode_threads=0` decode tiles on the main thread, `--net=enet|webrtc`
+  how co-op connects, `--screenshot=PATH` (and `--screenshot_delay=S`) save
+  a screenshot once the city has loaded, then quit.

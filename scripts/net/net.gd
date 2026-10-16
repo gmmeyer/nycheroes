@@ -9,8 +9,11 @@ extends Node
 ## server names the player who has been in the room longest the new host
 ## (host_changed), whose game takes the thugs over from the copies it and the
 ## others have (see EncounterDirector); the room keeps its code, so friends
-## can still join. Desktop builds have no WebRTC, so tests connect over ENet
-## on this machine instead, through the same signaling.
+## can still join. Desktop builds get WebRTC from the webrtc-native
+## GDExtension (addons/webrtc_native), so they play with browser players, and
+## use the public site's signaling server by default. The co-op tests connect
+## over ENet on this machine instead (--net=enet), through the same signaling;
+## --net=webrtc makes them use WebRTC too.
 ##
 ## The signaling server only hears of players through their sockets: games
 ## ping it every PING_INTERVAL, and tell it when they lose touch with a player
@@ -30,7 +33,8 @@ extends Node
 ##
 ## Launch options (read by Game): ?host hosts a game, ?join=CODE joins one,
 ## ?signal=wss://... picks the signaling server (default: /signal on the page's
-## host over https, else the page's host on port 8070), and ?relay=1 connects
+## host over https, else the page's host on port 8070; desktop builds the
+## public site's, the editor port 8070 on this machine), and ?relay=1 connects
 ## only through the TURN relay the signaling server hands out, to test the path
 ## players on strict networks need.
 
@@ -55,6 +59,10 @@ enum State { OFFLINE, CONNECTING, HOSTING, JOINED }
 const FIRST_HOST := 1
 const MAX_PLAYERS := 8
 const SIGNALING_PORT := 8070
+## The public site, whose signaling server desktop builds use by default; their
+## invite links open the game there.
+const SITE_URL := "https://nycheroes.party/"
+const PUBLIC_SIGNALING_URL := "wss://nycheroes.party/signal"
 ## Give up on reaching a host after this long (seconds).
 const CONNECT_TIMEOUT := 20.0
 ## After losing touch with the host, give up on the game after this long
@@ -82,8 +90,8 @@ const JOIN_RETRY_DELAY := 2.0
 ## this long, and again every RECONNECT_INTERVAL while it's down (msec).
 const RECONNECT_DELAY := 2000
 const RECONNECT_INTERVAL := 10000
-## ENet (desktop and tests) channels per connection: enough for
-## ENetMultiplayerPeer's own and the RPCs'.
+## ENet (tests, and desktop builds without the WebRTC extension) channels per
+## connection: enough for ENetMultiplayerPeer's own and the RPCs'.
 const ENET_CHANNELS := 8
 ## ENet connections drop after this long without an answer (msec, at least
 ## and at most): long enough to ride out a slow frame with four games on one
@@ -116,7 +124,7 @@ var _join_retries := 0
 var _reconnecting := false
 var _key := ""  # from the signaling server: ours, to take our place in the room back
 var _order: Array[int] = []  # everyone in the room, us too, in the order they came (as the server has it)
-var _mesh: MultiplayerPeer  # WebRTCMultiplayerPeer, or ENetMultiplayerPeer on desktop
+var _mesh: MultiplayerPeer  # WebRTCMultiplayerPeer, or ENetMultiplayerPeer in tests
 var _connections := {}  # player number -> WebRTCPeerConnection, or ENetConnection until connected
 var _ice_servers: Array = []
 var _members := {}  # player number -> true: everyone in the room as the signaling server last said, but us
@@ -127,6 +135,8 @@ var _connect_time := 0.0
 var _host_missing_time := 0.0
 var _ping_cooldown := 0.0
 var _report_cooldown := 0.0
+
+static var _webrtc := -1  # whether a WebRTC library loaded (desktop): -1 not checked yet, else 1 or 0
 
 
 func _ready() -> void:
@@ -229,12 +239,19 @@ func is_newcomer(id: int) -> bool:
 	return _newcomers.has(id)
 
 
-## A link that opens the game and joins this room (web only).
+## A link that opens the game in the browser and joins this room: on the
+## web, this page's; on desktop, the public site's (unless this game uses
+## another signaling server: then friends join with the code).
 func invite_link() -> String:
-	if room_code.is_empty() or not OS.has_feature("web"):
+	if room_code.is_empty():
 		return room_code
-	var link := str(JavaScriptBridge.eval("location.origin + location.pathname")) + "?join=" + room_code
-	if LaunchOptions.has("signal"):
+	var page := SITE_URL
+	if OS.has_feature("web"):
+		page = str(JavaScriptBridge.eval("location.origin + location.pathname"))
+	elif _signaling_url != PUBLIC_SIGNALING_URL:
+		return room_code
+	var link := page + "?join=" + room_code
+	if LaunchOptions.has("signal") and OS.has_feature("web"):
 		link += "&signal=" + LaunchOptions.get_string("signal").uri_encode()
 	return link
 
@@ -313,7 +330,11 @@ func _default_signaling_url() -> String:
 	if LaunchOptions.has("signal"):
 		return LaunchOptions.get_string("signal")
 	if not OS.has_feature("web"):
-		return "ws://127.0.0.1:%d" % SIGNALING_PORT
+		# Desktop builds play with the public site's players; the editor
+		# (and a build without WebRTC) with a local server.
+		if OS.has_feature("editor") or not _uses_webrtc():
+			return "ws://127.0.0.1:%d" % SIGNALING_PORT
+		return PUBLIC_SIGNALING_URL
 	# The public site (https, tools/cloudflare) has it at /signal on the same
 	# host; a local build (tools/build_web.ps1 -Serve) on its own port.
 	if str(JavaScriptBridge.eval("location.protocol")) == "https:":
@@ -514,8 +535,33 @@ static func _has_relay(servers: Array) -> bool:
 	return JSON.stringify(servers).contains("turn")
 
 
-func _open_mesh(id: int) -> void:
+## Whether connections between players go over WebRTC: always in the
+## browser; on desktop when the webrtc-native extension loaded, unless
+## --net=enet (the co-op tests) says otherwise.
+static func _uses_webrtc() -> bool:
 	if OS.has_feature("web"):
+		return true
+	match LaunchOptions.get_string("net"):
+		"enet":
+			return false
+		"webrtc":
+			return true
+	return _has_webrtc()
+
+
+## Whether a WebRTC library is there (desktop: the GDExtension loaded).
+static func _has_webrtc() -> bool:
+	if _webrtc < 0:
+		var probe := WebRTCPeerConnection.new()
+		_webrtc = 1 if probe.initialize({}) == OK else 0
+		probe.close()
+		if _webrtc == 0:
+			push_warning("[net] no WebRTC library: co-op connects over ENet, so only with other desktop games on this machine")
+	return _webrtc == 1
+
+
+func _open_mesh(id: int) -> void:
+	if _uses_webrtc():
 		var rtc := WebRTCMultiplayerPeer.new()
 		rtc.create_mesh(id)
 		_mesh = rtc

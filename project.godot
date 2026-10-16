@@ -11,8 +11,12 @@ config_version=5
 [application]
 
 config/name="New Game"
+config/name.desktop="NYC Heroes"
+config/version="0.9.0"
 run/main_scene="res://scenes/world.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+config/use_custom_user_dir.desktop=true
+config/custom_user_dir_name.desktop="NYC Heroes"
 
 [audio]
 
@@ -149,4 +153,5 @@ signal_clock={
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 anti_aliasing/quality/msaa_3d=2

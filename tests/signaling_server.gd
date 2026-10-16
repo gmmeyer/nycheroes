@@ -1,7 +1,7 @@
 extends RefCounted
 ## Runs the co-op signaling server (tools/signaling/server.mjs, Node.js) for
 ## the co-op tests, whose games connect through it like players' do (then over
-## ENet, as desktop builds have no WebRTC). Needs `npm install` in
+## ENet on this machine, unless --net=webrtc). Needs `npm install` in
 ## tools/signaling once.
 
 var pid := 0

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<!-- The downloads page (tools/build_web.ps1 copies it next to index.html; the
+     co-op menu links to it). The zips come from tools/build_desktop.ps1 and
+     are served from the R2 bucket under downloads/ (tools/deploy_cloudflare.ps1
+     -Desktop, tools/cloudflare/worker.mjs). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NYC Heroes for Windows and Mac</title>
+<style>
+	body {
+		margin: 0; min-height: 100vh; background: #0b0d12; color: #e8eaf0;
+		font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+		display: flex; justify-content: center;
+	}
+	main { max-width: 46em; padding: 40px 24px 56px; }
+	h1 { font-size: 30px; margin: 0 0 6px; }
+	h2 { font-size: 20px; margin: 0 0 8px; }
+	p, li { color: #c4c8d4; }
+	a { color: #9cbcff; }
+	.lead { margin: 0 0 28px; }
+	.downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(17em, 1fr)); gap: 18px; margin-bottom: 32px; }
+	.card { background: #151924; border-radius: 8px; padding: 20px 22px; }
+	.button {
+		display: inline-block; margin: 6px 0 12px; padding: 10px 18px; border-radius: 5px;
+		background: #335190; color: #fff; text-decoration: none; font-weight: 600;
+	}
+	.button:hover { background: #4266a8; }
+	.size { color: #8a90a0; font-size: 14px; margin-left: 8px; }
+	.card ol { padding-left: 1.2em; margin: 0; }
+	code { display: block; margin-top: 6px; background: #222838; padding: 6px 8px; border-radius: 3px; font-size: 13px; overflow-wrap: anywhere; }
+	.small { font-size: 14px; color: #8a90a0; }
+</style>
+</head>
+<body>
+<main>
+	<h1>NYC Heroes for Windows and Mac</h1>
+	<p class="lead">The same game as <a href="./">in the browser</a>, as an app. It streams the city from this
+		site like the browser does, so it needs the internet; places you've been are kept on your computer, and
+		play without it. Co-op works with friends in the browser too: same room codes.</p>
+
+	<div class="downloads">
+		<section class="card">
+			<h2>Windows</h2>
+			<a class="button" href="downloads/nyc-heroes-windows.zip" data-size="win">Download for Windows</a><span class="size" id="win"></span>
+			<ol>
+				<li>Unzip it, and open <b>NYC Heroes.exe</b> in the folder.</li>
+				<li>The app isn't signed yet, so Windows may say it protected your PC: click <b>More info</b>,
+					then <b>Run anyway</b>.</li>
+			</ol>
+			<p class="small">64-bit Windows 10 or 11, a graphics card with OpenGL 3.3.</p>
+		</section>
+		<section class="card">
+			<h2>Mac</h2>
+			<a class="button" href="downloads/nyc-heroes-macos.zip" data-size="mac">Download for Mac</a><span class="size" id="mac"></span>
+			<ol>
+				<li>Unzip it, and move <b>NYC Heroes</b> to your Applications folder.</li>
+				<li>The app isn't notarized by Apple yet, so the first time macOS says it can't check it. Open
+					<b>System Settings</b>, then <b>Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b>
+					next to NYC Heroes. (Before macOS 15, Control-click the app and choose <b>Open</b> instead.)</li>
+			</ol>
+			<p class="small">macOS 11 or later on Apple silicon, or 10.15 or later on Intel. Or, in Terminal:
+				<code>xattr -dr com.apple.quarantine "/Applications/NYC Heroes.app"</code></p>
+		</section>
+	</div>
+
+	<p class="small">Keys: WASD to move, the mouse to look and punch, Space to jump, F to fly, E to web-swing,
+		M for co-op, F11 for full screen.</p>
+</main>
+<script>
+	// The zips' sizes, from the server.
+	document.querySelectorAll('[data-size]').forEach(function (link) {
+		fetch(link.getAttribute('href'), { method: 'HEAD' }).then(function (response) {
+			var bytes = Number(response.headers.get('content-length'));
+			if (response.ok && bytes > 0) {
+				document.getElementById(link.dataset.size).textContent = Math.round(bytes / 1048576) + ' MB';
+			}
+		}).catch(function () {});
+	});
+</script>
+</body>
+</html>

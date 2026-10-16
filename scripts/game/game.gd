@@ -15,12 +15,19 @@ extends Node3D
 ## Phones and tablets: touch screens get on-screen controls (TouchControls;
 ## ?touch=1 or ?touch=0 forces them on or off, see Device), and a graphics
 ## quality preset is picked for the device (Quality; ?quality=low|medium|high).
+##
+## Desktop builds: F11 switches full screen on and off. --screenshot=PATH
+## saves the screen to PATH (PNG) a few seconds after the city has loaded
+## (--screenshot_delay=SECONDS, default 5), logs the frame times meanwhile,
+## and quits: for checking builds.
 
 ## Times Square, facing north up Broadway (world meters; dropped onto the ground).
 const DEFAULT_SPAWN := Vector3(0.0, 15.0, 0.0)
 ## Physics ticks to wait for new collision to show up before giving up on
 ## finding the ground (over open water there is none).
 const DROP_TRIES := 30
+## --screenshot waits this long after the city has loaded (s).
+const SCREENSHOT_DELAY := 5.0
 
 @export var hero: Hero
 @export var hero_camera: ThirdPersonCamera
@@ -67,6 +74,8 @@ func _ready() -> void:
 		Net.host()
 	elif LaunchOptions.has("join"):
 		Net.join(LaunchOptions.get_string("join"))
+	if LaunchOptions.has("screenshot") and not Device.is_web():
+		_take_screenshot(LaunchOptions.get_string("screenshot"))
 
 
 func _physics_process(_delta: float) -> void:
@@ -112,6 +121,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			free_camera.global_transform = hero_camera.camera.global_transform
 			free_camera.sync_rotation()
 		_set_free_camera(not _free_camera_on)
+	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11 \
+			and not Device.is_web():
+		var window := get_window()
+		window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
+		get_viewport().set_input_as_handled()
 
 
 func _start_demo() -> void:
@@ -126,6 +140,27 @@ func _start_demo() -> void:
 	director.free_camera = free_camera
 	director.time_of_day = time_of_day
 	add_child(director)
+
+
+func _take_screenshot(path: String) -> void:
+	var load_seconds: float = await city.initial_load_finished
+	var frames := PackedFloat64Array()
+	var delay := LaunchOptions.get_string("screenshot_delay", str(SCREENSHOT_DELAY)).to_float()
+	var until := Time.get_ticks_msec() + int(delay * 1000.0)
+	while Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+		frames.append(get_process_delta_time() * 1000.0)
+	await RenderingServer.frame_post_draw
+	var saved := get_viewport().get_texture().get_image().save_png(path)
+	var total := 0.0
+	var worst := 0.0
+	for msec in frames:
+		total += msec
+		worst = maxf(worst, msec)
+	print("[screenshot] %s %s: the city loaded in %.1f s; then %d frames, %.2f ms on average, %.1f ms at worst, %d draw calls" % [
+		"saved" if saved == OK else "couldn't save", path, load_seconds, frames.size(), total / maxf(frames.size(), 1),
+		worst, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))])
+	get_tree().quit()
 
 
 func _on_net_state_changed() -> void:

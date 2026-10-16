@@ -24,6 +24,8 @@ $marker = Join-Path $root "build\.gdignore"
 if (-not (Test-Path $marker)) { New-Item -ItemType File $marker | Out-Null }
 & $godot --headless --path $root --export-release "Web" "build/web/index.html"
 if ($LASTEXITCODE -ne 0) { throw "Godot export failed (exit code $LASTEXITCODE)" }
+# The page with the Windows and Mac versions (tools/build_desktop.ps1 makes them).
+Copy-Item (Join-Path $PSScriptRoot "web\download.html") (Join-Path $out "download.html")
 
 # Mirror the tiles (copies only what changed; the full city is about 1 GB).
 $skip = if ($Aerial) { @() } else { @("/XD", (Join-Path $tiles "nyc\aerial")) }
