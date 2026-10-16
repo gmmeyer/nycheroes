@@ -56,6 +56,9 @@ func _process(delta: float) -> void:
 	var traffic := get_node_or_null("../../Traffic") as Traffic
 	if traffic:
 		people += "  ·  %d cars (%.2f ms)" % [traffic.car_count, traffic.update_msec]
+	var trains := get_node_or_null("../../Trains") as Trains
+	if trains:
+		people += "  ·  %d trains (%.2f ms)" % [trains.trains.size(), trains.update_msec]
 	tiles += "  ·  " + people
 	text = "\n".join([render, status, tiles, FREE_CAMERA_HELP if free else HERO_HELP])
 

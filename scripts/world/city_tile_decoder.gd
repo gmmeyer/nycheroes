@@ -68,9 +68,27 @@ const SURFACE_TRAFFIC := 7
 ## paints (tools/citygen/landmarks.py, 41 and up), laid out like the buildings
 ## surface; the rest of a landmark is in the buildings surface.
 const SURFACE_LANDMARKS := 8
+## The tracks trains run on over the els (near tiles only,
+## tools/citygen/trains.py): one vertex per point and no indices (decoders
+## from before it skip it), each piece of track's points in a row, in the
+## order trains run, on the track's centerline at its rails' height. Every
+## point carries its piece's facts: normal (node it starts at, node it ends
+## at, speed limit m/s at this point), uv (1 where trains stop, a platform's
+## middle, else 0; the line's service, see Trains.SERVICES) and uv2 (the
+## piece's number in the tile; its TRACK_* flags). Nodes are shared by all
+## tiles, like the driving lanes'; a piece is in the tile holding its middle.
+const SURFACE_TRAINS := 9
 ## Floats per lane in a decoded traffic surface's info: from node, to node,
 ## speed, lane, lanes, signal phase, how it ends (0, 1, 2 as above).
 const TRAFFIC_INFO_STRIDE := 7
+## Floats per piece in a decoded trains surface's info: from node, to node,
+## service, flags.
+const TRAIN_INFO_STRIDE := 4
+## Track pieces' flags (uv2.y of the trains surface).
+const TRACK_OPEN_START := 1  ## nothing leads in: its start goes on out of sight (a tunnel)
+const TRACK_OPEN_END := 2    ## nothing goes on: its end goes on out of sight
+const TRACK_DEAD_END := 4    ## nothing goes on: bumper blocks, or a track trains don't use
+const TRACK_MAIN := 8        ## a running track: trains may appear on it
 ## 0xFFFFFFFF read as a signed 32-bit index.
 const LANE_BREAK := -1
 
@@ -113,6 +131,8 @@ const BASKET_WIRE := 0        ## the green wire basket [0.9 x 0.6]
 const BASKET_COMPACTOR := 1   ## solar compactor [1.2 x 0.7]
 const BIKE_RACK_HOOP := 0     ## round CityRack hoop [0.9 x 0.9]
 const BIKE_RACK_U := 1        ## U or wave rack [0.9 x 1.2]
+const SIGNAL_ON_POLE := 0     ## a traffic signal on its pole, with a mast arm over the road
+const SIGNAL_ON_COLUMN := 1   ## its heads alone, on an el's column (no pole or arm)
 ## Car models (uv.x of a parked car; traffic's cars use the same numbers),
 ## length x width x height (m) in brackets (PropMeshes.CAR_SIZES). Buses only
 ## drive, they never park.
@@ -188,6 +208,9 @@ static func decode_unpacked(data: PackedByteArray) -> Array[Dictionary]:
 		if kind == SURFACE_TRAFFIC:
 			surfaces.append(_traffic(positions, normals, uv, uv2, indices))
 			continue
+		if kind == SURFACE_TRAINS:
+			surfaces.append(_trains(positions, normals, uv, uv2))
+			continue
 		if index_count == 0:
 			continue
 		var arrays := []
@@ -224,6 +247,35 @@ static func _traffic(points: PackedVector3Array, normals: PackedVector3Array, uv
 		lane = PackedVector3Array()
 		first = -1
 	return {"kind": SURFACE_TRAFFIC, "lanes": lanes, "info": info}
+
+
+## {kind, tracks: Array[PackedVector3Array] (tile-local), speeds:
+## Array[PackedFloat32Array] (per point), stops: Array[PackedInt32Array]
+## (the points trains stop at), info: PackedFloat32Array
+## (TRAIN_INFO_STRIDE floats per piece)}.
+static func _trains(points: PackedVector3Array, normals: PackedVector3Array, uv: PackedVector2Array,
+		uv2: PackedVector2Array) -> Dictionary:
+	var tracks: Array[PackedVector3Array] = []
+	var speeds: Array[PackedFloat32Array] = []
+	var stops: Array[PackedInt32Array] = []
+	var info := PackedFloat32Array()
+	var first := 0
+	for i in points.size() + 1:
+		if i < points.size() and uv2[i].x == uv2[first].x:
+			continue
+		if i - first > 1:
+			tracks.append(points.slice(first, i))
+			var limits := PackedFloat32Array()
+			var at := PackedInt32Array()
+			for k in range(first, i):
+				limits.append(normals[k].z)
+				if uv[k].x > 0.5:
+					at.append(k - first)
+			speeds.append(limits)
+			stops.append(at)
+			info.append_array([normals[first].x, normals[first].y, uv[first].y, uv2[first].y])
+		first = i
+	return {"kind": SURFACE_TRAINS, "tracks": tracks, "speeds": speeds, "stops": stops, "info": info}
 
 
 static func _split_lanes(points: PackedVector3Array, indices: PackedInt32Array) -> Array[PackedVector3Array]:

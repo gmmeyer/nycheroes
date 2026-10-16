@@ -69,7 +69,8 @@ which file is which sound.
 - **Synthesized** (numpy, in `build_sounds.py`): punch, swing and dive
   whooshes, web shots and releases, take-off, super speed's zoom and wind,
   the air rushing past, a super jump's charge and launch, heavy landings,
-  rubble, getting back up, and wind up high.
+  rubble, getting back up, wind up high, and the trains on the els'
+  rumble and squeal.
 - **Kenney** (kenney.nl, CC0): "Impact Sounds" (footsteps on concrete,
   grass and wood; punches; soft landings), "RPG Audio" (cloth for jumps,
   creaks for the web's tension), "Sci-fi Sounds" (the low explosion under a

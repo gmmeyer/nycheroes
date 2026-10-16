@@ -21,6 +21,7 @@ extends Node
 ##   fog density         0.00016         0.00013         0.0001
 ##   pedestrians         12              24              45
 ##   moving cars         25              60              120
+##   trains on the els   2               3               4
 ##   gangs (thugs; most  1 (2-4; 6)      2 (3-4; 10)     2 (3-5; 16)
 ##   bodies left lying)
 ##
@@ -31,7 +32,7 @@ extends Node
 ## away one by one before those distances (CityStreamer.set_furniture_fade()
 ## and set_car_fade()), and each tile's stop drawing past them, so phones
 ## draw them in fewer tiles.
-## ?fog=, ?peds=, ?traffic= and ?tree_shadows= still override their preset
+## ?fog=, ?peds=, ?traffic=, ?trains= and ?tree_shadows= still override their preset
 ## values.
 
 enum Level { LOW, MEDIUM, HIGH }
@@ -49,6 +50,7 @@ const PRESETS := {
 		"fog_density": 0.00016,
 		"pedestrians": 12,
 		"cars": 25,
+		"trains": 2,
 		"gangs": 1,
 		"gang_size": Vector2i(2, 4),
 		"bodies": 6,
@@ -66,6 +68,7 @@ const PRESETS := {
 		"fog_density": 0.00013,
 		"pedestrians": 24,
 		"cars": 60,
+		"trains": 3,
 		"gangs": 2,
 		"gang_size": Vector2i(3, 4),
 		"bodies": 10,
@@ -122,7 +125,7 @@ static func level_name() -> String:
 
 
 ## Launch options that other nodes read when they start (call before they do):
-## no tree shadows and fewer pedestrians and cars below "high".
+## no tree shadows and fewer pedestrians, cars and trains below "high".
 static func set_launch_defaults() -> void:
 	if level() == Level.HIGH:
 		return
@@ -130,6 +133,7 @@ static func set_launch_defaults() -> void:
 	LaunchOptions.set_default("tree_shadows", "0")
 	LaunchOptions.set_default("peds", str(preset.pedestrians))
 	LaunchOptions.set_default("traffic", str(preset.cars))
+	LaunchOptions.set_default("trains", str(preset.trains))
 
 
 ## Applies the preset to the world's nodes (after they've started).
