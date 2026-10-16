@@ -110,7 +110,8 @@ def pieces(tracks, platforms: list, snap: float) -> list[dict]:
     cuts = []
     for c, length in enumerate(lengths):
         fixed = np.unique(np.concatenate([[0.0, length], joined_at[c]]))
-        even = [np.linspace(a, b, max(1, int(np.ceil((b - a) / PIECE))) + 1)[:-1] for a, b in zip(fixed[:-1], fixed[1:])]
+        even = [np.linspace(a, b, max(1, int(np.ceil((b - a) / PIECE))) + 1)[:-1]
+                for a, b in zip(fixed[:-1], fixed[1:])]
         cuts.append(np.append(np.concatenate(even), length))
 
     # Nodes: every cut, the cuts where tracks join made one.
@@ -169,8 +170,8 @@ def pieces(tracks, platforms: list, snap: float) -> list[dict]:
             low = np.minimum(low, np.concatenate([low[:1], low[:-1]]))
             piece = {"points": np.column_stack([en, y])[keep], "speeds": low, "stops": is_stop[keep],
                      "from": int(ends[0]), "to": int(ends[1]), "service": int(service[c]),
-                     "flags": MAIN if voted[c] and chain.length >= MAIN_LENGTH else 0, "kinds": (_end_kind(tracks, c, k == 0, 0),
-                                                                _end_kind(tracks, c, k == len(cuts[c]) - 2, 1))}
+                     "flags": MAIN if voted[c] and chain.length >= MAIN_LENGTH else 0,
+                     "kinds": (_end_kind(tracks, c, k == 0, 0), _end_kind(tracks, c, k == len(cuts[c]) - 2, 1))}
             if direction[c] < 0:
                 piece = _reversed(piece)
             out.append(piece)
@@ -214,7 +215,8 @@ def surface(found: list, origin) -> tuple:
         normals.append(np.column_stack([np.full(n, piece["from"]), np.full(n, piece["to"]), piece["speeds"]]))
         uv.append(np.column_stack([piece["stops"].astype(np.float64), np.full(n, piece["service"])]))
         uv2.append(np.column_stack([np.full(n, number), np.full(n, piece["flags"])]))
-    return (np.round(np.concatenate(points), 2).astype(np.float32), np.round(np.concatenate(normals), 2).astype(np.float32),
+    return (np.round(np.concatenate(points), 2).astype(np.float32),
+            np.round(np.concatenate(normals), 2).astype(np.float32),
             np.concatenate(uv).astype(np.float32), np.concatenate(uv2).astype(np.float32), np.zeros(0, dtype=np.uint32))
 
 
@@ -254,11 +256,11 @@ def _directions(tracks, service: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     known = np.zeros(len(chains), dtype=bool)
     for c in running:
         chain = chains[c]
-        s = np.arange(SAMPLE_STEP / 2, chain.length, SAMPLE_STEP) if chain.length > SAMPLE_STEP else np.array([chain.length / 2])
+        s = (np.arange(SAMPLE_STEP / 2, chain.length, SAMPLE_STEP) if chain.length > SAMPLE_STEP
+             else np.array([chain.length / 2]))
         points = shapely.line_interpolate_point(chain, s)
         p = shapely.get_coordinates(points)
         t = _tangents(chain, s)
-        votes, middles = 0, 0
         sample, near = tree.query(points, predicate="dwithin", distance=NEIGHBOR_REACH)
         left = np.zeros(len(s), dtype=np.int64)
         right = np.zeros(len(s), dtype=np.int64)

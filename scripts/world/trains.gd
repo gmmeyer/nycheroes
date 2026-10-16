@@ -190,6 +190,7 @@ var _body_check := 0.0
 # What _walk_cars found, per car (for their collision).
 var _car_middle := PackedVector3Array()
 var _car_forward := PackedVector3Array()
+## Script time (ms) in physics ticks since the last frame.
 var _physics_since_frame := 0.0
 ## ?stats: each part's time (microseconds since the last line): the physics
 ## ticks' people, looking ahead, running and collision; the frames' upkeep,
@@ -246,9 +247,10 @@ class Train:
 	var head := Vector3.ZERO
 	var tail := Vector3.ZERO
 	var squeal := 0.0
-	## Drawn standing still (its cars needn't be written again until it moves).
-	var at_rest := false
+	## Drawn yet, and drawn standing still (its cars needn't be written again
+	## until it moves).
 	var drawn := false
+	var at_rest := false
 
 
 func _ready() -> void:
