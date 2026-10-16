@@ -27,6 +27,9 @@ lines below wherever a license asks for one (the aerial photos do).
   subway entrances and exits (data.ny.gov, i9wp-a4ja).
 - **Ground elevation:** USGS 3D Elevation Program, 1/3 arc-second DEM
   (public domain, U.S. Government work).
+- **The Unisphere's continents:** Natural Earth 1:110m land (public
+  domain, naturalearthdata.com), reduced to 7.5-degree cells in
+  `tools/citygen/landmarks.py`.
 
 `tools/citygen/fetch_data.py` and `tools/citygen/aerial.py` list exactly
 what is downloaded from where.

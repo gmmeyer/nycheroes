@@ -52,7 +52,7 @@ from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND
                     GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_YARD, LANE_BREAK, MARKING_LIFT, ORIGIN_LAT,
                     ORIGIN_LON, PROJECTION, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR, PROP_PARKING_METER,
                     PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y,
-                    STRUCTURE_CONCRETE,
+                    STRUCTURE_CONCRETE, SURFACE_LANDMARKS,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
                     SURFACE_STRUCTURES, SURFACE_TRAFFIC, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
                     polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangles_of,
@@ -389,6 +389,7 @@ def _build_tile(task):
     bounds = tile_box(i, j, size)
 
     building_mesh, ground_mesh, structure_mesh, water_mesh = MeshBuilder(), MeshBuilder(), MeshBuilder(), MeshBuilder()
+    landmark_mesh = MeshBuilder()
     _W["level"] = level
     _W["streets"] = _streets_near(bounds)
     indices = _W["groups"][level].get((i, j), np.array([], dtype=np.int64))
@@ -399,7 +400,8 @@ def _build_tile(task):
     else:
         for index in indices:
             _add_building(building_mesh, index, settings)
-    landmarks.add_to_tile(building_mesh, level, size, i, j, _W["b"], _W["shapes"], _footprint_ground)
+    landmarks.add_to_tile(building_mesh, level, size, i, j, _W["b"], _W["shapes"], _footprint_ground,
+                          overpasses.bare(_W["ground"][level]).height, landmark_mesh)
     _add_ground(ground_mesh, bounds, settings)
     _add_raised_water(water_mesh, ground_mesh, bounds, settings)
     bridge = _W["bridges"][level].get((i, j))
@@ -409,7 +411,8 @@ def _build_tile(task):
     surfaces = []
     stats = {"vertices": 0, "triangles": 0}
     for kind, mesh in ((SURFACE_BUILDINGS, building_mesh), (SURFACE_GROUND, ground_mesh),
-                       (SURFACE_STRUCTURES, structure_mesh), (SURFACE_WATER, water_mesh)):
+                       (SURFACE_STRUCTURES, structure_mesh), (SURFACE_WATER, water_mesh),
+                       (SURFACE_LANDMARKS, landmark_mesh)):
         built = mesh.build(origin)
         if built is not None:
             surfaces.append((kind, built))
@@ -473,7 +476,12 @@ def _faces_street(middles: np.ndarray, outward: np.ndarray) -> np.ndarray:
 def _facade(index: int) -> tuple[int, int, int, float]:
     """A building's (archetype, flags, floor height in dm, seed)."""
     f, b = _W["facades"], _W["b"]
-    return int(f["archetype"][index]), int(f["flags"][index]), int(f["floor_dm"][index]), float(b["seed"][index])
+    archetype, flags = int(f["archetype"][index]), int(f["flags"][index])
+    # PLUTO's retail area isn't always a shopfront: none on landmark institutions
+    # (the Racquet Club's arcade on Park Avenue).
+    if archetype == facades.INSTITUTION and flags & facades.LANDMARK:
+        flags &= ~facades.RETAIL
+    return archetype, flags, int(f["floor_dm"][index]), float(b["seed"][index])
 
 
 def _add_prism(builder: MeshBuilder, poly, height: float, facade: tuple, fronts: bool = True,

@@ -127,6 +127,8 @@ var _ready_to_build: Array[Array] = []  # [tile, bytes]
 var _ready_photos: Array[Array] = []  # [tile, node instance id, bytes]
 var _photos_enabled := false
 var _merged_building_material: ShaderMaterial
+## The second batch of landmarks' own materials (the landmarks surface).
+var landmark_material := _new_landmark_material()
 var _props: CityProps
 var _light_map: StreetLightMap
 var _in_flight := 0
@@ -538,6 +540,8 @@ func _build_tile_node(tile: Tile, data: PackedByteArray) -> Node3D:
 		var instance := MeshInstance3D.new()
 		instance.mesh = surface.mesh
 		instance.material_override = _building_material(tile.level) if is_buildings else ground_material
+		if surface.kind == CityTileDecoder.SURFACE_LANDMARKS:
+			instance.material_override = landmark_material
 		var casts_shadow: bool = near and surface.kind != CityTileDecoder.SURFACE_GROUND
 		if not casts_shadow:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -613,6 +617,12 @@ func _apply_photo(item: Array) -> bool:
 	photo_count += 1
 	last_photo_msec = (Time.get_ticks_usec() - start) / 1000.0
 	return true
+
+
+static func _new_landmark_material() -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = preload("res://shaders/landmark.gdshader")
+	return material
 
 
 func _building_material(level: int) -> Material:

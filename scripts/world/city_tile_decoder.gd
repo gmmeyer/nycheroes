@@ -64,6 +64,10 @@ const MARKING_CROSSWALK := 13  ## high-visibility crosswalk bars
 ## the crossing street's curb line). A segment's lanes are in the tile
 ## holding its middle, whole, so they can reach past the tile's edges.
 const SURFACE_TRAFFIC := 7
+## Hand-made landmarks' faces in the materials shaders/landmark.gdshader
+## paints (tools/citygen/landmarks.py, 41 and up), laid out like the buildings
+## surface; the rest of a landmark is in the buildings surface.
+const SURFACE_LANDMARKS := 8
 ## Floats per lane in a decoded traffic surface's info: from node, to node,
 ## speed, lane, lanes, signal phase, how it ends (0, 1, 2 as above).
 const TRAFFIC_INFO_STRIDE := 7
