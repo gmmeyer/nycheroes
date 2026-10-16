@@ -13,10 +13,10 @@ global uniform float night;
 global uniform float dusk;
 global uniform float city_lights;
 
-uniform vec3 deep_color : source_color = vec3(0.04, 0.17, 0.25);
-uniform vec3 sky_tint : source_color = vec3(0.62, 0.76, 0.90);
+uniform vec3 deep_color : source_color = vec3(0.04, 0.10, 0.13);
+uniform vec3 sky_tint : source_color = vec3(0.34, 0.40, 0.46);
 // How much the waves' strength varies from patch to patch (0 = uniform).
-uniform float patchiness : hint_range(0.0, 1.0) = 0.7;
+uniform float patchiness : hint_range(0.0, 1.0) = 0.8;
 // World position of the scene origin (WorldOrigin.offset), so waves don't jump on shifts.
 uniform vec2 origin_offset = vec2(0.0);
 // The environment's fog (set by ocean.gd, linear color), and the distance
@@ -65,10 +65,10 @@ vec2 wave_slope(vec2 p, float pixel_size, vec2 direction, float wavelength, floa
 void fragment() {
 	vec2 footprint = fwidth(world_xz);
 	float pixel_size = max(footprint.x, footprint.y);
-	vec2 slope = wave_slope(world_xz, pixel_size, vec2(1.0, 0.3), 23.0, 0.15, 4.0)
-			+ wave_slope(world_xz, pixel_size, vec2(-0.4, 1.0), 11.0, 0.1, 2.8)
-			+ wave_slope(world_xz, pixel_size, vec2(0.7, -0.8), 5.3, 0.05, 1.9)
-			+ wave_slope(world_xz, pixel_size, vec2(-1.0, -0.2), 2.1, 0.02, 1.2);
+	vec2 slope = wave_slope(world_xz, pixel_size, vec2(1.0, 0.3), 23.0, 0.07, 4.0)
+			+ wave_slope(world_xz, pixel_size, vec2(-0.4, 1.0), 11.0, 0.05, 2.8)
+			+ wave_slope(world_xz, pixel_size, vec2(0.7, -0.8), 5.3, 0.03, 1.9)
+			+ wave_slope(world_xz, pixel_size, vec2(-1.0, -0.2), 2.1, 0.012, 1.2);
 	slope *= 1.0 - patchiness * value_noise(world_xz * 0.006 + vec2(TIME * 0.01, 0.0));
 
 	vec3 world_normal = normalize(vec3(-slope.x, 1.0, -slope.y));
@@ -85,8 +85,8 @@ void fragment() {
 	if (city_lights > 0.0) {
 		EMISSION += city_light_tint * (city_light_strength * city_lights * fresnel * (0.6 + 0.4 * value_noise(world_xz * 0.05)));
 	}
-	ROUGHNESS = 0.06;
-	SPECULAR = 0.6;
+	ROUGHNESS = 0.2;
+	SPECULAR = 0.5;
 
 	// The same exponential fog the environment applies, plus the fade-out.
 	float distance = length(VERTEX);

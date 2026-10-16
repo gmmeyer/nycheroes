@@ -66,18 +66,20 @@ const int FLOODLIT = 2;
 const int BALLAST = 4;
 
 // The hand-made bridges' palettes (sRGB), by UV2.y % 8: none (the els'
-// green steel, tools/citygen/els.py), Brooklyn (Brooklyn Bridge Tan steel
-// and cables, buff granite towers and limestone anchorages, wooden
-// promenade), Manhattan
-// (blue steel, gray granite, blue-gray cables), Hell Gate (Hell Gate Red,
-// light granite), High Bridge (gray steel, weathered granite, brick walk).
-const vec3 STEEL_COLORS[5] = vec3[](vec3(0.5, 0.62, 0.54), vec3(0.6, 0.55, 0.49), vec3(0.34, 0.54, 0.76),
+// weathered green-gray steel, tools/citygen/els.py), Brooklyn (Brooklyn
+// Bridge Tan steel and cables gone gray-tan, buff granite towers and
+// limestone anchorages, a promenade of weathered gray-brown planks),
+// Manhattan (blue-gray steel, gray granite, gray cables), Hell Gate (Hell
+// Gate Red, light granite), High Bridge (gray steel, weathered granite, brick
+// walk). Toon light and tone mapping saturate them further in shade, so the
+// paints are muted here (docs/REFERENCE.md).
+const vec3 STEEL_COLORS[5] = vec3[](vec3(0.45, 0.49, 0.48), vec3(0.57, 0.55, 0.52), vec3(0.4, 0.48, 0.56),
 		vec3(0.58, 0.23, 0.2), vec3(0.44, 0.49, 0.47));
 const vec3 STONE_COLORS[5] = vec3[](vec3(0.76, 0.68, 0.53), vec3(0.71, 0.67, 0.6), vec3(0.68, 0.65, 0.61),
 		vec3(0.72, 0.7, 0.65), vec3(0.62, 0.58, 0.52));
-const vec3 CABLE_COLORS[5] = vec3[](vec3(0.8, 0.82, 0.85), vec3(0.5, 0.45, 0.39), vec3(0.6, 0.66, 0.74),
+const vec3 CABLE_COLORS[5] = vec3[](vec3(0.8, 0.82, 0.85), vec3(0.5, 0.47, 0.44), vec3(0.56, 0.6, 0.64),
 		vec3(0.5, 0.22, 0.2), vec3(0.44, 0.49, 0.47));
-const vec3 WALKWAY_COLORS[5] = vec3[](vec3(0.55, 0.42, 0.3), vec3(0.52, 0.45, 0.38), vec3(0.55, 0.55, 0.52),
+const vec3 WALKWAY_COLORS[5] = vec3[](vec3(0.55, 0.42, 0.3), vec3(0.52, 0.49, 0.45), vec3(0.55, 0.55, 0.52),
 		vec3(0.5, 0.5, 0.48), vec3(0.6, 0.33, 0.25));
 // A truss panel's length (m) per palette, for lattice-painted steel.
 const float TRUSS_PANELS[5] = float[](5.0, 5.54, 7.5, 12.9, 7.0);
@@ -159,9 +161,10 @@ uniform float sign_glow_strength = 0.85;
 uniform vec3 shrubs_color : source_color = vec3(0.25, 0.42, 0.18);
 uniform float shrub_clump = 0.55;
 uniform float shrub_bump = 0.9;
-// Pavers in pedestrian plazas: dark gray concrete, paver_size meters (along
-// and across their rows), in running bond along the plaza.
-uniform vec3 pavers_color : source_color = vec3(0.43, 0.43, 0.44);
+// Pavers in pedestrian plazas: dark gray concrete (a touch warm, so they stay
+// gray in the sky's blue light in shade), paver_size meters (along and across
+// their rows), in running bond along the plaza.
+uniform vec3 pavers_color : source_color = vec3(0.45, 0.43, 0.41);
 uniform vec2 paver_size = vec2(0.6, 0.3);
 // Belgian block: granite setts cobble_size meters (across the street, along
 // it), in courses from curb to curb, with asphalt patches where the street

@@ -164,17 +164,18 @@ const int SMOOTH = 3;
 
 // Palettes, in sRGB. Measured against photos (docs/REFERENCE.md): weathered
 // masonry is darker and much less saturated than its name suggests, and the
-// toon light and tone mapping saturate dark warm colors further, so bricks
-// sit at about 0.3-0.4 saturation and stone lower.
+// toon light and tone mapping saturate dark warm colors further (about twice
+// over in shade), so bricks sit at about 0.2-0.25 saturation here and
+// brownstone and stone lower.
 // Deep red brick, weathered.
-const vec3 RED_BRICK[6] = vec3[](vec3(0.58, 0.39, 0.34), vec3(0.54, 0.37, 0.33), vec3(0.62, 0.44, 0.38),
-		vec3(0.52, 0.36, 0.32), vec3(0.57, 0.41, 0.36), vec3(0.53, 0.39, 0.35));
+const vec3 RED_BRICK[6] = vec3[](vec3(0.60, 0.47, 0.46), vec3(0.56, 0.44, 0.44), vec3(0.64, 0.52, 0.50),
+		vec3(0.54, 0.43, 0.43), vec3(0.59, 0.48, 0.47), vec3(0.55, 0.45, 0.44));
 // Dark brown and red-brown brick (Bronx apartments, Upper West Side, DUMBO).
-const vec3 BROWN_BRICK[5] = vec3[](vec3(0.47, 0.36, 0.32), vec3(0.52, 0.40, 0.35), vec3(0.44, 0.35, 0.32),
-		vec3(0.55, 0.43, 0.37), vec3(0.49, 0.40, 0.36));
+const vec3 BROWN_BRICK[5] = vec3[](vec3(0.48, 0.40, 0.38), vec3(0.54, 0.45, 0.41), vec3(0.45, 0.39, 0.37),
+		vec3(0.57, 0.48, 0.44), vec3(0.50, 0.44, 0.41));
 // Chocolate-brown sandstone.
-const vec3 BROWNSTONE[5] = vec3[](vec3(0.47, 0.38, 0.35), vec3(0.52, 0.42, 0.38), vec3(0.44, 0.36, 0.34),
-		vec3(0.55, 0.45, 0.41), vec3(0.49, 0.41, 0.39));
+const vec3 BROWNSTONE[5] = vec3[](vec3(0.52, 0.47, 0.44), vec3(0.57, 0.51, 0.49), vec3(0.48, 0.44, 0.42),
+		vec3(0.60, 0.55, 0.52), vec3(0.54, 0.49, 0.48));
 // Buff, tan and "blond" brick (Ridgewood, the Grand Concourse).
 const vec3 BUFF_BRICK[5] = vec3[](vec3(0.70, 0.62, 0.51), vec3(0.74, 0.66, 0.55), vec3(0.66, 0.58, 0.47),
 		vec3(0.71, 0.63, 0.52), vec3(0.65, 0.60, 0.51));
@@ -240,19 +241,20 @@ const vec3 TV_BLUE = vec3(0.45, 0.58, 1.0);
 const vec3 LOBBY_LIGHT = vec3(1.0, 0.88, 0.68);
 const vec3 FLOODLIGHT = vec3(1.0, 0.86, 0.62);
 
-// Times Square's screens, in sRGB: cartoon-bright ad colors (hot pink, cyan,
-// yellow, violet, orange, green, blue, red), neon tubes, the dark steel
-// between screens, and the news ticker's band and letters.
-const vec3 AD_COLORS[8] = vec3[](vec3(1.00, 0.16, 0.56), vec3(0.08, 0.78, 1.00), vec3(1.00, 0.84, 0.08),
-		vec3(0.58, 0.22, 1.00), vec3(1.00, 0.44, 0.06), vec3(0.18, 0.92, 0.36), vec3(0.12, 0.32, 1.00),
-		vec3(1.00, 0.12, 0.16));
+// Times Square's screens, in sRGB: bright ad colors (hot pink, cyan, yellow,
+// violet, orange, green, blue, red), a little muted, as most real ads are
+// photos; neon tubes, the dark steel between screens, and the news ticker's
+// band and letters.
+const vec3 AD_COLORS[8] = vec3[](vec3(0.81, 0.31, 0.55), vec3(0.34, 0.76, 0.89), vec3(0.94, 0.84, 0.39),
+		vec3(0.52, 0.31, 0.77), vec3(0.84, 0.51, 0.28), vec3(0.43, 0.87, 0.53), vec3(0.23, 0.35, 0.76),
+		vec3(0.80, 0.27, 0.30));
 const vec3 NEON[5] = vec3[](vec3(1.0, 0.22, 0.70), vec3(0.20, 0.92, 1.0), vec3(1.0, 0.88, 0.25),
 		vec3(0.45, 1.0, 0.30), vec3(1.0, 0.40, 0.12));
 const vec3 SIGN_CLADDING = vec3(0.045, 0.045, 0.055);
 const vec3 SIGN_BEZEL = vec3(0.18, 0.18, 0.20);
 const vec3 SCREEN_OFF = vec3(0.05, 0.05, 0.06);
-const vec3 AD_NIGHT_BLUE = vec3(0.03, 0.04, 0.12);
-const vec3 TICKER_BAND = vec3(0.02, 0.03, 0.09);
+const vec3 AD_NIGHT_BLUE = vec3(0.035, 0.04, 0.07);
+const vec3 TICKER_BAND = vec3(0.03, 0.03, 0.035);
 const vec3 TICKER_TEXT[3] = vec3[](vec3(1.0, 0.76, 0.22), vec3(0.95, 0.96, 1.0), vec3(0.35, 0.95, 1.0));
 // Letter-like glyphs as seven-segment codes (bits: 1 top, 2 upper right,
 // 4 lower right, 8 bottom, 16 lower left, 32 upper left, 64 middle): A b C d
@@ -270,7 +272,7 @@ const int AD_PORTRAIT = 7;  // a cartoon portrait, head and shoulders, lit like 
 const int AD_SCENE = 8;     // a landscape photo: sky, a low sun, ridges, a shore
 const int AD_POSTER = 9;    // a film poster: a rim-lit figure, light rays, a title
 // The kinds wide and tall screens pick from (repeats make a kind likelier).
-const int WIDE_ADS[10] = int[](AD_PORTRAIT, AD_PORTRAIT, AD_SCENE, AD_SCENE, AD_POSTER, AD_WORD, AD_BURST, AD_WAVES,
+const int WIDE_ADS[10] = int[](AD_PORTRAIT, AD_PORTRAIT, AD_SCENE, AD_SCENE, AD_POSTER, AD_POSTER, AD_WORD, AD_WAVES,
 		AD_GRADIENT, AD_TEXT);
 const int TALL_ADS[8] = int[](AD_PRODUCT, AD_PRODUCT, AD_COLUMN, AD_POSTER, AD_POSTER, AD_PORTRAIT, AD_WAVES, AD_GRADIENT);
 // Portraits' skin tones and hair, in sRGB.
@@ -339,7 +341,7 @@ uniform float floodlight_strength = 1.3;
 // (m above the base, picked per building in this range, or less where the
 // wall is lower), how far their colored light washes up the facade above
 // them at night (m), and how fast the news tickers run (m/s).
-uniform float sign_day_glow = 1.1;
+uniform float sign_day_glow = 0.85;
 uniform float sign_night_glow = 1.4;
 uniform float neon_glow = 2.2;
 uniform vec2 sign_top_range = vec2(40.0, 60.0);
@@ -830,14 +832,15 @@ Facade facade_for(int archetype, float seed, bool landmark, int material) {
 		// The old masonry landmarks are mostly faced in stone or terracotta
 		// rather than brick. Every prewar office tower is: 70% pale limestone,
 		// 30% ivory terracotta, so the Empire State, Chrysler and Woolworth
-		// Buildings read light. Three in four of the others are: 60%
-		// limestone, 25% terracotta, 15% granite.
+		// Buildings read light. Three in four of the others are too, most in
+		// limestone (the Waldorf Astoria among them): 90% limestone, 6%
+		// terracotta, 4% granite.
 		float r5 = rnd(seed, 5.0);
 		bool office = archetype == PREWAR_OFFICE;
 		if (office || r5 < 0.75) {
-			if (r5 < (office ? 0.7 : 0.45)) {
+			if (r5 < (office ? 0.7 : 0.675)) {
 				f.wall = srgb(LANDMARK_LIMESTONE[pick(r4, 3)]);
-			} else if (office || r5 < 0.64) {
+			} else if (office || r5 < 0.72) {
 				f.wall = srgb(TERRACOTTA[pick(r4, 3)]);
 			} else {
 				f.wall = srgb(GRANITE[pick(r4, 3)]);
@@ -1773,10 +1776,10 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 	vec3 c3 = ad_color(i1 + 1 + pick(k3, 7));
 	vec3 white = vec3(1.0);
 	// Dark ink on the light colors (cyan, yellow, green), white on the rest;
-	// some slides are on night blue.
+	// half the slides are on night blue.
 	vec3 ink = (i1 == 1 || i1 == 2 || i1 == 5) ? srgb(vec3(0.07, 0.07, 0.16)) : white;
 	vec3 night_blue = srgb(AD_NIGHT_BLUE);
-	bool dark = fract(k3 * 5.17) < 0.35;
+	bool dark = fract(k3 * 5.17) < 0.5;
 	float pixel = max(footprint.x, footprint.y);
 	float aspect = size.x / size.y;
 	vec2 q = uv / size.y;       // in screen heights
@@ -1795,7 +1798,7 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		float fx = wide ? (k3 < 0.5 ? 0.3 : 0.7) * aspect : 0.5 * aspect;
 		float scale = wide ? 1.0 : clamp(aspect * 1.3, 0.6, 1.0);
 		vec3 back = dark ? mix(night_blue, c2 * 0.3, q.y)
-				: mix(c1 * 0.5, c2 * 0.85, smoothstep(-0.2, 1.2, q.y + 0.2 * sin(q.x * 1.7 + k1 * 6.3)));
+				: mix(c1 * 0.3, c2 * 0.6, smoothstep(-0.2, 1.2, q.y + 0.2 * sin(q.x * 1.7 + k1 * 6.3)));
 		vec3 skin = srgb(SKIN[pick(fract(k1 * 3.7), 5)]);
 		vec3 hair = srgb(HAIR[pick(fract(k2 * 5.3), 5)]);
 		vec3 shirt = mix(c3, white, 0.15);
@@ -2370,7 +2373,7 @@ const vec3 NIROSTA = vec3(0.70, 0.73, 0.78);
 const vec3 WTC_GLASS_COLOR = vec3(0.34, 0.48, 0.60);
 const vec3 WTC_MULLION = vec3(0.66, 0.70, 0.74);
 // Stone and terracotta.
-const vec3 FLATIRON_STONE = vec3(0.88, 0.80, 0.66);
+const vec3 FLATIRON_STONE = vec3(0.73, 0.71, 0.66);
 const vec3 WOOLWORTH_CREAM = vec3(0.94, 0.90, 0.80);
 const vec3 GC_LIMESTONE = vec3(0.88, 0.84, 0.75);
 const vec3 ROCK_LIMESTONE = vec3(0.87, 0.83, 0.74);

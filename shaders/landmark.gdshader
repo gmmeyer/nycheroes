@@ -90,11 +90,11 @@ const vec3 LOBBY_LIGHT = vec3(1.0, 0.88, 0.68);
 // E F H J L o P S U y O 2.
 const int GLYPHS[16] = int[](119, 124, 57, 94, 121, 113, 118, 30, 56, 92, 115, 109, 62, 110, 63, 91);
 
-// Cartoon-bright ad colors (as Times Square's screens; for the video board)
+// Bright ad colors (as Times Square's screens; for the video board)
 // and the dark steel round screens, in sRGB.
-const vec3 AD_COLORS[8] = vec3[](vec3(1.00, 0.16, 0.56), vec3(0.08, 0.78, 1.00), vec3(1.00, 0.84, 0.08),
-		vec3(0.58, 0.22, 1.00), vec3(1.00, 0.44, 0.06), vec3(0.18, 0.92, 0.36), vec3(0.12, 0.32, 1.00),
-		vec3(1.00, 0.12, 0.16));
+const vec3 AD_COLORS[8] = vec3[](vec3(0.81, 0.31, 0.55), vec3(0.34, 0.76, 0.89), vec3(0.94, 0.84, 0.39),
+		vec3(0.52, 0.31, 0.77), vec3(0.84, 0.51, 0.28), vec3(0.43, 0.87, 0.53), vec3(0.23, 0.35, 0.76),
+		vec3(0.80, 0.27, 0.30));
 const vec3 SIGN_STEEL = vec3(0.10, 0.10, 0.12);
 
 // How mirror-like glass is overall (each building type scales it).
@@ -386,7 +386,7 @@ vec3 sky_reflection(vec3 r) {
 // --- Colors, words and tables ---
 
 const vec3 GUGG_WHITE = vec3(0.93, 0.91, 0.85);
-const vec3 MARBLE_WHITE = vec3(0.90, 0.89, 0.85);   // Vermont, Tuckahoe and the UN's marble
+const vec3 MARBLE = vec3(0.76, 0.75, 0.72);         // Vermont, Tuckahoe and the UN's marble, weathered gray-beige
 const vec3 SLATE_GRAY = vec3(0.37, 0.41, 0.43);
 const vec3 UN_GREEN = vec3(0.32, 0.52, 0.53);       // the Secretariat's blue-green glass
 const vec3 ALUMINUM = vec3(0.84, 0.85, 0.86);
@@ -457,7 +457,7 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 	float pixel = max(fp.x, fp.y);
 
 	// The wall's stone.
-	vec3 base = MARBLE_WHITE;
+	vec3 base = MARBLE;
 	int surface = STONE;
 	if (material == LM_GUGGENHEIM) {
 		base = variant == 3 ? vec3(0.82, 0.79, 0.71) : GUGG_WHITE;
@@ -648,7 +648,7 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 		float slats = stripes(p.x / 0.35, 0.5, fp.x / 0.35) * visible(0.35, pixel);
 		color = mix(color, srgb(vec3(0.55, 0.60, 0.58)) * (1.0 - 0.3 * slats), mech);
 		float column = centered_stripes(p.x / 6.0, 0.12, fp.x / 6.0);
-		color = mix(color, mix(srgb(LM_GLASS), srgb(MARBLE_WHITE) * 0.8, column), lobby);
+		color = mix(color, mix(srgb(LM_GLASS), srgb(MARBLE) * 0.8, column), lobby);
 		s.emission = srgb(LOBBY_LIGHT) * ((1.0 - column) * lobby * lobby_glow * city_lights);
 		lit = (1.0 - spandrel) * (1.0 - mullion) * (1.0 - mech) * (1.0 - lobby);
 		up = fract(p.y / floor_h);
