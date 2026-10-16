@@ -26,7 +26,8 @@ extends Node
 ##   center (m)
 ##   fog density         0.00016         0.00013         0.0001
 ##   pedestrians         12              24              45
-##   moving cars         25              60              120
+##   (on busy streets)   12              24              up to 68
+##   moving cars         35              90              180
 ##   trains on the els   2               3               4
 ##   gangs (thugs; most  1 (2-4; 6)      2 (3-4; 10)     2 (3-5; 16)
 ##   bodies left lying)
@@ -58,7 +59,8 @@ const PRESETS := {
 		"canopy_ranges": [0.0, 0.0, 0.0],
 		"fog_density": 0.00016,
 		"pedestrians": 12,
-		"cars": 25,
+		"busy_crowd": 1.0,
+		"cars": 35,
 		"trains": 2,
 		"gangs": 1,
 		"gang_size": Vector2i(2, 4),
@@ -78,7 +80,8 @@ const PRESETS := {
 		"canopy_ranges": [4000.0, 4000.0, 0.0],
 		"fog_density": 0.00013,
 		"pedestrians": 24,
-		"cars": 60,
+		"busy_crowd": 1.0,
+		"cars": 90,
 		"trains": 3,
 		"gangs": 2,
 		"gang_size": Vector2i(3, 4),
@@ -175,6 +178,7 @@ func apply(sun: DirectionalLight3D, environment: Environment, city: CityStreamer
 		city.set_canopy_ranges(canopy)
 		if environment and not LaunchOptions.has("fog"):
 			environment.fog_density = _preset.fog_density
+		crowd.busy_crowd = _preset.busy_crowd
 		encounters.max_gangs = _preset.gangs
 		encounters.gang_size = _preset.gang_size
 		encounters.max_bodies = _preset.bodies

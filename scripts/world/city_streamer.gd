@@ -66,6 +66,17 @@ const MARKINGS_RANGE := 1100.0
 ## this (their tile's center from the camera, m), where they're specks
 ## (Quality shortens it on phones and tablets: fronts_range).
 const FRONTS_RANGE := 600.0
+## How busy near tiles' sidewalks are (busyness_at()) is kept in squares this
+## big (m), from what each kind of prop there counts for (by prop type): shops'
+## signs and awnings, subway stairs, LinkNYC kiosks, bus stops, newsstands
+## and the plazas' tables, planters, kiosks and bike docks.
+const BUSY_CELL := 25.0
+const BUSY_WEIGHTS := {
+	CityTileDecoder.PROP_BUS_SHELTER: 1.0, CityTileDecoder.PROP_LINKNYC: 2.0, CityTileDecoder.PROP_BENCH: 0.5,
+	CityTileDecoder.PROP_SUBWAY_ENTRANCE: 8.0, CityTileDecoder.PROP_NEWSSTAND: 2.0,
+	CityTileDecoder.PROP_SHOP_SIGN: 1.0, CityTileDecoder.PROP_AWNING: 0.5, CityTileDecoder.PROP_BIKE_DOCK: 0.5,
+	CityTileDecoder.PROP_PLAZA_TABLE: 0.5, CityTileDecoder.PROP_PLANTER: 0.5, CityTileDecoder.PROP_KIOSK: 2.0,
+}
 
 ## Where a loaded tile's aerial photo is: NONE if it has none (or photos are
 ## off), WANTED until it's requested, then LOADING, then SHOWN or FAILED.
@@ -169,8 +180,10 @@ class Tile:
 	var retry_msec := 0
 	var parent: Tile
 	var children: Array[Tile] = []
-	## Sidewalk walking lanes (world-space polylines), lod0 only, while loaded.
+	## Sidewalk walking lanes (world-space polylines) and each one's bounds on
+	## the ground (x, z), lod0 only, while loaded.
 	var lanes: Array[PackedVector3Array] = []
+	var lane_bounds: Array[Rect2] = []
 	## Driving lanes (world-space polylines) and their info, lod0 only, while
 	## loaded.
 	var traffic_lanes: Array[PackedVector3Array] = []
@@ -181,6 +194,9 @@ class Tile:
 	## Trees, water towers, street lights, furniture and parked cars, lod0
 	## only, while loaded.
 	var prop_count := 0
+	## How busy its sidewalks are, per BUSY_CELL square (rows of z), lod0 only,
+	## while loaded.
+	var busy := PackedFloat32Array()
 	## The aerial photo's state for the current node.
 	var photo := Photo.NONE
 
@@ -294,16 +310,57 @@ func has_collision_at(world_position: Vector3) -> bool:
 	return tile == null or tile.node != null
 
 
-## Sidewalk lanes (world-space polylines) of loaded tiles within `radius` of a
-## world position.
+## Sidewalk lanes (world-space polylines) of loaded tiles that come within
+## about `radius` of a world position (their bounds do).
 func lanes_near(world_position: Vector3, radius: float) -> Array[PackedVector3Array]:
 	var found: Array[PackedVector3Array] = []
 	if _levels.is_empty():
 		return found
-	for tile: Tile in _levels[LEVEL_NEAR]["tiles"]:
-		if not tile.lanes.is_empty() and tile.distance_to(world_position.x, world_position.z) < radius:
-			found.append_array(tile.lanes)
+	var size: float = _levels[LEVEL_NEAR]["size"]
+	var by_coord: Dictionary = _levels[LEVEL_NEAR]["by_coord"]
+	var around := Rect2(world_position.x - radius, world_position.z - radius, radius * 2.0, radius * 2.0)
+	for j in range(floori(around.position.y / size), floori(around.end.y / size) + 1):
+		for i in range(floori(around.position.x / size), floori(around.end.x / size) + 1):
+			var tile: Tile = by_coord.get(Vector2i(i, j))
+			if tile == null or tile.lanes.is_empty():
+				continue
+			for n in tile.lanes.size():
+				if tile.lane_bounds[n].intersects(around, true):
+					found.append(tile.lanes[n])
 	return found
+
+
+## How busy the sidewalks around a world position are: what the shops, subway
+## stairs and the like in its BUSY_CELL square and `reach` squares around it
+## count for (BUSY_WEIGHTS), from the loaded near tiles. About 1 a shop; a
+## shopping street scores 20-60 with the 3x3 squares of reach 1.
+func busyness_at(world_position: Vector3, reach := 1) -> float:
+	if _levels.is_empty():
+		return 0.0
+	var by_coord: Dictionary = _levels[LEVEL_NEAR]["by_coord"]
+	var cells := roundi(_levels[LEVEL_NEAR]["size"] / BUSY_CELL)
+	var x := floori(world_position.x / BUSY_CELL)
+	var z := floori(world_position.z / BUSY_CELL)
+	var total := 0.0
+	var i := floori(float(x) / cells)
+	var j := floori(float(z) / cells)
+	var lx := x - i * cells
+	var lz := z - j * cells
+	if lx >= reach and lz >= reach and lx < cells - reach and lz < cells - reach:
+		# All in one tile (most of the time): no lookups per square.
+		var tile: Tile = by_coord.get(Vector2i(i, j))
+		if tile == null or tile.busy.is_empty():
+			return 0.0
+		for cz in range(lz - reach, lz + reach + 1):
+			for cx in range(lx - reach, lx + reach + 1):
+				total += tile.busy[cz * cells + cx]
+		return total
+	for cz in range(z - reach, z + reach + 1):
+		for cx in range(x - reach, x + reach + 1):
+			var tile: Tile = by_coord.get(Vector2i(floori(float(cx) / cells), floori(float(cz) / cells)))
+			if tile and not tile.busy.is_empty():
+				total += tile.busy[posmod(cz, cells) * cells + posmod(cx, cells)]
+	return total
 
 
 ## Driving lanes of every loaded near tile: {Vector2i(i, j): [lanes, info]}
@@ -546,10 +603,15 @@ func _build_tile_node(tile: Tile, data: PackedByteArray) -> Node3D:
 	for surface in CityTileDecoder.decode_unpacked(data):
 		if surface.kind == CityTileDecoder.SURFACE_LANES:
 			tile.lanes.clear()
+			tile.lane_bounds.clear()
 			for lane: PackedVector3Array in surface.lanes:
+				var bounds := Rect2(lane[0].x + node.position.x, lane[0].z + node.position.z, 0.0, 0.0)
 				for p in lane.size():
-					lane[p] += node.position
+					var point := lane[p] + node.position
+					lane[p] = point
+					bounds = bounds.expand(Vector2(point.x, point.z))
 				tile.lanes.append(lane)
+				tile.lane_bounds.append(bounds)
 			continue
 		if surface.kind == CityTileDecoder.SURFACE_TRAFFIC:
 			tile.traffic_lanes.clear()
@@ -571,6 +633,8 @@ func _build_tile_node(tile: Tile, data: PackedByteArray) -> Node3D:
 		if surface.kind == CityTileDecoder.SURFACE_PROPS:
 			tile.prop_count = _props.add_to(node, surface, tile.level)
 			prop_count += tile.prop_count
+			if near:
+				tile.busy = _busy_squares(surface, tile.size)
 			continue
 		if surface.kind == CityTileDecoder.SURFACE_MARKINGS:
 			# Paint on the road, without collision or shadows.
@@ -699,6 +763,27 @@ func _building_material(level: int) -> Material:
 	return _merged_building_material
 
 
+## A near tile's busy squares (see busyness_at()) from its props, which are
+## sorted by type.
+func _busy_squares(props: Dictionary, size: float) -> PackedFloat32Array:
+	var cells := roundi(size / BUSY_CELL)
+	var squares := PackedFloat32Array()
+	squares.resize(cells * cells)
+	var positions: PackedVector3Array = props.positions
+	var count := positions.size()
+	if count == 0:
+		return squares
+	var uv2: PackedVector2Array = props.uv2
+	var columns := Image.create_from_data(2, count, false, Image.FORMAT_RF, uv2.to_byte_array())
+	var types := columns.get_region(Rect2i(0, 0, 1, count)).get_data().to_float32_array()
+	for kind: int in BUSY_WEIGHTS:
+		var weight: float = BUSY_WEIGHTS[kind]
+		for k in range(types.bsearch(kind - 0.5), types.bsearch(kind + 0.5)):
+			var p := positions[k]
+			squares[clampi(floori(p.z / BUSY_CELL), 0, cells - 1) * cells + clampi(floori(p.x / BUSY_CELL), 0, cells - 1)] += weight
+	return squares
+
+
 ## A raised lake's surface, which heroes can find (but not stand on) up close.
 func _water_node(mesh: ArrayMesh, near: bool) -> Node3D:
 	var instance := MeshInstance3D.new()
@@ -720,6 +805,7 @@ func _unload(tile: Tile) -> void:
 	tile.node.queue_free()
 	tile.node = null
 	tile.lanes.clear()
+	tile.lane_bounds.clear()
 	if not tile.traffic_lanes.is_empty():
 		tile.traffic_lanes.clear()
 		tile.traffic_info = PackedFloat32Array()
@@ -729,6 +815,7 @@ func _unload(tile: Tile) -> void:
 		train_tracks_changed.emit(Vector2i(tile.i, tile.j), tile.train_tracks)
 	prop_count -= tile.prop_count
 	tile.prop_count = 0
+	tile.busy = PackedFloat32Array()
 	loaded_counts[tile.level] -= 1
 	if tile.photo == Photo.SHOWN:
 		photo_count -= 1

@@ -7,7 +7,10 @@ extends Node3D
 ## Cars appear out of sight (behind the camera or buildings) or, far off,
 ## grow in, up to max_cars within `radius` of the camera, and go once they're
 ## past despawn_distance (shrinking away if they're in view) or their tile
-## unloads. They follow their lane at its speed limit (each driver a little
+## unloads. Wide streets get more of them (TrafficLanes.spawn_weight(), and
+## at intersections they keep to wide streets), and fewer appear behind the
+## camera, where those out of sight go sooner (BEHIND_*), so most drive where
+## it looks. They follow their lane at its speed limit (each driver a little
 ## under it), keeping their distance from the car ahead with the Intelligent
 ## Driver Model, also across intersections. At a signal they stop at the stop
 ## line on red, and on yellow if they can stop comfortably (else they're
@@ -126,6 +129,16 @@ const PERSON_CELLS := 24
 ## (and shrink away the same way). Further than despawn_distance they go.
 const MIN_SPAWN_DISTANCE := 25.0
 const GROW_TIME := 1.2
+## Behind the camera (more than about 120 degrees off where it looks, and
+## past BEHIND_REACH m), where cars are only seen if it turns round, only
+## BEHIND_SHARE of the spots tried take a new car, and cars out of sight past
+## BEHIND_DESPAWN of the radius go, so more drive ahead.
+const BEHIND_COS := -0.5
+const BEHIND_REACH := 60.0
+const BEHIND_SHARE := 0.3
+const BEHIND_DESPAWN := 0.7
+## Fewer cars than this (high's) drive nearer the camera, as densely.
+const FULL_CARS := 180.0
 ## Room kept around a new car on its lane (m), and from its lane's ends.
 const SPAWN_ROOM := 8.0
 const SPAWN_END_ROOM := 6.0
@@ -161,7 +174,7 @@ const LOG_INTERVAL := 2.0
 @export var crowd: CrowdManager
 ## How many cars at most (?traffic=N), and how far from the camera they
 ## drive (m). Quality lowers both on phones and tablets.
-@export var max_cars := 120
+@export var max_cars := 180
 @export var radius := 300.0
 @export var grow_distance := 180.0
 @export var despawn_distance := 360.0
@@ -236,6 +249,8 @@ var _people_box := Rect2()
 var _spawn_tiles: Array[Vector2i] = []
 var _spawn_totals := PackedFloat32Array()
 var _focus := Vector3.ZERO
+## Where the camera looks, on the ground (x, z; zero looking straight down).
+var _heading := Vector2.ZERO
 var _camera: Camera3D
 var _now := 0.0
 var _upkeep := 0.0
@@ -264,7 +279,7 @@ func _ready() -> void:
 	_log_stats = LaunchOptions.has("stats")
 	# Fewer cars drive nearer, as densely.
 	var full := radius
-	radius = clampf(full * sqrt(max_cars / 120.0), 160.0, full)
+	radius = clampf(full * sqrt(max_cars / FULL_CARS), 160.0, full)
 	despawn_distance += radius - full
 	grow_distance = minf(grow_distance, radius * 0.6)
 	for corner in MANHATTAN:
@@ -345,6 +360,9 @@ func _process(delta: float) -> void:
 	_camera = get_viewport().get_camera_3d()
 	if _camera:
 		_focus = WorldOrigin.to_world(_camera.global_position)
+		var forward := -_camera.global_basis.z
+		_heading = Vector2(forward.x, forward.z)
+		_heading = _heading.normalized() if _heading.length() > 0.1 else Vector2.ZERO
 	_clock += delta
 	# Driving runs at a steady SIM_RATE (drawing goes on every frame).
 	_since_step += delta
@@ -974,7 +992,8 @@ func _clear_away() -> void:
 		if stranded:
 			_route(i)  # maybe the lanes on have loaded since
 			stranded = _via[i] == null
-		if distance < despawn_distance and _stuck[i] < STUCK_TIME and not stranded:
+		if distance < despawn_distance and _stuck[i] < STUCK_TIME and not stranded \
+				and not _behind(at, radius * BEHIND_DESPAWN):
 			continue
 		if _hidden(at):
 			_despawn(i)
@@ -1021,6 +1040,8 @@ func _spawn(tries: int) -> void:
 		var point := lane.point_on(k, s - length * 0.5)
 		var distance := Vector2(point.x - _focus.x, point.z - _focus.z).length()
 		if distance > radius or distance < MIN_SPAWN_DISTANCE:
+			continue
+		if _behind(point, BEHIND_REACH) and randf() > BEHIND_SHARE:
 			continue
 		var grow := not anywhere and not _hidden(point)
 		if grow and point.distance_to(_focus) < grow_distance:
@@ -1132,6 +1153,14 @@ func _despawn(i: int) -> void:
 	car_count -= 1
 	while _highest >= 0 and _path[_highest] == null:
 		_highest -= 1
+
+
+## Whether a world point is behind the camera (see BEHIND_COS), further
+## than `reach` from it on the ground.
+func _behind(world_point: Vector3, reach: float) -> bool:
+	var to := Vector2(world_point.x - _focus.x, world_point.z - _focus.z)
+	var distance := to.length()
+	return distance > reach and to.dot(_heading) < BEHIND_COS * distance
 
 
 ## Whether a world point is out of the camera's sight: outside its view, or
