@@ -42,7 +42,7 @@ func _ready() -> void:
 		if Net.is_online():
 			notify("%s left" % Net.player_name(id)))
 	Net.host_changed.connect(func(id: int) -> void:
-		if Net.state == Net.State.JOINED:  # the host left (not: we joined, or left)
+		if Net.is_online():  # the host left, or the server named another (not: we joined, or left)
 			notify("You're the host now" if id == Net.local_id() else "%s is now the host" % Net.player_name(id)))
 
 
@@ -102,6 +102,8 @@ func _draw_coop_status() -> void:
 			line = "Co-op: hosting room %s  ·  %s" % [Net.room_code, people]
 		Net.State.JOINED:
 			line = "Co-op: room %s  ·  %s" % [Net.room_code, people]
+	if Net.is_reconnecting():  # (the game goes on meanwhile)
+		line += "  ·  reconnecting..."
 	if line:
 		var width := _font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16).x
 		var at := Vector2(size.x - width - 24.0, 30.0)

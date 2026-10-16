@@ -19,6 +19,15 @@ extends Node
 ## a player is still there, only the connection between us broke: the one of
 ## us with the lower number connects again.
 ##
+## Game traffic never goes through the signaling server, so when it drops us
+## (a Worker deploy restarts its Durable Object and closes every socket) the
+## game goes on over the connections between players, and we connect to it
+## again, sooner at first, then every RETRY_DELAY_MAX. We rejoin the room as
+## the same player, with the key the server gave us, saying who's in the room,
+## in the order they came, and who hosts: a server that lost the room rebuilds
+## it from the players who come back (see tools/signaling/server.mjs). Only if
+## that takes more than a few seconds does the menu say so (is_reconnecting).
+##
 ## Launch options (read by Game): ?host hosts a game, ?join=CODE joins one,
 ## ?signal=wss://... picks the signaling server (default: /signal on the page's
 ## host over https, else the page's host on port 8070), and ?relay=1 connects
@@ -37,6 +46,8 @@ signal left_room(id: int)
 ## Another player (or we) became the host: nodes whose "authority" RPCs come
 ## from the host follow it (set_multiplayer_authority).
 signal host_changed(id: int)
+## is_reconnecting changed.
+signal reconnecting_changed
 
 enum State { OFFLINE, CONNECTING, HOSTING, JOINED }
 
@@ -53,6 +64,20 @@ const HOST_TIMEOUT := 60.0
 ## players we've lost touch with.
 const PING_INTERVAL := 10.0
 const LOST_REPORT_INTERVAL := 5.0
+## A signaling connection still opening after this long, or that hasn't
+## answered a ping for this long, is given up on and made again (seconds).
+const SIGNALING_TIMEOUT := 15.0
+## After the signaling server drops us, connect again after this long
+## (seconds), twice as long after each try that fails, up to RETRY_DELAY_MAX;
+## a little random, so a room's players don't all come back at once.
+const RETRY_DELAY := 0.5
+const RETRY_DELAY_MAX := 5.0
+## Tell the player we're reconnecting only once it's taken this long (seconds).
+const RECONNECTING_NOTICE := 5.0
+## A join the server has no room for is asked again this many times, this far
+## apart (seconds): just after a restart, the room's players may not be back.
+const JOIN_RETRIES := 2
+const JOIN_RETRY_DELAY := 2.0
 ## After a connection to a player still in the room drops, connect again after
 ## this long, and again every RECONNECT_INTERVAL while it's down (msec).
 const RECONNECT_DELAY := 2000
@@ -79,7 +104,18 @@ var error := ""
 
 var _signaling: WebSocketPeer
 var _signaling_url := ""
-var _greeting := {}  # first message to send once the signaling socket opens
+var _greeting := {}  # first message to the signaling server, until we're in a room
+var _hello_msec := -1  # when to send it (or ask to rejoin) on the signaling socket (-1: sent)
+var _got_through := false  # the signaling socket opened at least once
+var _rejoining := false  # we've asked to rejoin the room, and wait for the answer
+var _awaiting_msec := 0  # since when we've been waiting for the signaling server to answer (0: we aren't)
+var _signaling_lost_msec := 0  # when the signaling server dropped us (0: it hasn't)
+var _retry_msec := 0  # when to connect to it again (0: not waiting to)
+var _retry_delay := RETRY_DELAY
+var _join_retries := 0
+var _reconnecting := false
+var _key := ""  # from the signaling server: ours, to take our place in the room back
+var _order: Array[int] = []  # everyone in the room, us too, in the order they came (as the server has it)
 var _mesh: MultiplayerPeer  # WebRTCMultiplayerPeer, or ENetMultiplayerPeer on desktop
 var _connections := {}  # player number -> WebRTCPeerConnection, or ENetConnection until connected
 var _ice_servers: Array = []
@@ -101,6 +137,15 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _signaling:
 		_poll_signaling()
+	elif _retry_msec != 0 and Time.get_ticks_msec() >= _retry_msec:
+		_retry_msec = 0
+		if not _open_signaling():
+			_signaling_dropped()
+	var reconnecting := is_online() and _signaling_lost_msec != 0 \
+		and Time.get_ticks_msec() - _signaling_lost_msec > RECONNECTING_NOTICE * 1000.0
+	if reconnecting != _reconnecting:
+		_reconnecting = reconnecting
+		reconnecting_changed.emit()
 	if _mesh is ENetMultiplayerPeer:
 		_poll_enet_connections()
 	if state == State.CONNECTING:
@@ -116,6 +161,8 @@ func _process(delta: float) -> void:
 	if _ping_cooldown <= 0.0 and _signaling and _signaling.get_ready_state() == WebSocketPeer.STATE_OPEN:
 		_ping_cooldown = PING_INTERVAL
 		_signaling.send_text("ping")
+		if _awaiting_msec == 0:
+			_awaiting_msec = Time.get_ticks_msec()
 	_report_cooldown -= delta
 	if _report_cooldown <= 0.0 and not _lost.is_empty():
 		_report_cooldown = LOST_REPORT_INTERVAL
@@ -144,6 +191,18 @@ func is_online() -> bool:
 ## or hosting, false when playing in someone else's game.
 func is_authority() -> bool:
 	return state != State.JOINED
+
+
+## Whether the signaling server has us in our room now: not while it's gone
+## and we're getting back to it (the game goes on meanwhile).
+func has_signaling() -> bool:
+	return is_online() and _signaling_lost_msec == 0
+
+
+## Whether to tell the player we're reconnecting to the signaling server:
+## it's been gone for more than RECONNECTING_NOTICE (reconnecting_changed).
+func is_reconnecting() -> bool:
+	return _reconnecting
 
 
 ## This player's number (1 when offline).
@@ -209,6 +268,13 @@ func _reset() -> void:
 	if _signaling:
 		_signaling.close()
 		_signaling = null
+	_greeting = {}
+	_got_through = false
+	_rejoining = false
+	_signaling_lost_msec = 0
+	_retry_msec = 0
+	_key = ""
+	_order.clear()
 	for connection: Object in _connections.values():
 		if connection is WebRTCPeerConnection:
 			(connection as WebRTCPeerConnection).close()
@@ -225,19 +291,21 @@ func _reset() -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	room_code = ""
 	state = State.OFFLINE
+	if _reconnecting:
+		_reconnecting = false
+		reconnecting_changed.emit()
 	_set_host(FIRST_HOST)
 
 
 func _start(greeting: Dictionary) -> void:
 	_reset()
 	_signaling_url = _default_signaling_url()
-	_signaling = WebSocketPeer.new()
-	if _signaling.connect_to_url(_signaling_url) != OK:
+	if not _open_signaling():
 		leave("Couldn't reach the co-op server at %s." % _signaling_url)
 		return
 	_greeting = greeting
+	_join_retries = JOIN_RETRIES
 	_connect_time = 0.0
-	_ping_cooldown = PING_INTERVAL
 	_set_state(State.CONNECTING)
 
 
@@ -253,14 +321,30 @@ func _default_signaling_url() -> String:
 	return "ws://%s:%d" % [str(JavaScriptBridge.eval("location.hostname")), SIGNALING_PORT]
 
 
+## Starts connecting to the signaling server. False if it can't even try.
+func _open_signaling() -> bool:
+	_signaling = WebSocketPeer.new()
+	if _signaling.connect_to_url(_signaling_url) != OK:
+		_signaling = null
+		return false
+	_hello_msec = 0
+	_awaiting_msec = Time.get_ticks_msec()
+	_ping_cooldown = 0.0  # right away: the server counts us as heard from
+	return true
+
+
 func _poll_signaling() -> void:
 	_signaling.poll()
 	match _signaling.get_ready_state():
 		WebSocketPeer.STATE_OPEN:
-			if not _greeting.is_empty():
-				_send(_greeting)
-				_greeting = {}
+			_got_through = true
+			if _hello_msec >= 0 and Time.get_ticks_msec() >= _hello_msec:
+				_hello_msec = -1
+				# Back in touch after it dropped us: our place in the room.
+				_rejoining = not room_code.is_empty()
+				_send(_rejoin_request() if _rejoining else _greeting)
 			while _signaling and _signaling.get_available_packet_count() > 0:
+				_awaiting_msec = 0
 				var text := _signaling.get_packet().get_string_from_utf8()
 				if text == "pong":
 					continue
@@ -268,54 +352,166 @@ func _poll_signaling() -> void:
 				if typeof(message) == TYPE_DICTIONARY:
 					_on_signaling_message(message)
 		WebSocketPeer.STATE_CLOSED:
-			_signaling = null
-			if state != State.OFFLINE:
-				# Without it nobody new can join, and the server has told the
-				# others we left.
-				leave("Lost the connection to the co-op server at %s." % _signaling_url)
+			_signaling_dropped()
+			return
+	if _signaling and _awaiting_msec != 0 and Time.get_ticks_msec() - _awaiting_msec > SIGNALING_TIMEOUT * 1000.0:
+		print("[net] the co-op server isn't answering")
+		_signaling_dropped()
+
+
+## The signaling socket closed, or stopped answering. Unless it never got
+## through, the game goes on, and we connect again in a moment (and again,
+## less often, while that fails).
+func _signaling_dropped() -> void:
+	if _signaling:
+		_signaling.close()
+		_signaling = null
+	_rejoining = false
+	if state == State.OFFLINE:
+		return
+	if not _got_through:
+		leave("Couldn't reach the co-op server at %s." % _signaling_url)
+		return
+	var now := Time.get_ticks_msec()
+	if _signaling_lost_msec == 0:
+		_signaling_lost_msec = now
+		_retry_delay = RETRY_DELAY
+		print("[net] lost the co-op server; connecting again")
+	_retry_msec = now + int(_retry_delay * randf_range(0.75, 1.25) * 1000.0)
+	_retry_delay = minf(_retry_delay * 2.0, RETRY_DELAY_MAX)
+
+
+## In a room (again) as far as the signaling server goes.
+func _signaling_back() -> void:
+	if _signaling_lost_msec != 0:
+		print("[net] back in touch with the co-op server after %.1f s" \
+			% ((Time.get_ticks_msec() - _signaling_lost_msec) / 1000.0))
+	_signaling_lost_msec = 0
+	_greeting = {}
+
+
+## Our place in the room, for a signaling server that dropped us (and may have
+## lost the room: it rebuilds it from what its players say).
+func _rejoin_request() -> Dictionary:
+	return {type = "rejoin", code = room_code, id = local_id(), key = _key, host = host_id, players = _order}
 
 
 func _on_signaling_message(message: Dictionary) -> void:
 	match message.get("type"):
 		"hosted":
 			room_code = message.code
+			_key = str(message.get("key", ""))
 			_ice_servers = message.get("ice", [])
 			_open_mesh(int(message.id))
+			_order.assign([int(message.id)])
+			_signaling_back()
 			print("[net] hosting room %s" % room_code)
 			_set_host(int(message.id))
 		"joined":
 			room_code = message.code
+			_key = str(message.get("key", ""))
 			_ice_servers = message.get("ice", [])
 			_open_mesh(int(message.id))
 			# The players already in the room each send us an offer.
+			_order.clear()
 			for id in message.get("peers", [FIRST_HOST]):
 				_members[int(id)] = true
+				_order.append(int(id))
 				if _mesh is WebRTCMultiplayerPeer:
 					_add_connection(int(id))
+			_order.append(int(message.id))
+			_signaling_back()
 			print("[net] joining room %s as player %d" % [room_code, int(message.id)])
 			_set_host(int(message.get("host", FIRST_HOST)))
+		"rejoined":
+			_on_rejoined(message)
 		"peer_joined":
 			# Fresh relay credentials, if the server sends them: a game can go
 			# on for longer than they last.
-			_ice_servers = message.get("ice", _ice_servers)
+			_update_ice(message.get("ice", []))
 			var id := int(message.id)
 			_members[id] = true
-			_newcomers[id] = true
-			_offer(id)
-		"peer_left":
-			var id := int(message.id)
-			_members.erase(id)
-			_newcomers.erase(id)
-			_lost.erase(id)
+			if not _order.has(id):
+				_order.append(id)
+			# One coming back after the server let them go (their socket alone
+			# dropped) isn't new: we connect to them again, unless we still are.
+			var back: bool = message.get("back") == true
+			if not back:
+				_newcomers[id] = true
+			if not (back and _connected(id)):
+				_drop(id)
+				_offer(id)
 			_reconnect_at.erase(id)
-			left_room.emit(id)
-			_drop(id)
+		"peer_left":
+			_forget(int(message.id))
 			# The host may have been the one leaving; the server names the next.
 			_set_host(int(message.get("host", host_id)))
 		"signal":
 			_on_signal(int(message.from), message.get("data", {}))
 		"error":
-			leave(str(message.get("message", "Something went wrong.")))
+			if message.get("reason") == "no_room" and state == State.CONNECTING and _join_retries > 0:
+				# Just after a restart, the room's players may not be back yet.
+				_join_retries -= 1
+				_hello_msec = Time.get_ticks_msec() + int(JOIN_RETRY_DELAY * 1000.0)
+			elif _rejoining:
+				push_warning("[net] couldn't rejoin room %s: %s" % [room_code, message.get("message", "")])
+				leave("Lost the connection to the co-op server.")
+			else:
+				leave(str(message.get("message", "Something went wrong.")))
+
+
+## Back in the room after the signaling server dropped us: who's in it now,
+## and who hosts (it may have named another host if it let us go).
+func _on_rejoined(message: Dictionary) -> void:
+	_rejoining = false
+	_update_ice(message.get("ice", []))
+	_order.assign(message.get("players", []).map(func(id: Variant) -> int: return int(id)))
+	for id: int in _members.keys():
+		if not _order.has(id):
+			_forget(id)  # they left while we were away
+	for id in _order:
+		if id != local_id():
+			_members[id] = true
+	if message.get("back") == true:
+		# The server had let us go, and the others dropped their connections
+		# to us: they connect to us again, as when we joined (we do only if
+		# they haven't after a while).
+		for id: int in _members.keys():
+			_drop(id)
+		for id: int in _members:
+			_reconnect_at[id] = Time.get_ticks_msec() + RECONNECT_INTERVAL
+	else:
+		# Connections that broke meanwhile: the one of us with the lower
+		# number connects again (players who joined meanwhile hear from us
+		# next, in peer_joined).
+		for id: int in _members:
+			if not _connected(id) and local_id() < id:
+				_reconnect_at[id] = Time.get_ticks_msec() + RECONNECT_DELAY
+	_signaling_back()
+	print("[net] back in room %s as player %d" % [room_code, local_id()])
+	_set_host(int(message.get("host", host_id)))
+
+
+## The signaling server says a player left the room: we let go of them.
+func _forget(id: int) -> void:
+	_members.erase(id)
+	_order.erase(id)
+	_newcomers.erase(id)
+	_lost.erase(id)
+	_reconnect_at.erase(id)
+	left_room.emit(id)
+	_drop(id)
+
+
+## New STUN/TURN servers from the signaling server replace ours, unless they
+## come without the relay (Cloudflare didn't answer it just then) and ours have it.
+func _update_ice(servers: Array) -> void:
+	if not servers.is_empty() and (_has_relay(servers) or not _has_relay(_ice_servers)):
+		_ice_servers = servers
+
+
+static func _has_relay(servers: Array) -> bool:
+	return JSON.stringify(servers).contains("turn")
 
 
 func _open_mesh(id: int) -> void:
@@ -348,7 +544,7 @@ func _add_connection(id: int) -> WebRTCPeerConnection:
 	var config := {"iceServers": _ice_servers}
 	if LaunchOptions.get_string("relay", "0") != "0":
 		config.iceTransportPolicy = "relay"
-		if not JSON.stringify(_ice_servers).contains("turn"):
+		if not _has_relay(_ice_servers):
 			push_warning("[net] ?relay=1, but the co-op server offers no TURN relay")
 	connection.initialize(config)
 	connection.session_description_created.connect(func(type: String, sdp: String) -> void:
@@ -452,6 +648,10 @@ func _follow_host() -> void:
 	if host_id == local_id():
 		if state != State.HOSTING:
 			_set_state(State.HOSTING)
+	elif state == State.HOSTING:
+		# The server let us go while it was out of touch with us, and named
+		# another host: their game runs the thugs now.
+		_set_state(State.JOINED)
 	elif _connected(host_id):
 		if state == State.CONNECTING:
 			print("[net] connected to room %s" % room_code)

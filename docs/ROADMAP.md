@@ -146,9 +146,41 @@ peer can drive one later. Nearby tiles get collision.
   headless Chrome pages over WebRTC (signaling by the Durable Object, run
   locally), the host's tab closed, the next player took over its thugs
   within a quarter second, and a fourth joined with the same code.
-- **Still to do:** a game the signaling server drops (a Worker deploy
-  restarts the Durable Object and closes every socket) leaves its co-op
-  game rather than reconnecting.
+- **Signaling restarts (2026-10-16):** a game the signaling server drops (a
+  Worker deploy restarts the Durable Object and closes every socket) plays
+  on over its own connections and comes back: it connects again (after half
+  a second, then less often, up to every 5 s) and rejoins its room as the
+  same player, with a key the server gave it, saying who is in the room, in
+  the order they came, and who hosts. A server that lost the room rebuilds
+  it from the first player back and keeps the others' numbers (and the
+  host's role) until they're back, in Durable Object storage: a friend
+  joining meanwhile gets a free number, and the players coming back later
+  connect to them. One still away after 10 s whom another player has lost
+  touch with is taken to have left (handing on the host's role if it had
+  it). A player whose own socket dropped (so the server let it go) comes
+  back the same way and the others connect to it again; a host the server
+  let go finds the next player hosting and plays on in their game. Players
+  coming back get fresh TURN credentials from the new Durable Object
+  (shared as before); connections made earlier keep theirs. The menu and
+  the HUD's co-op line say nothing for 5 s, then a quiet "reconnecting...".
+  Games from before this still work with the new server (on a restart they
+  leave their game, as before). `tests/coop_reconnect_test.tscn` runs four
+  games: the server is killed mid-game and the games play on (positions, a
+  fight, the same room, number and host); it starts again and two come back
+  while the host holds off; a fourth joins with the code before the host is
+  back and gets number 4; the host comes back and connects to it; the
+  host's own socket drops (the next player takes over, and it comes back as
+  a player); the new host's game closes and the next in line takes over.
+  `protocol_check.mjs` covers rebuilt rooms (two players back at once, a
+  friend joining before the host, the host's place and the players' order
+  kept, a stale socket replaced, a stranger turned away, a host that never
+  comes back) and, with `--restart`, a real restart; both servers pass, the
+  Durable Object restarted under `wrangler dev`. In three headless Chrome
+  pages over WebRTC (signaling by the Durable Object under `wrangler dev`,
+  restarted and down for about 10 s), no connection between players dropped:
+  the HUD read "3 players · reconnecting..." meanwhile, all three were back
+  in the room within 13 s of losing it, a fourth joined with the code, and
+  closing the host's tab passed its role on in a fifth of a second.
 
 ## 6. Realism from open data (in progress)
 
@@ -1003,9 +1035,10 @@ templates for both are already installed.
   `tools/cloudflare/.dev.vars`, gitignored); $0.05/GB after 1,000 GB free.
 - Tests (headless): `godot --headless --path . res://tests/hero_moves_test.tscn`,
   `res://tests/combat_test.tscn`, `res://tests/streaming_test.tscn`,
-  `res://tests/coop_test.tscn` and `res://tests/coop_migration_test.tscn`
-  (they run the signaling server, so `npm install` in `tools/signaling`
-  first; `-- --port=N` picks its port, default 8071),
+  `res://tests/coop_test.tscn`, `res://tests/coop_migration_test.tscn` and
+  `res://tests/coop_reconnect_test.tscn` (they run the signaling server, so
+  `npm install` in `tools/signaling` first; `-- --port=N` picks its port,
+  default 8071),
   `res://tests/audio_test.tscn` and
   `res://tests/traffic_test.tscn` (75 s of
   midtown traffic: no red light run, no overlaps, cars stop for the hero,

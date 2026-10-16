@@ -2,7 +2,8 @@ class_name CoopPanel
 extends Control
 ## The co-op menu (M): host a game and send friends its link or room code, or
 ## join a friend's game with theirs. Shows who's playing (and hosting), and
-## the room's code and link to everyone in the game. Dims the game behind
+## the room's code and link to everyone in the game (and, quietly, when the
+## co-op server has been gone for a few seconds). Dims the game behind
 ## it and takes the mouse while open. On touch screens (use_touch_layout) it
 ## gets a Close button and bigger buttons, and the room code box becomes a
 ## browser text box, so the phone's keyboard comes up.
@@ -13,6 +14,7 @@ const WIDTH := 460.0
 const ERROR_COLOR := Color(1.0, 0.55, 0.45)
 
 var _status: Label
+var _reconnecting: Label
 var _host_button: Button
 var _join_row: HBoxContainer
 var _code_edit: LineEdit
@@ -36,6 +38,7 @@ func _ready() -> void:
 	Net.player_joined.connect(func(_id: int) -> void: _refresh())
 	Net.player_left.connect(func(_id: int) -> void: _refresh())
 	Net.host_changed.connect(func(_id: int) -> void: _refresh())
+	Net.reconnecting_changed.connect(_refresh)
 	_refresh()
 
 
@@ -113,6 +116,7 @@ func _refresh() -> void:
 	_join_row.visible = offline
 	_invite.visible = Net.is_online()
 	_players.visible = Net.is_online()
+	_reconnecting.visible = Net.is_reconnecting()
 	_leave_button.visible = not offline
 	_leave_button.text = "Leave game"  # (the others play on)
 	_status.remove_theme_color_override("font_color")
@@ -180,6 +184,14 @@ func _build() -> void:
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.custom_minimum_size = Vector2(WIDTH - 44.0, 0.0)
 	column.add_child(_status)
+
+	_reconnecting = Label.new()
+	_reconnecting.text = "Reconnecting to the co-op server... (you're still playing together)"
+	_reconnecting.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_reconnecting.custom_minimum_size = Vector2(WIDTH - 44.0, 0.0)
+	_reconnecting.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.5))
+	_reconnecting.add_theme_font_size_override("font_size", 13)
+	column.add_child(_reconnecting)
 
 	_host_button = Button.new()
 	_host_button.text = "Host a game"
