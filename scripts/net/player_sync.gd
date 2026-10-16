@@ -3,8 +3,9 @@ extends Node
 ## The other players in co-op. Shows a copy of each one's hero, moved to match
 ## what their game sends 20 times a second (drawn a little in the past, so it
 ## moves smoothly in between), and sends our hero's state to them. The host
-## also places players who join next to its hero, and keeps the ground loaded
-## around every hero so its thugs have streets to stand on.
+## (whoever it is now: see Net) also places players who join next to its hero,
+## and keeps the ground loaded around every hero so its thugs have streets to
+## stand on.
 
 ## The host put our hero next to its own (world position).
 signal placed_by_host(world_position: Vector3, facing: float)
@@ -36,6 +37,7 @@ func _ready() -> void:
 	Net.player_joined.connect(_add_player)
 	Net.player_left.connect(_remove_player)
 	Net.state_changed.connect(_on_net_state_changed)
+	Net.host_changed.connect(func(id: int) -> void: set_multiplayer_authority(id, false))
 
 
 func _physics_process(delta: float) -> void:
@@ -122,7 +124,7 @@ func _add_player(id: int) -> void:
 	copy.add_child(_name_tag(id))
 	remote_heroes[id] = copy
 	_snapshots[id] = SnapshotBuffer.new()
-	if Net.state == Net.State.HOSTING:
+	if Net.state == Net.State.HOSTING and Net.is_newcomer(id):
 		# Beside our hero, a few meters apart per player.
 		var right := Vector3(cos(hero.facing), 0.0, -sin(hero.facing))
 		_place.rpc_id(id, hero.world_position() + right * JOIN_SPACING * remote_heroes.size(), hero.facing)

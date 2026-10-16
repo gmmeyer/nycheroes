@@ -6,7 +6,8 @@ extends CharacterBody3D
 ##
 ## In co-op only the host's game runs thugs. In the other players' games each
 ## thug is a copy (`puppet`) that follows the host's updates; hits on a copy
-## show at once and go to the host to be applied (see Combat).
+## show at once and go to the host to be applied (see Combat). When the host
+## leaves, the new host's game takes its copies over (take_over).
 
 enum State { IDLE, CHASE, PUNCH, RECOVER, STAGGER, DOWN }
 
@@ -42,6 +43,9 @@ var surround_angle := 0.0
 var net_id := 0
 ## A copy of a thug the host runs (set before adding to the scene).
 var puppet := false
+## Holds still while set: a thug taken over where our game hasn't loaded the
+## ground yet (see EncounterDirector).
+var frozen := false
 ## What's playing, for copies: index into ANIMATIONS, speed, and how many
 ## times an animation has restarted (so copies restart it too).
 var anim_index := 0
@@ -97,8 +101,9 @@ func setup(target: Hero, gang_index: int, angle: float) -> void:
 	NpcLook.paint_thug($Model, gang)
 
 
-## Sets up a copy from what the host sent when it came into range.
-func setup_copy(gang_index: int, facing: float, health_left: float, down: bool) -> void:
+## Sets up a thug as another game described it: a copy from what the host
+## sent when it came into range, or one handed over to us as the new host.
+func setup_described(gang_index: int, facing: float, health_left: float, down: bool) -> void:
 	gang = gang_index
 	_facing = facing
 	_model.rotation.y = facing
@@ -106,6 +111,27 @@ func setup_copy(gang_index: int, facing: float, health_left: float, down: bool) 
 	NpcLook.paint_thug($Model, gang)
 	if down:
 		go_down(Vector3.ZERO, false)
+
+
+## Our game runs this thug from now on: it was a copy of the old host's, or
+## another player's copy handed over, and we're the new host. It picks its
+## own fight.
+func take_over() -> void:
+	puppet = false
+	_snapshots = null
+	if state != State.DOWN:
+		state = State.IDLE
+		velocity = Vector3.ZERO
+		surround_angle = randf() * TAU
+		_cooldown = randf_range(0.5, 1.5)
+
+
+## Copies only: a new host runs this thug now, and its updates are timed by
+## its own clock.
+func follow_new_host() -> void:
+	if puppet:
+		_snapshots = SnapshotBuffer.new()
+		_shown_restarts = -1
 
 
 func is_down() -> bool:
@@ -192,6 +218,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if puppet:
 		_follow_host(delta)
+		return
+	if frozen:
 		return
 	_timer -= delta
 	_cooldown -= delta

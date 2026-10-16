@@ -9,6 +9,12 @@ extends Node3D
 ## the thugs near their hero: when one comes into range, where it is and what
 ## it's doing 20 times a second, and when it leaves range or is cleared away.
 ## In those players' games the thugs are copies that follow along.
+##
+## When the host leaves, the new host's game takes the thugs over, so fights
+## carry on: its copies become thugs it runs, and every other player hands it
+## their copies (the thugs near their hero, which it may never have heard of).
+## Thugs keep their numbers, and each host numbers new ones in its own series
+## (ID_STRIDE), above every number it has seen, so none is used twice.
 
 const THUG_SCENE := preload("res://scenes/npc/thug.tscn")
 const UPDATE_INTERVAL := 0.5
@@ -25,6 +31,12 @@ const FORGET_RANGE := 500.0
 const SHARE_INTERVAL := 0.05
 ## Numbers sent per thug in each update.
 const STATE_SIZE := 9
+## Thug numbers are k * ID_STRIDE + the number of the player whose game made
+## the thug (more than there can be players).
+const ID_STRIDE := 16
+## A new host waits this long (seconds) for a player's copies before telling
+## them which thugs there are.
+const HANDOVER_WAIT := 3.0
 
 @export var city: CityStreamer
 ## Our hero.
@@ -43,9 +55,12 @@ var _cooldowns := {}  # hero instance id -> seconds until that hero can get anot
 var _update_cooldown := 0.0
 var _share_cooldown := 0.0
 var _gang_count := 0
-var _next_id := 1
+var _next_id := 1  # k for our next thug number (see ID_STRIDE)
 var _shared := {}  # player number -> {thug net id: true}: the thugs that player has
 var _was_authority := true
+var _awaiting := {}  # (new host) player number -> msec: until then, wait for their copies before sharing
+var _handovers := {}  # player number -> copies they handed over before we knew we're the host
+var _handover_due := false  # (new host's players) our copies are still to go to the new host
 
 
 func _ready() -> void:
@@ -53,11 +68,15 @@ func _ready() -> void:
 		max_gangs = int(LaunchOptions.get_string("gangs"))
 	Combat.thug_defeated.connect(_on_thug_defeated)
 	Net.state_changed.connect(_on_net_state_changed)
+	Net.host_changed.connect(_on_host_changed)
 	Net.player_left.connect(func(id: int) -> void: _shared.erase(id))
 
 
 func _process(delta: float) -> void:
 	if not Net.is_authority():
+		if _handover_due and Net.peers().has(Net.host_id):
+			_handover_due = false
+			_hand_over.rpc_id(Net.host_id, Combat.thugs.map(_describe))
 		return
 	if Net.is_online():
 		_share_cooldown -= delta
@@ -69,6 +88,9 @@ func _process(delta: float) -> void:
 		return
 	_update_cooldown = UPDATE_INTERVAL
 	_clear_far_gangs()
+	for thug in Combat.thugs:
+		if thug.frozen and city.has_collision_at(WorldOrigin.to_world(thug.global_position)):
+			thug.frozen = false
 	for target in Combat.heroes:
 		_spawn_near(target)
 
@@ -98,7 +120,7 @@ func spawn_gang(world_center: Vector3, count: int, direction: Vector3, target: H
 		if ground > spot.y - GROUND_SEARCH:
 			spot.y = ground
 		var thug: Thug = THUG_SCENE.instantiate()
-		thug.net_id = _next_id
+		thug.net_id = _next_id * ID_STRIDE + Net.local_id() % ID_STRIDE
 		_next_id += 1
 		add_child(thug)
 		thug.global_position = WorldOrigin.to_local(spot) + Vector3.UP * 0.2
@@ -189,6 +211,11 @@ func _share_thugs() -> void:
 	for player in Combat.heroes:
 		if not player.is_remote() or not connected.has(player.remote_id):
 			continue
+		if _awaiting.has(player.remote_id):
+			if now < _awaiting[player.remote_id]:
+				continue
+			_awaiting.erase(player.remote_id)
+		var first := not _shared.has(player.remote_id)
 		var known: Dictionary = _shared.get_or_add(player.remote_id, {})
 		var center := player.world_position()
 		var arrivals: Array = []
@@ -208,31 +235,65 @@ func _share_thugs() -> void:
 						thug.anim_index, thug.anim_speed, thug.anim_restarts])
 			elif distance < SHARE_RANGE:
 				known[thug.net_id] = true
-				arrivals.append([thug.net_id, at, thug.facing(), thug.gang, thug.health, thug.is_down()])
+				arrivals.append(_describe(thug))
 		for net_id: int in known.keys():
 			if not present.has(net_id):
 				known.erase(net_id)
 				leaving.append(net_id)
-		if not arrivals.is_empty():
-			_add_thugs.rpc_id(player.remote_id, arrivals)
+		if first or not arrivals.is_empty():
+			_add_thugs.rpc_id(player.remote_id, arrivals, first)
 		if not leaving.is_empty():
 			_remove_thugs.rpc_id(player.remote_id, leaving)
 		if not states.is_empty():
 			_thug_states.rpc_id(player.remote_id, now, states)
 
 
-## Thugs came into range: [net id, world position, facing, gang, health, down] each.
+## What another game needs to set a thug up: [net id, world position,
+## facing, gang, health, down].
+func _describe(thug: Thug) -> Array:
+	return [thug.net_id, WorldOrigin.to_world(thug.global_position), thug.facing(), thug.gang, thug.health, thug.is_down()]
+
+
+## A thug as another game described it: a copy that follows the host's
+## updates, or (on a new host) one we run from now on.
+func _spawn_thug(description: Array, copy: bool) -> Thug:
+	var thug: Thug = THUG_SCENE.instantiate()
+	thug.net_id = int(description[0])
+	thug.puppet = copy
+	add_child(thug)
+	thug.global_position = WorldOrigin.to_local(description[1])
+	thug.setup_described(int(description[3]), float(description[2]), float(description[4]), bool(description[5]))
+	return thug
+
+
+## Keeps our own numbering above every thug and gang we've seen, so if we
+## become the host, the thugs and gangs we make get new numbers.
+func _saw(net_id: int, gang: int) -> void:
+	_next_id = maxi(_next_id, net_id / ID_STRIDE + 1)
+	_gang_count = maxi(_gang_count, gang + 1)
+
+
+func _remove(thug: Thug) -> void:
+	Combat.unregister(thug)  # right away, so a new thug can't be confused with it
+	thug.queue_free()
+
+
+## Thugs came into range: descriptions (see _describe). `only` comes with a
+## host's first word to us (a new host's too): these are all the thugs there
+## are around us, so copies of any others go.
 @rpc("authority", "call_remote", "reliable")
-func _add_thugs(arrivals: Array) -> void:
+func _add_thugs(arrivals: Array, only: bool) -> void:
+	if only:
+		var listed := {}
+		for data: Array in arrivals:
+			listed[int(data[0])] = true
+		for thug in Combat.thugs.duplicate():
+			if not listed.has(thug.net_id):
+				_remove(thug)
 	for data: Array in arrivals:
-		if Combat.thug_by_id(int(data[0])):
-			continue
-		var thug: Thug = THUG_SCENE.instantiate()
-		thug.net_id = int(data[0])
-		thug.puppet = true
-		add_child(thug)
-		thug.global_position = WorldOrigin.to_local(data[1])
-		thug.setup_copy(int(data[3]), float(data[2]), float(data[4]), bool(data[5]))
+		_saw(int(data[0]), int(data[3]))
+		if not Combat.thug_by_id(int(data[0])):
+			_spawn_thug(data, true)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -240,8 +301,7 @@ func _remove_thugs(net_ids: PackedInt32Array) -> void:
 	for net_id in net_ids:
 		var thug := Combat.thug_by_id(net_id)
 		if thug:
-			Combat.unregister(thug)
-			thug.queue_free()
+			_remove(thug)
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
@@ -254,17 +314,98 @@ func _thug_states(sender_msec: int, states: PackedFloat32Array) -> void:
 
 
 ## Joining someone's game, or leaving it, swaps which thugs are around: our
-## own, or copies of the host's.
+## own, or copies of the host's. Becoming the host (the old one left) keeps
+## them: the copies become ours to run.
 func _on_net_state_changed() -> void:
 	_shared.clear()
+	if not Net.is_online():
+		_awaiting.clear()
+		_handovers.clear()
+		_handover_due = false
 	if Net.is_authority() == _was_authority:
 		return
 	_was_authority = Net.is_authority()
+	if Net.state == Net.State.HOSTING:
+		_take_over()
+		return
 	for thug in Combat.thugs.duplicate():
-		Combat.unregister(thug)  # right away, so new thugs can reuse its number
-		thug.queue_free()
+		_remove(thug)
 	_gangs.clear()
 	_bodies.clear()
+
+
+func _on_host_changed(id: int) -> void:
+	set_multiplayer_authority(id, false)
+	if id == Net.local_id():
+		return
+	_handovers.clear()
+	if Net.state == Net.State.JOINED:
+		# The new host takes over the thugs: it gets our copies, and its
+		# updates run on its own clock.
+		_handover_due = true
+		for thug in Combat.thugs:
+			thug.follow_new_host()
+
+
+## We're the new host: our copies become thugs we run, and the other players'
+## copies are on their way (_hand_over). Until a player's come (or
+## HANDOVER_WAIT passes), we hold off telling them which thugs there are.
+func _take_over() -> void:
+	var until := Time.get_ticks_msec() + int(HANDOVER_WAIT * 1000.0)
+	for id in Net.peers():
+		_awaiting[id] = until
+	for thug in Combat.thugs:
+		_saw(thug.net_id, thug.gang)
+		_run(thug)
+	for id: int in _handovers:
+		_adopt(_handovers[id])
+		_awaiting.erase(id)
+	_handovers.clear()
+	_regroup()
+	print("[encounters] took over %d thugs" % Combat.thugs.size())
+
+
+## Our game runs this thug from now on. It waits where it is until we have
+## the ground under it (the old host may have run it far from us).
+func _run(thug: Thug) -> void:
+	thug.take_over()
+	if not thug.is_down() and not city.has_collision_at(WorldOrigin.to_world(thug.global_position)):
+		thug.frozen = true
+
+
+## A player's copies (descriptions, see _describe), handed to the new host:
+## thugs we hadn't heard of join ours, and ones they saw go down go down here
+## too (their hit may have gone to the old host as it left).
+func _adopt(thugs: Array) -> void:
+	for data: Array in thugs:
+		_saw(int(data[0]), int(data[3]))
+		var thug := Combat.thug_by_id(int(data[0]))
+		if thug == null:
+			_run(_spawn_thug(data, false))
+		elif bool(data[5]) and not thug.is_down():
+			thug.go_down(Vector3.ZERO)
+
+
+## Gangs and bodies, from the thugs there are now (after taking over).
+func _regroup() -> void:
+	var gangs := {}
+	for thug in Combat.thugs:
+		gangs.get_or_add(thug.gang, []).append(thug)
+		if thug.is_down() and not _bodies.has(thug):
+			_bodies.append(thug)
+	_gangs.assign(gangs.values())
+
+
+## To the new host: a player's copies of the thugs, to carry on with.
+@rpc("any_peer", "call_remote", "reliable")
+func _hand_over(thugs: Array) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	if Net.state != Net.State.HOSTING:
+		_handovers[sender] = thugs  # the server's word that we're the host is on its way
+		return
+	_adopt(thugs)
+	_regroup()
+	_awaiting.erase(sender)
 
 
 func _on_thug_defeated(thug: Thug) -> void:

@@ -1,19 +1,27 @@
 extends Node
-## Headless check of co-op, over ENet on this machine (WebRTC needs a browser;
-## everything above the connection is the same). Run it once: it hosts a game,
-## starts a second copy of the game that joins, and checks that each sees the
-## other's hero in the right place, that the host's thugs show up for the
-## joined player and hurt them, and that the joined player's punches take the
-## host's thugs down. The joined copy sends its results back before leaving.
-## Run: godot --headless --path . res://tests/coop_test.tscn
+## Headless check of co-op, through the signaling server (tools/signaling,
+## Node.js) and over ENet on this machine (WebRTC needs a browser; everything
+## above the connection is the same). Run it once: it starts the server, hosts
+## a game, starts a second copy of the game that joins, and checks that each
+## sees the other's hero in the right place, that the host's thugs show up for
+## the joined player and hurt them, and that the joined player's punches take
+## the host's thugs down. The joined copy sends its results back before
+## leaving. See coop_migration_test for the host leaving.
+## Run: godot --headless --path . res://tests/coop_test.tscn [-- --port=8071]
+## (--port: the signaling server's; other options, e.g. --tiles, go to both games)
 
-const PORT := 8071
+const SignalingServer := preload("res://tests/signaling_server.gd")
+## The signaling server's port, unless --port=N says otherwise.
+const DEFAULT_PORT := 8071
 ## Across the city from the host: the Bronx, by Yankee Stadium (world meters).
 const FAR_SPOT := Vector3(4998.0, 150.0, -7700.0)
 ## How close a hero copy must be to where its player says the hero is (m).
 const POSITION_TOLERANCE := 0.5
 
 var _role := "host"
+var _port := DEFAULT_PORT
+var _room := ""
+var _server := SignalingServer.new()
 var _world: Node
 var _hero: Hero
 var _players: PlayerSync
@@ -34,6 +42,11 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--role="):
 			_role = arg.trim_prefix("--role=")
+		elif arg.begins_with("--port="):
+			_port = int(arg.trim_prefix("--port="))
+		elif arg.begins_with("--room="):
+			_room = arg.trim_prefix("--room=")
+	LaunchOptions.set_default("signal", "ws://127.0.0.1:%d" % _port)
 	_world = load("res://scenes/world.tscn").instantiate()
 	add_child(_world)
 	for node_name in ["PlayerInput", "Crowd"]:
@@ -49,13 +62,20 @@ func _ready() -> void:
 
 func _host_steps() -> Array[Dictionary]:
 	return [
-		_step("host, and start a second game that joins", 40.0, func() -> void:
-			if Net.host_enet(PORT) != OK:
-				_fail("couldn't host on port %d" % PORT)
-			_client_log = ProjectSettings.globalize_path("user://coop_test_client.log")
-			_client_pid = OS.create_process(OS.get_executable_path(), [
-				"--headless", "--log-file", _client_log, "--path", ProjectSettings.globalize_path("res://"),
-				"res://tests/coop_test.tscn", "--", "--role=client"]),
+		_step("start the co-op server on port %d" % _port, 10.0, func() -> void:
+			var problem := _server.start(_port)
+			if problem:
+				_fail(problem),
+			func() -> bool: return _server.is_up()),
+		_step("host a game", 10.0, Net.host, func() -> bool: return Net.state == Net.State.HOSTING),
+		_step("start a second game that joins", 40.0, func() -> void:
+			_client_log = ProjectSettings.globalize_path("user://coop_test_client_%d.log" % _port)
+			var args := ["--headless", "--log-file", _client_log, "--path", ProjectSettings.globalize_path("res://"),
+				"res://tests/coop_test.tscn", "--", "--role=client", "--room=" + Net.room_code]
+			for arg in OS.get_cmdline_user_args():
+				if not arg.begins_with("--role=") and not arg.begins_with("--room="):
+					args.append(arg)  # --port, --tiles, ...
+			_client_pid = OS.create_process(OS.get_executable_path(), args),
 			func() -> bool: return Net.peers().size() == 1),
 		_step("their hero appears next to ours", 30.0, Callable(), func() -> bool:
 			var other := _other_hero()
@@ -82,10 +102,7 @@ func _host_steps() -> Array[Dictionary]:
 
 func _client_steps() -> Array[Dictionary]:
 	return [
-		_step("join the host", 20.0, func() -> void:
-			if Net.join_enet("127.0.0.1", PORT) != OK:
-				_fail("couldn't start joining"),
-			func() -> bool: return Net.state == Net.State.JOINED),
+		_step("join the host", 20.0, Net.join.bind(_room), func() -> bool: return Net.state == Net.State.JOINED),
 		_step("we're placed next to the host's hero", 30.0, Callable(), func() -> bool:
 			var other := _other_hero()
 			return other != null and not _hero.frozen and other.global_position.distance_to(_hero.global_position) < 10.0),
@@ -139,7 +156,7 @@ func _begin(index: int) -> void:
 
 func _finish() -> void:
 	if _role == "client":
-		_report.rpc_id(Net.HOST_ID, _results, _failures)
+		_report.rpc_id(Net.host_id, _results, _failures)
 		await get_tree().create_timer(1.0).timeout
 		Net.leave()
 		await get_tree().create_timer(0.5).timeout
@@ -156,6 +173,7 @@ func _finish() -> void:
 		print("joined player's log:\n" + FileAccess.get_file_as_string(_client_log))
 	if _client_pid and OS.is_process_running(_client_pid):
 		OS.kill(_client_pid)
+	_server.stop()
 	print("co-op test finished: %d problems" % total)
 	get_tree().quit(1 if total else 0)
 

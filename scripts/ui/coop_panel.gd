@@ -1,7 +1,8 @@
 class_name CoopPanel
 extends Control
 ## The co-op menu (M): host a game and send friends its link or room code, or
-## join a friend's game with theirs. Shows who's playing. Dims the game behind
+## join a friend's game with theirs. Shows who's playing (and hosting), and
+## the room's code and link to everyone in the game. Dims the game behind
 ## it and takes the mouse while open. On touch screens (use_touch_layout) it
 ## gets a Close button and bigger buttons, and the room code box becomes a
 ## browser text box, so the phone's keyboard comes up.
@@ -34,6 +35,7 @@ func _ready() -> void:
 	Net.state_changed.connect(_refresh)
 	Net.player_joined.connect(func(_id: int) -> void: _refresh())
 	Net.player_left.connect(func(_id: int) -> void: _refresh())
+	Net.host_changed.connect(func(_id: int) -> void: _refresh())
 	_refresh()
 
 
@@ -109,10 +111,10 @@ func _refresh() -> void:
 	var offline := state == Net.State.OFFLINE
 	_host_button.visible = offline
 	_join_row.visible = offline
-	_invite.visible = state == Net.State.HOSTING
+	_invite.visible = Net.is_online()
 	_players.visible = Net.is_online()
 	_leave_button.visible = not offline
-	_leave_button.text = "Stop hosting" if state == Net.State.HOSTING else "Leave game"
+	_leave_button.text = "Leave game"  # (the others play on)
 	_status.remove_theme_color_override("font_color")
 	match state:
 		Net.State.OFFLINE:
@@ -125,13 +127,19 @@ func _refresh() -> void:
 			_status.text = "Connecting..."
 		Net.State.HOSTING:
 			_status.text = "You're hosting. Friends can join with the room code or the link."
-			_room.text = "Room code: %s" % Net.room_code
-			_link_edit.text = Net.invite_link()
 		Net.State.JOINED:
-			_status.text = "You're in room %s." % Net.room_code
-	var names: Array[String] = [Net.player_name(Net.local_id()) + " (you)"]
-	for id in Net.peers():
-		names.append(Net.player_name(id))
+			_status.text = "You're in %s's game. Friends can join with the room code or the link too." \
+				% Net.player_name(Net.host_id)
+	_room.text = "Room code: %s" % Net.room_code
+	_link_edit.text = Net.invite_link()
+	var names: Array[String] = []
+	for id: int in [Net.local_id()] + Array(Net.peers()):
+		var notes: Array[String] = []
+		if id == Net.local_id():
+			notes.append("you")
+		if id == Net.host_id:
+			notes.append("host")
+		names.append(Net.player_name(id) + (" (%s)" % ", ".join(notes) if notes else ""))
 	_players.text = "Players: " + ", ".join(names)
 
 

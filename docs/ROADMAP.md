@@ -85,11 +85,12 @@ peer can drive one later. Nearby tiles get collision.
 - **Joining:** press M for the co-op menu. "Host a game" gives a 4-letter
   room code and an invite link (`?join=CODE`); friends join with either.
   Players who join start next to the host's hero. Up to 8 players.
-- **Connections:** browsers connect directly over WebRTC, every player to the
-  host (Godot relays between the others). A small signaling server
-  (`tools/signaling`, Node.js) only introduces players by room code; game
-  traffic never goes through it. It also hands out the STUN/TURN servers to
-  use (`ICE_SERVERS`), so a relay can be added without rebuilding the game.
+- **Connections:** browsers connect directly over WebRTC, every player to
+  every other (a full mesh, so nobody's traffic depends on the host's
+  connection). A small signaling server (`tools/signaling`, Node.js) only
+  introduces players by room code; game traffic never goes through it. It
+  also hands out the STUN/TURN servers to use (`ICE_SERVERS`), so a relay can
+  be added without rebuilding the game.
 - **Who runs what:** each player moves their own hero and sends its state 20
   times a second; other games show a copy, drawn a moment in the past so it
   moves smoothly. The host runs every thug and spawns gangs near every
@@ -101,10 +102,11 @@ peer can drive one later. Nearby tiles get collision.
   local to each player but run from fights anywhere.
 - **Positions** go between games in world coordinates, since each player has
   their own floating origin.
-- **Tested:** `tests/coop_test.tscn` runs a host and a second game over ENet
-  (desktop has no WebRTC) and checks positions, thugs showing up and fighting
-  both ways, and players far apart. Two headless Chrome instances also
-  connected over WebRTC through the signaling server.
+- **Tested:** `tests/coop_test.tscn` runs a host and a second game through
+  the signaling server and over ENet (desktop has no WebRTC) and checks
+  positions, thugs showing up and fighting both ways, and players far apart.
+  Two headless Chrome instances also connected over WebRTC through the
+  signaling server.
 - **Public (2026-10-15):** https://nycheroes.party on Cloudflare: the game,
   its tiles and signaling (a Durable Object at `/signal`) from one Worker
   (`tools/deploy_cloudflare.ps1`, see "Working on the project"); published
@@ -116,7 +118,35 @@ peer can drive one later. Nearby tiles get collision.
   the relay only when going direct fails; `?relay=1` forces it. The local
   signaling server stays STUN only. Tested with two headless Chrome players
   connected relay-only.
-- **Still to do:** if the host leaves, the game ends for everyone.
+- **Host leaving (2026-10-15):** the game goes on without the host. The
+  signaling server names the player who has been in the room longest the new
+  host (passing over any who stopped pinging: a dead connection, or a game
+  paused in a background tab) and tells everyone; the room keeps its code,
+  so friends can still join (with the lowest free player number). The new
+  host's game turns its copies of the thugs into thugs it runs, and the
+  other players hand over their copies (thugs near them it never heard of),
+  so fights carry on with the same thugs, none doubled; a thug the new host
+  has no ground for yet waits until it loads. Each host numbers new thugs in
+  its own series, above every number it has seen. Everyone sees "Player 2
+  is now the host". Games ping the signaling server every 10 s and tell it
+  when they lose touch with a player; one that has also stopped pinging for
+  25 s is dropped, so a host whose network died is replaced in about half a
+  minute. If only the connection between two players broke (both still
+  pinging), the one with the lower number connects again through the
+  server. The menu shows the room code, the link and who's hosting to
+  everyone; "Stop hosting" became "Leave game".
+  `tests/coop_migration_test.tscn` runs four games: the host's game is
+  killed, the next player takes over the same thugs (which hurt and are
+  beaten by the others), a broken connection between two players comes
+  back, a fourth joins with the same code, a player leaves, and a host whose
+  game stops answering is replaced. `tools/signaling/protocol_check.mjs`
+  checks either signaling server (local, or the Durable Object). In four
+  headless Chrome pages over WebRTC (signaling by the Durable Object, run
+  locally), the host's tab closed, the next player took over its thugs
+  within a quarter second, and a fourth joined with the same code.
+- **Still to do:** a game the signaling server drops (a Worker deploy
+  restarts the Durable Object and closes every socket) leaves its co-op
+  game rather than reconnecting.
 
 ## 6. Realism from open data (in progress)
 
@@ -737,7 +767,10 @@ templates for both are already installed.
   `tools/cloudflare/.dev.vars`, gitignored); $0.05/GB after 1,000 GB free.
 - Tests (headless): `godot --headless --path . res://tests/hero_moves_test.tscn`,
   `res://tests/combat_test.tscn`, `res://tests/streaming_test.tscn`,
-  `res://tests/coop_test.tscn`, `res://tests/audio_test.tscn` and
+  `res://tests/coop_test.tscn` and `res://tests/coop_migration_test.tscn`
+  (they run the signaling server, so `npm install` in `tools/signaling`
+  first; `-- --port=N` picks its port, default 8071),
+  `res://tests/audio_test.tscn` and
   `res://tests/traffic_test.tscn` (75 s of
   midtown traffic: no red light run, no overlaps, cars stop for the hero,
   and leave with their tiles).
