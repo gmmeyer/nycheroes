@@ -148,7 +148,15 @@ const PROP_BIKE_DOCK := 20         ## bike share docks (DOCKS_PER_SECTION) or it
 const PROP_PLAZA_TABLE := 21       ## cafe table and chairs, variant 1 with an umbrella [0.75 x 0.8]
 const PROP_PLANTER := 22           ## variant 0 a long box [0.75 x 1.8], 1 a round tub
 const PROP_KIOSK := 23             ## a plaza's food kiosk [2.9 x 2.6]
-const PROP_TYPE_COUNT := 24
+## A wooden utility pole on a street lined with houses, its crossarm toward
+## the street; variant POLE_* bits. Its street light, if any, is a cobra-head
+## (PROP_STREET_LIGHT) at its foot with uv.y ("trunk") 1: no pole of its own.
+const PROP_UTILITY_POLE := 24
+## An overhead wire's span from a utility pole (or a drop to a house, or a
+## guy to the ground): normal (the pole's height, the span's length along the
+## ground, yaw), uv (WIRE_* bits, how far the far end is above the pole's top).
+const PROP_WIRE := 25
+const PROP_TYPE_COUNT := 26
 ## Trees' foliage tones (uv.x of the props surface).
 const TONE_GREEN := 0
 const TONE_LIGHT := 1  ## yellow-green: honeylocust, ginkgo, birch, willow
@@ -157,6 +165,12 @@ const TONE_RED := 3    ## purple-leaf plum, copper beech
 ## Street lights' styles (uv.x of the props surface).
 const STREET_LIGHT_COBRA_HEAD := 0  ## modern: a 9 m pole, a 2.6 m arm
 const STREET_LIGHT_POST_TOP := 1    ## historic: a 4.4 m post with a lantern, by parks
+## Utility poles' variant bits, and wires'.
+const POLE_TRANSFORMER := 1   ## a transformer can hangs on it
+const POLE_THREE_PHASE := 2   ## a third primary wire on a pin on its top
+const WIRE_DROP := 1          ## a service drop to a house (one wire), not a span between poles
+const WIRE_THREE_PHASE := 2
+const WIRE_GUY := 4           ## a down guy from a line's end pole to an anchor in the sidewalk (one wire)
 ## Furniture's variants (uv.x of the props surface).
 const LINKNYC_KIOSK := 0      ## Link1.0 kiosk with two big screens [2.9 x 0.9]
 const LINKNYC_5G := 1         ## Link5G pole [9 x 0.6]

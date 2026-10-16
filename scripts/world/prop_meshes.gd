@@ -40,6 +40,11 @@ extends RefCounted
 ## Plus their glows (street_light_glow.gdshader, a quad the shader turns to
 ## the camera) and pools of light on the ground (street_light_pool.gdshader,
 ## a 2D quad drawn into StreetLightMap).
+## Wooden utility poles, a mesh of their own drawn with the street lights'
+## shader (parts PART_WOOD and up): the pole's y in its height (0..1), the rest
+## (crossarm, insulators, transformer, brackets) in meters from its top; the
+## crossarm runs along z, toward the street. Overhead wires
+## (shaders/wires.gdshader): see wires().
 ## Street furniture (shaders/street_furniture.gdshader), in two meshes:
 ## small pieces (hydrants, benches, litter baskets, bike racks, parking
 ## meters) and large ones (bus shelters, LinkNYC kiosks, subway entrances,
@@ -118,6 +123,18 @@ const PART_CAP := 6
 const COBRA_HEAD_HEIGHT := 9.0
 const COBRA_HEAD_ARM := 2.6
 const POST_TOP_HEIGHT := 4.4
+## Utility poles' parts (on from the street lights', in the same shader).
+const PART_WOOD := 7
+const PART_CROSSARM := 8
+const PART_INSULATOR := 9
+const PART_TOP_PIN := 10      ## the third wire's insulator on the pole's top (three-phase lines only)
+const PART_TRANSFORMER := 11  ## only on poles with one
+const PART_HARDWARE := 12     ## galvanized brackets and braces
+## Overhead wires: how many per span, quads along each, and a box holding a
+## span at unit size whichever way it runs (wires.gdshader hangs them).
+const WIRE_COUNT := 6
+const WIRE_SEGMENTS := 8
+const WIRE_BOUNDS := AABB(Vector3(-1.0, -0.7, -1.0), Vector3(2.0, 1.9, 2.0))
 
 ## How far blob normals lean toward the whole crown's (0 = each blob its own
 ## ball, 1 = one smooth ball).
@@ -418,6 +435,50 @@ static func street_light() -> ArrayMesh:
 				p.y /= POST_TOP_HEIGHT
 		b.positions[i] = p
 	return b.commit()
+
+
+## A wooden utility pole (see the header): a tapering pole, a crossarm with
+## an insulator at each end on two braces, a pin insulator on its top (for
+## three-phase lines), the secondary's and the phone cable's brackets toward
+## the street, and a transformer can on its back; the shader folds away the
+## pin and the can on poles without them.
+static func utility_pole() -> ArrayMesh:
+	var b := _Builder.new()
+	_lathe(b, 6, [Vector2(0.0, 0.16), Vector2(1.0, 0.115), Vector2(1.004, 0.0)], PART_WOOD)
+	_block(b, Vector3(-0.05, -0.47, -1.2), Vector3(0.05, -0.36, 1.2), PART_CROSSARM)
+	for z: float in [-1.0, 1.0]:
+		_beam(b, Vector3(0.0, -1.2, 0.1 * z), Vector3(0.0, -0.47, 0.62 * z), 0.022, PART_HARDWARE)
+		_lathe_at(b, 4, [Vector2(-0.36, 0.04), Vector2(-0.27, 0.065), Vector2(-0.18, 0.0)], PART_INSULATOR,
+				Vector3(0.0, 0.0, 0.95 * z))
+	_lathe_at(b, 4, [Vector2(0.0, 0.035), Vector2(0.09, 0.065), Vector2(0.18, 0.0)], PART_TOP_PIN, Vector3.ZERO)
+	_block(b, Vector3(-0.04, -1.75, 0.1), Vector3(0.04, -1.45, 0.17), PART_HARDWARE)
+	_block(b, Vector3(-0.06, -4.18, 0.1), Vector3(0.06, -4.02, 0.16), PART_HARDWARE)
+	_lathe_at(b, 6, [Vector2(-3.0, 0.0), Vector2(-2.98, 0.24), Vector2(-2.1, 0.24), Vector2(-2.02, 0.0)],
+			PART_TRANSFORMER, Vector3(0.0, 0.0, -0.42))
+	_block(b, Vector3(-0.07, -2.75, -0.2), Vector3(0.07, -2.3, -0.1), PART_TRANSFORMER)
+	return b.commit()
+
+
+## Overhead wires (shaders/wires.gdshader): WIRE_COUNT wires, each a strip of
+## WIRE_SEGMENTS quads, which the shader hangs between two poles (or a pole
+## and a house) and turns to face the camera.
+##   UV = (0..1 along the wire, -1 or 1 across the strip), UV2.x = its number
+## The positions are placeholders; the custom AABB (WIRE_BOUNDS) holds a span
+## at unit size whichever way it runs (the instances scale it by the span's
+## length and the pole's height).
+static func wires() -> ArrayMesh:
+	var b := _Builder.new()
+	for wire in WIRE_COUNT:
+		var row: Array[int] = []
+		for k in WIRE_SEGMENTS + 1:
+			var t := float(k) / WIRE_SEGMENTS
+			for side: float in [-1.0, 1.0]:
+				row.append(b.vertex(Vector3(side * 0.01, 1.0, t), Vector3.UP, Vector2(t, side), Vector2(wire, 0.0)))
+		for k in WIRE_SEGMENTS:
+			b.quad(row[2 * k], row[2 * k + 1], row[2 * k + 3], row[2 * k + 2], Vector3.UP)
+	var mesh := b.commit()
+	mesh.custom_aabb = WIRE_BOUNDS
+	return mesh
 
 
 ## A street light's glow: a quad (corners -1..1 in UV) that the shader turns
@@ -1204,6 +1265,31 @@ static func _lathe(b: _Builder, sides: int, profile: Array[Vector2], part: int) 
 			else:
 				var v3 := b.vertex(Vector3(cos(a0) * p1.y, p1.x, sin(a0) * p1.y), n, Vector2(part, (p1.x - bottom) / height))
 				b.quad(v0, v1, v2, v3, n)
+
+
+## _lathe() about a vertical axis through `center`.
+static func _lathe_at(b: _Builder, sides: int, profile: Array[Vector2], part: int, center: Vector3) -> void:
+	var first := b.positions.size()
+	_lathe(b, sides, profile, part)
+	for i in range(first, b.positions.size()):
+		b.positions[i] += center
+
+
+## A box from `lo` to `hi` (axis-aligned, all six faces).
+static func _block(b: _Builder, lo: Vector3, hi: Vector3, part: int) -> void:
+	var middle := (lo + hi) * 0.5
+	for axis in 3:
+		for facing: float in [-1.0, 1.0]:
+			var n := Vector3.ZERO
+			n[axis] = facing
+			var u := Vector3.ZERO
+			u[(axis + 1) % 3] = 1.0
+			var v := n.cross(u)
+			var corners: Array[int] = []
+			for c: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+				var p: Vector3 = middle + (n + u * c.x + v * c.y) * (hi - lo) * 0.5
+				corners.append(b.vertex(p, n, Vector2(part, (p.y - lo.y) / maxf(hi.y - lo.y, 1e-3))))
+			b.quad(corners[0], corners[1], corners[2], corners[3], n)
 
 
 ## A small pointed cone (a water tower's finial).
