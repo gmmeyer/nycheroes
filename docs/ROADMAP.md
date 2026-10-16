@@ -434,7 +434,7 @@ In order:
   Gateway's units, Riverbank, Roberto Clemente, Gantry Plaza, East River
   and Shirley Chisholm State Parks, Roosevelt Island's), and the
   Planimetric Open Space's cemeteries (Green-Wood, Calvary, Woodlawn...)
-  and recreation areas: 6,671 lawns, 3,556 ha. Paths in the waterfront
+  and recreation areas: 6,383 lawns, 3,425 ha. Paths in the waterfront
   parks get post-top lamps.
 - Special pavements: dark concrete pavers in the DOT's 93 pedestrian
   plazas (Times Square, Herald Square, the Flatiron...), and Belgian block,
@@ -445,8 +445,9 @@ In order:
   Ocean and Eastern Parkways, Riverside Drive and Fifth Avenue along
   Central Park (`props.HISTORIC_LAMP_STREETS`, picked by the street
   centerline's names).
-- Cost: near and mid tiles about +4% (a random sample of 70); draw calls
-  and triangles on screen unchanged.
+- Cost (random samples): near tiles +3.0% (109 tiles), mid +3.8% (20),
+  far about +5% (tiles with new parks grow most: Governors Island's
+  +68%); draw calls and triangles on screen unchanged.
 
 **Parked cars and traffic (in progress):**
 - Data (`tools/citygen/traffic.py`, from the street centerlines): driving
