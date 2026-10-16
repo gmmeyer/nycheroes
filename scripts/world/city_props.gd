@@ -151,8 +151,11 @@ var tree_shadows := true
 ## from its center.
 var canopy_ranges: Array[float] = [6000.0, 6000.0, 9000.0]
 var canopy_range_begin := 240.0
-## Water towers, few and big, draw a little further than trees.
+## Water towers, few and big, draw a little further than trees; mid tiles'
+## (on the buildings they draw one by one) as far as the roofs read from the
+## air (tile center to camera, m).
 var water_tower_range := 1600.0
+var mid_water_tower_range := 3500.0
 ## Street lights shrink away before 650 m (street_light.gdshader); their glows
 ## go on to 1500 m (street_light_glow.gdshader).
 var street_light_range := 1050.0
@@ -282,6 +285,8 @@ func add_to(parent: Node3D, props: Dictionary, level := 0) -> int:
 			count -= share.size() / STRIDE
 			continue
 		var instance := _instance(group, share, _meshes[group])
+		if group == WATER_TOWERS and level > 0:
+			instance.visibility_range_end = mid_water_tower_range
 		parent.add_child(instance)
 		if group == CANOPY:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

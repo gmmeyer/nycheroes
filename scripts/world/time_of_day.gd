@@ -64,6 +64,7 @@ const MIN_INTERVAL := 0.1
 const DUSK := {
 	"light_color": Color(1.0, 0.68, 0.36),
 	"fog_color": Color(0.78, 0.76, 0.75),
+	"fog": 1.0,
 	"ambient_color": Color(0.62, 0.68, 0.88),
 	"ambient_energy": 0.55,
 	"exposure": 1.25,
@@ -79,6 +80,7 @@ const DUSK := {
 const DAWN := {
 	"light_color": Color(1.0, 0.74, 0.48),
 	"fog_color": Color(0.80, 0.77, 0.78),
+	"fog": 1.0,
 	"ambient_color": Color(0.64, 0.70, 0.90),
 	"ambient_energy": 0.55,
 	"exposure": 1.25,
@@ -94,6 +96,7 @@ const DAWN := {
 const NIGHT := {
 	"light_color": Color(0.55, 0.66, 1.0),
 	"fog_color": Color(0.10, 0.11, 0.17),
+	"fog": 1.0,
 	"ambient_color": Color(0.50, 0.58, 0.85),
 	"ambient_energy": 0.55,
 	"exposure": 1.15,
@@ -116,6 +119,7 @@ const NIGHT := {
 const OVERCAST := {
 	"light_color": Color(0.96, 0.97, 1.0),
 	"fog_color": Color(0.92, 0.93, 0.95),
+	"fog": OVERCAST_FOG,
 	"ambient_color": Color(0.80, 0.82, 0.86),
 	"ambient_energy": 0.7,
 	"exposure": 0.9,
@@ -132,6 +136,7 @@ const OVERCAST := {
 const OVERCAST_DUSK := {
 	"light_color": Color(1.0, 0.78, 0.62),
 	"fog_color": Color(0.54, 0.50, 0.52),
+	"fog": OVERCAST_FOG,
 	"ambient_color": Color(0.68, 0.66, 0.74),
 	"ambient_energy": 0.6,
 	"exposure": 1.1,
@@ -147,6 +152,7 @@ const OVERCAST_DUSK := {
 const OVERCAST_DAWN := {
 	"light_color": Color(1.0, 0.82, 0.72),
 	"fog_color": Color(0.56, 0.53, 0.57),
+	"fog": OVERCAST_FOG,
 	"ambient_color": Color(0.70, 0.69, 0.78),
 	"ambient_energy": 0.6,
 	"exposure": 1.1,
@@ -162,6 +168,7 @@ const OVERCAST_DAWN := {
 const OVERCAST_NIGHT := {
 	"light_color": Color(0.55, 0.66, 1.0),
 	"fog_color": Color(0.15, 0.13, 0.15),
+	"fog": OVERCAST_FOG,
 	"ambient_color": Color(0.56, 0.56, 0.72),
 	"ambient_energy": 0.55,
 	"exposure": 1.15,
@@ -176,14 +183,15 @@ const OVERCAST_NIGHT := {
 	"cloud_shade": Color(0.07, 0.07, 0.09),
 }
 ## Overcast: the sun's (and moon's) energy and shadows' strength as a share
-## of a clear day's, and how much thicker the fog is.
+## of a clear day's, and how much thicker the fog is than at dusk.
 const OVERCAST_SUN_ENERGY := 0.3
 const OVERCAST_SHADOW_OPACITY := 0.6
 const OVERCAST_FOG := 1.3
 ## Overcast: uniforms of the city's materials (the toon ambient of
 ## toon.gdshaderinc: the gray sky fills in the shade, and walls get less
-## bounce from the dull streets, less still at their feet in the canyons;
-## building glass's reflections) and the ocean's (its sky reflection and
+## bounce from the dull streets, less still at their feet in the canyons,
+## and what sees little sky (narrow streets, under decks) is darker still, as
+## all the light is the sky's; building glass's reflections) and the ocean's (its sky reflection and
 ## depth), wherever a material has them. Colors replace, numbers scale.
 const OVERCAST_MATERIALS := {
 	"ambient_sky": Color(0.80, 0.82, 0.86),
@@ -191,6 +199,7 @@ const OVERCAST_MATERIALS := {
 	"ambient_energy": 1.12,
 	"ambient_wall_bounce": 0.4,
 	"canyon_occlusion": 0.65,
+	"sky_light": Vector2(0.92, 0.8),
 	"reflect_zenith": Color(0.60, 0.63, 0.68),
 	"reflect_horizon": Color(0.77, 0.79, 0.82),
 	"sky_tint": Color(0.50, 0.53, 0.57),
@@ -239,6 +248,8 @@ var declination := DECLINATION
 var solar_noon := SOLAR_NOON
 
 var _day := {}
+## The preset's fog density (see _keep_fog()); 0 until it's known, or with ?fog.
+var _fog := 0.0
 var _presets: Array[float] = PRESETS.duplicate()
 var _sky: ShaderMaterial
 var _sun_pinned := false
@@ -258,6 +269,7 @@ func _ready() -> void:
 		"light_color": sun.light_color,
 		"light_energy": sun.light_energy,
 		"fog_color": env.fog_light_color,
+		"fog": Quality.clear_fog(),
 		"ambient_color": env.ambient_light_color,
 		"ambient_energy": env.ambient_light_energy,
 		"exposure": env.tonemap_exposure,
@@ -283,6 +295,8 @@ func _ready() -> void:
 	if LaunchOptions.get_string("weather") == "overcast":
 		_set_overcast()
 	_apply()
+	if not LaunchOptions.has("fog"):
+		_keep_fog.call_deferred()
 
 
 func _process(delta: float) -> void:
@@ -437,6 +451,8 @@ func _apply() -> void:
 
 	var env := world_environment.environment
 	env.fog_light_color = look.fog_color
+	if _fog > 0.0:
+		env.fog_density = _fog * look.fog
 	env.ambient_light_color = look.ambient_color
 	env.ambient_light_energy = look.ambient_energy
 	env.tonemap_exposure = look.exposure
@@ -486,8 +502,7 @@ static func _blend(a: Dictionary, b: Dictionary, t: float) -> Dictionary:
 
 
 ## Turns the day overcast (see OVERCAST...): the sky's deck of cloud, faint
-## shadows, the materials' gray ambient, and (once Quality has set the
-## preset's fog, after every node's _ready) thicker fog.
+## shadows, the materials' gray ambient (and thicker fog: OVERCAST_FOG).
 func _set_overcast() -> void:
 	weather = "overcast"
 	overcast = 1.0
@@ -501,13 +516,14 @@ func _set_overcast() -> void:
 				continue
 			var target: Variant = OVERCAST_MATERIALS[key]
 			material.set_shader_parameter(key, lerp(value, target if target is Color else value * target, overcast))
-	if not LaunchOptions.has("fog"):
-		_thicken_fog.call_deferred()
 
 
-func _thicken_fog() -> void:
-	var env := world_environment.environment
-	env.fog_density *= lerpf(1.0, OVERCAST_FOG, overcast)
+## Takes the fog Quality's preset has set (after every node's _ready) as the
+## haze of dusk and night, which each look scales ("fog": thinner on a clear
+## day, Quality.clear_fog(); thicker overcast, OVERCAST_FOG).
+func _keep_fog() -> void:
+	_fog = world_environment.environment.fog_density
+	_apply()
 
 
 ## The city's materials and the ocean's (the ones DUSK_MATERIALS and

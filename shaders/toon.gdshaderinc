@@ -24,6 +24,12 @@ uniform float ambient_energy = 0.75;
 // Extra fill on walls (up to this much more at vertical), standing in for
 // the light that sunlit streets and facades bounce into the shade.
 uniform float ambient_wall_bounce = 0.5;
+// The ambient light (as toon_ambient()'s occlusion) of a surface that sees
+// all of the sky, and of one that sees none of it, for surfaces with the
+// share they see baked into the tiles (tools/citygen/shade.py: the ground
+// and the walls' feet; less down narrow, tall streets and under el decks).
+// A typical street, seeing about two thirds of it, keeps the light it had.
+uniform vec2 sky_light = vec2(1.175, 0.675);
 // At night: the night sky's light from above, the city's sodium-and-neon
 // glow from below, and their strength. At dusk and dawn the day's ambient is
 // tinted by dusk_ambient: shade goes blue against the low sun's gold.

@@ -26,6 +26,7 @@ prepared buildings (prepare.py).
 import json
 
 import numpy as np
+import shapely
 
 from common import RAW_DIR
 
@@ -137,6 +138,13 @@ DISTRICT_ODDS = (
 WAREHOUSE_DISTRICTS = ("DUMBO", "FULTON FERRY", "VINEGAR HILL", "WALLABOUT", "GANSEVOORT", "WEST CHELSEA")
 # Houses in a row share a material, except this share, picked on their own.
 OWN_MATERIAL_SHARE = 0.2
+# Shops fill all of a street front whose retail area is at least this share
+# of the ground floor; lofts' and warehouses' at most LOFT_SHOP_SHARE of it
+# (prepare_retail()).
+FULL_SHOP_SHARE = 0.75
+LOFT_SHOP_SHARE = 0.3
+DISTRICT_REACH = 40.0  # m
+SQUARE_FEET = 10.7639  # in a square meter
 
 CACHE_NAME = "facades"
 
@@ -177,6 +185,45 @@ def prepare(buildings: dict) -> dict:
     print(f"  facades: {matched:,} of {count:,} buildings matched to tax lots", flush=True)
     # stoop: steps up to the front door (fronts.py), 0 for none.
     return {"archetype": archetype, "flags": flags, "floor_dm": floor_dm, "stoop": stoop}
+
+
+def prepare_retail(buildings: dict, f: dict) -> dict:
+    """Per building (same order as `buildings`; `f` is prepare()'s): the
+    share of its street front that has shops (data/cache/retail.pkl).
+    PLUTO's retail area over the ground floor of its tax lot (the footprints
+    of the lot's buildings); 1 (shops all along) where PLUTO has none (the
+    shop comes from the building class) or more than a ground floor. Lofts
+    and warehouses (LOFT, INDUSTRIAL, and prewar buildings in the old
+    warehouse districts) have at most LOFT_SHOP_SHARE: mostly loading docks,
+    entrances and a few shops, whatever their retail area (often a whole
+    floor or two)."""
+    lots, pluto = lot_tables()
+    count = len(buildings["bin"])
+    lot = np.array([lots.get(int(buildings["bin"][k]), int(buildings["bbl"][k])) for k in range(count)], dtype=np.int64)
+    numbers, which = np.unique(lot, return_inverse=True)
+    ground = np.bincount(which, weights=shapely.area(buildings["geoms"]) * SQUARE_FEET)
+    retail = np.array([number(pluto.get(int(n)) or {}, "retailarea") for n in numbers])
+    share = np.where(retail[which] > 0, np.clip(retail[which] / np.maximum(ground[which], 1.0), 0.0, 1.0), 1.0)
+    loft = np.isin(f["archetype"], (LOFT, INDUSTRIAL))
+    # The historic district: the lot's, or for lots without one (condominiums'
+    # billing lots often have none) the nearest building's within
+    # DISTRICT_REACH.
+    district = np.array([(pluto.get(int(n)) or {}).get("histdist") or "" for n in numbers], dtype=object)[which]
+    named = np.flatnonzero(district != "")
+    unnamed = np.flatnonzero(district == "")
+    anchors = shapely.points(buildings["anchor"])
+    near = shapely.STRtree(anchors[named]).query_nearest(anchors[unnamed], max_distance=DISTRICT_REACH)
+    district[unnamed[near[0]]] = district[named[near[1]]]
+    for k in np.flatnonzero(~loft & np.isin(f["archetype"], (WALKUP, PREWAR_APARTMENT, PREWAR_OFFICE))):
+        row = pluto.get(int(lot[k])) or {}
+        loft[k] = int(number(row, "yearbuilt") or 1950) < PREWAR_YEAR and any(
+            n in district[k].upper() for n in WAREHOUSE_DISTRICTS)
+    share = np.where(share >= FULL_SHOP_SHARE, 1.0, share)  # (stairs, lobbies, the odd office)
+    share = np.where(loft, np.minimum(share, LOFT_SHOP_SHARE), share)
+    shops = ((f["flags"] & RETAIL) != 0) | (f["archetype"] == STORE)
+    print(f"  retail: {int(np.sum(shops & (share < 1.0))):,} of {int(shops.sum()):,} shop buildings with shops along "
+          f"part of their front ({int(np.sum(shops & loft)):,} lofts and warehouses)", flush=True)
+    return {"share": share.astype(np.float32)}
 
 
 def _floors(lot, height: float) -> int:

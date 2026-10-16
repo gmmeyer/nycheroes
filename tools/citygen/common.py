@@ -385,6 +385,16 @@ class MeshBuilder:
     def is_empty(self) -> bool:
         return not self.pos
 
+    def joined(self) -> tuple:
+        """Everything added so far as (pos, uv, uv2, normals), each (T, 3, k),
+        joined into one array per kind (which later adds append to); changing
+        uv2 in place changes the mesh."""
+        if not self.pos:
+            return None
+        for name in ("pos", "uv", "uv2", "front", "normals"):
+            setattr(self, name, [np.ascontiguousarray(np.concatenate(getattr(self, name)))])
+        return self.pos[0], self.uv[0], self.uv2[0], self.normals[0]
+
     def build(self, origin, decimals: int = 3):
         """The mesh arrays relative to origin, with positions and uvs rounded
         to `decimals` (normals to 0.001) so the files compress well."""

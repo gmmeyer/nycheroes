@@ -90,7 +90,11 @@ void fragment() {
 	vec3 color = kind == YELLOW ? yellow_paint : white_paint;
 	color *= 0.95 + 0.07 * value_noise(p * 0.05);
 	ALBEDO = toon_night_albedo(mix(asphalt, color, paint));
-	EMISSION = ALBEDO * toon_ambient(vec3(0.0, 1.0, 0.0), 1.0);
+	// Sky light, less down narrow streets and under decks, like the road's
+	// (UV2.x past the kind, as ground.gdshader has it; tools/citygen/shade.py).
+	float unseen_sky = (UV2.x - float(kind)) * 40.0;
+	float occlusion = unseen_sky > 0.5 ? mix(sky_light.x, sky_light.y, (unseen_sky - 1.0) / 15.0) : 1.0;
+	EMISSION = ALBEDO * toon_ambient(vec3(0.0, 1.0, 0.0), occlusion);
 	toon_glint = 0.0;
 	if (city_lights > 0.0) {
 		float distance_to_camera = length(VERTEX);

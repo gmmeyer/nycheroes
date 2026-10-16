@@ -10,6 +10,8 @@
 //        20 shrubs (beds and hedges on planted medians, a low mound), 21 pavers
 //        (pedestrian plazas), 22 Belgian block (cobbled streets).
 //        Bridge deck tops are road.
+//        Flat ground's UV2.x also carries, past its kind, the share of the
+//        sky it doesn't see (tools/citygen/shade.py; at most 0.4).
 // UV2.y: structures on the hand-made bridges carry palette + 8 * flags (the
 //        bridge's colors: 1 Brooklyn, 2 Manhattan, 3 Hell Gate, 4 High Bridge;
 //        flags 1 lattice: steel painted as an open truss, its UV.y 0..1 up
@@ -639,7 +641,12 @@ void fragment() {
 	bool photographed = (kind <= MARSH && kind != SEAWALL) || kind == YARD || kind >= SHRUBS;
 	float far_enough = smoothstep(aerial_near_fade.x, aerial_near_fade.y, length(VERTEX));
 	ALBEDO = toon_night_albedo(mix(color, photo, photographed ? aerial_amount(aerial_uv) * far_enough : 0.0));
-	EMISSION = ALBEDO * toon_ambient(shading_normal, 1.0);
+	// Sky light, less down narrow streets and under decks: flat ground's UV2.x
+	// past its kind is (1 + the share of the sky it doesn't see in 15ths) / 40
+	// (tools/citygen/shade.py), else 0.
+	float unseen_sky = (UV2.x - float(kind)) * 40.0;
+	float occlusion = unseen_sky > 0.5 ? mix(sky_light.x, sky_light.y, (unseen_sky - 1.0) / 15.0) : 1.0;
+	EMISSION = ALBEDO * toon_ambient(shading_normal, occlusion);
 	toon_glint = kind == CABLE ? 0.3 : (kind == STEEL ? 0.12 : 0.0);
 
 	if (city_lights > 0.0) {
