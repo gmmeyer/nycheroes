@@ -47,6 +47,7 @@ import markings
 import overpasses
 import prepare
 import props
+import times_square
 import towers
 import traffic
 from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT,
@@ -96,6 +97,11 @@ LANE_OFFSET = 2.5  # meters in from the curb
 LANE_WALL_GAP = 0.8  # keep this far from building walls
 MIN_LANE_LENGTH = 10.0
 LANE_STEP = 10.0  # points along a lane at least this often, to follow the terrain
+
+# Sign walls (facades.SIGNS) at least this wide measure uv.x from their own
+# left corner, so the shader can fit screens to them (narrower ones, like the
+# facets of a rounded corner, keep measuring along the building).
+SIGN_FACE_MIN = 6.0
 
 # Gaps between road pieces narrower than twice this (meters) are filled.
 ROAD_GAP = 0.25
@@ -398,12 +404,14 @@ def _build_tile(task):
     indices = _W["groups"][level].get((i, j), np.array([], dtype=np.int64))
     # Hand-made landmarks (landmarks.py) stand in for their data buildings.
     indices = landmarks.without(indices, _W["b"]["bin"])
+    indices = times_square.without(indices, _W["b"]["bin"])  # the TKTS booth's steps stand in for it
     if settings.get("blocks"):
         _add_blocks(building_mesh, indices, settings)
     else:
         for index in indices:
             _add_building(building_mesh, index, settings)
     landmarks.add_to_tile(building_mesh, level, size, i, j, _W["b"], _W["shapes"], _footprint_ground)
+    times_square.add_to_tile(building_mesh, level, size, i, j, _W, _footprint_ground)
     _add_ground(ground_mesh, bounds, settings)
     _add_raised_water(water_mesh, ground_mesh, bounds, settings)
     bridge = _W["bridges"][level].get((i, j))
@@ -494,12 +502,14 @@ def _add_prism(builder: MeshBuilder, poly, height: float, facade: tuple, fronts:
     for ring in (poly.exterior, *poly.interiors):
         coords = np.asarray(ring.coords)[:, :2]
         uv2 = _wall_uv2(coords, (archetype, wall_flags, floor_dm, seed), fronts)
+        restart = _sign_faces(coords, uv2)
         if parapet:
-            builder.add_walls(coords, ground - 1.0, top + facades.PARAPET_HEIGHT, uv2, ground_y=ground)
+            builder.add_walls(coords, ground - 1.0, top + facades.PARAPET_HEIGHT, uv2, ground_y=ground,
+                              restart=restart)
             inside = facades.encode(archetype, flags | facades.PARAPET_INSIDE, floor_dm, seed)
             builder.add_walls(coords[::-1], top, top + facades.PARAPET_HEIGHT, inside, ground_y=ground)
         else:
-            builder.add_walls(coords, ground - 1.0, top, uv2, ground_y=ground)
+            builder.add_walls(coords, ground - 1.0, top, uv2, ground_y=ground, restart=restart)
     builder.add_flat([poly], top, facades.encode(archetype, flags | facades.ROOF, floor_dm, seed))
 
 
@@ -512,11 +522,19 @@ def _wall_uv2(coords: np.ndarray, facade: tuple, fronts: bool) -> np.ndarray:
         length = np.maximum(np.hypot(seg[:, 0], seg[:, 1]), 1e-9)
         outward = np.column_stack([seg[:, 1], -seg[:, 0]]) / length[:, None]  # right of travel
         middles = (coords[1:] + coords[:-1]) * 0.5
-        front = _faces_street(middles, outward)
+        front = _faces_street(middles, outward) | times_square.faces_plaza(_W, middles, outward)
         uv2[front, 0] += facades.FLAG_SCALE * facades.FRONT
         signs = front & props.in_sign_district(middles)
-        uv2[signs, 0] += facades.FLAG_SCALE * facades.SIGNS
+        uv2[signs, 0] += facades.FLAG_SCALE * (facades.SIGNS + _W.get("sign_part", 0) * facades.FRONT_PART)
     return uv2
+
+
+def _sign_faces(coords: np.ndarray, uv2: np.ndarray) -> np.ndarray:
+    """Which wall segments along coords (with per-segment uv2) are sign walls
+    of at least SIGN_FACE_MIN, measuring uv.x from their own corner."""
+    flags = (np.asarray(uv2)[:, 0] // facades.FLAG_SCALE).astype(np.int64)
+    seg = np.diff(np.asarray(coords)[:, :2], axis=0)
+    return ((flags & facades.SIGNS) != 0) & (np.hypot(seg[:, 0], seg[:, 1]) >= SIGN_FACE_MIN)
 
 
 def _add_pitched(builder: MeshBuilder, poly, height: float, facade: tuple) -> bool:
@@ -611,7 +629,8 @@ def _add_pitched(builder: MeshBuilder, poly, height: float, facade: tuple) -> bo
     distances = np.unique(np.round(distances, 3))
     coords = shapely.get_coordinates(shapely.line_interpolate_point(ring, distances))
     uv2 = _wall_uv2(coords, facade, True)
-    builder.add_walls(coords, ground - 1.0, roof_height(coords), uv2, ground_y=ground)
+    builder.add_walls(coords, ground - 1.0, roof_height(coords), uv2, ground_y=ground,
+                      restart=_sign_faces(coords, uv2))
     return True
 
 
@@ -623,6 +642,8 @@ def _footprint_ground(geom) -> float:
 
 def _add_building(builder: MeshBuilder, index: int, settings: dict) -> None:
     b = _W["b"]
+    # Its sign walls' part (times_square.py: One Times Square's screens go to the top).
+    _W["sign_part"] = times_square.sign_part(int(b["bin"][index]))
     # Towers newer than the 3-D model have their massing from a table (towers.py).
     if towers.has(int(b["bin"][index])):
         towers.add(builder, index, _W, settings, _footprint_ground, _faces_street, _add_shape)
@@ -696,10 +717,15 @@ def _add_shape(builder: MeshBuilder, shape, ground: float, facade: tuple) -> Non
             wall_flags = flags
             if length > 1e-6:
                 middle = rings[0][:, :2].mean(axis=0)
-                if _faces_street(middle[None], (normal[:2] / length)[None])[0]:
+                outward = (normal[:2] / length)[None]
+                if _faces_street(middle[None], outward)[0] or times_square.faces_plaza(_W, middle[None], outward)[0]:
                     wall_flags |= facades.FRONT
                     if props.in_sign_district(middle[None])[0]:
-                        wall_flags |= facades.SIGNS
+                        wall_flags |= facades.SIGNS | _W.get("sign_part", 0) * facades.FRONT_PART
+                        # Wide sign walls measure from their left corner (see SIGN_FACE_MIN).
+                        span = rings[0][:, :2] @ along
+                        if span.max() - span.min() >= SIGN_FACE_MIN:
+                            uv[..., 0] -= span.min()
             uv2 = facades.encode(archetype, wall_flags, floor_dm, seed)
         pos = np.stack([tris[..., 0], tris[..., 2], -tris[..., 1]], axis=-1)
         builder.add(pos, uv, uv2, (normal[0], normal[2], -normal[1]))
@@ -1307,7 +1333,10 @@ def _build_lanes(bounds, origin):
     if len(nearby_buildings):
         sidewalks = shapely.difference(sidewalks, shapely.buffer(shapely.union_all(nearby_buildings), LANE_WALL_GAP))
     sidewalks = _W["details"].without_narrow_medians(sidewalks, area)  # nobody walks along medians
+    # Times Square's plazas: around their benches, and lanes across them too.
+    sidewalks = shapely.difference(sidewalks, times_square.bench_obstacles(_W, bounds))
     lanes = shapely.intersection(shapely.buffer(roads_near, LANE_OFFSET).boundary, sidewalks)
+    lanes = shapely.union(lanes, times_square.plaza_lanes(_W, bounds, sidewalks, roads_near))
 
     lines = [line for line in lines_of(lanes) if line.length >= 1.0]
     if not lines:
@@ -1320,6 +1349,11 @@ def _build_lanes(bounds, origin):
         start = len(points)
         points.extend(to_godot(coords, _W["ground"]["lod0"].height(coords)) - np.asarray(origin))
         indices.extend(range(start, start + len(coords)))
+        indices.append(LANE_BREAK)
+    for lane in times_square.step_lanes(_W, bounds, _footprint_ground):
+        start = len(points)
+        points.extend(to_godot(lane[:, :2], lane[:, 2]) - np.asarray(origin))
+        indices.extend(range(start, start + len(lane)))
         indices.append(LANE_BREAK)
     if not points:
         return None

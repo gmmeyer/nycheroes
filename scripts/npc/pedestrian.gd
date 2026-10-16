@@ -10,7 +10,12 @@ const CALM_DOWN_TIME := 9.0
 ## Step aside when a hero comes this close.
 const DODGE_DISTANCE := 2.5
 const MAX_SIDE_STEP := 2.5
-## Further from the camera than this, stop animating (too small to notice) ...
+## Further from the camera than this, pose only FAR_POSE_RATE times a second
+## (each new pose costs a skinning pass, see SkinWarmup; Times Square's
+## crowd has dozens in view), at times of their own so they spread out ...
+const SLOW_POSE_DISTANCE := 25.0
+const FAR_POSE_RATE := 12.0
+## ... further than this, stop animating (too small to notice) ...
 const ANIMATE_DISTANCE := 60.0
 ## ... and further than this, don't draw at all.
 const VISIBLE_DISTANCE := 120.0
@@ -32,6 +37,9 @@ var _facing := 0.0
 var _player: AnimationPlayer
 var _detail_check := randf() * 0.5
 var _warmup: SkinWarmup
+var _slow_pose := false
+var _pose_wait := randf() / FAR_POSE_RATE
+var _pose_time := 0.0
 
 @onready var _model: Node3D = $Model
 
@@ -105,6 +113,14 @@ func _process(delta: float) -> void:
 		_facing = lerp_angle(_facing, _travel_yaw(), 1.0 - exp(-8.0 * delta))
 	_model.rotation.y = _facing
 	_animate(speed)
+	if _slow_pose:
+		_pose_time += delta
+		_pose_wait -= delta
+		if _pose_wait <= 0.0:
+			_pose_wait += 1.0 / FAR_POSE_RATE
+			if _player.active and _player.can_process():
+				_player.advance(_pose_time)
+			_pose_time = 0.0
 	_update_detail(delta)
 
 
@@ -119,6 +135,12 @@ func _update_detail(delta: float) -> void:
 	var distance := global_position.distance_to(camera.global_position)
 	visible = distance < VISIBLE_DISTANCE
 	_player.active = distance < ANIMATE_DISTANCE
+	var slow := distance > SLOW_POSE_DISTANCE
+	if slow != _slow_pose:
+		_slow_pose = slow
+		_pose_time = 0.0
+		_player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL if slow \
+				else AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_IDLE
 
 
 func _move(distance: float) -> void:
