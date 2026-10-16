@@ -91,7 +91,7 @@ OVER_DEPTH = 2.0      # the bridges over it
 RAILING = 1.1         # pipe railings and the Promenade's fence
 RAILS = (0.55, 1.1)   # the railings' pipes, this high
 RAIL_DEPTH = 0.12
-POST_SPACING = 2.5    # and their posts, this far apart (up close)
+POST_SPACING = 5.0    # and their posts, this far apart (up close)
 POST_HALF = 0.06
 PARAPET = 1.1         # where a deck's back has nothing above it
 WALL_FOOT = 1.0       # walls reach this far into the ground
@@ -116,6 +116,7 @@ TRENCH_STEP = 5.0
 # that aren't moved.
 REALIGN_BLEND = 25.0
 REALIGN_REACH = 3.0   # lines this close to a deck are on it
+REALIGN_TOLERANCE = 0.05  # and the moved lines' points this close to straight are left out
 # Streets bridging over the structure (Columbia Heights, lidar): this high
 # over the middle roadway (4.2 m clear, then the bridge), across the cut and
 # BRIDGE_REACH past it; the ground climbs to their ends at LANDING_SLOPE,
@@ -147,13 +148,14 @@ DEFAULT_HALF = 5.0
 EDGE_FACING = 0.6
 DECK_SPACING = overpasses.DECK_SPACING
 DETAILED = overpasses.DETAILED
+NEAR = ("lod0",)  # railings only up close
 LAMP_SPACING = 30.0   # the Promenade's lamps, along its railing
 LAMP_INSET = 1.2
 WALK_OFFSET = 2.5     # a walking lane this far from the Promenade's path, toward its railing
 
 # How it's painted (the landmark bridges' structure kinds and uv2.y: palette +
 # 8 * flags, see bridge_landmarks): concrete walls; rust-colored fascias
-# (palette 3's concrete); pipe railings in the els' pale green steel; the
+# (palette 3's concrete); pipe railings in the els' green-gray steel; the
 # Promenade's fence drawn as open steel (lattice) in rust brown.
 WALL = (STRUCTURE_CONCRETE, 0.0)
 FASCIA = (STRUCTURE_CONCRETE, 3.0)
@@ -617,7 +619,7 @@ class Structure:
             for key, i in zip(keys, (0, -1)):
                 if key not in fixed:
                     moved[i] = placed.setdefault(key, moved[i].copy())
-            out[k] = shapely.LineString(moved)
+            out[k] = shapely.simplify(shapely.LineString(moved), REALIGN_TOLERANCE)
         return out
 
     @staticmethod
@@ -832,7 +834,7 @@ def build(network, buckets: dict, level_sizes: dict) -> None:
         y = promenade_y(coords)
         if facing > 0:
             _wall(builders, coords, ground(coords) - WALL_FOOT, y, WALL)
-            _wall(builders, coords, y, y + RAILING, FENCE_STEEL, band=True)
+            _wall(builders, coords, y, y + RAILING, FENCE_STEEL, band=True, levels=NEAR)
         else:
             _edge_beam(builders, coords, y, DECK_TIP + 0.2, fence=True)
 
@@ -1036,10 +1038,10 @@ def _edge_beam(builders: dict, coords: np.ndarray, y: np.ndarray, depth: float, 
     railing (or the Promenade's fence)."""
     _wall(builders, coords, y - depth, y, FASCIA)
     if fence:
-        _wall(builders, coords, y, y + RAILING, FENCE_STEEL, band=True)
+        _wall(builders, coords, y, y + RAILING, FENCE_STEEL, band=True, levels=NEAR)
         return
     for rail in RAILS:
-        _wall(builders, coords, y + rail - RAIL_DEPTH, y + rail, RAILING_STEEL)
+        _wall(builders, coords, y + rail - RAIL_DEPTH, y + rail, RAILING_STEEL, levels=NEAR)
     if "lod0" in builders:
         line = shapely.LineString(coords)
         s = np.arange(POST_SPACING / 2, line.length, POST_SPACING)
@@ -1053,16 +1055,17 @@ def _edge_beam(builders: dict, coords: np.ndarray, y: np.ndarray, depth: float, 
                     builders["lod0"].add_walls(ends, foot, foot + RAILING, RAILING_STEEL)
 
 
-def _wall(builders: dict, coords: np.ndarray, bottom, top, uv2: tuple, band: bool = False) -> None:
-    """A wall along coords (outward to the right of travel) in the detailed
-    levels (from far away only the tops show); a `band`'s uv.y runs 0..1 from
-    its foot to its top (railings drawn as open steel)."""
+def _wall(builders: dict, coords: np.ndarray, bottom, top, uv2: tuple, band: bool = False,
+          levels=DETAILED) -> None:
+    """A wall along coords (outward to the right of travel) in these levels
+    (from far away only the tops show); a `band`'s uv.y runs 0..1 from its
+    foot to its top (railings drawn as open steel)."""
     coords = np.asarray(coords, np.float64)
     if len(coords) < 2:
         return
     bottom = np.broadcast_to(np.asarray(bottom, np.float64), len(coords))
     top = np.maximum(np.broadcast_to(np.asarray(top, np.float64), len(coords)), bottom)
-    for level in DETAILED:
+    for level in levels:
         if level not in builders:
             continue
         count = len(builders[level].pos)

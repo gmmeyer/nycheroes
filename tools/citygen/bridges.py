@@ -225,13 +225,16 @@ def _build_bridge(poly, name: str, land, terrain, builders: dict, approach) -> b
     # (where, how far along it a point is (0 at the water, 1 at its end), the
     # height it comes down to).
     ramps = []
+    ends = []  # the heights the approaches come down to at their far ends
     for part in polygons_of(shapely.intersection(poly, land), min_area=5.0):
         if _shores(part, water) != 1:
             continue
         part_ring = np.asarray(part.exterior.coords)[:, :2]
-        reach = max(float(shapely.distance(shapely.points(part_ring), water).max()), 1.0)
+        away = shapely.distance(shapely.points(part_ring), water)
+        reach = max(float(away.max()), 1.0)
         shapely.prepare(part)
         ramps.append((part, lambda geoms, reach=reach: shapely.distance(geoms, water) / reach, approach))
+        ends.append(float(approach(part_ring[[int(np.argmax(away))]])[0]))
     shore_ends = _shore_ends(poly, land, [r[0] for r in ramps])
     if len(ramps) + len(shore_ends) < 2:
         return False  # doesn't reach land at both ends
@@ -243,6 +246,9 @@ def _build_bridge(poly, name: str, land, terrain, builders: dict, approach) -> b
     # Clearance is over the water, which inland can be well above sea level.
     water_level = max(0.0, float(terrain.raw(shapely.get_coordinates(shapely.point_on_surface(main_span)))[0]))
     deck_top = water_level + clearance
+    if name not in MAJOR_BRIDGES and len(ends) >= 2:
+        # A viaduct crossing a creek or canal on its way holds its height over it.
+        deck_top = max(deck_top, min(ends))
 
     # Ends at the shore ramp down over the deck, from the street where it
     # meets the land.
