@@ -98,6 +98,11 @@ const SURFACE_CHURCHES := 10
 ## iron railings and fences, fence posts, shrubs, awnings), which
 ## shaders/fronts.gdshader paints; without collision.
 const SURFACE_FRONTS := 11
+## The waterfront landmarks' faces (tools/citygen/landmarks.py, materials 60
+## and up: ferry terminals, pier sheds, the slips' racks, docks and boats) in
+## the materials shaders/waterfront.gdshader paints, laid out like the
+## landmarks surface. With collision up close.
+const SURFACE_WATERFRONT := 12
 ## Floats per lane in a decoded traffic surface's info: from node, to node,
 ## speed, lane, lanes, signal phase, how it ends (0, 1, 2 as above).
 const TRAFFIC_INFO_STRIDE := 7

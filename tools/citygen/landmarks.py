@@ -9,7 +9,9 @@ collision. Faces carry a landmark material in the archetype slot of uv2.x (16
 and up; the data buildings use 0-15, see facades.py), which
 shaders/building.gdshader paints; the second batch's own materials (OWN_SHADER
 and up) go to the tile's landmarks surface instead, painted by
-shaders/landmark.gdshader (one more draw call where there's one):
+shaders/landmark.gdshader, and the waterfront's (WATERFRONT_SHADER and up) to
+its waterfront surface, painted by shaders/waterfront.gdshader (one more draw
+call each where there's one):
 
   uv2.x = material + FLAG_SCALE * flags (facades.ROOF on roofs)
   uv2.y = param + SEED; on walls param = face width in dm * 4 + variant
@@ -36,10 +38,11 @@ import numpy as np
 import shapely
 from shapely import affinity
 from shapely.geometry import Polygon
+from shapely.geometry import shape as geojson_shape
 
 import buildings3d
 import facades
-from common import polygon_normal, polygons_of, triangles_of
+from common import FEET, load_features, polygon_normal, polygons_of, project, triangles_of
 
 # Landmark materials (the archetype slot of uv2.x). Same numbers in
 # shaders/building.gdshader.
@@ -75,8 +78,9 @@ GUGGENHEIM = 41      # white painted concrete: 0 the spiral's bands, 1 the glass
                      # them, 2 plain walls with window bands (the name on the bridge), 3 the
                      # annex's limestone grid; uv on the spiral = (m around, z)
 NYPL = 42            # Vermont marble: 0 the walls, 1 the Fifth Avenue portico, 2 the attic
-CATHEDRAL = 43       # white marble Gothic: 0 aisles and chapels, 1 the clerestory and gables,
-                     # 2 the west front, 3 the towers, lanterns and spires
+CATHEDRAL = 43       # gray-tan marble Gothic: 0 aisles and chapels, 1 the clerestory and
+                     # gables, 2 the west front's central wall (and plates: its gable), 3 the
+                     # towers, lanterns and spires (uv on spires = (share across a face * 3.6, z))
 SLATE = 44           # slate roofs; on pitched roofs uv = (m along the eaves, m up the slope)
 UN_GLASS = 45        # the Secretariat's blue-green curtain walls and mechanical floors
 UN_MARBLE = 46       # 0 white marble and limestone, 1 glass between marble piers, 2 the
@@ -101,9 +105,23 @@ RIDE = 57            # painted steel: 0 white, 1 blue, 2 red with LED lights (uv
                      # m along)), 3 the Wonder Wheel's cars and its sign
 MARQUEE = 58         # Radio City Music Hall: 0 the marquee (4.4 to 7.4 m up), 1 the vertical
                      # sign (uv = m across its face, m above its foot)
+GOTHIC = 59          # St. Patrick's carved work, in CATHEDRAL's marble: 0 plain (reveals,
+                     # buttresses, parapets), 1 pinnacles, crockets and gables, 2 a window's
+                     # glass and tracery (the rose window on the central front), 3 a portal's
+                     # bronze doors under its tympanum; walls' uv on the face they're set in
+# The waterfront (painted by shaders/waterfront.gdshader, see WATERFRONT_SHADER).
+PIERSIDE = 60        # ferry terminals and pier sheds: 0 a glass curtain wall, 1 brick (the slip
+                     # houses), 2 metal panels with window bands, 3 white-painted steel; roofs
+                     # metal, the canopies' undersides (down) steel
+TIMBER = 61          # 0 fender racks (timber piles), 1 decking (docks; roofs: boards), 2 a boat
+                     # (white hull and cabin), 3 a Staten Island ferry (orange); boats' bands by
+                     # their height above the water
 # Materials from here on are painted by shaders/landmark.gdshader, in the tiles'
-# landmarks surface (the buildings' shader would grow too big to compile fast).
+# landmarks surface (the buildings' shader would grow too big to compile fast),
+# and from WATERFRONT_SHADER on by shaders/waterfront.gdshader, in the
+# waterfront surface (so the landmarks' shader stays small too).
 OWN_SHADER = GUGGENHEIM
+WATERFRONT_SHADER = PIERSIDE
 
 ROOF = facades.ROOF
 FLAG_SCALE = facades.FLAG_SCALE
@@ -433,11 +451,12 @@ def footprint_frame(footprint, nominal_degrees: float) -> Frame:
     return Frame(centroid, best)
 
 
-def place(model: Model, builder, frame: Frame, ground: float, own_builder=None) -> None:
+def place(model: Model, builder, frame: Frame, ground: float, own_builder=None, waterfront_builder=None) -> None:
     """Adds a model to a tile's MeshBuilders (Godot space), standing at
     `ground`: faces in the materials from OWN_SHADER on to `own_builder` (the
-    landmarks surface, shaders/landmark.gdshader), the rest to `builder` (the
-    buildings surface)."""
+    landmarks surface, shaders/landmark.gdshader), from WATERFRONT_SHADER on to
+    `waterfront_builder` (the waterfront surface, shaders/waterfront.gdshader),
+    the rest to `builder` (the buildings surface)."""
     c, s = math.cos(frame.angle), math.sin(frame.angle)
 
     def rotate(v):
@@ -448,8 +467,11 @@ def place(model: Model, builder, frame: Frame, ground: float, own_builder=None) 
         en = frame.to_world(pos[..., :2])
         world = np.stack([en[..., 0], pos[..., 2] + ground, -en[..., 1]], axis=-1)
         uv2 = np.repeat(np.column_stack([code, param + SEED])[:, None, :], 3, axis=1)
-        own = (np.mod(code, FLAG_SCALE) >= OWN_SHADER) if own_builder is not None else np.zeros(len(code), bool)
-        for target, keep in ((builder, ~own), (own_builder, own)):
+        material = np.mod(code, FLAG_SCALE)
+        own = (material >= OWN_SHADER) if own_builder is not None else np.zeros(len(code), bool)
+        waterfront = own & (material >= WATERFRONT_SHADER) if waterfront_builder is not None else np.zeros(len(code), bool)
+        own &= ~waterfront
+        for target, keep in ((builder, ~own & ~waterfront), (own_builder, own), (waterfront_builder, waterfront)):
             if keep.any():
                 target.add(world[keep], uv[keep], uv2[keep], rotate(front[keep]), rotate(normals[keep]))
 
@@ -478,6 +500,7 @@ class Context:
     shape: object        # the 3-D model's shape for the main BIN, or None
     detail: int
     ground: object = _flat  # ground(local xy (N, 2)): the terrain's height above the base (m)
+    base: float = 0.0    # the base's height above sea level (m)
 
 
 def _empire_state(m: Model, ctx: Context) -> None:
@@ -996,22 +1019,24 @@ def _quads(m, corners, uv, material, param, flags=0, normals=None):
 
 def _guggenheim(m: Model, ctx: Context) -> None:
     """Solomon R. Guggenheim Museum (Frank Lloyd Wright, 1959). The rotunda:
-    white bands spiraling up around the ramp (432 m at a 5% grade), each band
-    leaning out over a glass strip, the whole an inverted ziggurat 38 m
-    across at the top (the footprint data; about 30 m at the bottom, from
-    photos), its roof at 29.7 m and the skylight's twelve-sided dome to 37.5 m
-    (the city's 3-D model); the Monitor (the small rotunda, four stories) to
-    the north, the bridge band along Fifth Avenue with the museum's name, and
-    Gwathmey Siegel's ten-story annex (1992), a limestone grid, behind.
-    Wikipedia, "Solomon R. Guggenheim Museum". Local x runs west to Fifth
-    Avenue, y south; the rotunda is centered at (0.2, 11.1), the Monitor at
-    (7.7, -22.0)."""
+    on a base drum that carries the bridge's band round its front over the
+    lobby's glass (set back under it), white-gray bands spiraling up around
+    the ramp (432 m at a 5% grade), each band leaning out over a glass strip,
+    the whole an inverted ziggurat 38 m across at the top (the footprint
+    data; the drum about 35 m and the lowest band 31 m, from photos), its roof
+    at 29.7 m and the skylight's twelve-sided dome to 37.5 m (the city's 3-D
+    model); the Monitor (the small rotunda, four stories) to the north, the
+    bridge band along Fifth Avenue with the museum's name, and Gwathmey
+    Siegel's ten-story annex (1992), a limestone grid, behind. Wikipedia,
+    "Solomon R. Guggenheim Museum". Local x runs west to Fifth Avenue, y
+    south; the rotunda is centered at (0.2, 11.1), the Monitor at (7.7,
+    -22.0)."""
     d = m.detail
     cx, cy = 0.2, 11.1
-    top, z0, pitch, band, tuck = 29.7, 1.85, 5.1, 4.0, 0.35
+    top, z0, pitch, band, tuck, drum = 29.7, 9.6, 5.6, 4.4, 0.35, 10.9
 
     def radius(z):  # the bands' outer face
-        return 15.0 + 4.0 * np.clip((z - z0) / (top - z0), 0.0, 1.0)
+        return 15.4 + 3.6 * np.clip((z - z0) / (top - z0), 0.0, 1.0)
 
     def inner(z):  # the glass strips
         return radius(z) - 1.5
@@ -1026,15 +1051,23 @@ def _guggenheim(m: Model, ctx: Context) -> None:
     m.prism(annex, -1.0, 44.0, GUGGENHEIM, variant=3)
     if d == 2:
         # Far away: a frustum with its bands painted, and the Monitor.
-        tower(m, cx, cy, [(-1.0, 15.0), (top, 19.0)], 10, GUGGENHEIM, close_top=False)
-        m.cap(Polygon(circle(cx, cy, 19.0, 10, start=np.pi / 10)[:, :2]), top, PAVING)
+        tower(m, cx, cy, [(-1.0, 15.0), (top, 19.0)], 16, GUGGENHEIM, close_top=False)
+        m.cap(Polygon(circle(cx, cy, 19.0, 16, start=np.pi / 16)[:, :2]), top, PAVING)
         tower(m, 7.7, -22.0, [(-1.0, 7.5), (18.5, 7.7)], 8, GUGGENHEIM, variant=2)
         return
+    # The ground floor: the lobby's glass, set back under the base drum.
+    n = (72, 32)[d]
+    _surface_of_revolution(m, cx, cy, [(-1.0, 14.2), (4.4, 14.2)], n, GUGGENHEIM, 1, 2 * np.pi * 14.2)
+    m.cap(shapely.difference(shapely.Point(cx, cy).buffer(17.2, quad_segs=n // 4),
+                             shapely.Point(cx, cy).buffer(14.2, quad_segs=n // 4)), 4.4, GUGGENHEIM, flags=0, down=True)
+    _surface_of_revolution(m, cx, cy, [(4.4, 17.2), (drum, 17.8)], n, GUGGENHEIM, 0, 2 * np.pi * 17.5)
+    m.cap(shapely.difference(shapely.Point(cx, cy).buffer(17.8, quad_segs=n // 4),
+                             shapely.Point(cx, cy).buffer(float(inner(z0)) - 0.05, quad_segs=n // 4)), drum, GUGGENHEIM)
     # The spiral: one long strip of band (its face, underside and top ledge)
     # and the glass strip under it, around and up from the back (east). Its
     # bottom edge rises `pitch` a turn until the band reaches the roof, then
     # runs level for a last turn; each band stops short of the one above.
-    per_turn = (24, 12)[d]
+    per_turn = (72, 32)[d]
     turns = (top - band - z0) / pitch + 1.0
     theta = np.linspace(0.0, 2 * np.pi * turns, int(per_turn * turns) + 1)
 
@@ -1045,7 +1078,7 @@ def _guggenheim(m: Model, ctx: Context) -> None:
         above = np.where(t + 2 * np.pi <= theta[-1] + 1e-9, bottom_at(t + 2 * np.pi), top)
         return np.minimum(bottom_at(t) + band, above)
     lo, hi = bottom_at(theta), top_at(theta)
-    below = np.where(theta >= 2 * np.pi - 1e-9, top_at(theta - 2 * np.pi), -1.0)
+    below = np.minimum(np.where(theta >= 2 * np.pi - 1e-9, top_at(theta - 2 * np.pi), drum - 0.1), lo)
     phi = np.pi + theta
     c, s = np.cos(phi), np.sin(phi)
 
@@ -1053,19 +1086,25 @@ def _guggenheim(m: Model, ctx: Context) -> None:
         return np.stack([cx + r * c, cy + r * s, z], -1)
     arc = theta * 17.0  # m around, at a middle radius
 
-    def strip(p, q, variant, flags=0):
-        # Quads between consecutive samples of the lower ring p and the upper q.
+    def strip(p, q, variant, normal, flags=0):
+        # Quads between consecutive samples of the lower ring p and the upper q,
+        # normal = (out, up) at each sample for smooth shading round the turn.
         a0, a1, b1, b0 = p[:-1], p[1:], q[1:], q[:-1]
         if flags & ROOF:
             uv = np.stack([a0[:, :2], a1[:, :2], b1[:, :2], b0[:, :2]], 1)
         else:
             uv = np.stack([np.column_stack([arc[:-1], a0[:, 2]]), np.column_stack([arc[1:], a1[:, 2]]),
                            np.column_stack([arc[1:], b1[:, 2]]), np.column_stack([arc[:-1], b0[:, 2]])], 1)
-        _quads(m, np.stack([a0, a1, b1, b0], 1), uv, GUGGENHEIM, 4 * 380 + variant, flags)
-    strip(at(inner(below), below), at(inner(lo), lo), 1)
-    strip(at(inner(lo), lo), at(radius(lo) - tuck, lo), 0)
-    strip(at(radius(lo) - tuck, lo), at(radius(hi), hi), 0)
-    strip(at(radius(hi), hi), at(inner(hi), hi), 0, flags=ROOF)
+        normal = np.broadcast_to(np.asarray(normal, np.float64), (len(c), 2))
+        normal = normal / np.linalg.norm(normal, axis=-1, keepdims=True)
+        n3 = np.stack([normal[:, 0] * c, normal[:, 0] * s, normal[:, 1]], -1)
+        _quads(m, np.stack([a0, a1, b1, b0], 1), uv, GUGGENHEIM, 4 * 380 + variant, flags,
+               normals=np.stack([n3[:-1], n3[1:], n3[1:], n3[:-1]], 1))
+    lean = np.column_stack([hi - lo, -(radius(hi) - radius(lo) + tuck)])
+    strip(at(inner(below), below), at(inner(lo), lo), 1, (1.0, 0.0))
+    strip(at(inner(lo), lo), at(radius(lo) - tuck, lo), 0, (0.0, -1.0))
+    strip(at(radius(lo) - tuck, lo), at(radius(hi), hi), 0, lean)
+    strip(at(radius(hi), hi), at(inner(hi), hi), 0, (0.0, 1.0), flags=ROOF)
     # The band's first end, at the back, facing back along the spiral.
     def first(r, z):
         return (cx + r * c[0], cy + r * s[0], z)
@@ -1155,27 +1194,319 @@ def _lion(m, base, d):
         m.box((x + 1.0, y, z + 0.35), (0.9, 1.2, 0.7), GC_SCULPTURE)         # haunches
 
 
+class _Face:
+    """A vertical face from a to b (local x/y), its outside right of travel (as
+    in Model.walls): u runs m from a (its left end seen from outside), z up,
+    and `depth` m into it."""
+
+    def __init__(self, a, b):
+        self.a = np.asarray(a, np.float64)
+        d = np.asarray(b, np.float64) - self.a
+        self.width = float(np.linalg.norm(d))
+        self.along = d / self.width
+        self.out = np.array([self.along[1], -self.along[0]])
+
+    def point(self, u, z, depth=0.0):
+        u, z, depth = np.broadcast_arrays(np.asarray(u, np.float64), np.asarray(z, np.float64),
+                                          np.asarray(depth, np.float64))
+        xy = self.a + u[..., None] * self.along - depth[..., None] * self.out
+        return np.concatenate([xy, z[..., None]], axis=-1)
+
+    def direction(self, du, dz, dout=0.0):
+        """A 3-D direction from its parts along the face, up and out of it."""
+        return np.array([du * self.along[0] + dout * self.out[0], du * self.along[1] + dout * self.out[1], dz])
+
+
+def _arch(u0, u1, sill, apex, rise=None, n=6):
+    """A pointed arch's opening as a (u, z) polygon: upright sides from `sill`,
+    then two arcs meeting at `apex`, `rise` above the springing (by default an
+    equilateral arch's, 0.866 of its width; half its width makes it round);
+    n points to an arc."""
+    w = u1 - u0
+    rise = min(0.866 * w if rise is None else rise, apex - sill)
+    spring = apex - rise
+    r = (rise * rise + w * w / 4.0) / w
+    top = math.acos(max(-1.0, min(1.0, (w / 2.0 - r) / r)))  # the apex, seen from the left arc's center
+    right = [(u1 - r + r * math.cos(a), spring + r * math.sin(a)) for a in np.linspace(0.0, math.pi - top, n + 1)]
+    left = [(u0 + r + r * math.cos(a), spring + r * math.sin(a)) for a in np.linspace(top, math.pi, n + 1)[1:]]
+    return Polygon([(u0, sill), (u1, sill)] + right + left)
+
+
+def _face_poly(m, face, poly, material, variant=0, depth=0.0, facing=1.0):
+    """(u, z) polygons (holes allowed) on `face`, `depth` m in, facing out (or
+    in, facing=-1); uv = (u, z), param's width the face's."""
+    for part in polygons_of(poly, 0.01):
+        tris = triangles_of(part)
+        if tris is not None:
+            m.add(face.point(tris[..., 0], tris[..., 1], depth), tris, material,
+                  round(face.width * 10.0) * 4 + variant, (facing * face.out[0], facing * face.out[1], 0.0))
+
+
+def _face_sides(m, face, poly, d0, d1, material, variant=0, inward=True):
+    """The sides of a (u, z) polygon's outline on `face` from depth d0 to d1:
+    facing into the polygon (a recess's reveals) or out of it (a projecting
+    block's). uv = (m along the outline and in, z)."""
+    ring = np.asarray(shapely.orient_polygons(poly).exterior.coords)
+    p, q = ring[:-1], ring[1:]
+    e = q - p
+    length = np.hypot(e[:, 0], e[:, 1])
+    keep = length > 1e-3
+    p, q, e, length = p[keep], q[keep], e[keep], length[keep]
+    s = np.concatenate([[0.0], np.cumsum(length)[:-1]])
+    side = np.column_stack([-e[:, 1], e[:, 0]]) / length[:, None] * (1.0 if inward else -1.0)
+    normal = np.column_stack([side[:, 0] * face.along[0], side[:, 0] * face.along[1], side[:, 1]])
+    corners = np.stack([face.point(p[:, 0], p[:, 1], d0), face.point(q[:, 0], q[:, 1], d0),
+                        face.point(q[:, 0], q[:, 1], d1), face.point(p[:, 0], p[:, 1], d1)], 1)
+    uv = np.stack([np.column_stack([s + d0, p[:, 1]]), np.column_stack([s + length + d0, q[:, 1]]),
+                   np.column_stack([s + length + d1, q[:, 1]]), np.column_stack([s + d1, p[:, 1]])], 1)
+    halves = [[0, 1, 2], [0, 2, 3]]
+    m.add(corners[:, halves].reshape(-1, 3, 3), uv[:, halves].reshape(-1, 3, 2), material, 4 * 10 + variant,
+          np.repeat(normal, 2, axis=0))
+
+
+def _face_recess(m, face, opening, depth, orders, inset, base=0.0, keep_sill=False):
+    """Sets an opening ((u, z) polygon) into `face` from `base` to `depth` m
+    in, in `orders` steps each `inset` m narrower (a Gothic portal's or
+    window's orders): the reveals and the steps between them, plain stone.
+    With keep_sill the orders keep the opening's foot (a doorway). Returns
+    the innermost opening."""
+    current = opening
+    step = (depth - base) / orders
+    for k in range(orders):
+        d1 = base + step * (k + 1)
+        _face_sides(m, face, current, base + step * k, d1, GOTHIC)
+        if k + 1 == orders:
+            break
+        inner = shapely.buffer(current, -inset, join_style="mitre")
+        if keep_sill:
+            bounds = inner.bounds
+            inner = shapely.union(inner, rect(bounds[0], current.bounds[1], bounds[2], bounds[1] + 0.01))
+        inner = max(polygons_of(inner, 0.01), key=lambda poly: poly.area)
+        _face_poly(m, face, shapely.difference(current, inner), GOTHIC, 0, d1)
+        current = inner
+    return current
+
+
+def _crocket(m, p, up, out, size):
+    """A crocket: a stone leaf curling up and out from an edge at p (3-D),
+    `up` along the edge, `out` away from it (unit vectors)."""
+    m.tri_plate(p, p + up * size * 1.3, p + up * size * 0.9 + out * size, size * 0.5, GOTHIC, variant=1)
+
+
+def _crockets(m, a, b, out, size, spacing):
+    """Crockets every `spacing` m up the edge from a to b (3-D points), their
+    leaves toward `out` (made square to the edge)."""
+    a, b = np.asarray(a, np.float64), np.asarray(b, np.float64)
+    length = float(np.linalg.norm(b - a))
+    up = (b - a) / length
+    out = np.asarray(out, np.float64) - up * (up @ np.asarray(out, np.float64))
+    out /= np.linalg.norm(out)
+    for t in np.arange(spacing * 0.6, length - size * 1.4, spacing):
+        _crocket(m, a + up * t, up, out, size)
+
+
+def _pinnacle(m, x, y, z0, z1, half, start=np.pi / 4):
+    """A Gothic pinnacle on (x, y) from z0 to its tip at z1: a square shaft
+    `half` m from its axis, a ledge, and a spirelet (its crockets painted)."""
+    c = half * math.sqrt(2.0)
+    zs = z0 + 0.4 * (z1 - z0)
+    tower(m, x, y, [(z0, c), (zs, c), (zs, c * 1.2), (zs + 0.12 * (z1 - z0), c * 1.2), (zs + 0.12 * (z1 - z0), c),
+                    (z1, 0.03)], 4, GOTHIC, smooth=False, variant=1, start=start)
+
+
+def _gabled_frame(m, face, center, half, foot, eaves, apex, opening, out, d):
+    """A Gothic portal's or window's frame: a block `out` m proud of `face`,
+    `half` m either side of `center`, from `foot` up to a gable (`eaves` to
+    `apex`), the opening cut through it; crockets up the gable's rakes and a
+    finial on near tiles."""
+    house = Polygon([(center - half, foot), (center + half, foot), (center + half, eaves), (center, apex),
+                     (center - half, eaves)])
+    _face_poly(m, face, shapely.difference(house, opening), GOTHIC, 1, -out)
+    _face_poly(m, face, shapely.difference(house, opening), GOTHIC, 1, 0.0, facing=-1.0)
+    _face_sides(m, face, house, -out, 0.0, GOTHIC, 1, inward=False)
+    if d == 0:
+        top = face.point(center, apex, -out / 2)
+        for side in (-1.0, 1.0):
+            foot_point = face.point(center + side * half, eaves, -out / 2)
+            rake = np.array([-side * half, apex - eaves])
+            _crockets(m, foot_point, top, face.direction(side * rake[1], abs(rake[0])), 0.45, 1.1)
+        tower(m, top[0], top[1], [(apex - 0.3, 0.32), (apex + 1.4, 0.03)], 4, GOTHIC, smooth=False, variant=1,
+              start=np.pi / 4)
+
+
+def _openwork_spire(m, cx, cy, z0, z1, r0, r1, d, start=np.pi / 8):
+    """An octagonal spire from z0 (corners r0 from its axis) to z1 (r1), in
+    tiers of tracery (painted: uv = (share across a face * 3.6, z)), with
+    crockets up its eight edges on near tiles."""
+    tiers = (12, 4, 1)[d]
+    z = np.linspace(z0, z1, tiers + 1)
+    r = r0 + (r1 - r0) * (z - z0) / (z1 - z0)
+    a = start + np.arange(9) * (np.pi / 4)
+    c, s = np.cos(a), np.sin(a)
+    quads, uvs = [], []
+    for i in range(tiers):
+        for k in range(8):
+            quads.append([(cx + r[i] * c[k], cy + r[i] * s[k], z[i]), (cx + r[i] * c[k + 1], cy + r[i] * s[k + 1], z[i]),
+                          (cx + r[i + 1] * c[k + 1], cy + r[i + 1] * s[k + 1], z[i + 1]),
+                          (cx + r[i + 1] * c[k], cy + r[i + 1] * s[k], z[i + 1])])
+            uvs.append([(0.0, z[i]), (3.6, z[i]), (3.6, z[i + 1]), (0.0, z[i + 1])])
+    _quads(m, np.array(quads), np.array(uvs), CATHEDRAL, round(28.8 * 10) * 4 + 3)
+    if d == 0:
+        for k in range(8):
+            foot = np.array([cx + r0 * c[k], cy + r0 * s[k], z0])
+            tip = np.array([cx + r1 * c[k], cy + r1 * s[k], z1])
+            _crockets(m, foot, tip, (c[k], s[k], 0.0), 0.55, 1.65)
+
+
+def _st_patricks_front(m, d, front):
+    """St. Patrick's west front on near and mid tiles (see _st_patricks)."""
+    orders = 3 if d == 0 else 1
+    # The central wall: the main portal (9.4 x 16 m, set back 3.7 m in orders
+    # to the bronze doors) under its gablet, the rose window (7.9 m) in its
+    # arch above, the gable over all.
+    face = _Face((front, -7.4), (front, 8.0))
+    mid = face.width / 2
+    portal = _arch(mid - 4.7, mid + 4.7, -1.0, 16.0, rise=6.0)
+    rose_arch = _arch(mid - 6.4, mid + 6.4, 18.5, 33.0)
+    _face_poly(m, face, shapely.difference(rect(0.0, -1.0, face.width, 34.0), shapely.union(portal, rose_arch)),
+               CATHEDRAL, 2)
+    doors = _face_recess(m, face, portal, 3.7, orders, 0.55, base=-0.7, keep_sill=True)
+    _face_poly(m, face, doors, GOTHIC, 3, 3.7)
+    _gabled_frame(m, face, mid, 5.7, -1.0, 12.0, 22.5, portal, 0.7, d)
+    back = _face_recess(m, face, rose_arch, 1.1, max(orders - 1, 1), 0.5)
+    rose = shapely.Point(mid, 26.0).buffer(4.25, quad_segs=(8, 4, 2)[d])
+    _face_poly(m, face, shapely.difference(back, rose), GOTHIC, 0, 1.1)
+    _face_poly(m, face, _face_recess(m, face, rose, 1.7, 1, 0.0, base=1.1), GOTHIC, 2, 1.7)
+    m.cap(rect(front - 3.6, -7.4, front, 8.0), 34.0, SLATE)
+    gable = Polygon([(0.0, 34.0), (face.width, 34.0), (mid, 47.5)])
+    _face_poly(m, face, gable, CATHEDRAL, 2)
+    _face_poly(m, face, gable, CATHEDRAL, 2, 2.7, facing=-1.0)
+    _face_sides(m, face, gable, 0.0, 2.7, GOTHIC, 1, inward=False)
+    if d == 0:
+        top = face.point(mid, 47.5, 1.2)
+        for side in (-1.0, 1.0):
+            _crockets(m, face.point(mid + side * mid, 34.0, 1.2), top, face.direction(side * 13.5, mid), 0.8, 1.6)
+    # The cross on the gable.
+    cx, cy, _ = face.point(mid, 0.0, 1.2)
+    m.box((cx, cy, 49.0), (0.5, 0.5, 3.0), GOTHIC)
+    m.box((cx, cy, 49.6), (0.5, 2.0, 0.45), GOTHIC)
+    # The towers.
+    for y0, y1, sign in ((-17.2, -7.4, -1.0), (8.0, 17.8, 1.0)):
+        outer, inner = (y0, y1) if sign < 0 else (y1, y0)
+        tx, ty = (42.5 + front) / 2, (y0 + y1) / 2
+        faces = [(_Face((front, y0), (front, y1)), True)]
+        side = _Face((42.5, outer), (front, outer)) if sign < 0 else _Face((front, outer), (42.5, outer))
+        faces.append((side, False))
+        for face, has_portal in faces:
+            c = face.width / 2
+            low = (_arch(c - 2.0, c + 2.0, -1.0, 10.0) if has_portal else _arch(c - 1.2, c + 1.2, 3.0, 11.0))
+            window = _arch(c - 1.9, c + 1.9, 16.0, 28.0)
+            _face_poly(m, face, shapely.difference(rect(0.0, -1.0, face.width, 41.5), shapely.union(low, window)),
+                       CATHEDRAL, 3)
+            if has_portal:
+                _face_poly(m, face, _face_recess(m, face, low, 1.6, orders, 0.45, base=-0.5, keep_sill=True),
+                           GOTHIC, 3, 1.6)
+                _gabled_frame(m, face, c, 2.8, -1.0, 8.0, 14.5, low, 0.5, d)
+            else:
+                _face_poly(m, face, _face_recess(m, face, low, 0.6, 1, 0.0), GOTHIC, 2, 0.6)
+            _face_poly(m, face, _face_recess(m, face, window, 0.9, max(orders - 1, 1), 0.3, base=-0.35), GOTHIC, 2,
+                       0.9)
+            _gabled_frame(m, face, c, 2.6, 15.0, 24.5, 31.0, window, 0.35, d)
+        # The back and the inner side, plain; the top, its pierced battlement.
+        if sign < 0:
+            m.walls([(42.5, y1), (42.5, y0)], -1.0, 41.5, CATHEDRAL, 3, closed=False)
+            m.walls([(front, y1), (42.5, y1)], -1.0, 41.5, CATHEDRAL, 3, closed=False)
+        else:
+            m.walls([(42.5, y1), (42.5, y0)], -1.0, 41.5, CATHEDRAL, 3, closed=False)
+            m.walls([(42.5, y0), (front, y0)], -1.0, 41.5, CATHEDRAL, 3, closed=False)
+        square = rect(42.5, y0, front, y1)
+        m.cap(square, 41.5, PAVING)
+        m.prism(shapely.difference(square, shapely.buffer(square, -0.4, join_style="mitre")), 41.5, 43.0, GOTHIC,
+                roof=GOTHIC)
+        # Buttresses at the corners, stepping back in three stages, small
+        # pinnacles on the setbacks and clustered ones on top.
+        stages = ((-1.0, 15.0, 1.6), (15.0, 28.0, 1.1), (28.0, 41.5, 0.6))
+        for k, (z0, z1, p) in enumerate(stages):
+            for box in (rect(front - 2.0, min(outer + sign * p, outer - sign * 1.8), front + p,
+                             max(outer + sign * p, outer - sign * 1.8)),
+                        rect(front - 0.5, min(inner - sign * 1.8, inner + sign * 0.8), front + p,
+                             max(inner - sign * 1.8, inner + sign * 0.8)),
+                        rect(42.5, min(outer + sign * p, outer - sign * 1.2), 44.5,
+                             max(outer + sign * p, outer - sign * 1.2))):
+                m.prism(box, z0, z1, GOTHIC, roof=GOTHIC)
+            if d == 0 and k < 2:
+                nxt = stages[k + 1][2]
+                for y in (outer - sign * 0.8, inner - sign * 0.5):
+                    _pinnacle(m, front + (p + nxt) / 2, y, z1, z1 + 4.0, 0.22)
+        if d < 2:
+            # Each corner's cluster: a tall pinnacle and, on near tiles, two
+            # smaller ones beside it along the faces.
+            for x, y, h in ((front - 0.7, outer - sign * 0.6, 1.05), (front, inner - sign * 0.5, 0.95),
+                            (43.5, outer - sign * 0.3, 0.95), (43.2, inner + sign * 0.7, 0.8)):
+                _pinnacle(m, x, y, 41.5, 56.0, h)
+                if d == 0:
+                    cx, cy = (x - tx, y - ty)
+                    for ox, oy in ((-np.sign(cx) * 1.9, 0.0), (0.0, -np.sign(cy) * 1.9)):
+                        _pinnacle(m, x + ox, y + oy, 41.5, 50.0, 0.45)
+        if d == 0:
+            for x, y in ((front - 0.3, ty), (tx, outer - sign * 0.3), (tx, inner + sign * 0.3), (42.8, ty)):
+                _pinnacle(m, x, y, 43.0, 48.5, 0.35)
+        # The octagonal lantern with gablets and pinnacles round its top, the
+        # spire, its molding between the two tiers, and the cross.
+        tower(m, tx, ty, [(41.5, 4.75), (57.6, 4.75)], 8, CATHEDRAL, close_top=False, smooth=False, variant=3,
+              start=np.pi / 8)
+        tower(m, tx, ty, [(57.6, 5.1), (59.0, 5.1), (59.0, 4.7)], 8, CATHEDRAL, close_top=False, smooth=False,
+              variant=3, start=np.pi / 8)
+        corners = [(tx + 4.75 * math.cos(np.pi / 8 + k * np.pi / 4), ty + 4.75 * math.sin(np.pi / 8 + k * np.pi / 4))
+                   for k in range(9)]
+        if d < 2:
+            for k in range(8):
+                lantern = _Face(corners[k], corners[k + 1])
+                _gabled_frame(m, lantern, lantern.width / 2, lantern.width / 2 - 0.25, 54.0, 56.5, 61.5,
+                              Polygon(), 0.45, d)
+                a = np.pi / 8 + k * np.pi / 4
+                _pinnacle(m, tx + 5.2 * math.cos(a), ty + 5.2 * math.sin(a), 53.0, 63.0, 0.38)
+        _openwork_spire(m, tx, ty, 59.0, 98.6, 4.7, 0.25, d)
+        tower(m, tx, ty, [(78.4, 2.75), (79.6, 2.75)], 8, GOTHIC, close_top=False, smooth=False, variant=1,
+              start=np.pi / 8)
+        m.box((tx, ty, 99.5), (0.3, 0.3, 1.9), GOTHIC)
+        m.box((tx, ty, 99.8), (0.3, 1.1, 0.25), GOTHIC)
+
+
 def _st_patricks(m: Model, ctx: Context) -> None:
-    """St. Patrick's Cathedral (James Renwick Jr., 1878; spires 1888): white
-    marble Gothic on a Latin cross. The aisles and chapels to 20.5 m over the
-    footprint data's plan, the nave (15 m across, the clerestory's top at
-    32 m) and transepts (53 m across) under steep slate roofs to the city's
-    3-D model's ridge at 42.6 m, the apse; on Fifth Avenue the central gable
-    (48 m, with the rose window, 7.9 m) between two towers 9.8 m square:
-    square to 41 m, then octagonal lanterns (16 m) and spires (43 m) to
-    100.4 m. Wikipedia, "St. Patrick's Cathedral (Manhattan)". Local x runs
-    west to Fifth Avenue, y south; the nave's axis is y = 0.4."""
+    """St. Patrick's Cathedral (James Renwick Jr., 1878; spires 1888): Tuckahoe
+    and Lee marble Gothic on a Latin cross, weathered gray-tan. The aisles and
+    chapels to 20.5 m over the footprint data's plan, the nave (15 m across,
+    the clerestory's top at 32 m) and transepts (53 m across) under steep
+    slate roofs to the city's 3-D model's ridge at 42.6 m, the apse. The west
+    front on Fifth Avenue: the central gable (156 ft, 48 m, crocketed, with its
+    cross) over the main portal (31 ft wide and 51 ft high, set back 12 ft in
+    orders to the bronze doors, 16.5 ft high) and its gablet, and the rose
+    window (26 ft) in a pointed arch; two towers 32 ft (9.8 m) square to
+    136 ft (41.5 m), each with a portal and gablet, a window under a gable,
+    four small windows to a side under a pierced battlement, buttresses at the
+    corners stepping back in three stages, and clustered pinnacles on top; the
+    octagonal lanterns (54 ft) with gablets and pinnacles round their tops,
+    and the spires (140 ft) in two tiers of tracery, crockets up their edges,
+    to 100.4 m. Wikipedia, "St. Patrick's Cathedral (Manhattan)". Local x runs
+    west to Fifth Avenue, y south; the nave's axis is y = 0.4, the front at
+    x = 52.3."""
     d = m.detail
-    yc, eaves, ridge, aisle = 0.4, 32.0, 42.6, 20.5
+    yc, eaves, ridge, aisle, front = 0.4, 32.0, 42.6, 20.5, 52.3
     plan = shapely.simplify(_local_footprint(ctx), TOLERANCE[d])
     nave = rect(-35.0, yc - 8.0, 49.6, yc + 8.0)
     transept = rect(-13.8, -22.2, 2.5, 23.8)
     apse = shapely.intersection(shapely.Point(-35.0, yc).buffer(8.0, quad_segs=4),
                                 rect(-44.0, yc - 8.0, -35.0, yc + 8.0))
     cross = shapely.union_all([nave, transept, apse])
-    towers = [rect(42.5, -17.2, 52.3, -7.4), rect(42.5, 8.0, 52.3, 17.8)]
+    towers = [rect(42.5, -17.2, front, -7.4), rect(42.5, 8.0, front, 17.8)]
     # Aisles and chapels, then the clerestory over the cross.
-    low = shapely.difference(plan, shapely.union_all(towers))
+    # (Near, the west front between the towers is built on its own.)
+    if d < 2:
+        towers_and_front = shapely.union_all(towers + [rect(48.0, -7.4, front + 10.0, 8.0)])
+    else:
+        towers_and_front = shapely.union_all(towers)
+    low = shapely.difference(plan, towers_and_front)
     for poly in polygons_of(low, 1.0):
         poly = shapely.orient_polygons(poly)
         m.walls(np.asarray(poly.exterior.coords), -1.0, aisle, CATHEDRAL, 0)
@@ -1196,22 +1527,20 @@ def _st_patricks(m: Model, ctx: Context) -> None:
         if normal[2] < 0:
             tri, normal = tri[[0, 2, 1]], -normal
         m.add(tri[None], tri[None, :, :2], SLATE, 0.0, normal / np.linalg.norm(normal), flags=ROOF)
-    # The west front between the towers: its wall and the central gable.
-    m.prism(rect(49.6, -7.4, 52.3, 8.0), -1.0, 34.0, CATHEDRAL, variant=2, roof=SLATE)
-    m.tri_plate((51.1, -7.4, 34.0), (51.1, 8.0, 34.0), (51.1, yc, 47.5), 2.4, CATHEDRAL, variant=2)
-    # The towers, their lanterns and spires.
-    for tw in towers:
-        tx, ty = tw.centroid.x, tw.centroid.y
-        m.prism(tw, -1.0, 41.5, CATHEDRAL, variant=3, roof=PAVING)
-        tower(m, tx, ty, [(41.5, 4.75), (57.6, 4.75)], 8, CATHEDRAL, close_top=False, smooth=False, variant=3,
-              start=np.pi / 8)
-        tower(m, tx, ty, [(57.6, 5.1), (59.0, 5.1), (59.0, 4.7), (100.4, 0.15)], 8, CATHEDRAL, smooth=False,
-              variant=3, start=np.pi / 8)
-        if d < 2:
-            for sx in (-1, 1):
-                for sy in (-1, 1):
-                    tower(m, tx + sx * 4.2, ty + sy * 4.2, [(41.5, 0.7), (43.5, 0.7), (48.0, 0.05)], 4, CATHEDRAL,
-                          smooth=False, variant=3, start=np.pi / 4)
+    if d < 2:
+        _st_patricks_front(m, d, front)
+    else:
+        # Far away: the central wall and gable, the towers, lanterns and spires.
+        m.prism(rect(49.6, -7.4, front, 8.0), -1.0, 34.0, CATHEDRAL, variant=2, roof=SLATE)
+        m.tri_plate((51.1, -7.4, 34.0), (51.1, 8.0, 34.0), (51.1, yc, 47.5), 2.4, CATHEDRAL, variant=2)
+        for tw in towers:
+            tx, ty = tw.centroid.x, tw.centroid.y
+            m.prism(tw, -1.0, 41.5, CATHEDRAL, variant=3, roof=PAVING)
+            tower(m, tx, ty, [(41.5, 4.75), (57.6, 4.75)], 8, CATHEDRAL, close_top=False, smooth=False, variant=3,
+                  start=np.pi / 8)
+            tower(m, tx, ty, [(57.6, 5.1), (59.0, 5.1), (59.0, 4.7)], 8, CATHEDRAL, close_top=False, smooth=False,
+                  variant=3, start=np.pi / 8)
+            _openwork_spire(m, tx, ty, 59.0, 100.4, 4.7, 0.15, d)
     # Pinnacles on the buttresses along the aisles and on the transepts' corners.
     if d == 0:
         for x in np.arange(-31.0, 42.0, 7.2):
@@ -1219,12 +1548,10 @@ def _st_patricks(m: Model, ctx: Context) -> None:
                 continue
             for y in (yc - 21.0, yc + 21.0):
                 if shapely.contains_xy(plan, x, y + (0.8 if y < yc else -0.8)):
-                    tower(m, x, y, [(aisle - 0.5, 0.6), (aisle + 1.2, 0.6), (aisle + 5.0, 0.05)], 4, CATHEDRAL,
-                          smooth=False, variant=3, start=np.pi / 4)
+                    _pinnacle(m, x, y, aisle - 0.5, aisle + 5.0, 0.42)
         for x in (-13.8, 2.5):
             for y in (-22.2, 23.8):
-                tower(m, x, y, [(eaves - 1.0, 0.8), (eaves + 2.0, 0.8), (eaves + 8.0, 0.05)], 4, CATHEDRAL,
-                      smooth=False, variant=3, start=np.pi / 4)
+                _pinnacle(m, x, y, eaves - 1.0, eaves + 8.0, 0.57)
 
 
 def _gable(m, a, b, half, eaves, ridge, roof, wall, ends=(True, True), wall_variant=1):
@@ -1932,6 +2259,437 @@ def _radio_city(m: Model, ctx: Context) -> None:
     _box_faces(m, (20.6, 32.1, 17.0), (1.0, 4.4, 18.0), MARQUEE, 1, yaw=math.radians(-45.0))
 
 
+# --- The waterfront ---
+
+_HYDRO = {}
+
+
+def _hydro_parts(area, codes) -> list:
+    """The city's planimetric hydrography structures (piers, fender racks) with
+    feature codes in `codes` whose parts lie in `area` (east/north): a list
+    of (polygon, its top in m above sea level, from the data's elevation)."""
+    if not _HYDRO:
+        features = load_features("hydro_structures")
+        _HYDRO["geoms"] = project(np.array([geojson_shape(f["geometry"]) for f in features], dtype=object))
+        _HYDRO["codes"] = np.array([f["properties"].get("feat_code") for f in features])
+        _HYDRO["tops"] = np.array([float(f["properties"].get("elevation") or 0.0) * FEET for f in features])
+        _HYDRO["tree"] = shapely.STRtree(_HYDRO["geoms"])
+    out = []
+    for k in sorted(_HYDRO["tree"].query(area)):
+        if _HYDRO["codes"][k] in codes:
+            out += [(part, float(_HYDRO["tops"][k])) for part in polygons_of(_HYDRO["geoms"][k], 1.0)
+                    if shapely.contains(area, part.centroid)]
+    return out
+
+
+def piers():
+    """The piers out over the water (the planimetric hydrography structures'
+    piers, feature code 2800) as one geometry, east/north. prepare.py adds
+    them to the land before taking the water away, which drops every pier
+    standing over the water again; build_tiles.py adds them back."""
+    _hydro_parts(shapely.box(0.0, 0.0, 0.0, 0.0), ())
+    if "piers" not in _HYDRO:
+        picked = _HYDRO["geoms"][_HYDRO["codes"] == "2800"]
+        _HYDRO["piers"] = shapely.union_all(polygons_of(shapely.union_all(shapely.make_valid(picked)), 4.0))
+    return _HYDRO["piers"]
+
+
+def _local(ctx, poly, tolerance):
+    """An east/north polygon in the landmark's frame, simplified."""
+    shell = ctx.frame.to_local(np.asarray(poly.exterior.coords)[:, :2])
+    holes = [ctx.frame.to_local(np.asarray(h.coords)[:, :2]) for h in poly.interiors]
+    return shapely.simplify(shapely.make_valid(Polygon(shell, holes)), tolerance)
+
+
+def _heading_frame(ctx, at, heading):
+    """A point (east/north) in the landmark's frame and the unit vectors
+    along `heading` (degrees from east) and across it (to its left)."""
+    a = math.radians(heading) - ctx.frame.angle
+    along = np.array([math.cos(a), math.sin(a)])
+    return ctx.frame.to_local(np.asarray([at], np.float64))[0], along, np.array([-along[1], along[0]])
+
+
+def _racks(m, ctx, parts, d):
+    """Timber fender racks guiding the ferries into their slips, over the
+    data's outlines: walls of piles from under the water to their tops (the
+    data's elevations, kept 3 to 4.5 m above the water as in photos),
+    decked."""
+    for poly, top in parts:
+        m.prism(_local(ctx, poly, TOLERANCE[d] + 0.1), -1.5 - ctx.base, min(max(top, 3.0), 4.5) - ctx.base, TIMBER,
+                roof=TIMBER, roof_variant=1)
+
+
+def _slip_house(m, ctx, head, heading, d, half=12.0, top=16.0):
+    """A ferry slip's house where the slip meets the terminal (`head`,
+    east/north; the slip runs out toward `heading`, degrees from east): brick
+    towers either side of the slip, a white steel frame over the opening,
+    the transfer bridge's deck inside and the terminal's glass behind it.
+    Heights in m above the water."""
+    c, along, across = _heading_frame(ctx, head, heading)
+
+    def box(u0, u1, v0, v1):
+        return Polygon([c + across * u + along * v for u, v in ((u0, v0), (u1, v0), (u1, v1), (u0, v1))])
+    low, beam = -1.5 - ctx.base, top - 3.2 - ctx.base
+    for side in (-1.0, 1.0):
+        u0, u1 = sorted((side * half, side * (half + 6.0)))
+        m.prism(box(u0, u1, -10.0, 10.0), low, beam, PIERSIDE, variant=1, roof=PAVING)
+    m.prism(box(-half - 6.5, half + 6.5, -10.5, 10.5), beam, top - ctx.base, PIERSIDE, variant=3, roof=PIERSIDE)
+    m.cap(box(-half, half, -10.5, 10.5), beam, PIERSIDE, variant=3, flags=0, down=True)
+    if d < 2:
+        m.prism(box(-half + 1.0, half - 1.0, -10.0, 4.0), low, 4.2 - ctx.base, PIERSIDE, variant=3, roof=PIERSIDE)
+        m.walls([c + across * -half - along * 10.0, c + across * half - along * 10.0], 4.2 - ctx.base, beam,
+                PIERSIDE, 0, closed=False)
+
+
+def _ferry(m, ctx, center, heading, d):
+    """A Staten Island Ferry at its slip (the Barberi and Molinari classes:
+    about 95 m long and 21 m across, double-ended, orange): the hull to its
+    main deck 4.5 m above the water, two passenger decks, a pilothouse at
+    each end, the mast. Wikipedia, "Staten Island Ferry"."""
+    c, along, across = _heading_frame(ctx, center, heading)
+    n = (32, 16, 8)[d]
+    t = np.arange(n) * (2 * np.pi / n)
+
+    def plan(half_l, half_w, power):
+        x = half_l * np.sign(np.cos(t)) * np.abs(np.cos(t)) ** (2.0 / power)
+        y = half_w * np.sign(np.sin(t)) * np.abs(np.sin(t)) ** (2.0 / power)
+        return Polygon(c + x[:, None] * along + y[:, None] * across)
+    w = -ctx.base
+    hull, deck, upper = plan(47.5, 10.5, 3.0), plan(43.0, 10.3, 4.0), plan(35.0, 8.6, 5.0)
+    m.prism(hull, w - 2.0, w + 4.5, TIMBER, variant=3, roof=None)
+    m.cap(shapely.difference(hull, deck), w + 4.5, PAVING)
+    m.prism(deck, w + 4.5, w + 10.5, TIMBER, variant=3, roof=PAVING)
+    m.prism(upper, w + 10.5, w + 13.6, TIMBER, variant=3, roof=PAVING)
+    if d < 2:
+        for end in (-1.0, 1.0):
+            m.box((*(c + along * end * 29.0), w + 15.2), (5.0, 8.0, 3.2), TIMBER, yaw=math.atan2(along[1], along[0]),
+                  roof=PAVING, variant=3)
+        tower(m, c[0], c[1], [(w + 13.6, 0.3), (w + 22.0, 0.15)], 6, PIERSIDE, variant=3)
+
+
+def _boat(m, ctx, east, north, heading, length, beam, d):
+    """A boat at its mooring (place, heading, length and beam from the aerial
+    photos): a white hull with a pointed bow, its cabin, a flybridge on the
+    bigger ones and a mast on some of the smaller."""
+    c, along, across = _heading_frame(ctx, (east, north), heading)
+    w = -ctx.base
+
+    def hull(l0, l1, half, bow):
+        pts = [(l0, -half), (l1 - bow, -half), (l1, 0.0), (l1 - bow, half), (l0, half)]
+        return Polygon([c + along * x + across * y for x, y in pts])
+    half_l, half_b = length / 2, beam / 2
+    m.prism(hull(-half_l, half_l, half_b, length * 0.3), w - 0.5, w + 1.5, TIMBER, variant=2, roof=TIMBER,
+            roof_variant=2)
+    if d == 2:
+        return
+    m.prism(hull(-half_l * 0.55, half_l * 0.35, half_b * 0.72, length * 0.12), w + 1.5, w + 2.9, TIMBER, variant=2,
+            roof=TIMBER, roof_variant=2)
+    seed = (east * 12.9898 + north * 78.233) % 1.0
+    if length > 13.0:
+        m.prism(hull(-half_l * 0.35, half_l * 0.1, half_b * 0.6, length * 0.05), w + 2.9, w + 3.9, TIMBER, variant=2,
+                roof=TIMBER, roof_variant=2)
+    elif seed < 0.4:
+        tower(m, *(c + along * length * 0.1), [(w + 2.9, 0.12), (w + 2.9 + length * 1.3, 0.06)], 4, PIERSIDE,
+              variant=3)
+
+
+def _st_george(m: Model, ctx: Context) -> None:
+    """St. George Ferry Terminal, Staten Island (1951; rebuilt 2005): the
+    building's massing from the city's 3-D model, the waiting room's curved
+    aluminum and glass curtain wall toward the harbor (40 ft high, 208 ft
+    long; ENR, 2005) and brick elsewhere; four slip houses where the slips
+    meet it (brick towers either side of each slip, a white steel frame over
+    it; their places and headings from the city's aerial photos), the slips'
+    timber fender racks (the city's planimetric hydrography structures, their
+    tops from its elevations), and two ferries in their slips. Local x runs
+    east, y north."""
+    d = m.detail
+    terraces = model_terraces(ctx.shape, ctx.frame, 1000.0, d) if ctx.shape else []
+    harbor = np.array([math.cos(math.radians(35.0)), math.sin(math.radians(35.0))])
+
+    def wall(middle, out):
+        return 0 if out @ harbor > 0.35 else 1
+    if terraces:
+        add_terraces(m, terraces, lambda lo, hi: (PIERSIDE, wall), roof=PAVING)
+    else:
+        m.prism(_local_footprint(ctx), -1.0, 18.5, PIERSIDE, variant=wall)
+    for head, heading in STG_SLIPS:
+        _slip_house(m, ctx, head, heading, d)
+    _racks(m, ctx, _hydro_parts(shapely.box(-7400.0, -12740.0, -7190.0, -12540.0), {"2800"}), d)
+    for center, heading in STG_FERRIES:
+        _ferry(m, ctx, center, heading, d)
+
+
+def _whitehall(m: Model, ctx: Context) -> None:
+    """Whitehall Terminal, the Staten Island Ferry's Manhattan end (Frederic
+    Schwartz Architects, 2005): four stories, glass on three sides (the
+    waiting room's 75 ft glass wall) and corrugated stainless steel toward the
+    slips, and the long, sinuous canopy over the street side carrying the
+    words "Staten Island Ferry" (Wikipedia, "Whitehall Terminal"); the
+    massing and the canopy's outline from the city's 3-D model; the slips'
+    timber racks (the city's planimetric hydrography structures) and a
+    ferry in the east slip (the city's aerial photos). Local x runs east, y
+    north."""
+    d = m.detail
+    terraces = model_terraces(ctx.shape, ctx.frame, 1000.0, d) if ctx.shape else []
+
+    def wall(middle, out):
+        return 2 if out[1] < -0.7 else 0
+    if len(terraces) > 1:
+        # The canopy: the lowest tier beyond the building above it, a slab on columns.
+        building = terraces[1][1]
+        canopy = shapely.difference(terraces[0][1], shapely.buffer(building, 0.3, join_style="mitre"))
+        add_terraces(m, [(level, shapely.intersection(outline, shapely.buffer(building, 0.3, join_style="mitre")))
+                         for level, outline in terraces], lambda lo, hi: (PIERSIDE, wall), roof=PAVING)
+        top = terraces[0][0]
+        for part in polygons_of(canopy, 20.0):
+            # Its fascia's uv.y runs up from the fascia's foot: the words' band.
+            part = shapely.orient_polygons(part)
+            count = len(m.pos)
+            m.walls(np.asarray(part.exterior.coords), 0.0, 1.1, PIERSIDE, 3)
+            for k in range(count, len(m.pos)):
+                m.pos[k] = m.pos[k] + np.array([0.0, 0.0, top - 1.1])
+            m.cap(part, top, PIERSIDE)
+            m.cap(part, top - 1.1, PIERSIDE, variant=3, flags=0, down=True)
+            if d < 2:
+                spine = shapely.buffer(part, -1.5, join_style="mitre")
+                for ring in polygons_of(spine, 1.0):
+                    line = ring.exterior
+                    for s in np.arange(0.0, line.length, 14.0):
+                        p = line.interpolate(s)
+                        m.box((p.x, p.y, (top - 1.1 - 1.0) / 2), (0.5, 0.5, top - 1.1 + 1.0), PIERSIDE, variant=3,
+                              roof=PIERSIDE)
+    else:
+        m.prism(_local_footprint(ctx), -1.0, 27.7, PIERSIDE, variant=wall)
+    _racks(m, ctx, _hydro_parts(shapely.box(-2400.0, -6480.0, -2240.0, -6378.0), {"2810"}), d)
+    _ferry(m, ctx, (-2276.0, -6422.5), -72.7, d)
+
+
+def _chelsea_shed(m: Model, ctx: Context) -> None:
+    """Chelsea Piers' pier sheds (Warren and Wetmore, 1910; a sports complex
+    since 1995), Piers 60 and 61 on the Hudson: the sheds' side aisles to
+    8 m and the stepped monitor roof up to 22 m from the city's 3-D model,
+    clad in metal panels with bands of windows. Wikipedia, "Chelsea
+    Piers". Local x runs east, y north."""
+    terraces = model_terraces(ctx.shape, ctx.frame, 1000.0, m.detail) if ctx.shape else []
+    if terraces:
+        add_terraces(m, terraces, lambda lo, hi: (PIERSIDE, 2), roof=PIERSIDE)
+    else:
+        m.prism(_local_footprint(ctx), -1.0, 24.0, PIERSIDE, variant=2, roof=PIERSIDE)
+
+
+def _chelsea_golf(m: Model, ctx: Context) -> None:
+    """The Golf Club at Chelsea Piers, Pier 59: the driving range's netting
+    over the pier, hung from steel poles about 46 m (150 ft) tall along both
+    sides and the far end (its outline and the poles' spacing from the
+    city's aerial photos, the height from their shadows), drawn as its poles
+    and cables. Local x runs east, y north."""
+    d = m.detail
+    nw, ne, se, sw = (ctx.frame.to_local(np.asarray([p], np.float64))[0] for p in CHELSEA_GOLF)
+    top = 46.0
+    count = 6
+    north = [nw + (ne - nw) * k / (count - 1) for k in range(count)]
+    south = [sw + (se - sw) * k / (count - 1) for k in range(count)]
+    for p in north + south:
+        tower(m, p[0], p[1], [(-1.0, 0.45), (top, 0.22)], (8, 6, 4)[d], PIERSIDE, variant=3)
+    if d == 2:
+        return
+    for a, b in zip(north[:-1], north[1:]):
+        for z in (top, top / 2):
+            _beam(m, (*a, z), (*b, z), 0.15, 0.15, PIERSIDE, variant=3)
+    for a, b in zip(south[:-1], south[1:]):
+        for z in (top, top / 2):
+            _beam(m, (*a, z), (*b, z), 0.15, 0.15, PIERSIDE, variant=3)
+    for a, b in zip(north, south):
+        _beam(m, (*a, top), (*b, top), 0.15, 0.15, PIERSIDE, variant=3)
+    _beam(m, (*north[0], top / 2), (*south[0], top / 2), 0.15, 0.15, PIERSIDE, variant=3)
+
+
+def _bbp_pier2(m: Model, ctx: Context) -> None:
+    """Brooklyn Bridge Park's Pier 2 (2013): the 1950s pier shed's steel frame
+    and roof kept, open-sided, over basketball and handball courts and a
+    roller rink, cut back to leave the lawn at the west end and courts in
+    the middle open to the sky. Its three roofs (the city's aerial photos)
+    in ridged bays 10 m up (the footprint data) on steel columns. Local x
+    runs east, y north."""
+    d = m.detail
+    eaves, ridge = 9.0, 10.1
+    for corners in BBP_PIER2_ROOFS:
+        nw, ne, se, sw = ctx.frame.to_local(np.asarray(corners, np.float64))
+        length, width = float(np.linalg.norm(ne - nw)), float(np.linalg.norm(sw - nw))
+        along, across = (ne - nw) / length, (sw - nw) / width
+        bays = max(1, round(width / 6.5))
+        quads, uvs = [], []
+        for k in range(bays):
+            s0, s1 = width * k / bays, width * (k + 1) / bays
+            sm = (s0 + s1) / 2
+            for a, b, za, zb in ((s0, sm, eaves, ridge), (sm, s1, ridge, eaves)):
+                p0, p1 = nw + across * a, nw + across * b
+                quad = np.array([(*p0, za), (*(p0 + along * length), za), (*(p1 + along * length), zb), (*p1, zb)])
+                if np.cross(quad[1] - quad[0], quad[3] - quad[0])[2] < 0:
+                    quad = quad[::-1]
+                quads.append(quad)
+                uvs.append(quad[:, :2])
+        _quads(m, np.array(quads), np.array(uvs), PIERSIDE, 0.0, flags=ROOF)
+        # The bays' gable ends.
+        for k in range(bays):
+            s0, s1 = width * k / bays, width * (k + 1) / bays
+            for end, out in ((0.0, -along), (length, along)):
+                p0, p1, top = (nw + along * end + across * s0, nw + along * end + across * s1,
+                               nw + along * end + across * (s0 + s1) / 2)
+                tri = np.array([(*p0, eaves), (*p1, eaves), (*top, ridge)])
+                m.add(tri[None], np.array([[[0.0, eaves], [s1 - s0, eaves], [(s1 - s0) / 2, ridge]]]), PIERSIDE,
+                      4 * 10 + 3, (out[0], out[1], 0.0))
+        outline = Polygon([nw, ne, se, sw])
+        m.prism(outline, eaves - 0.7, eaves, PIERSIDE, variant=3, roof=None)
+        m.cap(outline, eaves - 0.7, PIERSIDE, variant=3, flags=0, down=True)
+        if d < 2:
+            for k in range(bays + 1):
+                line = nw + across * (width * k / bays + (0.3 if k == 0 else -0.3 if k == bays else 0.0))
+                for s in np.linspace(0.6, length - 0.6, max(2, round(length / 12.0) + 1)):
+                    p = line + along * s
+                    m.box((p[0], p[1], (eaves - 0.7 - 1.0) / 2), (0.4, 0.4, eaves - 0.7 + 1.0), PIERSIDE, variant=3,
+                          roof=PIERSIDE)
+
+
+def berm_height(en) -> np.ndarray:
+    """The Pier 3 berm's height above the ground at (N, 2) east/north points
+    (0 off it): a ridge along BBP_BERM, steep toward Furman Street (east) and
+    sloping gently into the park (west), tapering at its ends."""
+    en = np.asarray(en, np.float64).reshape(-1, 2)
+    crest = np.asarray(BBP_BERM, np.float64)
+    near = np.full(len(en), np.inf)
+    side = np.zeros(len(en))
+    place = np.zeros(len(en))
+    start = 0.0
+    for a, b in zip(crest[:-1], crest[1:]):
+        length = float(np.linalg.norm(b - a))
+        u = (b - a) / length
+        rel = en - a
+        t = np.clip(rel @ u, 0.0, length)
+        dist = np.linalg.norm(rel - t[:, None] * u, axis=1)
+        closer = dist < near
+        near[closer] = dist[closer]
+        side[closer] = -(u[0] * rel[closer, 1] - u[1] * rel[closer, 0])  # west of the crest positive
+        place[closer] = start + t[closer]
+        start += length
+    reach = np.where(side >= 0.0, BERM_WEST, BERM_EAST)
+    x = np.clip(near / reach, 0.0, 1.0)
+    ends = np.clip(place / BERM_ENDS, 0.0, 1.0) * np.clip((start - place) / BERM_ENDS, 0.0, 1.0)
+    return BERM_HEIGHT * 0.5 * (1.0 + np.cos(np.pi * x)) * (ends * ends * (3.0 - 2.0 * ends))
+
+
+def lift(en) -> np.ndarray:
+    """How far above the terrain hand-made ground (the Pier 3 berm) raises
+    what stands at (N, 2) east/north points: trees and their crowns."""
+    en = np.asarray(en, np.float64).reshape(-1, 2)
+    out = np.zeros(len(en))
+    crest = np.asarray(BBP_BERM)
+    lo, hi = crest.min(axis=0) - BERM_WEST, crest.max(axis=0) + BERM_WEST
+    inside = np.all((en >= lo) & (en <= hi), axis=1)
+    if inside.any():
+        out[inside] = berm_height(en[inside])
+    return out
+
+
+def _bbp_berm(m: Model, ctx: Context) -> None:
+    """Brooklyn Bridge Park's sound-attenuating berm (2013) along Furman
+    Street at the Pier 3 uplands: a hill 30 ft (9.1 m) high and about 800 ft
+    long, planted with meadow grasses, lawns sloping from its foot and trees
+    (from the land cover map, standing on it: lift()). Brooklyn Bridge Park's
+    press release (2013); its line from the city's aerial photos. Local x
+    runs east, y north."""
+    d = m.detail
+    crest = np.asarray(BBP_BERM, np.float64)
+    step, across = (3.0, 6.0, 15.0)[d], (2.0, 4.0, 8.0)[d]
+    stations, normals = [], []
+    for a, b in zip(crest[:-1], crest[1:]):
+        length = float(np.linalg.norm(b - a))
+        u = (b - a) / length
+        for t in np.arange(0.0, length, step):
+            stations.append(a + u * t)
+            normals.append(np.array([-u[1], u[0]]) * -1.0)  # west
+    stations.append(crest[-1])
+    normals.append(normals[-1])
+    s = np.arange(-BERM_EAST - 2.0, BERM_WEST + 2.0 + 1e-6, across)
+    grid = np.array([[p + nrm * v for v in s] for p, nrm in zip(stations, normals)])  # (rows, cols, 2) east/north
+    flat = grid.reshape(-1, 2)
+    local = ctx.frame.to_local(flat)
+    z = ctx.ground(local) + berm_height(flat) - 0.3
+    eps = 0.5
+    gx = (berm_height(flat + [eps, 0.0]) - berm_height(flat - [eps, 0.0])) / (2 * eps)
+    gy = (berm_height(flat + [0.0, eps]) - berm_height(flat - [0.0, eps])) / (2 * eps)
+    c, s_ = math.cos(ctx.frame.angle), math.sin(ctx.frame.angle)
+    normal = np.column_stack([-(gx * c + gy * s_), -(-gx * s_ + gy * c), np.ones(len(flat))])
+    normal /= np.linalg.norm(normal, axis=1, keepdims=True)
+    points = np.column_stack([local, z]).reshape(grid.shape[0], grid.shape[1], 3)
+    normal = normal.reshape(points.shape)
+    rows, cols = points.shape[:2]
+    quads = np.stack([points[:-1, :-1], points[:-1, 1:], points[1:, 1:], points[1:, :-1]], 2).reshape(-1, 4, 3)
+    quad_normals = np.stack([normal[:-1, :-1], normal[:-1, 1:], normal[1:, 1:], normal[1:, :-1]], 2).reshape(-1, 4, 3)
+    up = np.cross(quads[:, 1] - quads[:, 0], quads[:, 3] - quads[:, 0])[:, 2] < 0
+    quads[up] = quads[up][:, ::-1]
+    quad_normals[up] = quad_normals[up][:, ::-1]
+    _quads(m, quads, quads[..., :2], PLAYFIELD, 3.0, flags=ROOF, normals=quad_normals)
+
+
+def _bbp_marina(m: Model, ctx: Context) -> None:
+    """ONE15 Brooklyn Marina (2016), between Piers 3 and 5 in Brooklyn
+    Bridge Park: its floating docks (the narrow parts of the city's
+    planimetric pier outline there, which joins them to Pier 5) decked in
+    timber, the wave attenuators' pilings, and the boats moored there in the
+    city's aerial photos (March 2024). Local x runs east, y north."""
+    d = m.detail
+    w = -ctx.base
+    for poly, _ in _hydro_parts(shapely.box(-1460.0, -7000.0, -1150.0, -6700.0), {"2800"}):
+        local = _local(ctx, poly, 0.2)
+        body = shapely.buffer(shapely.buffer(local, -3.0, join_style="mitre"), 3.0, join_style="mitre")
+        for dock in polygons_of(shapely.difference(local, shapely.buffer(body, 0.05, join_style="mitre")), 6.0):
+            dock = shapely.simplify(dock, TOLERANCE[d])
+            m.prism(dock, w - 0.5, w + 2.15, TIMBER, variant=1, roof=TIMBER, roof_variant=1)
+            corners = np.asarray(shapely.oriented_envelope(dock).exterior.coords)[:4]
+            edges = [corners[1] - corners[0], corners[2] - corners[1]]
+            longest = max(edges, key=lambda e: np.linalg.norm(e))
+            if d < 2 and np.linalg.norm(longest) > 60.0:
+                middle = corners.mean(axis=0)
+                axis = longest / np.linalg.norm(longest)
+                half = float(np.linalg.norm(longest)) / 2
+                for s in np.arange(-half + 4.0, half - 3.0, 15.0):
+                    p = middle + axis * s
+                    tower(m, p[0], p[1], [(w - 1.5, 0.38), (w + 7.0, 0.38)], 6, TIMBER, variant=0)
+    for boat in BBP_BOATS:
+        _boat(m, ctx, *boat, d)
+
+
+# Where the St. George slips meet the terminal (the slip houses' middles,
+# east/north) and their headings (degrees from east); the ferries in two of
+# them. From the city's aerial photos.
+STG_SLIPS = (((-7385.0, -12568.0), 48.0), ((-7331.0, -12603.0), 27.0), ((-7309.0, -12644.0), 23.0),
+             ((-7294.0, -12692.0), 15.0))
+STG_FERRIES = (((-7285.0, -12572.0), 27.0), ((-7260.0, -12627.0), 23.0))
+# The Chelsea Piers driving range's netting (NW, NE, SE, SW corners, east/north).
+CHELSEA_GOLF = ((-2190.0, -1337.0), (-2042.0, -1358.0), (-2042.0, -1398.0), (-2190.0, -1380.0))
+# Pier 2's three roofs (NW, NE, SE, SW corners, east/north).
+BBP_PIER2_ROOFS = (((-1148.5, -6429.5), (-1034.5, -6482.0), (-1049.5, -6509.0), (-1162.0, -6456.5)),
+                   ((-1096.0, -6492.5), (-1049.5, -6510.5), (-1060.0, -6542.0), (-1106.5, -6521.0)),
+                   ((-1210.0, -6479.0), (-1084.0, -6524.0), (-1090.0, -6549.5), (-1216.0, -6500.0)))
+# The Pier 3 berm's crest (east/north, north to south), its height, reach east
+# and west of the crest and the length its ends taper over (m).
+BBP_BERM = ((-1011.0, -6602.0), (-1021.5, -6637.5), (-1039.0, -6707.5), (-1060.0, -6767.0), (-1081.0, -6816.0),
+            (-1088.0, -6832.0))
+BERM_HEIGHT, BERM_EAST, BERM_WEST, BERM_ENDS = 9.1, 13.0, 30.0, 25.0
+# Boats moored in the ONE15 marina: (east, north, heading, length, beam), found
+# as bright hulls on the water in the city's aerial photos (March 2024).
+BBP_BOATS = ((-1302.2, -6873.1, 138.0, 9.6, 3.1), (-1312.4, -6893.3, 153.0, 11.7, 4.3),
+             (-1218.2, -6903.5, 159.0, 5.7, 2.5), (-1319.4, -6907.9, 155.0, 12.9, 4.9),
+             (-1221.2, -6913.0, 162.0, 8.0, 3.3), (-1262.1, -6920.9, 174.0, 8.9, 4.6),
+             (-1226.5, -6923.6, 155.0, 8.0, 3.1), (-1325.6, -6925.4, 154.0, 12.6, 3.9),
+             (-1230.4, -6931.5, 162.0, 7.8, 3.2), (-1332.4, -6936.2, 170.0, 10.4, 3.5),
+             (-1234.1, -6939.7, 158.0, 8.2, 3.4), (-1239.3, -6949.0, 158.0, 8.0, 3.3),
+             (-1243.0, -6958.7, 159.0, 7.9, 3.2), (-1246.9, -6966.7, 162.0, 8.0, 3.3),
+             (-1249.1, -6972.7, 155.0, 5.5, 2.6))
+
+
 LANDMARKS = [
     Landmark("Empire State Building", (1015862,), 151.06, _empire_state),
     Landmark("Chrysler Building", (1036156,), 150.94, _chrysler),
@@ -1957,6 +2715,15 @@ LANDMARKS = [
     Landmark("Wonder Wheel", (3347224,), 0.0, _wonder_wheel, at=(538.0, -20425.5), exact=True),
     Landmark("Parachute Jump", (3404019,), 0.0, _parachute_jump),
     Landmark("Radio City Music Hall", (1083861,), 151.06, _radio_city),
+    # The waterfront.
+    Landmark("St. George Ferry Terminal", (5141706,), 0.0, _st_george, exact=True),
+    Landmark("Whitehall Terminal", (1085792,), 0.0, _whitehall, exact=True),
+    Landmark("Chelsea Piers, Pier 60", (1012255,), 0.0, _chelsea_shed, exact=True),
+    Landmark("Chelsea Piers, Pier 61", (1085935,), 0.0, _chelsea_shed, exact=True),
+    Landmark("Chelsea Piers golf range", (), 0.0, _chelsea_golf, at=(-2116.0, -1368.0), exact=True),
+    Landmark("Brooklyn Bridge Park, Pier 2", (3423335,), 0.0, _bbp_pier2, exact=True),
+    Landmark("Brooklyn Bridge Park berm", (), 0.0, _bbp_berm, at=(-1046.0, -6720.0), exact=True),
+    Landmark("ONE15 Brooklyn Marina", (), 0.0, _bbp_marina, at=(-1300.0, -6900.0), exact=True),
 ]
 REPLACED = np.array(sorted({b for landmark in LANDMARKS for b in landmark.bins}), dtype=np.int64)
 
@@ -1977,12 +2744,12 @@ def _frame(landmark: Landmark, footprint) -> Frame:
     return Frame(origin, footprint_frame(footprint, landmark.angle).angle)
 
 
-def build(landmark: Landmark, footprint, shape, detail: int, height=None) -> tuple[Model, Frame]:
+def build(landmark: Landmark, footprint, shape, detail: int, height=None, base: float = 0.0) -> tuple[Model, Frame]:
     """A landmark's model and frame; height(east/north (N, 2)) is the terrain's
-    height above where it stands, if known."""
+    height above where it stands (`base` m above sea level), if known."""
     frame = _frame(landmark, footprint)
     model = Model(detail)
-    context = Context(footprint, frame, shape, detail)
+    context = Context(footprint, frame, shape, detail, base=base)
     if height is not None:
         context.ground = lambda xy: height(frame.to_world(np.asarray(xy, np.float64).reshape(-1, 2)))
     landmark.build(model, context)
@@ -1990,12 +2757,13 @@ def build(landmark: Landmark, footprint, shape, detail: int, height=None) -> tup
 
 
 def add_to_tile(builder, level: str, size: float, i: int, j: int, buildings: dict, shapes: dict,
-                ground_of, terrain=None, own_builder=None) -> int:
+                ground_of, terrain=None, own_builder=None, waterfront_builder=None) -> int:
     """Adds the landmarks whose main building (or `at`) is anchored in tile
     (i, j) of `level` (tiles `size` m) to its buildings MeshBuilder;
     ground_of(footprint) is where a building stands, terrain(east/north (N, 2))
-    the ground's height; own_builder takes the faces shaders/landmark.gdshader
-    paints (see place()). Returns how many triangles it added."""
+    the ground's height; own_builder and waterfront_builder take the faces
+    shaders/landmark.gdshader and shaders/waterfront.gdshader paint (see
+    place()). Returns how many triangles it added."""
     key = id(buildings)
     if key not in _index:
         found = np.flatnonzero(np.isin(buildings["bin"], [lm.bins[0] for lm in LANDMARKS if lm.bins]))
@@ -2017,7 +2785,7 @@ def add_to_tile(builder, level: str, size: float, i: int, j: int, buildings: dic
             continue
         base = ground_of(footprint)
         height = None if terrain is None else (lambda en, base=base: terrain(en) - base)
-        model, frame = build(landmark, footprint, shape, DETAIL[level], height)
-        place(model, builder, frame, base, own_builder)
+        model, frame = build(landmark, footprint, shape, DETAIL[level], height, base)
+        place(model, builder, frame, base, own_builder, waterfront_builder)
         added += model.triangles()
     return added

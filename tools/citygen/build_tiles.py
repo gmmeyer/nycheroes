@@ -60,7 +60,7 @@ from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND
                     GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_SHRUBS, GROUND_YARD, LANE_BREAK, MARKING_LIFT,
                     ORIGIN_LAT, ORIGIN_LON, PROJECTION, PROP_BIKE_DOCK, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR,
                     PROP_PARKING_METER, PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y, SIGNAL_ON_COLUMN,
-                    STRUCTURE_CONCRETE, SURFACE_CHURCHES, SURFACE_FRONTS, SURFACE_LANDMARKS,
+                    STRUCTURE_CONCRETE, SURFACE_CHURCHES, SURFACE_FRONTS, SURFACE_LANDMARKS, SURFACE_WATERFRONT,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
                     SURFACE_STRUCTURES, SURFACE_TRAFFIC, SURFACE_TRAINS, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
                     polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangles_of,
@@ -421,6 +421,10 @@ def _init_worker() -> None:
             groups[key].append(index)
         _W["groups"][level] = {key: np.array(value) for key, value in groups.items()}
     _W["building_tree"] = shapely.STRtree(buildings["geoms"])
+    # The piers out over the water are land (landmarks.piers()).
+    _W["piers"] = landmarks.piers()
+    shapely.prepare(_W["piers"])
+    ground["land"] = shapely.union(ground["land"], _W["piers"])
     for name in ("land", "beaches", "marsh"):
         shapely.prepare(ground[name])
     _W["g"] = ground
@@ -484,7 +488,7 @@ def _build_tile(task):
     bounds = tile_box(i, j, size)
 
     building_mesh, ground_mesh, structure_mesh, water_mesh = MeshBuilder(), MeshBuilder(), MeshBuilder(), MeshBuilder()
-    landmark_mesh = MeshBuilder()
+    landmark_mesh, waterfront_mesh = MeshBuilder(), MeshBuilder()
     # Churches' faces, which their own shader paints (churches.py), and the
     # small parts of rowhouse fronts (fronts.py: railings, fences, shrubs).
     _W["church_mesh"] = church_mesh = MeshBuilder()
@@ -501,7 +505,7 @@ def _build_tile(task):
         for index in indices:
             _add_building(building_mesh, index, settings)
     landmarks.add_to_tile(building_mesh, level, size, i, j, _W["b"], _W["shapes"], _footprint_ground,
-                          overpasses.bare(_W["ground"][level]).height, landmark_mesh)
+                          overpasses.bare(_W["ground"][level]).height, landmark_mesh, waterfront_mesh)
     times_square.add_to_tile(building_mesh, level, size, i, j, _W, _footprint_ground)
     _add_ground(ground_mesh, bounds, settings)
     _add_raised_water(water_mesh, ground_mesh, bounds, settings)
@@ -514,7 +518,7 @@ def _build_tile(task):
     for kind, mesh in ((SURFACE_BUILDINGS, building_mesh), (SURFACE_GROUND, ground_mesh),
                        (SURFACE_STRUCTURES, structure_mesh), (SURFACE_WATER, water_mesh),
                        (SURFACE_LANDMARKS, landmark_mesh), (SURFACE_CHURCHES, church_mesh),
-                       (SURFACE_FRONTS, front_mesh)):
+                       (SURFACE_FRONTS, front_mesh), (SURFACE_WATERFRONT, waterfront_mesh)):
         built = mesh.build(origin, decimals=2 if kind == SURFACE_FRONTS else 3)  # small parts: to the cm
         if built is not None:
             surfaces.append((kind, built))
@@ -977,6 +981,10 @@ def _add_raised_water(water: MeshBuilder, ground: MeshBuilder, bounds, settings:
     cell = settings["ground_cell"]
     for k in _W["water_tree"].query(bounds, predicate="intersects"):
         clipped = shapely.intersection(w["geoms"][k], bounds)
+        if shapely.intersects(_W["piers"], clipped):
+            # (The elevation model has the piers' decks in it, so water round them can
+            # pass for raised water: none on the piers.)
+            clipped = shapely.difference(clipped, _W["piers"])
         clipped = shapely.simplify(clipped, settings["ground_tolerance"], preserve_topology=True)
         polys = polygons_of(clipped, min_area=settings["min_ground_area"])
         if not polys:
@@ -1100,7 +1108,9 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
         return None, {}
     trees = len(street["en"]) + len(canopy["en"])
     ground = _W["ground"]["lod0"]
-    y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"])] + [p["y"] for p in parts[2:]])
+    # (Trees on hand-made ground stand on it: landmarks.lift, the Pier 3 berm.)
+    y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]) + landmarks.lift(canopy["en"])]
+                       + [p["y"] for p in parts[2:]])
     seed = np.concatenate([p["seed"] for p in parts])
     # Trees and towers face any way; lamps reach over the street.
     yaw = np.concatenate([p["yaw"] if "yaw" in p else props.location_seed(p["en"] * 3.7) * (2 * np.pi)
@@ -1165,7 +1175,7 @@ def _canopy_clumps(level: str, bounds) -> dict:
     inside = (en[:, 0] >= min_e) & (en[:, 0] < max_e) & (en[:, 1] >= min_n) & (en[:, 1] < max_n)
     inside[inside] = shapely.contains_xy(_W["g"]["land"], en[inside, 0], en[inside, 1])
     found = props.canopy_clumps(en[inside], share[inside], cells[inside], cell)
-    found["y"] = overpasses.bare(_W["ground"][level]).height(found["en"])
+    found["y"] = overpasses.bare(_W["ground"][level]).height(found["en"]) + landmarks.lift(found["en"])
     return found
 
 def _furniture(i: int, j: int, bounds) -> dict:

@@ -15,7 +15,7 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
-| 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, facade materials and stoops, ground details, first landmarks, sound done) |
+| 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, facade materials and stoops, ground details, first landmarks, landmarks in stone, waterfront landmarks, sound done) |
 | 7 | Phones and tablets | Done in emulation; real phones to check |
 | 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions, elevated railways and their trains) |
 | 9 | Mac and Windows versions | Planned (last) |
@@ -999,6 +999,98 @@ and 29):**
   +74 kB, mid +80 kB, far +25 kB); one more draw call in each of those
   tiles.
 
+**Landmarks in stone, not toys (done; reference round 3's 22):**
+- St. Patrick's west front is built, not painted, with a few Gothic helpers
+  in `landmarks.py` (faces with openings set back in orders, gabled frames,
+  crockets, pinnacles, an openwork spire), from Wikipedia's figures: the main
+  portal (31 by 51 ft) set back 12 ft in three orders to the bronze doors
+  (16.5 ft) under a row of niches, the side portals in two, each under a
+  crocketed gablet; the rose window (26 ft) in a pointed arch set back
+  twice, its glass dark and muted (sixteen lights round a quatrefoil, no
+  more rainbow); the crocketed central gable (156 ft) with a wheel of blind
+  tracery and the cross; each tower's traceried window under a gable, four
+  small lancets to a side, buttresses at the corners stepping back in three
+  stages with small pinnacles on the setbacks, the battlement and clustered
+  pinnacles at 136 ft; the octagonal lanterns' paired openings, gablets and
+  pinnacles; the spires in tiers of pierced tracery (painted, narrowing with
+  the faces) between moldings, crockets up their eight edges. The aisles'
+  and transepts' pinnacles are real pinnacles too. Gray-tan Tuckahoe marble,
+  blotchy and grimier low down (`CATHEDRAL_MARBLE`); floodlit at night.
+- The Guggenheim: the spiral in 72 samples a turn (24 before) with smooth
+  normals, white-gray instead of cream; its ground floor as photos show it:
+  the lobby's glass set back under the base drum that carries the bridge's
+  band round the rotunda's front, then three bands to the roof.
+- The others, a view each: the Vessel was a bright orange waffle cone (its
+  copper muted now, its openings showing the flights across the bowl); the
+  Met's column pairs stood flat against the wall (shadow behind each pair);
+  the rest read as intended. The Statue of Liberty's mint green and its
+  low-poly statue are painted by building.gdshader: left for later.
+- Compile time: landmark.gdshader's tables indexed per pixel went from
+  seven to two (the made-up letters and the three words in one table,
+  looked up once, so glyph() is compiled once; the ad colors and the
+  stained glass as formulas), which paid for St. Patrick's code. Its color
+  program compiles as fast as before: medians of nine interleaved compiles
+  of the captured programs, 2.38 s at master and 2.42 s now (busy machine;
+  about 2 s idle). The waterfront's materials (below) cost 0.4 s inside it,
+  so they have a shader of their own.
+- Cost: St. Patrick's 679 / 505 / 318 triangles to 11,127 / 3,057 / 302
+  (near / mid / far), the Guggenheim 1,820 / 1,048 / 109 to 3,386 / 1,686 /
+  127; St. Patrick's near tile +180 kB, the Guggenheim's +23 kB; no new draw
+  calls. Still at the 145 FPS cap in both views.
+
+**Waterfront landmarks (done; reference round 3's 28):**
+- Piers: the city's pier outlines (Planimetric hydrography structures,
+  feature 2800) were never drawn out over the water, because
+  `prepare_ground` adds them to the land and then takes the water away,
+  piers with it. `build_tiles.py` adds the 1,216 piers (1.25 km²) back to
+  the land (`landmarks.piers()`, no cache change), with seawalls round them,
+  and keeps the raised-water surfaces off them (the elevation model has the
+  decks in it, so water round piers passed for raised water). Every tile
+  with a pier changes: Chelsea Piers' and Brooklyn Bridge Park's piers, the
+  Hudson River Park piers, the ferry racks and docks.
+- St. George Ferry Terminal: the 3-D model's massing in glass toward the
+  harbor (the 2005 waiting room's curtain wall, 40 ft high; ENR) and brick
+  elsewhere; four slip houses where the slips meet it (brick towers either
+  side, a white steel frame over the opening, the transfer bridge's deck,
+  the terminal's glass behind), their places and headings from the city's
+  aerial photos; the slips' timber fender racks over the hydrography
+  structures' outlines (3 to 4.5 m above the water, darker where the tide
+  wets them); two Staten Island ferries in their slips (95 by 21 m,
+  double-ended, orange, two passenger decks, pilothouses at both ends,
+  windows lit at night).
+- Whitehall Terminal (Frederic Schwartz, 2005): glass on three sides and
+  corrugated stainless toward the slips over the 3-D model's massing; its
+  lowest tier beyond the building is the long canopy on columns, the words
+  along its fascia; the slips' racks (the hydrography structures' 2810
+  outlines, not drawn before) and a ferry in the east slip.
+- Chelsea Piers: the Pier 60 and 61 sheds (the 3-D model's side aisles and
+  stepped monitor roof) in metal panels with bands of windows; the golf
+  range's netting on Pier 59 as its six pairs of 46 m poles and their
+  cables (the height from their shadows in the aerial photos).
+- Brooklyn Bridge Park: Pier 2's three roofs in ridged bays on steel
+  columns, open-sided (the data had a 10 m box over the whole pier); the
+  Pier 3 uplands' berm along Furman Street (9.1 m high, about 240 m long;
+  the park's press release, its line from the aerial photos), a meadow whose
+  trees and crowns stand on it (`landmarks.lift()` raises them); the ONE15
+  marina's floating docks (the narrow parts of the pier outline there)
+  decked in timber, the attenuators' pilings, and the 15 boats moored in the
+  aerial photos (found as bright hulls on the water: place, heading, length
+  and beam), cabins, flybridges and masts.
+- Their materials (60, 61: glass, brick, panels and white steel; timber,
+  decking, boats and ferries) are painted by `shaders/waterfront.gdshader`
+  on a tile surface of their own (kind 12, waterfront), compiled only near
+  the waterfront: 0.4 s. In landmark.gdshader they added 0.4 s to its 2 s.
+- Cost: triangles near / mid / far: St. George 2,433 / 1,754 / 746,
+  Whitehall 1,456 / 1,053 / 384, Chelsea Piers' sheds 368 / 170 / 47 and
+  golf range 504 / 432 / 144, Pier 2 1,836 / 1,836 / 108, the berm 3,864 /
+  946 / 190, the marina 1,898 / 1,517 / 662; one more draw call in the
+  tiles that hold them. The 26 tiles rebuilt here: +804 kB (+6%), the
+  piers' ground included.
+- Next: the lawns, trees and fields on Brooklyn Bridge Park's piers (the
+  2017 land cover has Piers 3 and 5 paved and Pier 1 as water), St.
+  George's white arched canopy (84 ft by 320 ft), the Battery Maritime
+  Building's green cast iron and slips, more boats in summer.
+
 **Sound (done; added 2026-10-15 at the user's request):**
 - The hero: footsteps on the run animation's foot contacts (grass, boards,
   concrete), super speed's wind and zoom, jumps and the super jump's
@@ -1378,10 +1470,11 @@ templates for both are already installed.
     `landmark_wall_2()`). A helper called from three branches is compiled
     three times over, and the total is then squared. Big features that few
     tiles have belong in a shader of their own on a surface of their own
-    (landmark.gdshader), compiled only once they're in view. Avoid adding
-    dynamically indexed `const` arrays to the big shaders: ANGLE turns each
-    into a per-pixel copy, which made the building shader compile about a
-    third slower.
+    (landmark.gdshader, waterfront.gdshader), compiled only once they're in
+    view. Avoid adding dynamically indexed `const` arrays to the big
+    shaders: ANGLE turns each into a per-pixel copy, which made the building
+    shader compile about a third slower. Every line counts: 70 lines of
+    waterfront materials made landmark.gdshader compile 0.4 s (20%) slower.
   - Check after changing shaders: `node tools/shader_compile_check.mjs
     http://localhost:8060/` (headless Chrome with a fresh profile: the time
     to "ready", and the compile time per shader and per program; `--cam=`
