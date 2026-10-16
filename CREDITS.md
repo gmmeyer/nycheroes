@@ -113,6 +113,43 @@ which file is which sound.
   `tools/audio/soundscape_map.py`): where parks, water and built-up blocks
   are, for the ambience.
 
+## Reference photos
+
+Not part of the game: free-licensed photos from Wikimedia Commons that
+`tools/reference/compare.py` downloads (to `build/reference/photos/`, never
+committed) to compare the game with reality (`docs/REFERENCE.md`). If any
+are shown publicly, credit them as below and keep the share-alike terms.
+
+- times_square: "Times Square looking south from 46th Street", Dough4872,
+  CC BY-SA 4.0.
+- fifth_ave_esb: "29th St 5th Av 03 - Marble Collegiate Church",
+  Tdorante10, CC BY-SA 4.0.
+- flatiron: "Flatiron Building - panoramio (5)", qwesy qwesy, CC BY 3.0.
+- park_ave: "Park Ave - panoramio", Elvis Boaventura, CC BY 3.0.
+- totr_south: "New York skyline from Top of the Rock", Hugo Maestá,
+  CC BY-SA 4.0.
+- totr_north: "Sunset at the Top of the Rock (north side)", Nicolas Lh.,
+  CC BY-SA 2.0.
+- brooklyn_bridge: "Brooklyn Bridge, New York City, 20231005 0939 2163",
+  Jakub Hałun, CC BY-SA 4.0.
+- dumbo: "Manhattan Bridge and Empire State Building from Washington
+  Street, Dumbo, Brooklyn, New York", Christian David, CC BY-SA 4.0.
+- promenade: "View across the East River towards Lower Manhattan from the
+  Brooklyn Heights Promenade" (2024-05-22), Famartin, CC BY-SA 4.0.
+- park_slope: "Park Slope", Mark O'Neill, CC BY-SA 3.0.
+- queens_ridgewood: "60th Lane Ridgewood", Kidfly182, CC BY-SA 4.0.
+- grand_concourse: "Grand Concourse, Bronx - 20220616", Andre
+  Carrotflower, CC BY-SA 4.0.
+- st_george: "St. George Ferry Terminal, Staten Island, New York City,
+  20231002 1621 1749", Jakub Hałun, CC BY 4.0.
+- roosevelt_ave: "82 Street vc", Doug Letterman, CC BY 2.0.
+- st_patricks: "Saint Patricks Cathedral in New York - NYC - USA -
+  panoramio", diego_cue, CC BY-SA 3.0.
+- guggenheim: "NYC - Guggenheim Museum", Jean-Christophe BENOIST,
+  CC BY 3.0.
+
+Each file's Commons page is in `tools/reference/views.json` (`photo.page`).
+
 ## Engine
 
 - Godot Engine 4.7 (MIT license), https://godotengine.org.

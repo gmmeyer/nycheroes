@@ -51,6 +51,11 @@
 // aluminum spandrels, Nirosta arches with triangular windows, curtain walls,
 // terracotta, copper, granite, the torch's gold and Grand Central's clock, and
 // light their crowns at night.
+// Browsers on Windows compile this through ANGLE with the D3D compiler, which
+// inlines every call and slows with the square of the code: the heavy
+// helpers (facade_for(), window_light(), the screens' text_line()) are each
+// called from one place, wall_texture() from few, the painters passing along
+// what they need. See "Shader compile time" in docs/ROADMAP.md.
 shader_type spatial;
 render_mode ambient_light_disabled;
 
@@ -159,17 +164,18 @@ const int SMOOTH = 3;
 
 // Palettes, in sRGB. Measured against photos (docs/REFERENCE.md): weathered
 // masonry is darker and much less saturated than its name suggests, and the
-// toon light and tone mapping saturate dark warm colors further, so bricks
-// sit at about 0.3-0.4 saturation and stone lower.
+// toon light and tone mapping saturate dark warm colors further (about twice
+// over in shade), so bricks sit at about 0.2-0.25 saturation here and
+// brownstone and stone lower.
 // Deep red brick, weathered.
-const vec3 RED_BRICK[6] = vec3[](vec3(0.58, 0.39, 0.34), vec3(0.54, 0.37, 0.33), vec3(0.62, 0.44, 0.38),
-		vec3(0.52, 0.36, 0.32), vec3(0.57, 0.41, 0.36), vec3(0.53, 0.39, 0.35));
+const vec3 RED_BRICK[6] = vec3[](vec3(0.60, 0.47, 0.46), vec3(0.56, 0.44, 0.44), vec3(0.64, 0.52, 0.50),
+		vec3(0.54, 0.43, 0.43), vec3(0.59, 0.48, 0.47), vec3(0.55, 0.45, 0.44));
 // Dark brown and red-brown brick (Bronx apartments, Upper West Side, DUMBO).
-const vec3 BROWN_BRICK[5] = vec3[](vec3(0.47, 0.36, 0.32), vec3(0.52, 0.40, 0.35), vec3(0.44, 0.35, 0.32),
-		vec3(0.55, 0.43, 0.37), vec3(0.49, 0.40, 0.36));
+const vec3 BROWN_BRICK[5] = vec3[](vec3(0.48, 0.40, 0.38), vec3(0.54, 0.45, 0.41), vec3(0.45, 0.39, 0.37),
+		vec3(0.57, 0.48, 0.44), vec3(0.50, 0.44, 0.41));
 // Chocolate-brown sandstone.
-const vec3 BROWNSTONE[5] = vec3[](vec3(0.47, 0.38, 0.35), vec3(0.52, 0.42, 0.38), vec3(0.44, 0.36, 0.34),
-		vec3(0.55, 0.45, 0.41), vec3(0.49, 0.41, 0.39));
+const vec3 BROWNSTONE[5] = vec3[](vec3(0.52, 0.47, 0.44), vec3(0.57, 0.51, 0.49), vec3(0.48, 0.44, 0.42),
+		vec3(0.60, 0.55, 0.52), vec3(0.54, 0.49, 0.48));
 // Buff, tan and "blond" brick (Ridgewood, the Grand Concourse).
 const vec3 BUFF_BRICK[5] = vec3[](vec3(0.70, 0.62, 0.51), vec3(0.74, 0.66, 0.55), vec3(0.66, 0.58, 0.47),
 		vec3(0.71, 0.63, 0.52), vec3(0.65, 0.60, 0.51));
@@ -235,19 +241,20 @@ const vec3 TV_BLUE = vec3(0.45, 0.58, 1.0);
 const vec3 LOBBY_LIGHT = vec3(1.0, 0.88, 0.68);
 const vec3 FLOODLIGHT = vec3(1.0, 0.86, 0.62);
 
-// Times Square's screens, in sRGB: cartoon-bright ad colors (hot pink, cyan,
-// yellow, violet, orange, green, blue, red), neon tubes, the dark steel
-// between screens, and the news ticker's band and letters.
-const vec3 AD_COLORS[8] = vec3[](vec3(1.00, 0.16, 0.56), vec3(0.08, 0.78, 1.00), vec3(1.00, 0.84, 0.08),
-		vec3(0.58, 0.22, 1.00), vec3(1.00, 0.44, 0.06), vec3(0.18, 0.92, 0.36), vec3(0.12, 0.32, 1.00),
-		vec3(1.00, 0.12, 0.16));
+// Times Square's screens, in sRGB: bright ad colors (hot pink, cyan, yellow,
+// violet, orange, green, blue, red), a little muted, as most real ads are
+// photos; neon tubes, the dark steel between screens, and the news ticker's
+// band and letters.
+const vec3 AD_COLORS[8] = vec3[](vec3(0.81, 0.31, 0.55), vec3(0.34, 0.76, 0.89), vec3(0.94, 0.84, 0.39),
+		vec3(0.52, 0.31, 0.77), vec3(0.84, 0.51, 0.28), vec3(0.43, 0.87, 0.53), vec3(0.23, 0.35, 0.76),
+		vec3(0.80, 0.27, 0.30));
 const vec3 NEON[5] = vec3[](vec3(1.0, 0.22, 0.70), vec3(0.20, 0.92, 1.0), vec3(1.0, 0.88, 0.25),
 		vec3(0.45, 1.0, 0.30), vec3(1.0, 0.40, 0.12));
 const vec3 SIGN_CLADDING = vec3(0.045, 0.045, 0.055);
 const vec3 SIGN_BEZEL = vec3(0.18, 0.18, 0.20);
 const vec3 SCREEN_OFF = vec3(0.05, 0.05, 0.06);
-const vec3 AD_NIGHT_BLUE = vec3(0.03, 0.04, 0.12);
-const vec3 TICKER_BAND = vec3(0.02, 0.03, 0.09);
+const vec3 AD_NIGHT_BLUE = vec3(0.035, 0.04, 0.07);
+const vec3 TICKER_BAND = vec3(0.03, 0.03, 0.035);
 const vec3 TICKER_TEXT[3] = vec3[](vec3(1.0, 0.76, 0.22), vec3(0.95, 0.96, 1.0), vec3(0.35, 0.95, 1.0));
 // Letter-like glyphs as seven-segment codes (bits: 1 top, 2 upper right,
 // 4 lower right, 8 bottom, 16 lower left, 32 upper left, 64 middle): A b C d
@@ -265,7 +272,7 @@ const int AD_PORTRAIT = 7;  // a cartoon portrait, head and shoulders, lit like 
 const int AD_SCENE = 8;     // a landscape photo: sky, a low sun, ridges, a shore
 const int AD_POSTER = 9;    // a film poster: a rim-lit figure, light rays, a title
 // The kinds wide and tall screens pick from (repeats make a kind likelier).
-const int WIDE_ADS[10] = int[](AD_PORTRAIT, AD_PORTRAIT, AD_SCENE, AD_SCENE, AD_POSTER, AD_WORD, AD_BURST, AD_WAVES,
+const int WIDE_ADS[10] = int[](AD_PORTRAIT, AD_PORTRAIT, AD_SCENE, AD_SCENE, AD_POSTER, AD_POSTER, AD_WORD, AD_WAVES,
 		AD_GRADIENT, AD_TEXT);
 const int TALL_ADS[8] = int[](AD_PRODUCT, AD_PRODUCT, AD_COLUMN, AD_POSTER, AD_POSTER, AD_PORTRAIT, AD_WAVES, AD_GRADIENT);
 // Portraits' skin tones and hair, in sRGB.
@@ -334,7 +341,7 @@ uniform float floodlight_strength = 1.3;
 // (m above the base, picked per building in this range, or less where the
 // wall is lower), how far their colored light washes up the facade above
 // them at night (m), and how fast the news tickers run (m/s).
-uniform float sign_day_glow = 1.1;
+uniform float sign_day_glow = 0.85;
 uniform float sign_night_glow = 1.4;
 uniform float neon_glow = 2.2;
 uniform vec2 sign_top_range = vec2(40.0, 60.0);
@@ -359,7 +366,7 @@ uniform vec3 esb_lights_top : source_color = vec3(1.0, 0.98, 0.94);
 uniform float landmark_flood = 1.0;
 uniform float torch_glow = 4.0;
 
-// Moments of the wall height at the vertices (see wall_top_distance).
+// Moments of the wall height at the vertices (see wall_span()).
 varying vec4 wall_moments;
 // The same for uv.x: where sign walls' faces start and end (sign_zone()).
 varying vec4 wall_x_moments;
@@ -493,6 +500,33 @@ Facade facade_for(int archetype, float seed, bool landmark, int material) {
 	f.piers = false;
 	f.shutters = false;
 
+	// The wall material of the types that take one (or else their own mix of
+	// materials), and its wall color, surface and trim, worked out once up
+	// here rather than in each type's branch, so each material helper is
+	// inlined once (see "Shader compile time" in docs/ROADMAP.md). Prewar
+	// offices' mix by default; lofts' brick is red or brown by r4.
+	vec4 mix_cuts = vec4(0.0, 0.17, 0.48, 0.83);
+	float mix_last = 1.0;
+	float mix_r = r1;
+	if (archetype == ROWHOUSE) {
+		mix_cuts = vec4(0.08, 0.39, 0.63, 0.68);
+		mix_last = 0.9;
+	} else if (archetype == WALKUP) {
+		mix_cuts = vec4(0.05, 0.43, 0.64, 0.64);
+		mix_last = 0.89;
+	} else if (archetype == PREWAR_APARTMENT) {
+		mix_cuts = vec4(0.0, 0.22, 0.51, 0.67);
+	} else if (archetype == LOFT) {
+		mix_cuts = vec4(0.0, 0.6, 0.6, 0.6);
+		mix_r = r4;
+	}
+	int m = material != MAT_AUTO ? material
+			: mixed_material(mix_r, mix_cuts.x, mix_cuts.y, mix_cuts.z, mix_cuts.w, mix_last);
+	bool loft = archetype == LOFT;
+	vec3 m_wall = material_wall(m, loft ? r3 : r4);
+	int m_surface = material_surface(m);
+	vec3 m_trim = material_trim(m, m_wall, loft ? r2 : r3);
+
 	if (archetype == HOUSE) {
 		// Vinyl siding in pale colors, or brick; white trim, some shutters.
 		if (r1 < 0.68) {
@@ -512,10 +546,9 @@ Facade facade_for(int archetype, float seed, bool landmark, int material) {
 	} else if (archetype == ROWHOUSE) {
 		// Brownstones, limestones and brick rows: tall parlor windows, heavy
 		// lintels, cornices painted dark (or light on buff brick).
-		int m = material != MAT_AUTO ? material : mixed_material(r1, 0.08, 0.39, 0.63, 0.68, 0.9);
-		f.wall = material_wall(m, r4);
-		f.surface = material_surface(m);
-		f.trim = material_trim(m, f.wall, r3);
+		f.wall = m_wall;
+		f.surface = m_surface;
+		f.trim = m_trim;
 		f.cornice = srgb(m == MAT_BUFF_BRICK || m == MAT_PAINTED ? (r2 < 0.6 ? CORNICE_PAINT[2] : vec3(0.62, 0.63, 0.62))
 				: (r2 < 0.6 ? CORNICE_PAINT[1] : CORNICE_PAINT[pick(r3, 4)]));
 		if (m == MAT_BROWNSTONE && r2 >= 0.6) {
@@ -533,10 +566,9 @@ Facade facade_for(int archetype, float seed, bool landmark, int material) {
 		f.air_conditioners = 0.12;
 	} else if (archetype == WALKUP) {
 		// Tenements: red, brown, tan or painted brick with stone trim.
-		int m = material != MAT_AUTO ? material : mixed_material(r1, 0.05, 0.43, 0.64, 0.64, 0.89);
-		f.wall = material_wall(m, r4);
-		f.surface = material_surface(m);
-		f.trim = material_trim(m, f.wall, r3);
+		f.wall = m_wall;
+		f.surface = m_surface;
+		f.trim = m_trim;
 		f.bay = 2.1;
 		f.window_width = 0.92;
 		f.window_height = 0.45;
@@ -546,10 +578,9 @@ Facade facade_for(int archetype, float seed, bool landmark, int material) {
 		f.air_conditioners = 0.22;
 	} else if (archetype == PREWAR_APARTMENT) {
 		// Brick over a limestone base, or all limestone.
-		int m = material != MAT_AUTO ? material : mixed_material(r1, 0.0, 0.22, 0.51, 0.67, 1.0);
 		f.base = srgb(LIMESTONE[pick(r2, 5)]);
-		f.wall = material_wall(m, r4);
-		f.surface = material_surface(m);
+		f.wall = m_wall;
+		f.surface = m_surface;
 		if (m == MAT_LIMESTONE) {
 			f.base = f.wall;
 			f.base_floors = 1.0;
@@ -620,9 +651,8 @@ Facade facade_for(int archetype, float seed, bool landmark, int material) {
 		// Masonry towers: windows in vertical strips between piers, with
 		// dark spandrels, over a tall stone base: limestone and cream brick
 		// mostly, some gray stone, red and brown brick.
-		int m = material != MAT_AUTO ? material : mixed_material(r1, 0.0, 0.17, 0.48, 0.83, 1.0);
-		f.wall = material_wall(m, r4);
-		f.surface = material_surface(m);
+		f.wall = m_wall;
+		f.surface = m_surface;
 		if (m == MAT_LIMESTONE && r3 > 0.75) {
 			f.wall = srgb(vec3(0.62, 0.62, 0.60));  // gray granite or sandstone
 		}
@@ -688,10 +718,9 @@ Facade facade_for(int archetype, float seed, bool landmark, int material) {
 			f.piers = true;
 			f.accent = f.wall * 0.86;
 		} else {
-			int m = material != MAT_AUTO ? material : (r4 < 0.6 ? MAT_RED_BRICK : MAT_BROWN_BRICK);
-			f.wall = material_wall(m, r3);
-			f.surface = material_surface(m);
-			f.trim = material_trim(m, f.wall, r2);
+			f.wall = m_wall;
+			f.surface = m_surface;
+			f.trim = m_trim;
 			f.lintels = true;
 		}
 		f.frame = srgb(r2 < 0.6 ? FRAME_PAINT[1] : FRAME_PAINT[2]);
@@ -717,8 +746,8 @@ Facade facade_for(int archetype, float seed, bool landmark, int material) {
 	} else if (archetype == INDUSTRIAL) {
 		// Warehouses and garages: brick or block, steel factory windows.
 		if (material != MAT_AUTO) {
-			f.wall = material_wall(material, r4);
-			f.surface = material_surface(material);
+			f.wall = m_wall;
+			f.surface = m_surface;
 		} else if (r1 < 0.5) {
 			f.wall = srgb(r4 < 0.6 ? RED_BRICK[pick(r3, 6)] : BROWN_BRICK[pick(r3, 5)]);
 		} else if (r1 < 0.75) {
@@ -803,14 +832,15 @@ Facade facade_for(int archetype, float seed, bool landmark, int material) {
 		// The old masonry landmarks are mostly faced in stone or terracotta
 		// rather than brick. Every prewar office tower is: 70% pale limestone,
 		// 30% ivory terracotta, so the Empire State, Chrysler and Woolworth
-		// Buildings read light. Three in four of the others are: 60%
-		// limestone, 25% terracotta, 15% granite.
+		// Buildings read light. Three in four of the others are too, most in
+		// limestone (the Waldorf Astoria among them): 90% limestone, 6%
+		// terracotta, 4% granite.
 		float r5 = rnd(seed, 5.0);
 		bool office = archetype == PREWAR_OFFICE;
 		if (office || r5 < 0.75) {
-			if (r5 < (office ? 0.7 : 0.45)) {
+			if (r5 < (office ? 0.7 : 0.675)) {
 				f.wall = srgb(LANDMARK_LIMESTONE[pick(r4, 3)]);
-			} else if (office || r5 < 0.64) {
+			} else if (office || r5 < 0.72) {
 				f.wall = srgb(TERRACOTTA[pick(r4, 3)]);
 			} else {
 				f.wall = srgb(GRANITE[pick(r4, 3)]);
@@ -918,6 +948,32 @@ vec3 window_light(int archetype, bool curtain, vec2 cell, float seed, vec2 cell_
 	return light * mix(0.8, 1.15, up);
 }
 
+// A pixel's lit window, if any: window_light()'s arguments and how much of
+// the pixel glows (0: none). facade() and landmark_wall() fill it in and
+// fragment() adds the light, so window_light() is inlined once (see "Shader
+// compile time" in docs/ROADMAP.md).
+struct WindowLight {
+	int archetype;
+	bool curtain;
+	vec2 cell;
+	float seed;
+	vec2 cell_pixels;
+	float up;
+	float amount;
+};
+
+WindowLight no_window_light() {
+	WindowLight w;
+	w.archetype = 0;
+	w.curtain = false;
+	w.cell = vec2(0.0);
+	w.seed = 0.0;
+	w.cell_pixels = vec2(1.0);
+	w.up = 0.0;
+	w.amount = 0.0;
+	return w;
+}
+
 // The foot and top of this fragment's wall triangle (UV.y meters), or
 // (-1e4, 1e4) where they aren't known. A wall triangle's corners sit at just
 // two heights, its foot b and its top t; the vertex shader passes the first
@@ -939,12 +995,6 @@ vec2 wall_span(vec4 m) {
 	}
 	float root = sqrt(discriminant);
 	return vec2(0.5 * (s - root), 0.5 * (s + root)) * 100.0 - 1.0;
-}
-
-// Meters from this fragment up to the top of its wall, or a big number where
-// that isn't known (see wall_span()).
-float wall_top_distance(vec4 m, float y) {
-	return wall_span(m).y - y;
 }
 
 vec3 wall_texture(vec3 color, int surface, vec2 p, vec2 footprint) {
@@ -1114,9 +1164,12 @@ vec2 fire_escape(vec2 p, vec2 footprint, float floor_height, float bay, float si
 	return vec2(iron, shadow) * allowed;
 }
 
-Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_height, float seed, float below_top) {
+// A wall's facade: `f` is the building's (facade_for()), `wall` its wall
+// texture (wall_texture() of f.wall and f.surface at p); `lights` its lit
+// window at night.
+Surface facade(Facade f, vec3 wall, vec2 p, vec2 footprint, int archetype, int flags, float floor_height, float seed,
+		float below_top, out WindowLight lights) {
 	bool landmark = (flags & LANDMARK) != 0;
-	Facade f = facade_for(archetype, seed, landmark, (flags / MATERIAL) % 8);
 	bool front = (flags & FRONT) != 0 || merged_blocks;
 	bool street = (flags & FRONT) != 0 && !merged_blocks;
 	bool retail = street && ((flags & RETAIL) != 0 || archetype == STORE);
@@ -1135,7 +1188,6 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 	float upper = band(p.y, floor_height, 1e5, footprint.y);
 
 	// The wall itself, with a stone base and a darker water table.
-	vec3 wall = wall_texture(f.wall, f.surface, p, footprint);
 	if (f.base_floors > 0.0) {
 		float base_top = f.base_floors * floor_height;
 		float in_base = band(p.y, -2.0, base_top, footprint.y);
@@ -1422,9 +1474,15 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 		}
 	}
 
+	lights = no_window_light();
 	if (city_lights > 0.0 && glow > 0.0) {
-		s.emission += window_light(archetype, f.windows == CURTAIN, cell, seed, cell_size / footprint, window_up)
-				* (glow * window_glow * city_lights);
+		lights.archetype = archetype;
+		lights.curtain = f.windows == CURTAIN;
+		lights.cell = cell;
+		lights.seed = seed;
+		lights.cell_pixels = cell_size / footprint;
+		lights.up = window_up;
+		lights.amount = glow * window_glow * city_lights;
 	}
 
 	// Calm distance: once windows are only a few pixels, pull the grid toward
@@ -1441,15 +1499,29 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 }
 
 // The inside of a parapet, seen from the roof: plain wall under its coping.
-Surface parapet_inside(vec2 p, vec2 footprint, int archetype, int flags, float seed, float below_top) {
-	Facade f = facade_for(archetype, seed, (flags & LANDMARK) != 0, (flags / MATERIAL) % 8);
-	vec3 color = f.windows == CURTAIN ? f.frame : wall_texture(f.wall, f.surface, p, footprint) * 0.9;
+// `f` and `wall` as for facade().
+Surface parapet_inside(Facade f, vec3 wall, vec2 footprint, float below_top) {
+	vec3 color = f.windows == CURTAIN ? f.frame : wall * 0.9;
 	color = mix(color, f.trim, band(below_top, -1.0, 0.24, footprint.y));
 	Surface s;
 	s.albedo = color;
 	s.emission = vec3(0.0);
 	s.glass = 0.0;
 	return s;
+}
+
+// The stone of a stoop: `f` is the house's facade (facade_for()).
+vec3 stoop_stone(Facade f, int archetype, int material, float seed) {
+	float r = rnd(seed, 31.0);
+	vec3 stone = f.trim;
+	if (material == MAT_BROWNSTONE || material == MAT_LIMESTONE) {
+		stone = f.wall;
+	} else if (material == MAT_SIDING || r < (archetype == WALKUP ? 0.5 : 0.25)) {
+		stone = srgb(CONCRETE);
+	} else if (material != MAT_PAINTED && r < 0.55) {
+		stone = srgb(BROWNSTONE[pick(fract(r * 5.7), 5)]);
+	}
+	return stone;
 }
 
 // A stoop (tools/citygen/fronts.py): steps up to the parlor floor between
@@ -1460,20 +1532,11 @@ Surface parapet_inside(vec2 p, vec2 footprint, int archetype, int flags, float s
 // between stone posts along the yard instead of a stone wall). The doorway:
 // double doors with glass panes under a transom, in a stone surround with a
 // hood; at night the glass glows and a lamp lights the landing.
-Surface stoop(int part, vec2 p, vec2 fp, int archetype, int flags, float seed) {
-	int material = (flags / MATERIAL) % 8;
-	Facade f = facade_for(archetype, seed, false, material);
-	float r = rnd(seed, 31.0);
+// `stone` is stoop_stone(), `textured` its wall_texture() as STONE at p
+// (treads: at p * (0.6, 1)).
+Surface stoop(Facade f, vec3 stone, vec3 textured, int part, vec2 p, vec2 fp, int material, float seed) {
 	float pixel = max(fp.x, fp.y);
 	float detail = smoothstep(4.0, 10.0, 0.3 / pixel);
-	vec3 stone = f.trim;
-	if (material == MAT_BROWNSTONE || material == MAT_LIMESTONE) {
-		stone = f.wall;
-	} else if (material == MAT_SIDING || r < (archetype == WALKUP ? 0.5 : 0.25)) {
-		stone = srgb(CONCRETE);
-	} else if (material != MAT_PAINTED && r < 0.55) {
-		stone = srgb(BROWNSTONE[pick(fract(r * 5.7), 5)]);
-	}
 	bool iron = material != MAT_BROWNSTONE && rnd(seed, 32.0) < 0.45;
 	Surface s;
 	s.emission = vec3(0.0);
@@ -1485,7 +1548,7 @@ Surface stoop(int part, vec2 p, vec2 fp, int archetype, int flags, float seed) {
 		float steps = band(p.y, STOOP_LANDING, 1e4, fp.y);
 		float riser = stripes(u, 0.4, fu) * steps;
 		float nose = stripes(u - 0.93, 0.07, fu) * steps;
-		vec3 color = wall_texture(stone, STONE, p * vec2(0.6, 1.0), fp * vec2(0.6, 1.0)) * 1.04;
+		vec3 color = textured * 1.04;
 		color *= 1.0 - 0.3 * riser + 0.12 * nose;
 		s.albedo = color;
 		return s;
@@ -1494,7 +1557,7 @@ Surface stoop(int part, vec2 p, vec2 fp, int archetype, int flags, float seed) {
 		// Height above the steps' line (the landing, then down the steps).
 		float h = p.y + max(p.x - STOOP_LANDING, 0.0) * (STEP_RISE / STEP_RUN);
 		float above = band(h, 0.0, 1e4, fp.y);
-		vec3 color = wall_texture(stone, STONE, p, fp);
+		vec3 color = textured;
 		// The body under the steps: courses of stone, darker toward the ground.
 		color *= 1.0 - 0.25 * stripes(p.y / 0.38, 0.06, fp.y / 0.38) * visible(0.38, pixel) * (1.0 - above);
 		color *= mix(0.86, 1.0, smoothstep(-2.5, -0.5, p.y)) * mix(1.0, 0.92, above * float(part == CHEEK));
@@ -1522,7 +1585,7 @@ Surface stoop(int part, vec2 p, vec2 fp, int archetype, int flags, float seed) {
 		// A stone wall under a coping, or an iron fence on a curb between
 		// capped stone posts.
 		float h = p.y;
-		vec3 color = wall_texture(stone, STONE, p, fp);
+		vec3 color = textured;
 		color *= mix(0.84, 1.0, smoothstep(-0.2, 0.25, h));
 		float cap = band(h, AREAWAY_HEIGHT - 0.1, 1e4, fp.y);
 		float under_cap = band(h, AREAWAY_HEIGHT - 0.15, AREAWAY_HEIGHT - 0.1, fp.y);
@@ -1544,7 +1607,7 @@ Surface stoop(int part, vec2 p, vec2 fp, int archetype, int flags, float seed) {
 	const float WIDTH = 1.5;
 	const float PILASTER = 0.17;
 	const float OPENING_TOP = 2.6;
-	vec3 surround = wall_texture(stone, STONE, p, fp) * 1.04;
+	vec3 surround = textured * 1.04;
 	float x = p.x - 0.5 * WIDTH;  // m from the middle
 	float opening = band(x, -0.5 * WIDTH + PILASTER, 0.5 * WIDTH - PILASTER, fp.x) * band(p.y, -1.0, OPENING_TOP, fp.y);
 	vec3 door = srgb(DOOR_PAINT[pick(rnd(seed, 33.0), 5)]);
@@ -1623,12 +1686,37 @@ float text_line(vec2 q, float height, float spaces, float salt, vec2 footprint) 
 	return line * mix(0.45 * (1.0 - spaces), letter * shape, smoothstep(1.5, 4.0, pitch / footprint.x));
 }
 
+// A line of text on a screen: text_line()'s arguments (q, height, spaces,
+// salt), how much of it shows (cover: 0 for none) and its ink. The ad kinds
+// in screen() each set one, and one text_line() call after them draws it, so
+// text_line() is inlined once there (see "Shader compile time" in
+// docs/ROADMAP.md).
+struct TextLine {
+	vec2 q;
+	float height;
+	float spaces;
+	float salt;
+	float cover;
+	vec3 ink;
+};
+
+TextLine text_spec(vec2 q, float height, float spaces, float salt, float cover, vec3 ink) {
+	TextLine t;
+	t.q = q;
+	t.height = height;
+	t.spaces = spaces;
+	t.salt = salt;
+	t.cover = cover;
+	t.ink = ink;
+	return t;
+}
+
 // One word of `letters` letters, `height` m tall, centered on `middle` (m
-// from the screen's lower left corner, like uv). Returns coverage.
-float word(vec2 uv, vec2 middle, float height, float letters, float salt, vec2 footprint) {
+// from the screen's lower left corner, like uv), in `ink`.
+TextLine word(vec2 uv, vec2 middle, float height, float letters, float salt, vec2 footprint, vec3 ink) {
 	float width = letters * height * 0.8 - height * 0.2;
 	vec2 at = uv - middle + vec2(0.5 * width, 0.5 * height);
-	return text_line(at, height, 0.0, salt, footprint) * band(at.x, 0.0, width, footprint.x);
+	return text_spec(at, height, 0.0, salt, band(at.x, 0.0, width, footprint.x), ink);
 }
 
 // Rolling color bands: the n-th band's color.
@@ -1688,10 +1776,10 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 	vec3 c3 = ad_color(i1 + 1 + pick(k3, 7));
 	vec3 white = vec3(1.0);
 	// Dark ink on the light colors (cyan, yellow, green), white on the rest;
-	// some slides are on night blue.
+	// half the slides are on night blue.
 	vec3 ink = (i1 == 1 || i1 == 2 || i1 == 5) ? srgb(vec3(0.07, 0.07, 0.16)) : white;
 	vec3 night_blue = srgb(AD_NIGHT_BLUE);
-	bool dark = fract(k3 * 5.17) < 0.35;
+	bool dark = fract(k3 * 5.17) < 0.5;
 	float pixel = max(footprint.x, footprint.y);
 	float aspect = size.x / size.y;
 	vec2 q = uv / size.y;       // in screen heights
@@ -1701,6 +1789,8 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 	float side = k2 < 0.5 ? -1.0 : 1.0;  // where the light comes from, in photos
 
 	vec3 color;
+	TextLine text = text_spec(vec2(0.0), 1.0, 0.0, 0.0, 0.0, white);
+	float bar = 0.0;  // AD_WORD's colored bar, over its word
 	if (kind == AD_PORTRAIT) {
 		// Head and shoulders, softly lit as in a studio, on a soft gradient,
 		// with the brand's word beside it (wide screens) or below.
@@ -1708,7 +1798,7 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		float fx = wide ? (k3 < 0.5 ? 0.3 : 0.7) * aspect : 0.5 * aspect;
 		float scale = wide ? 1.0 : clamp(aspect * 1.3, 0.6, 1.0);
 		vec3 back = dark ? mix(night_blue, c2 * 0.3, q.y)
-				: mix(c1 * 0.5, c2 * 0.85, smoothstep(-0.2, 1.2, q.y + 0.2 * sin(q.x * 1.7 + k1 * 6.3)));
+				: mix(c1 * 0.3, c2 * 0.6, smoothstep(-0.2, 1.2, q.y + 0.2 * sin(q.x * 1.7 + k1 * 6.3)));
 		vec3 skin = srgb(SKIN[pick(fract(k1 * 3.7), 5)]);
 		vec3 hair = srgb(HAIR[pick(fract(k2 * 5.3), 5)]);
 		vec3 shirt = mix(c3, white, 0.15);
@@ -1743,8 +1833,7 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		float height = (wide ? 0.13 : 0.09) * size.y;
 		float letters = wide ? 3.0 + floor(k1 * 3.0) : 3.0 + floor(k1 * 2.0);
 		vec2 middle = wide ? vec2((fx < 0.5 * aspect ? 0.75 : 0.25) * aspect, 0.5) : vec2(0.5 * aspect, 0.1);
-		float brand = word(uv, middle * size.y, height, letters, k3 * 41.0, footprint);
-		color = mix(color, dark ? c1 : white, brand);
+		text = word(uv, middle * size.y, height, letters, k3 * 41.0, footprint, dark ? c1 : white);
 		average = mix(mix(back, shirt, 0.25), skin, min(0.3 * scale * scale / aspect, 0.3));
 	} else if (kind == AD_SCENE) {
 		// A travel "photo", slowly panning: sky, a low sun, hazy ridges, a
@@ -1767,9 +1856,8 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		float glints = stripes(q.y * 40.0 + sin(x * 9.0 + TIME) * 0.6, 0.15, px * 40.0) * (1.0 - smoothstep(0.0, 0.25, abs(q.x - sun.x)));
 		vec3 water = mix(zenith, horizon, 0.45) * 0.75 + horizon * (0.5 * glints);
 		color = mix(color, water, smoothstep(0.16 + px, 0.16 - px, q.y));
-		float headline = text_line(uv - size * vec2(0.08, 0.84), size.y * 0.1, 0.18, k2 * 70.0, footprint)
-				* band(uv.x, size.x * 0.08, size.x * 0.75, footprint.x);
-		color = mix(color, white, headline);
+		text = text_spec(uv - size * vec2(0.08, 0.84), size.y * 0.1, 0.18, k2 * 70.0,
+				band(uv.x, size.x * 0.08, size.x * 0.75, footprint.x), white);
 		average = mix(mix(horizon, zenith, 0.5), near_hills, 0.3) + 0.03;
 	} else if (kind == AD_POSTER) {
 		// A film poster: a dark figure against a glow, light rays behind, a
@@ -1785,8 +1873,7 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		color = mix(color, srgb(vec3(0.03, 0.03, 0.04)), figure(q, foot, height, px));
 		float letters = clamp(floor(0.8 * aspect / 0.08), 3.0, 7.0);
 		float title_height = min(0.1, 0.85 * aspect / (letters * 0.8)) * size.y;
-		float title = word(uv, vec2(0.5 * size.x, 0.1 * size.y), title_height, letters, k1 * 23.0, footprint);
-		color = mix(color, mix(c3, white, 0.5) * 1.2, title);
+		text = word(uv, vec2(0.5 * size.x, 0.1 * size.y), title_height, letters, k1 * 23.0, footprint, mix(c3, white, 0.5) * 1.2);
 		average = srgb(vec3(0.03)) + c1 * 0.22;
 	} else if (kind == AD_GRADIENT) {
 		float g = 0.5 + 0.5 * sin((q.x * 0.7 + q.y * 1.3) * 2.4 - TIME * 0.8 + k1 * 6.3);
@@ -1799,9 +1886,8 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		float disc = 1.0 - smoothstep(radius - px, radius + px, d);
 		float ring = band(d, radius + 0.04, radius + 0.075, px);
 		color = mix(mix(color, c3, disc), white, ring);
-		float line = text_line(uv - size * vec2(0.08, 0.1), size.y * 0.12, 0.2, k3 * 50.0, footprint)
-				* band(uv.x, size.x * 0.08, size.x * 0.92, footprint.x);
-		color = mix(color, white, line);
+		text = text_spec(uv - size * vec2(0.08, 0.1), size.y * 0.12, 0.2, k3 * 50.0,
+				band(uv.x, size.x * 0.08, size.x * 0.92, footprint.x), white);
 		average = mix(mix(tone_a, tone_b, 0.5), c3, min(3.1 * radius * radius / aspect, 0.5)) + 0.06;
 	} else if (kind == AD_TEXT) {
 		// Three lines of text, typing themselves out line by line.
@@ -1811,9 +1897,8 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		float row = clamp(floor((0.93 - q.y) / 0.27), 0.0, 2.0);
 		float height = size.y * (row == 0.0 ? 0.2 : 0.17);
 		float typed = size.x * 0.07 + (since - 0.4 - 0.7 * row) * size.x * 0.9;
-		float text = text_line(uv - vec2(size.x * 0.07, size.y * (0.66 - 0.27 * row)), height, 0.18, k1 * 31.0 + row * 7.0, footprint)
-				* band(uv.x, size.x * 0.07, min(size.x * 0.93, typed), footprint.x);
-		color = mix(color, ink, text);
+		text = text_spec(uv - vec2(size.x * 0.07, size.y * (0.66 - 0.27 * row)), height, 0.18, k1 * 31.0 + row * 7.0,
+				band(uv.x, size.x * 0.07, min(size.x * 0.93, typed), footprint.x), ink);
 		average = mix(back * 0.87, ink, 0.15);
 	} else if (kind == AD_BURST) {
 		vec2 d = q - vec2(0.5 * aspect, 0.5);
@@ -1831,9 +1916,8 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		float n = floor(w + 0.5);
 		float edge = smoothstep(-1.0, 1.0, (w - n) / max(px * 2.5, 1e-4));
 		color = mix(wave_color(n - 1.0, c1, c2, c3), wave_color(n, c1, c2, c3), edge);
-		float line = text_line(uv - size * vec2(0.1, 0.42), size.y * 0.16, 0.15, k2 * 60.0, footprint)
-				* band(uv.x, size.x * 0.1, size.x * 0.9, footprint.x);
-		color = mix(color, white, line);
+		text = text_spec(uv - size * vec2(0.1, 0.42), size.y * 0.16, 0.15, k2 * 60.0,
+				band(uv.x, size.x * 0.1, size.x * 0.9, footprint.x), white);
 		average = (c1 + c2 + c3) / 3.0 + 0.04;
 	} else if (kind == AD_WORD) {
 		// One huge word on night blue, glowing, over a colored bar.
@@ -1844,9 +1928,8 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		float width = letters * height * 0.8 - height * 0.2;
 		vec2 at = uv - vec2(0.5 * (size.x - width), 0.5 * size.y - 0.4 * height);
 		float across = band(at.x, 0.0, width, footprint.x);
-		float big = text_line(at, height, 0.0, k1 * 77.0, footprint) * across;
-		color = mix(color, c1 * (1.15 + 0.15 * sin(TIME * 4.0 + k2 * 6.3)), big);
-		color = mix(color, c3, across * band(at.y, -0.3 * height, -0.18 * height, footprint.y));
+		text = text_spec(at, height, 0.0, k1 * 77.0, across, c1 * (1.15 + 0.15 * sin(TIME * 4.0 + k2 * 6.3)));
+		bar = across * band(at.y, -0.3 * height, -0.18 * height, footprint.y);
 		average = mix(back + c2 * 0.1, c1, 0.5 * height * width / (size.x * size.y));
 	} else if (kind == AD_PRODUCT) {
 		// A cartoon can bobbing over a glowing gradient.
@@ -1874,6 +1957,10 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		color = mix(color, ink, on);
 		average = mix(c1 * 0.8, ink, 0.2);
 	}
+
+	// The kind's line of text, then AD_WORD's bar over it.
+	color = mix(color, text.ink, text_line(text.q, text.height, text.spaces, text.salt, footprint) * text.cover);
+	color = mix(color, c3, bar);
 
 	// Far off, the average; a blink between slides; now and then a flash.
 	color = mix(average, color, smoothstep(0.5, 1.5, 0.1 * min(size.x, size.y) / pixel));
@@ -2286,7 +2373,7 @@ const vec3 NIROSTA = vec3(0.70, 0.73, 0.78);
 const vec3 WTC_GLASS_COLOR = vec3(0.34, 0.48, 0.60);
 const vec3 WTC_MULLION = vec3(0.66, 0.70, 0.74);
 // Stone and terracotta.
-const vec3 FLATIRON_STONE = vec3(0.88, 0.80, 0.66);
+const vec3 FLATIRON_STONE = vec3(0.73, 0.71, 0.66);
 const vec3 WOOLWORTH_CREAM = vec3(0.94, 0.90, 0.80);
 const vec3 GC_LIMESTONE = vec3(0.88, 0.84, 0.75);
 const vec3 ROCK_LIMESTONE = vec3(0.87, 0.83, 0.74);
@@ -2347,8 +2434,11 @@ vec3 lm_cornice(vec3 color, vec2 p, vec2 fp, float z0, float z1) {
 
 // A wall of a landmark (see the material list in landmarks.py). The windowed
 // walls share one grid painter fed by a few numbers per material, so the
-// heavier helpers (wall_texture, storefront, window_light) appear once each.
-Surface landmark_wall(int material, int variant, vec2 p, vec2 fp, float width, vec3 world_normal) {
+// heavier helpers (wall_texture, storefront) appear once each here; `lights`
+// is the lit window, if any, as for facade().
+Surface landmark_wall(int material, int variant, vec2 p, vec2 fp, float width, vec3 world_normal,
+		out WindowLight lights) {
+	lights = no_window_light();
 	Surface s;
 	s.emission = vec3(0.0);
 	s.glass = 0.0;
@@ -2510,8 +2600,13 @@ Surface landmark_wall(int material, int variant, vec2 p, vec2 fp, float width, v
 		}
 		lit *= 1.0 - ground;
 		if (city_lights > 0.0 && lit > 0.0) {
-			after_dark += window_light(occupant, occupant == MODERN_OFFICE, cell, salt, size / fp, g.w)
-					* (lit * window_glow * city_lights);
+			lights.archetype = occupant;
+			lights.curtain = occupant == MODERN_OFFICE;
+			lights.cell = cell;
+			lights.seed = salt;
+			lights.cell_pixels = size / fp;
+			lights.up = g.w;
+			lights.amount = lit * window_glow * city_lights;
 		}
 		s.emission = after_dark;
 	} else if (material == LM_FLATIRON) {
@@ -2793,8 +2888,19 @@ void fragment() {
 	vec3 world_view = normalize((INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz);
 	vec3 photo = aerial_albedo(aerial_uv);
 
+	// The foot and top of this wall triangle, and on Times Square's sign walls
+	// the face's span across (wall_span()), worked out once here for all the
+	// painters below (see "Shader compile time" in docs/ROADMAP.md).
+	vec2 span = wall_span(wall_moments);
+	float below_top = span.y - UV.y;  // m up to the top of the wall (big where unknown)
+	vec2 face = vec2(-1e4, 1e4);
+	if ((flags & SIGNS) != 0) {
+		face = wall_span(wall_x_moments);
+	}
+
 	Surface s;
 	float occlusion = 1.0;
+	WindowLight lights = no_window_light();
 	bool landmark = archetype >= LM_FIRST;
 	if (landmark) {
 		// UV2.y's whole part: the face's width in dm * 4 + a variant.
@@ -2802,43 +2908,66 @@ void fragment() {
 		if ((flags & ROOF) != 0) {
 			s = landmark_roof(archetype, UV, footprint);
 		} else {
-			s = landmark_wall(archetype, param % 4, UV, footprint, float(param / 4) * 0.1, world_normal);
+			s = landmark_wall(archetype, param % 4, UV, footprint, float(param / 4) * 0.1, world_normal, lights);
 			bool height_uv = archetype != LM_CHRYSLER_CROWN && archetype != LM_CLOCK && archetype != LM_LIBERTY
 					&& archetype != LM_GOLD;
 			occlusion = height_uv ? mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y)) : 1.0;
 		}
 	} else if ((flags & SIGNS) != 0 && flags >= 2 * FRONT_PART) {
 		// Times Square's own pieces: the TKTS steps, benches, the corner drum.
-		s = plaza_piece(flags / FRONT_PART, UV, footprint, flags, wall_top_distance(wall_moments, UV.y), wall_span(wall_x_moments));
+		s = plaza_piece(flags / FRONT_PART, UV, footprint, flags, below_top, face);
 		occlusion = (flags & ROOF) != 0 ? 1.0 : mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y));
-	} else if (flags >= FRONT_PART && (flags & SIGNS) == 0) {
-		s = stoop(flags / FRONT_PART, UV, footprint, archetype, flags, seed);
-		occlusion = canyon_occlusion;
-	} else if ((flags & ROOF) != 0) {
+	} else if ((flags & ROOF) != 0 && (flags < FRONT_PART || (flags & SIGNS) != 0)) {
+		// Roofs (a stoop's treads are flagged ROOF too, but painted by stoop()).
 		s.albedo = mix(roof(UV, footprint, archetype, seed), photo, aerial_amount(aerial_uv));
 		s.emission = vec3(0.0);
 		s.glass = 0.0;
-	} else if ((flags & PARAPET_INSIDE) != 0) {
-		s = parapet_inside(UV, footprint, archetype, flags, seed, wall_top_distance(wall_moments, UV.y));
 	} else {
-		float below_top = wall_top_distance(wall_moments, UV.y);
-		// Sign walls paint their facade only where the screens leave it showing.
-		bool signs = (flags & SIGNS) != 0;
-		SignZone zone;
-		zone.cover = 0.0;
-		if (signs) {
-			zone = sign_zone(UV, footprint, flags, floor_height, seed, below_top, wall_span(wall_x_moments), world_normal);
+		// Walls, parapets' inner faces and stoops share one facade_for() and
+		// one wall_texture() call, so each is inlined once.
+		int part = flags / FRONT_PART;
+		bool stoop_part = part > 0 && (flags & SIGNS) == 0;
+		int material = (flags / MATERIAL) % 8;
+		Facade f = facade_for(archetype, seed, (flags & LANDMARK) != 0 && !stoop_part, material);
+		vec3 stone = f.wall;
+		int surface = f.surface;
+		vec2 scale = vec2(1.0);
+		if (stoop_part) {
+			stone = stoop_stone(f, archetype, material, seed);
+			surface = STONE;
+			scale = part == STEPS ? vec2(0.6, 1.0) : vec2(1.0);
 		}
-		s.albedo = vec3(0.0);
-		s.emission = vec3(0.0);
-		s.glass = 0.0;
-		if (zone.cover < 1.0) {
-			s = facade(UV, footprint, archetype, flags, floor_height, seed, below_top);
+		vec3 textured = wall_texture(stone, surface, UV * scale, footprint * scale);
+		if (stoop_part) {
+			s = stoop(f, stone, textured, part, UV, footprint, material, seed);
+			occlusion = canyon_occlusion;
+		} else if ((flags & PARAPET_INSIDE) != 0) {
+			s = parapet_inside(f, textured, footprint, below_top);
+		} else {
+			// Sign walls paint their facade only where the screens leave it showing.
+			bool signs = (flags & SIGNS) != 0;
+			SignZone zone;
+			zone.cover = 0.0;
+			if (signs) {
+				zone = sign_zone(UV, footprint, flags, floor_height, seed, below_top, face, world_normal);
+			}
+			s.albedo = vec3(0.0);
+			s.emission = vec3(0.0);
+			s.glass = 0.0;
+			if (zone.cover < 1.0) {
+				s = facade(f, textured, UV, footprint, archetype, flags, floor_height, seed, below_top, lights);
+			}
+			if (signs) {
+				s = sign_wall(s, UV, footprint, seed, zone);
+				lights.amount *= 1.0 - zone.cover;  // as sign_wall() mixes the facade's light
+			}
+			occlusion = mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y));
 		}
-		if (signs) {
-			s = sign_wall(s, UV, footprint, seed, zone);
-		}
-		occlusion = mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y));
+	}
+
+	if (lights.amount > 0.0) {
+		s.emission += window_light(lights.archetype, lights.curtain, lights.cell, lights.seed, lights.cell_pixels, lights.up)
+				* lights.amount;
 	}
 
 	// Glass reflects the sky, more at grazing angles.
@@ -2865,7 +2994,6 @@ void fragment() {
 		// Floodlights on landmarks' masonry setbacks, from the roof below.
 		if ((flags & LANDMARK) != 0 && (archetype == PREWAR_OFFICE || archetype == PREWAR_APARTMENT
 				|| archetype == HOTEL || archetype == INSTITUTION)) {
-			vec2 span = wall_span(wall_moments);
 			if (span.x > floodlight_min_height && span.y < 1e3) {
 				float flood = 1.0 - smoothstep(0.0, floodlight_reach, UV.y - span.x);
 				EMISSION += ALBEDO * srgb(FLOODLIGHT) * (floodlight_strength * flood * city_lights);
