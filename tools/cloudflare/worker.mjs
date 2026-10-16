@@ -1,6 +1,7 @@
 // The public web build on Cloudflare: one Worker that serves the game and its
 // city tiles as static assets, the engine (index.wasm, too big for a static
-// asset) from an R2 bucket, and co-op signaling at /signal from a Durable
+// asset) and the Windows and Mac versions' zips (downloads/, see
+// tools/build_desktop.ps1) from an R2 bucket, and co-op signaling at /signal from a Durable
 // Object (the same protocol as tools/signaling/server.mjs, which stays the
 // local server, plus TURN relay credentials for players whose networks block
 // direct connections). Deploy with tools/deploy_cloudflare.ps1.
@@ -45,9 +46,48 @@ export default {
     if (url.pathname === '/index.wasm') {
       return wasm(request, env);
     }
+    if (DOWNLOADS.includes(url.pathname)) {
+      return download(request, env, url.pathname.slice(1));
+    }
     return env.ASSETS.fetch(request);
   },
 };
+
+// The desktop versions (tools/deploy_cloudflare.ps1 -Desktop uploads them).
+const DOWNLOADS = ['/downloads/nyc-heroes-windows.zip', '/downloads/nyc-heroes-macos.zip'];
+
+// A zip from R2, resumable (Range requests); browsers keep it for a few
+// minutes, so a new version shows up soon after it's uploaded. HEAD (the
+// downloads page asks for the sizes) doesn't read the file.
+async function download(request, env, key) {
+  const head = request.method === 'HEAD';
+  const range = request.headers.has('range') ? request.headers : undefined;
+  const object = head ? await env.FILES.head(key) : await env.FILES.get(key, { onlyIf: request.headers, range });
+  if (object === null) {
+    return new Response('Not found', { status: 404 });
+  }
+  const headers = new Headers({
+    'content-type': 'application/zip',
+    'content-disposition': `attachment; filename="${key.split('/').pop()}"`,
+    'accept-ranges': 'bytes',
+    etag: object.httpEtag,
+    'cache-control': 'public, max-age=300',
+  });
+  if (head) {
+    headers.set('content-length', String(object.size));
+    return new Response(null, { headers });
+  }
+  if (!('body' in object) || !object.body) {
+    return new Response(null, { status: 304, headers });
+  }
+  if (range && object.range) {
+    const start = object.range.offset ?? object.size - object.range.suffix;
+    const length = object.range.length ?? object.size - start;
+    headers.set('content-range', `bytes ${start}-${start + length - 1}/${object.size}`);
+    return new Response(object.body, { status: 206, headers });
+  }
+  return new Response(object.body, { headers });
+}
 
 async function wasm(request, env) {
   const object = await env.FILES.get('index.wasm', { onlyIf: request.headers });

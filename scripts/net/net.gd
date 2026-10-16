@@ -90,8 +90,8 @@ const JOIN_RETRY_DELAY := 2.0
 ## this long, and again every RECONNECT_INTERVAL while it's down (msec).
 const RECONNECT_DELAY := 2000
 const RECONNECT_INTERVAL := 10000
-## ENet (tests, and desktop builds without the WebRTC extension) channels per connection: enough for
-## ENetMultiplayerPeer's own and the RPCs'.
+## ENet (tests, and desktop builds without the WebRTC extension) channels per
+## connection: enough for ENetMultiplayerPeer's own and the RPCs'.
 const ENET_CHANNELS := 8
 ## ENet connections drop after this long without an answer (msec, at least
 ## and at most): long enough to ride out a slow frame with four games on one
