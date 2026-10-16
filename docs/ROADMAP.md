@@ -410,14 +410,19 @@ In order:
 
 **Night: time of day, street lights, lit windows (done):**
 - `scripts/world/time_of_day.gd` owns the clock: the sun follows New York's
-  real arc (through azimuth 235°, elevation 42° at 15:30; sunset about
-  19:25), a full moon takes over the light at night, and the sky, fog,
+  real arc on April 6 (through azimuth 235°, elevation 42° at 15:30; sunset
+  about 19:25; `?date=MM-DD` picks another day's, below), a full moon takes
+  over the light at night, and the sky, fog,
   ambient light and exposure blend from day through dusk to night. Shader
   globals (`night`, `dusk`, `city_lights`, `clock_hours`, the street light
   map) reach every city shader through `shaders/night.gdshaderinc`; with
   them at 0, the day looks exactly as before.
 - **T** steps to the next of dawn, day, dusk and night; `?time=HH:MM` sets
-  the clock, `?daylength=MINUTES` runs it.
+  the clock, `?daylength=MINUTES` runs it. `?date=MM-DD` (or `YYYY-MM-DD`)
+  puts the sun on New York's arc that day, on the city's clock (daylight
+  saving time in summer; the Astronomical Almanac's low-precision sun, good
+  to a minute or so), and moves T's dawn and dusk with sunrise and sunset:
+  `?date=12-21` sets at 16:32, `?date=06-21` at 20:31.
 - 545,000 street lights (new prop type 4): the city publishes no lamp
   positions, so they stand along every curb about every 35 m, 0.6 m onto
   the sidewalk, arms over the street; historic post-tops in and beside
@@ -659,6 +664,42 @@ In order:
   0.00013, low 0.00016) with a warm tint toward the sun.
 - `?weather=overcast`: a grey deck, soft light, faint shadows, grey water
   and fog; dusk and night follow. Same draw calls and triangles.
+
+**Light at the ends of the day and in gray weather (done; reference improvement 18):**
+- Shade: the toon ambient's ground bounce (what walls get half of) is a
+  light gray instead of warm, so shade on light walls is a cool gray, not
+  beige (the Guggenheim's shaded side #9B8F7F to #959086). The sky's share
+  (streets, roofs) is unchanged. Bluer turned brownstone and marble gray in
+  shade: the palettes count on some warmth there.
+- Low sun: the dusk and dawn keyframes keep the zenith blue over a pale
+  horizon, with the warm band under the sun (`dusk_band` 0.6) and peach
+  clouds; the sun stays gold at full strength, the shade turns blue
+  (`dusk_ambient`), the haze is a cool gray, and glass and water reflect
+  blue overhead and the pale horizon instead of orange all round
+  (TimeOfDay's `DUSK_MATERIALS`); exposure 1.25, AgX contrast 1.25. The
+  warm light starts with the sun 20° up (was 30°). Before, the sky went
+  mauve to the zenith and the whole city pink-gray.
+- Overcast: a bright deck over darker, more contrasty streets: exposure 0.9,
+  AgX contrast 1.3, less fill in the shade (ambient ×1.12, was ×1.45), a
+  darker ground bounce, darker wall feet (canyon occlusion ×0.65), thinner
+  fog (×1.3, was ×1.8). The Compatibility renderer clamps the 3-D buffer at
+  1.0 before tone mapping, so no sky gets past what AgX makes of 1.0 (about
+  #C5 at the day's contrast) however bright its colors; the overcast look
+  lowers AgX white to 2.0, its minimum, which lifts the deck to #D8 and
+  leaves mid-tones alone. The night keyframes set AgX contrast and white
+  back, so the night is unchanged.
+- Sun path: the default arc is New York's on April 6; `?date=MM-DD` (or
+  `YYYY-MM-DD`) gives any day's (above, under Night).
+- Measured against the photos (REFERENCE.md round 3's 18): at
+  `time=19:00` totr_north's top of frame #948187 to #9AB1CC (the photo's
+  blue #95B7CD), lower half 0.36 to 0.40 (0.42), contrast 0.14 to 0.17
+  (0.21), warm share 0.70 to 0.41 (0.21); overcast, the deck #9B-#B4 to
+  #CC-#D8 (#D4-#E1), lower half 0.50 to 0.42 (0.41), contrast 0.13 to 0.16
+  (0.20); the clear day's means of 13 unchanged in value (0.40) and
+  masonry saturation (0.24 to 0.23).
+- Cost: values only (keyframes, uniform defaults, environment settings, and
+  three material uniforms set once at the start): the compiled shaders are
+  byte for byte the same (hashed), so compile time is unchanged.
 
 **Facade materials and rowhouse fronts (done):**
 - Each masonry building has a wall material from the tax lot data
@@ -1247,6 +1288,7 @@ templates for both are already installed.
   `?peds=N`, `?gangs=N`, `?traffic=N`, `?trains=N` (0: none), `?demo` / `?demo=fight` / `?demo=city` / `?demo=new` scripted tours for videos,
   `?host` / `?join=CODE` co-op, `?signal=wss://...` signaling server
   (default: the page's host, port 8070), `?relay=1` co-op only through the
-  TURN relay (testing), `?weather=overcast`, `?fog_scatter=` (sun tint of
+  TURN relay (testing), `?weather=overcast`, `?date=MM-DD` (or
+  `YYYY-MM-DD`) the sun's arc on that day, `?fog_scatter=` (sun tint of
   the fog), `?tree_shadows=0` trees without shadows,
   `--tiles=DIR` (desktop and tests) read the city from a tile copy.
