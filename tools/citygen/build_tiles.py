@@ -1118,13 +1118,20 @@ def _curb_lamps(bounds) -> dict:
 
 
 def _deck_lamps(i: int, j: int) -> dict:
-    deck = _W["bridges"]["lamps"].get((i, j))
-    if deck is None:
+    """Cobra-heads along bridge decks, and the hand-made bridges' historic
+    lamps (bridges.build's "post_lamps")."""
+    parts = []
+    for key, post_top in (("lamps", False), ("post_lamps", True)):
+        deck = _W["bridges"].get(key, {}).get((i, j))
+        if deck is None or len(deck[0]) == 0:
+            continue
+        points, heights, arms = deck
+        found = props.lamps(points, arms, np.full(len(points), post_top))
+        found["y"] = heights
+        parts.append(found)
+    if not parts:
         return _no_props()
-    points, heights, arms = deck
-    found = props.lamps(points, arms, np.zeros(len(points), dtype=bool))
-    found["y"] = heights
-    return found
+    return {key: np.concatenate([p[key] for p in parts]) for key in parts[0]}
 
 
 def _path_lamps(bounds) -> dict:

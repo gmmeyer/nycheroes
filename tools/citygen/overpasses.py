@@ -46,8 +46,8 @@ import bridges
 import markings
 import props
 import traffic
-from common import (CURB_HEIGHT, FEET, GROUND_ROAD, MARKING_LIFT, STRUCTURE_CONCRETE, MeshBuilder, lines_of,
-                    load_features, polygons_of, project)
+from common import (CURB_HEIGHT, FEET, GROUND_ROAD, MARKING_LIFT, STRUCTURE_CONCRETE, STRUCTURE_WALKWAY, MeshBuilder,
+                    lines_of, load_features, polygons_of, project)
 from markings import AT_GRADE, BOTH, HIGHWAY, STREET
 
 BRIDGE_CODE = "2300"
@@ -364,6 +364,9 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
                 on_land.append(part)
                 names.append(name)
                 wet_outlines.append(part)
+    # Also off the hand-made bridges (bridges.build's "hand_made"): the data
+    # codes some of their walkways as raised roads (the High Bridge's).
+    over_water += buckets.get("hand_made", [])
     keep_out = shapely.union_all(shapely.buffer(over_water, 1.0)) if over_water else shapely.Polygon()
     shapely.prepare(keep_out)
     wet_outlines = shapely.union_all(wet_outlines) if wet_outlines else shapely.Polygon()
@@ -948,14 +951,19 @@ def lanes(network: Network, buckets: dict, bounds, land) -> list:
     """Driving lanes (traffic.lanes' format) of the raised roads, ramps and
     bridges whose middle is in `bounds` (a near tile's box), at their deck's
     height (from the lod0 bridge buckets); lanes over water with no deck under
-    them (bridges left out of the world) are dropped."""
+    them (bridges left out of the world) are dropped, and so are footpaths
+    the data codes as bridges (no lanes, no width) along a hand-made bridge's
+    walkways (bridge_landmarks: the Brooklyn Bridge's promenade, the
+    Manhattan Bridge's walkway and bikeway, the High Bridge)."""
     surface = surface_for(buckets, bounds)
+    walkways = surface_for(buckets, bounds, (STRUCTURE_WALKWAY,))
     out = []
     attrs = network.attrs
     for k in network.tree.query(bounds, predicate="intersects"):
         k = int(k)
         if network.data["rw"][k] == PATH:
             continue
+        footpath = network.data["lanes"][k] == 0 and network.data["width"][k] == 0
 
         def height(en, k=k):
             return road_height(network, surface, k, en, land)[0]
@@ -963,6 +971,8 @@ def lanes(network: Network, buckets: dict, bounds, land) -> list:
             _, found = road_height(network, surface, k, lane[:, :2], land)
             wet = ~shapely.contains_xy(land, lane[:, 0], lane[:, 1])
             if (wet & ~found).any():
+                continue
+            if footpath and walkways.tree is not None and walkways.height(lane[:, :2], lane[:, 2])[1].any():
                 continue
             out.append((lane, info))
     return out

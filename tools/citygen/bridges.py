@@ -8,18 +8,23 @@ ends are built, which also leaves out bridges to New Jersey and Nassau County
 (ocean in this world); outlines mostly over land (a highway viaduct that
 crosses a canal on its way) are overpasses (overpasses.py). Heights of the
 major bridges are rounded public figures; their towers stand where
-OpenStreetMap's mappers put them (TOWERS).
+OpenStreetMap's mappers put them (TOWERS). The most famous ones are built by
+hand over their main spans (bridge_landmarks.py: the Brooklyn, Manhattan,
+Hell Gate and High Bridges), the generic deck only on their approaches.
 
 build(land, terrain, sizes) returns, per LOD level, the bridge triangles bucketed by tile:
-{level: {(i, j): (pos, uv, uv2, front)}} in Godot world space.
+{level: {(i, j): (pos, uv, uv2, front)}} in Godot world space; "lamps" and
+"post_lamps" (historic lamps) hold street lights along decks per lod0 tile,
+"hand_made" the hand-made bridges' sections (east/north polygons).
 """
 
 import numpy as np
 import shapely
 from shapely.geometry import shape
 
+import bridge_landmarks
 import props
-from common import (CURB_HEIGHT, GROUND_ROAD, STRUCTURE_CABLE, STRUCTURE_CONCRETE, STRUCTURE_STONE,
+from common import (CURB_HEIGHT, GROUND_ROAD, STRUCTURE_CABLE, STRUCTURE_CONCRETE, STRUCTURE_RAIL, STRUCTURE_STONE,
                     MeshBuilder, lines_of, load_features, polygons_of, project, triangles_of)
 
 BRIDGE_CODE = "2300"
@@ -29,7 +34,9 @@ BRIDGE_CODE = "2300"
 # piers with truss chords between; "cable_stayed" ones (the Kosciuszko) a
 # tower with stay cables fanning out over a main and a back span.
 MAJOR_BRIDGES = {
-    "Brooklyn Bridge": ("stone_suspension", 41.0, 84.0, 486.0),
+    # The Brooklyn Bridge's roadway at its towers (bridge_landmarks.CAMBER
+    # raises it to 41.1 m mid-river).
+    "Brooklyn Bridge": ("stone_suspension", 36.35, 84.3, 486.3),
     "Manhatten Bridge": ("suspension", 41.0, 102.0, 448.0),  # sic, as spelled in the data
     "Williamsburg Bridge": ("suspension", 41.0, 94.0, 488.0),
     "Verrazano-Narrows Bridge": ("suspension", 69.0, 211.0, 1298.0),
@@ -49,6 +56,10 @@ MAJOR_BRIDGES = {
     "Gil Hodges Memorial Bridge": ("girder", 17.0, 0.0, 0.0),
     "Cross Bay Bridge": ("girder", 17.0, 0.0, 0.0),
     "NORTH CHANNEL BRIDGE": ("girder", 18.0, 0.0, 0.0),
+    # Hand-made over their arches (bridge_landmarks.py): the Hell Gate's
+    # deck top 145 ft over high water, the High Bridge's walkway 140 ft.
+    "Hellgate Bridge": ("arch", 44.2, 67.1, 0.0),
+    "High Bridge/Aqueduct Bridge": ("arch", 42.5, 0.0, 0.0),
 }
 # Bridges to New Jersey or Nassau County.
 EXCLUDED = {"George Washington Bridge", "Bayonne Bridge", "Outerbridge Crossing",
@@ -106,8 +117,8 @@ def build(land, terrain, level_sizes: dict, approach=None) -> dict:
     (overpasses.Network.approach)."""
     shapely.prepare(land)
     features = [f for f in load_features("transport_structures")
-                if str(f["properties"].get("feat_code")) == BRIDGE_CODE
-                and f["properties"].get("name") not in EXCLUDED]
+                if (str(f["properties"].get("feat_code")) == BRIDGE_CODE and f["properties"].get("name") not in EXCLUDED)
+                or f["properties"].get("name") in bridge_landmarks.OUTLINES]
     geoms = shapely.make_valid(project(np.array([shape(f["geometry"]) for f in features], dtype=object)))
     if approach is None:
         def approach(en):
@@ -115,7 +126,9 @@ def build(land, terrain, level_sizes: dict, approach=None) -> dict:
 
     builders = {level: MeshBuilder() for level in ALL_LEVELS}
     builders["lamps"] = []  # (positions, heights, arm directions) per deck
+    builders["post_lamps"] = []  # the same, historic post-tops (bridge_landmarks)
     builders["towers"] = set()  # bridges whose towers are built (some have more than one outline)
+    builders["hand_made"] = []  # the sections bridge_landmarks builds (east/north polygons)
     built = []
     for feat, geom in zip(features, geoms):
         for poly in polygons_of(geom, min_area=50.0):
@@ -129,6 +142,8 @@ def build(land, terrain, level_sizes: dict, approach=None) -> dict:
     for level, size in level_sizes.items():
         buckets[level] = _bucket(builders[level], size)
     buckets["lamps"] = _bucket_lamps(builders["lamps"], level_sizes["lod0"])
+    buckets["post_lamps"] = _bucket_lamps(builders["post_lamps"], level_sizes["lod0"])
+    buckets["hand_made"] = builders["hand_made"]
     return buckets
 
 
@@ -239,8 +254,20 @@ def _build_bridge(poly, name: str, land, terrain, builders: dict, approach) -> b
         ramps.append((region, lambda geoms, contact=contact: 1.0 - shapely.distance(geoms, contact) / ramp_length,
                       lambda en, street=street: np.full(len(en), street)))
 
+    towers = _towers(name, poly)
+    landmark = bridge_landmarks.BRIDGES.get(name)
+    if landmark is not None and name not in TOWERS:
+        towers = bridge_landmarks.towers_of(name)
+        towers = towers if shapely.dwithin(poly, shapely.points(towers), 30.0).all() else np.zeros((0, 2))
+    camber = bridge_landmarks.CAMBER.get(name, 0.0) if len(towers) == 2 else 0.0
+
     def deck_y(points: np.ndarray) -> np.ndarray:
         y = np.full(len(points), deck_top)
+        if camber:
+            # Rising from the towers to mid-span.
+            middle, axis = towers.mean(axis=0), towers[1] - towers[0]
+            k = np.clip(1.0 - (((points - middle) @ axis) / (axis @ axis / 2)) ** 2, 0.0, 1.0)
+            y += camber * k
         geoms = shapely.points(points)
         for region, along, comes_to in ramps:
             # Deck points sit right on the approach's edge, where floating point
@@ -252,11 +279,34 @@ def _build_bridge(poly, name: str, land, terrain, builders: dict, approach) -> b
                 y[inside] = street + (np.maximum(deck_top, street + 1.0) - street) * (1.0 - t * t * (3.0 - 2.0 * t))
         return y
 
-    _add_deck(poly, deck_y, builders)
-    builders["lamps"].append(props.deck_lamps(np.asarray(poly.exterior.coords)[:, :2], deck_y))
-    towers = _towers(name, poly)
+    # A hand-made bridge takes over its section; the generic deck stays on
+    # the rest, its sides only along the outline (it just ends at the section).
+    hand_made = None
+    if landmark is not None and len(towers) == 2:
+        hand_made = landmark(bridge_landmarks.Site(name, poly, towers, deck_y, terrain, land))
+    section = hand_made.section() if hand_made else None
+    road = name not in bridge_landmarks.NOT_ROADS
+    rest = shapely.difference(poly, section) if section is not None else poly
+    # Approaches built of masonry (the Brooklyn Bridge's) get stone sides and piers.
+    masonry = (STRUCTURE_STONE, float(bridge_landmarks.PALETTES[name])) if name in bridge_landmarks.MASONRY else None
+    _add_deck(rest, deck_y, builders, sides=poly.boundary if section is not None else None,
+              ballast=None if road else bridge_landmarks.PALETTES.get(name, 0), stone=masonry)
+    if road:
+        lamps = props.deck_lamps(np.asarray(poly.exterior.coords)[:, :2], deck_y)
+        if section is not None:
+            off = ~shapely.dwithin(section, shapely.points(lamps[0]), 2.0)
+            lamps = tuple(part[off] for part in lamps)
+        builders["lamps"].append(lamps)
     held = None  # where cables hold the deck up (no columns)
-    if style.endswith("suspension") and len(towers) == 2:
+    if hand_made:
+        held = section
+        if name not in builders["towers"]:
+            builders["towers"].add(name)
+            built = hand_made.build(builders)
+            builders["hand_made"].append(built.section)
+            builders["lamps"] += built.cobra_heads
+            builders["post_lamps"] += built.post_tops
+    elif style.endswith("suspension") and len(towers) == 2:
         tower_u = (towers[1] - towers[0]) / np.linalg.norm(towers[1] - towers[0])
         middle = towers.mean(axis=0)
         span = float(np.linalg.norm(towers[1] - towers[0]))
@@ -279,7 +329,7 @@ def _build_bridge(poly, name: str, land, terrain, builders: dict, approach) -> b
         held = _add_cable_stayed(poly, towers[0], main_span, main_span_length, BACK_SPAN.get(name, 0.5 * main_span_length),
                                  deck_y, tower_top, name not in builders["towers"], builders)
         builders["towers"].add(name)
-    _add_columns(poly, center, u, v, width, s_range, held, deck_y, land, terrain, builders)
+    _add_columns(poly, center, u, v, width, s_range, held, deck_y, land, terrain, builders, masonry)
     return True
 
 
@@ -358,26 +408,55 @@ def _shores(part, water) -> int:
 DECK_SPACING = {"lod0": 8.0, "lod1": 16.0, "lod2": 40.0}
 
 
-def _add_deck(poly, deck_y, builders: dict) -> None:
+def _add_deck(poly, deck_y, builders: dict, sides=None, ballast=None, stone=None) -> None:
+    """A deck over `poly` at deck_y: road top, underside, and sides rising
+    into parapets up close. `sides` (a line) keeps the sides to the edges
+    along it. Rail decks (`ballast`: the bridge's palette, see
+    bridge_landmarks) have a concrete top under a ballast bed; `stone` (a
+    uv2 pair) makes the sides masonry."""
     for level, spacing in DECK_SPACING.items():
-        dense = shapely.segmentize(poly, spacing)
-        tris = triangles_of(dense)
-        if tris is None:
-            continue
-        y = deck_y(tris.reshape(-1, 2)).reshape(-1, 3)
-        top = np.stack([tris[..., 0], y, -tris[..., 1]], axis=-1)
-        uv = np.stack([tris[..., 0], -tris[..., 1]], axis=-1)
-        builders[level].add(top, uv, (GROUND_ROAD, 0.0), (0.0, 1.0, 0.0))
-        detailed = level != "lod2"
-        if detailed:
-            bottom = top - np.array([0.0, DECK_THICKNESS, 0.0])
-            builders[level].add(bottom, uv, (STRUCTURE_CONCRETE, 0.0), (0.0, -1.0, 0.0))
-        for ring in (dense.exterior, *dense.interiors):
-            coords = np.asarray(ring.coords)[:, :2]
-            ring_y = deck_y(coords)
+        for part in polygons_of(poly, 1.0):
+            _add_deck_part(level, shapely.segmentize(part, spacing), deck_y, builders, sides, ballast, stone)
+
+
+def _add_deck_part(level, dense, deck_y, builders: dict, sides, ballast, stone) -> None:
+    tris = triangles_of(dense)
+    if tris is None:
+        return
+    y = deck_y(tris.reshape(-1, 2)).reshape(-1, 3)
+    top = np.stack([tris[..., 0], y, -tris[..., 1]], axis=-1)
+    uv = np.stack([tris[..., 0], -tris[..., 1]], axis=-1)
+    builders[level].add(top, uv, (GROUND_ROAD if ballast is None else STRUCTURE_CONCRETE, 0.0), (0.0, 1.0, 0.0))
+    detailed = level != "lod2"
+    if ballast is not None and detailed:
+        bed = triangles_of(shapely.buffer(dense, -1.0, join_style="mitre"))
+        if bed is not None:
+            bed_y = deck_y(bed.reshape(-1, 2)).reshape(-1, 3) + 0.3
+            builders[level].add(np.stack([bed[..., 0], bed_y, -bed[..., 1]], axis=-1),
+                                np.stack([bed[..., 0], -bed[..., 1]], axis=-1),
+                                (STRUCTURE_RAIL, ballast + 8.0 * bridge_landmarks.BALLAST), (0.0, 1.0, 0.0))
+    if detailed:
+        bottom = top - np.array([0.0, DECK_THICKNESS, 0.0])
+        builders[level].add(bottom, uv, (STRUCTURE_CONCRETE, 0.0), (0.0, -1.0, 0.0))
+    for ring in (dense.exterior, *dense.interiors):
+        coords = np.asarray(ring.coords)[:, :2]
+        runs = [coords]
+        if sides is not None:
+            # Only the edges along `sides`, in runs of consecutive segments.
+            middles = shapely.points((coords[:-1] + coords[1:]) / 2)
+            along = shapely.dwithin(sides, middles, 0.05)
+            runs = [coords[a:b + 1] for a, b in _true_runs(along)]
+        for run in runs:
+            run_y = deck_y(run)
             # Sides of the deck, rising into a parapet up close.
-            top_y = ring_y + PARAPET_HEIGHT if detailed else ring_y
-            builders[level].add_walls(coords, ring_y - DECK_THICKNESS, top_y, (STRUCTURE_CONCRETE, 0.0))
+            top_y = run_y + PARAPET_HEIGHT if detailed else run_y
+            builders[level].add_walls(run, run_y - DECK_THICKNESS, top_y, stone or (STRUCTURE_CONCRETE, 0.0))
+
+
+def _true_runs(mask: np.ndarray) -> list:
+    """(start, end) of each run of True in a boolean array, end exclusive."""
+    edges = np.diff(np.concatenate([[0], mask.astype(np.int8), [0]]))
+    return list(zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)))
 
 
 def _add_suspension(poly, center, u, width, span, deck_y, deck_top, tower_top, stone, builders) -> None:
@@ -514,9 +593,10 @@ def _reach_on_deck(poly, center, u, start, direction, limit) -> float:
     return float(steps[off[0] - 1]) if len(off) and off[0] > 0 else (0.0 if len(off) else float(steps[-1]))
 
 
-def _add_columns(poly, center, u, v, width, s_range, suspended, deck_y, land, terrain, builders) -> None:
+def _add_columns(poly, center, u, v, width, s_range, suspended, deck_y, land, terrain, builders, stone=None) -> None:
     """Columns under the deck every COLUMN_SPACING along it, except under a
-    suspended span (`suspended`, a shape or None)."""
+    suspended span (`suspended`, a shape or None); `stone` (a uv2 pair) makes
+    them wider masonry piers."""
     s_min, s_max = s_range
     if suspended is not None:
         suspended = shapely.buffer(suspended, 10.0)
@@ -537,7 +617,10 @@ def _add_columns(poly, center, u, v, width, s_range, suspended, deck_y, land, te
             bottom = street - 1.0 if on_land else WATER_FOOTING_Y
             if top - max(bottom, street) < 3.0:
                 continue
-            _add_box(base, u, half, half, bottom, top, STRUCTURE_CONCRETE, ("lod0", "lod1"), builders)
+            if stone:
+                _add_box(base, u, half * 1.5, half * 2.5, bottom, top, stone, ("lod0", "lod1"), builders)
+            else:
+                _add_box(base, u, half, half, bottom, top, STRUCTURE_CONCRETE, ("lod0", "lod1"), builders)
 
 
 def _add_box(base_en, u, half_u, half_v, y0, y1, kind, levels, builders) -> None:
@@ -545,9 +628,10 @@ def _add_box(base_en, u, half_u, half_v, y0, y1, kind, levels, builders) -> None
     v = np.array([-u[1], u[0]])
     corners = [base_en + u * su * half_u + v * sv * half_v for su, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
     ring = np.array(corners + [corners[0]])
+    uv2 = kind if isinstance(kind, tuple) else (kind, 0.0)
     for level in levels:
-        builders[level].add_walls(ring, y0, y1, (kind, 0.0))
-        builders[level].add_flat([shapely.Polygon(corners)], y1, (kind, 0.0))
+        builders[level].add_walls(ring, y0, y1, uv2)
+        builders[level].add_flat([shapely.Polygon(corners)], y1, uv2)
 
 
 def _add_tube(points: np.ndarray, radius: float, levels, builders) -> None:
