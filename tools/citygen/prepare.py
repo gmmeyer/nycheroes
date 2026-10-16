@@ -152,6 +152,10 @@ def prepare_facades() -> dict:
     return facades.prepare(load("buildings"))
 
 
+def prepare_retail() -> dict:
+    return facades.prepare_retail(load("buildings"), load("facades"))
+
+
 def prepare_churches() -> dict:
     return churches.prepare(load("buildings"))
 
@@ -167,7 +171,8 @@ def prepare_ground_details() -> dict:
 
 
 PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": prepare_water,
-             "facades": prepare_facades, "churches": prepare_churches, "trees": props.prepare_trees, "centerline": markings.prepare,
+             "facades": prepare_facades, "retail": prepare_retail, "churches": prepare_churches,
+             "trees": props.prepare_trees, "centerline": markings.prepare,
              "furniture": props.prepare_furniture, "overpasses": overpasses.prepare,
              "ground_details": prepare_ground_details, "els": els.prepare,
              "deck_sidewalks": overpasses.prepare_sidewalks, "cantilever": cantilever.prepare,

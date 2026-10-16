@@ -11,10 +11,12 @@ and writes data/tiles/nyc/:
                        plaza furniture (props.py), utility poles and overhead
                        wires (poles.py)
   lod1/<i>_<j>.nyct    1 km tiles: buildings under 20 m merged into blocks,
-                       taller ones simplified; simplified ground
+                       taller ones simplified, with their water towers;
+                       simplified ground
   lod2/<i>_<j>.nyct    4 km tiles: everything under 60 m merged into blocks by
                        height band, skyscrapers simplified, ground without streets
 The game shows a tile's children instead of the tile once they've all loaded.
+Every level's ground and walls carry the share of the sky they see (shade.py).
 The ground follows the real terrain (terrain.py); buildings stand on it.
 
 Tile (i, j) of size T covers x in [i*T, (i+1)*T) and z in [j*T, (j+1)*T) in
@@ -54,6 +56,7 @@ import overpasses
 import poles
 import prepare
 import props
+import shade
 import times_square
 import towers
 import traffic
@@ -101,6 +104,12 @@ LEVELS = {
                         "merge_gap": 3.0, "tolerance": 10.0, "min_area": 1000.0}},
 }
 
+# Mid tiles have the water towers of the buildings they draw one by one, so
+# roofs seen from afar keep some clutter (the 3-D model's, from lod1's
+# "shapes_from" up, has their bulkheads and penthouses; drawing the 20-40 m
+# buildings from it too made mid tiles 24% bigger for nothing to see).
+MID_TOWERS = ("lod1",)
+
 # Walking lanes for pedestrians: lines along every sidewalk.
 LANE_OFFSET = 2.5  # meters in from the curb
 LANE_WALL_GAP = 0.8  # keep this far from building walls
@@ -111,6 +120,19 @@ LANE_STEP = 10.0  # points along a lane at least this often, to follow the terra
 # left corner, so the shader can fit screens to them (narrower ones, like the
 # facets of a rounded corner, keep measuring along the building).
 SIGN_FACE_MIN = 6.0
+
+# Shops along part of a street front (facades.prepare_retail(): PLUTO's
+# retail area; lofts' and warehouses' few shops): the front is cut into
+# slots one store wide, as building.gdshader's storefront() has them (bays by
+# building type, about 6.2 m to a store: STORE_WIDTH), and that share of the
+# slots, evenly spread, are shops. The walls between have no RETAIL (doors,
+# loading doors, lobbies) and get no signs. Stores (all shop fronts in the
+# shader), and hotels and unknown buildings (whose bay the shader picks),
+# keep shops all along.
+STORE_WIDTH = {facades.HOUSE: 6.0, facades.ROWHOUSE: 5.7, facades.WALKUP: 6.3, facades.PREWAR_APARTMENT: 6.9,
+               facades.POSTWAR_APARTMENT: 6.0, facades.MODERN_RESIDENTIAL: 6.0, facades.PREWAR_OFFICE: 5.4,
+               facades.MIDCENTURY_OFFICE: 6.0, facades.MODERN_OFFICE: 6.0, facades.LOFT: 5.2, facades.INDUSTRIAL: 8.0,
+               facades.INSTITUTION: 6.0, facades.OTHER: 8.0}
 
 # Gaps between road pieces narrower than twice this (meters) are filled.
 ROAD_GAP = 0.25
@@ -141,10 +163,16 @@ SHAPE_MIN_OVERLAP = 0.6
 SHAPE_HEIGHT_TOLERANCE = (6.0, 0.25)  # meters, fraction of the height
 
 # A wall faces a street (gets a storefront, fire escapes, more windows) if a
-# road is within FRONT_REACH of a point this far in front of it; two points,
-# so setback walls above a lower roof count too.
+# road is within FRONT_REACH of a point this far in front of it, with no
+# other building in between; two points, so setback walls above a lower roof
+# count too. (Without the sight line, party walls counted where a street lay
+# beyond a narrow neighbor: 30-50% of shop walls in dense blocks.) The sight
+# line starts FRONT_CLEAR out from the wall; buildings smaller than
+# FRONT_BLOCKER_AREA (kiosks, sheds) don't block it.
 FRONT_PROBES = (6.0, 15.0)
 FRONT_REACH = 4.0
+FRONT_CLEAR = 0.3
+FRONT_BLOCKER_AREA = 20.0
 
 # Pitched roofs: houses whose footprint fills at least PITCH_FILL of its
 # smallest enclosing rectangle, PITCH_WIDTH wide, get a gable or (on longer
@@ -229,6 +257,7 @@ def main() -> None:
     ground = prepare.load("ground")
     prepare.load("water")
     prepare.load("facades")
+    prepare.load("retail")
     prepare.load("churches")
     prepare.load("trees")
     prepare.load("centerline")
@@ -380,7 +409,7 @@ def _rebuild(only: list[str], workers: int) -> None:
     if OUT_DIR == TILES_DIR / REGION or not manifest_path.exists():
         raise SystemExit("--only needs --out pointing at a copy of a full build (with its manifest.json)")
     _build_bridges(prepare.load("ground"))
-    for name in ("ground_details", "shops", "sheds", "bike_docks", "poles"):
+    for name in ("ground_details", "retail", "shops", "sheds", "bike_docks", "poles"):
         prepare.load(name)
     tasks = []
     for item in only:
@@ -428,6 +457,7 @@ def _init_worker() -> None:
             groups[key].append(index)
         _W["groups"][level] = {key: np.array(value) for key, value in groups.items()}
     _W["building_tree"] = shapely.STRtree(buildings["geoms"])
+    _W["building_area"] = shapely.area(buildings["geoms"])
     # The piers out over the water are land (landmarks.piers()).
     _W["piers"] = landmarks.piers()
     shapely.prepare(_W["piers"])
@@ -449,6 +479,7 @@ def _init_worker() -> None:
     _W["water"] = prepare.load("water")
     _W["shapes"] = buildings3d.load()
     _W["facades"] = prepare.load("facades")
+    _W["retail"] = prepare.load("retail")
     _W["churches"] = prepare.load("churches")
     _W["building_index_tree"] = shapely.STRtree(buildings["geoms"])
     _W["water_tree"] = shapely.STRtree(_W["water"]["geoms"])
@@ -527,6 +558,10 @@ def _build_tile(task):
     times_square.add_to_tile(building_mesh, level, size, i, j, _W, _footprint_ground)
     _add_ground(ground_mesh, bounds, settings)
     _add_raised_water(water_mesh, ground_mesh, bounds, settings)
+    # How much of the sky the walls' feet and the ground see (shade.py).
+    sky = shade.Sky(level, bounds, _W)
+    shade.shade_buildings(sky, building_mesh)
+    shade.shade_ground(sky, ground_mesh)
     bridge = _W["bridges"][level].get((i, j))
     if bridge:
         structure_mesh.add(*bridge)
@@ -555,6 +590,7 @@ def _build_tile(task):
             stats["lane_points"] = len(lanes[0])
         marking_mesh = MeshBuilder()
         _add_markings(marking_mesh, bounds, i, j)
+        shade.shade_ground(sky, marking_mesh)
         built = marking_mesh.build(origin, decimals=2)
         if built is not None:
             surfaces.append((SURFACE_MARKINGS, built))
@@ -570,7 +606,7 @@ def _build_tile(task):
             stats["train_tracks"] = len(tracks)
         prop_surface, counts = _build_props(i, j, bounds, indices, origin)
     else:
-        prop_surface, counts = _build_clumps(level, bounds, origin)
+        prop_surface, counts = _build_clumps(level, bounds, origin, indices)
     if prop_surface is not None:
         surfaces.append((SURFACE_PROPS, prop_surface))
         stats.update(counts)
@@ -592,15 +628,28 @@ def _streets_near(bounds):
 
 def _faces_street(middles: np.ndarray, outward: np.ndarray) -> np.ndarray:
     """For walls with these (N, 2) midpoints and outward unit normals (east/north),
-    whether each faces a street."""
+    whether each faces a street (see FRONT_PROBES), seen past any building
+    but the one being built (_W["own"])."""
     streets = _W["streets"]
     if streets.is_empty or len(middles) == 0:
         return np.zeros(len(middles), dtype=bool)
     near = np.zeros(len(middles), dtype=bool)
     for reach in FRONT_PROBES:
         probes = middles + outward * reach
-        near |= shapely.dwithin(streets, shapely.points(probes), FRONT_REACH)
+        found = np.flatnonzero(~near & shapely.dwithin(streets, shapely.points(probes), FRONT_REACH))
+        if len(found):
+            near[found[~_blocked(middles[found] + outward[found] * FRONT_CLEAR, probes[found])]] = True
     return near
+
+
+def _blocked(starts: np.ndarray, ends: np.ndarray) -> np.ndarray:
+    """Which sight lines from starts to ends ((N, 2) east/north each) pass
+    through a building (at least FRONT_BLOCKER_AREA) other than _W["own"]."""
+    hits = _W["building_tree"].query(shapely.linestrings(np.stack([starts, ends], axis=1)), predicate="intersects")
+    other = (hits[1] != _W.get("own", -1)) & (_W["building_area"][hits[1]] >= FRONT_BLOCKER_AREA)
+    blocked = np.zeros(len(starts), dtype=bool)
+    blocked[hits[0][other]] = True
+    return blocked
 
 
 def _facade(index: int) -> tuple[int, int, int, float]:
@@ -628,6 +677,8 @@ def _add_prism(builder: MeshBuilder, poly, height: float, facade: tuple, fronts:
     for ring in (poly.exterior, *poly.interiors):
         coords = np.asarray(ring.coords)[:, :2]
         uv2 = _wall_uv2(coords, (archetype, wall_flags, floor_dm, seed), fronts)
+        if fronts:
+            coords, uv2 = _shop_split(coords, uv2)
         restart = _sign_faces(coords, uv2)
         if parapet:
             builder.add_walls(coords, ground - 1.0, top + facades.PARAPET_HEIGHT, uv2, ground_y=ground,
@@ -661,6 +712,59 @@ def _sign_faces(coords: np.ndarray, uv2: np.ndarray) -> np.ndarray:
     flags = (np.asarray(uv2)[:, 0] // facades.FLAG_SCALE).astype(np.int64)
     seg = np.diff(np.asarray(coords)[:, :2], axis=0)
     return ((flags & facades.SIGNS) != 0) & (np.hypot(seg[:, 0], seg[:, 1]) >= SIGN_FACE_MIN)
+
+
+def _shop_slots():
+    """(store width, shop share, offset) of the building being built
+    (_W["own"]) if its shops fill only part of its street front (see
+    STORE_WIDTH), else None."""
+    index = _W.get("own", -1)
+    share = float(_W["retail"]["share"][index]) if index >= 0 else 1.0
+    width = STORE_WIDTH.get(int(_W["facades"]["archetype"][index])) if share < 1.0 else None
+    return None if width is None else (width, share, float(_W["b"]["seed"][index]))
+
+
+def _shop_runs(u0: float, u1: float, slots: tuple) -> list:
+    """[start, end, shop] along a street front from u0 to u1 (m, as the
+    shader's uv.x), cut where a shop starts or ends (see STORE_WIDTH)."""
+    width, share, offset = slots
+    edges = np.concatenate([[u0], np.arange(np.floor(u0 / width) + 1.0, np.ceil(u1 / width)) * width, [u1]])
+    slot = np.floor((edges[:-1] + edges[1:]) * 0.5 / width)
+    shops = np.floor((slot + 1.0) * share + offset) > np.floor(slot * share + offset)
+    runs = []
+    for a, b, shop in zip(edges[:-1], edges[1:], shops.tolist()):
+        if runs and runs[-1][2] == shop:
+            runs[-1][1] = b
+        else:
+            runs.append([a, b, shop])
+    return runs
+
+
+def _shop_split(coords: np.ndarray, uv2: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Walls along coords (with per-segment uv2) cut where a shop starts or
+    ends, without RETAIL between the shops, if the building being built has
+    shops along only part of its street front (see STORE_WIDTH)."""
+    slots = _shop_slots()
+    if slots is None or len(coords) < 2:
+        return coords, uv2
+    flags = (np.asarray(uv2)[:, 0] // facades.FLAG_SCALE).astype(np.int64)
+    split = ((flags & facades.FRONT) != 0) & ((flags & facades.RETAIL) != 0) & ((flags & facades.SIGNS) == 0)
+    if not split.any():
+        return coords, uv2
+    seg = coords[1:] - coords[:-1]
+    length = np.hypot(seg[:, 0], seg[:, 1])
+    start = np.concatenate([[0.0], np.cumsum(length)[:-1]])
+    no_shop = np.array([facades.FLAG_SCALE * facades.RETAIL, 0.0])
+    points, pieces = [coords[0]], []
+    for k in range(len(seg)):
+        if not split[k]:
+            points.append(coords[k + 1])
+            pieces.append(uv2[k])
+            continue
+        for _, end, shop in _shop_runs(start[k], start[k] + length[k], slots):
+            points.append(coords[k] + seg[k] * ((end - start[k]) / max(length[k], 1e-9)))
+            pieces.append(uv2[k] if shop else uv2[k] - no_shop)
+    return np.array(points), np.array(pieces)
 
 
 def _add_pitched(builder: MeshBuilder, poly, height: float, facade: tuple) -> bool:
@@ -755,6 +859,7 @@ def _add_pitched(builder: MeshBuilder, poly, height: float, facade: tuple) -> bo
     distances = np.unique(np.round(distances, 3))
     coords = shapely.get_coordinates(shapely.line_interpolate_point(ring, distances))
     uv2 = _wall_uv2(coords, facade, True)
+    coords, uv2 = _shop_split(coords, uv2)
     builder.add_walls(coords, ground - 1.0, roof_height(coords), uv2, ground_y=ground,
                       restart=_sign_faces(coords, uv2))
     return True
@@ -768,6 +873,7 @@ def _footprint_ground(geom) -> float:
 
 def _add_building(builder: MeshBuilder, index: int, settings: dict) -> None:
     b = _W["b"]
+    _W["own"] = index  # (its walls see the street past any other building: _faces_street)
     # Its sign walls' part (times_square.py: One Times Square's screens go to the top).
     _W["sign_part"] = times_square.sign_part(int(b["bin"][index]))
     # Towers newer than the 3-D model have their massing from a table (towers.py).
@@ -868,8 +974,41 @@ def _add_shape(builder: MeshBuilder, shape, ground: float, facade: tuple) -> Non
                         span = rings[0][:, :2] @ along
                         if span.max() - span.min() >= SIGN_FACE_MIN:
                             uv[..., 0] -= span.min()
+            slots = _shop_slots()
+            shops = wall_flags & facades.RETAIL and wall_flags & facades.FRONT and not wall_flags & facades.SIGNS
+            if shops and slots is not None:
+                # Shops along part of the front (see STORE_WIDTH): cut the wall between them.
+                span = rings[0][:, :2] @ along
+                runs = _shop_runs(float(span.min()), float(span.max()), slots)
+                if len(runs) > 1 and abs(normal[2]) < 0.05:
+                    _add_shop_runs(builder, rings, runs, along, normal, ground, (archetype, wall_flags, floor_dm, seed))
+                    continue
+                if not runs[0][2]:
+                    wall_flags &= ~facades.RETAIL
             uv2 = facades.encode(archetype, wall_flags, floor_dm, seed)
         pos = np.stack([tris[..., 0], tris[..., 2], -tris[..., 1]], axis=-1)
+        builder.add(pos, uv, uv2, (normal[0], normal[2], -normal[1]))
+
+
+def _add_shop_runs(builder: MeshBuilder, rings: list, runs: list, along: np.ndarray, normal: np.ndarray,
+                   ground: float, facade: tuple) -> None:
+    """A 3-D model's upright wall (rings as in _add_shape), cut along the
+    runs from _shop_runs(); the runs without a shop have no RETAIL."""
+    archetype, flags, floor_dm, seed = facade
+    outward = normal[:2] / np.linalg.norm(normal[:2])
+    depth = float(np.mean(rings[0][:, :2] @ outward))
+    flat = [np.column_stack([ring[:, :2] @ along, ring[:, 2]]) for ring in rings]  # (along, up)
+    wall = shapely.make_valid(Polygon(flat[0], flat[1:]))
+    for start, end, shop in runs:
+        tris = [t for t in (triangles_of(p) for p in polygons_of(shapely.clip_by_rect(wall, start, -1e5, end, 1e5), 1e-4))
+                if t is not None]
+        if not tris:
+            continue
+        uz = np.concatenate(tris)
+        en = uz[..., :1] * along + outward * depth
+        pos = np.stack([en[..., 0], uz[..., 1], -en[..., 1]], axis=-1)
+        uv = np.stack([uz[..., 0], uz[..., 1] - ground], axis=-1)
+        uv2 = facades.encode(archetype, flags if shop else flags & ~facades.RETAIL, floor_dm, seed)
         builder.add(pos, uv, uv2, (normal[0], normal[2], -normal[1]))
 
 
@@ -1164,17 +1303,27 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
                      "wires": len(wires["en"])}
 
 
-def _build_clumps(level: str, bounds, origin):
-    """A mid or far tile's props surface: just its clumps of crowns (woods
-    seen from afar), or (None, {})."""
-    c = _canopy_clumps(level, bounds)
+def _build_clumps(level: str, bounds, origin, indices: np.ndarray):
+    """A mid or far tile's props surface: its clumps of crowns (woods seen
+    from afar), and on mid tiles the water towers of the buildings drawn one
+    by one (see MID_TOWERS), or (None, {})."""
+    parts = [_canopy_clumps(level, bounds)]
+    if level in MID_TOWERS and len(indices):
+        b = _W["b"]
+        tall = towers.heights(b["bin"][indices], b["height"][indices]) >= LEVELS[level]["blocks"]["individual_from"]
+        parts.append(_water_towers(indices[tall], LEVELS[level]["shapes_from"]))
+    c = {key: np.concatenate([p[key] for p in parts]) for key in ("en", "y", "height", "width", "tone", "trunk",
+                                                                  "type", "seed")}
+    c["yaw"] = np.concatenate([p["yaw"] if "yaw" in p else props.location_seed(p["en"] * 3.7) * (2 * np.pi)
+                               for p in parts])
     keep = overpasses.clear_of_decks(_W["bridges"][level], bounds, c["en"], c["y"], c["height"])
     if not keep.any():
         return None, {}
     normals = np.column_stack([c["height"], c["width"], c["yaw"]])
     uv = np.column_stack([c["tone"], c["trunk"]])
+    clumps = keep & (c["type"] != PROP_WATER_TOWER)
     return _props_surface(c["en"], c["y"], normals, uv, c["type"], c["seed"], origin, keep), {
-        "canopy_clumps": int(keep.sum())}
+        "canopy_clumps": int(clumps.sum()), "water_towers": int((keep & ~clumps).sum())}
 
 
 def _props_surface(en, y, normals, uv, kinds, seed, origin, keep) -> tuple:
@@ -1269,7 +1418,9 @@ def _shop_fronts(indices: np.ndarray) -> tuple[dict, dict]:
         if not walls:
             continue
         if retail:
-            found = props.shop_fronts(walls, _footprint_ground(b["geoms"][index]), floor_dm / 10.0,
+            _W["own"] = index
+            shop_walls = walls if _shop_slots() is None else _street_walls(index, shops=True)
+            found = props.shop_fronts(shop_walls, _footprint_ground(b["geoms"][index]), floor_dm / 10.0,
                                       float(b["height"][index]), archetype, int(b["bbl"][index] // 1_000_000_000),
                                       int(shops["density"][index]), bool(shops["upstairs"][index]), seed, shed)
             if found:
@@ -1282,12 +1433,13 @@ def _shop_fronts(indices: np.ndarray) -> tuple[dict, dict]:
                  for parts in (signs, sheds))
 
 
-def _street_walls(index: int) -> list:
+def _street_walls(index: int, shops: bool = False) -> list:
     """A building's walls at street level that face a street, as drawn (the
     3-D model's, where it draws the building, else its footprint's), outside
     the sign district: (start, end, outward, sidewalk) each, east/north, the
     unit normal out of the wall, and how far the sidewalk reaches in front of
-    its middle (to the curb, m)."""
+    its middle (to the curb, m). With `shops`, only the stretches with shops
+    (where they fill only part of the front: see STORE_WIDTH)."""
     b = _W["b"]
     height = float(b["height"][index])
     shape = _W["shapes"].get(int(b["bin"][index]))
@@ -1312,28 +1464,40 @@ def _street_walls(index: int) -> list:
             along = np.array([-outward[1], outward[0]])
             span = ring[:, :2] @ along
             depth = float(np.mean(ring[:, :2] @ outward))
-            walls.append((along * span.min() + outward * depth, along * span.max() + outward * depth, outward))
+            walls.append((along * span.min() + outward * depth, along * span.max() + outward * depth, outward,
+                          float(span.min())))
     else:
         geom = shapely.simplify(b["geoms"][index], LEVELS["lod0"]["building_tolerance"], preserve_topology=True)
         for poly in polygons_of(geom, LEVELS["lod0"]["min_area"]):
             coords = np.asarray(shapely.orient_polygons(poly).exterior.coords)[:, :2]
             seg = coords[1:] - coords[:-1]
             length = np.hypot(seg[:, 0], seg[:, 1])
+            u_start = np.concatenate([[0.0], np.cumsum(length)[:-1]])  # (the mesh's uv.x)
             for k in np.flatnonzero(length > 1.0):
-                walls.append((coords[k], coords[k + 1], np.array([seg[k, 1], -seg[k, 0]]) / length[k]))
+                walls.append((coords[k], coords[k + 1], np.array([seg[k, 1], -seg[k, 0]]) / length[k], u_start[k]))
     if not walls or _W["streets"].is_empty:
         return []
-    middles = np.array([(a + e) / 2 for a, e, _ in walls])
-    outward = np.array([o for _, _, o in walls])
+    middles = np.array([(a + e) / 2 for a, e, _, _ in walls])
+    outward = np.array([o for _, _, o, _ in walls])
+    # The walls the building's mesh marks FRONT (party walls aren't).
+    _W["own"] = index
     front = _faces_street(middles, outward) & ~props.in_sign_district(middles)
-    # Not party walls: nothing goes where another building stands in front.
-    for reach in (0.5, 1.5):
-        hits = _W["building_tree"].query(shapely.points(middles + outward * reach), predicate="within")
-        front[hits[0]] = False
     if not front.any():
         return []
     sidewalk = shapely.distance(_W["streets"], shapely.points(middles[front] + outward[front] * 0.05))
-    return [(walls[k][0], walls[k][1], walls[k][2], float(d)) for k, d in zip(np.flatnonzero(front), sidewalk)]
+    slots = _shop_slots() if shops else None
+    out = []
+    for k, d in zip(np.flatnonzero(front), sidewalk):
+        start, end, normal, u0 = walls[k]
+        if slots is None:
+            out.append((start, end, normal, float(d)))
+            continue
+        length = float(np.linalg.norm(end - start))
+        for a, b, shop in _shop_runs(u0, u0 + length, slots):
+            if shop:
+                out.append((start + (end - start) * ((a - u0) / length), start + (end - start) * ((b - u0) / length),
+                            normal, float(d)))
+    return out
 
 
 def _bike_docks(i: int, j: int) -> dict:
@@ -1639,8 +1803,10 @@ def _canopy_trees(i: int, j: int, bounds, street_en: np.ndarray) -> dict:
     return props.canopy_trees(en, seed, cover.canopy_share(en, CANOPY_REACH))
 
 
-def _water_towers(indices: np.ndarray) -> dict:
-    """Rooftop water tanks on the tile's buildings that get one (props.py)."""
+def _water_towers(indices: np.ndarray, shapes_from: float = 0.0) -> dict:
+    """Rooftop water tanks on the tile's buildings that get one (props.py),
+    on the 3-D model's roof where the level draws it (at least shapes_from
+    tall)."""
     if len(indices) == 0:
         return _no_props()
     b, f = _W["b"], _W["facades"]
@@ -1659,7 +1825,7 @@ def _water_towers(indices: np.ndarray) -> dict:
         seed = float(b["seed"][index])
         tower_height, diameter, variant = props.tower_sizes(poly.area, seed)
         ground = _footprint_ground(b["geoms"][index])
-        shape = _W["shapes"].get(int(b["bin"][index]))
+        shape = _W["shapes"].get(int(b["bin"][index])) if height[k] >= shapes_from else None
         if shape is not None and not _shape_matches(shape, b["geoms"][index], float(height[k])):
             shape = None
         for n, spot in enumerate(props.tower_spots(poly, _W["streets"], diameter, seed)):
