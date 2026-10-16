@@ -10,7 +10,10 @@ extends RefCounted
 ## subway entrances, traffic signals, newsstands), each mesh holding all its
 ## pieces' shapes, and one for parked cars (every model on one mesh, which
 ## traffic's cars share). Draw calls are what props cost most on the web
-## (measured), hence so few.
+## (measured), hence so few. Woods seen from afar are clumps of crowns, in
+## tiles of every level (mid and far tiles have nothing else): one more
+## MultiMesh, drawn by the trees' shader, which grows them in where the trees
+## shrink away.
 ##
 ## At night street lights add a MultiMesh of glows around their heads (shown
 ## only while the city's lights are on: set lights_on), and their pools of
@@ -41,7 +44,7 @@ extends RefCounted
 ## The MultiMeshes: their node names, and the prop types
 ## (CityTileDecoder.PROP_*) each holds, as ranges (first, last).
 const GROUP_NAMES: Array[String] = ["Trees", "WaterTowers", "StreetLights", "SmallFurniture", "LargeFurniture",
-	"ParkedCars"]
+	"ParkedCars", "Canopy"]
 const GROUP_TYPES: Array[Array] = [
 	[Vector2i(0, 2)], [Vector2i(3, 3)], [Vector2i(4, 4)],
 	# Hydrants; benches; litter baskets, bike racks and parking meters.
@@ -49,12 +52,14 @@ const GROUP_TYPES: Array[Array] = [
 	# Bus shelters and LinkNYC; subway entrances and traffic signals; newsstands.
 	[Vector2i(6, 7), Vector2i(9, 10), Vector2i(14, 14)],
 	[Vector2i(15, 15)],
+	[Vector2i(16, 16)],
 ]
 const WATER_TOWERS := 1
 const STREET_LIGHTS := 2
 const SMALL_FURNITURE := 3
 const LARGE_FURNITURE := 4
 const PARKED_CARS := 5
+const CANOPY := 6
 ## Street lights' glows: their node name, and the group they're all in.
 const GLOW_NAME := "StreetLightGlow"
 const GLOW_GROUP := &"street_light_glow"
@@ -120,6 +125,14 @@ var tree_range := 1250.0
 ## shadow_distance), so no tile's shadows pop. Off, trees cast none.
 var tree_shadow_range := 1000.0
 var tree_shadows := true
+## Woods' clumps of crowns draw until their tile's center is this far from
+## the camera (m), by the tile's level (CityStreamer.LEVEL_*; 0: not at all;
+## set_canopy_ranges() changes them). Near tiles' start drawing once their
+## center is canopy_range_begin away: the tree shader grows each clump in
+## from 600 m (its canopy_distance), and a 500 m tile's corners are 354 m
+## from its center.
+var canopy_ranges: Array[float] = [6000.0, 6000.0, 9000.0]
+var canopy_range_begin := 240.0
 ## Water towers, few and big, draw a little further than trees.
 var water_tower_range := 1600.0
 ## Street lights shrink away before 650 m (street_light.gdshader); their glows
@@ -150,15 +163,16 @@ var _glow_material: Material
 func _init(tree_material: Material, water_tower_material: Material, street_light_material: Material,
 		street_light_glow_material: Material, street_furniture_material: Material, car_material: Material) -> void:
 	_meshes = [PropMeshes.tree(), PropMeshes.water_tower(), PropMeshes.street_light(),
-		PropMeshes.street_furniture_small(), PropMeshes.street_furniture_large(), PropMeshes.car()]
+		PropMeshes.street_furniture_small(), PropMeshes.street_furniture_large(), PropMeshes.car(),
+		PropMeshes.canopy()]
 	# Water towers cast their own shadows; street lights, furniture and cars
 	# cast none (thin, or small next to the buildings' shadows, and each would
 	# cost a draw call per shadow split: large furniture's shadows measured
 	# 3-11% of the frame rate in midtown for little to see; cars draw a
 	# contact shadow of their own).
-	_shadow_meshes = [PropMeshes.tree_shadow(), null, null, null, null, null]
+	_shadow_meshes = [PropMeshes.tree_shadow(), null, null, null, null, null, null]
 	_materials = [tree_material, water_tower_material, street_light_material, street_furniture_material,
-		street_furniture_material, car_material]
+		street_furniture_material, car_material, tree_material]
 	_glow_mesh = PropMeshes.street_light_glow()
 	_glow_material = street_light_glow_material
 	# Fade distances already set on the material (?sh_small_fade_distance=...,
@@ -197,9 +211,16 @@ func set_car_fade(fade: Vector2) -> void:
 		material.set_shader_parameter("fade_distance", fade)
 
 
-## Adds a tile's props (a decoded props surface) under its node. Returns how
-## many there were.
-func add_to(parent: Node3D, props: Dictionary) -> int:
+## Sets how far woods' clumps of crowns draw, by tile level (see
+## canopy_ranges). Takes effect for tiles built from then on, so set it
+## before the city loads (Quality does).
+func set_canopy_ranges(ranges: Array[float]) -> void:
+	canopy_ranges = ranges
+
+
+## Adds a tile's props (a decoded props surface) under its node; `level` is
+## the tile's (CityStreamer.LEVEL_*). Returns how many it draws.
+func add_to(parent: Node3D, props: Dictionary, level := 0) -> int:
 	var count: int = props.positions.size()
 	if count == 0:
 		return 0
@@ -221,9 +242,17 @@ func add_to(parent: Node3D, props: Dictionary) -> int:
 				share.append_array(buffer.slice(start * STRIDE, end * STRIDE))
 		if share.is_empty():
 			continue
+		if group == CANOPY and canopy_ranges[level] <= 0.0:
+			count -= share.size() / STRIDE
+			continue
 		var instance := _instance(group, share, _meshes[group])
 		parent.add_child(instance)
-		if group == STREET_LIGHTS:
+		if group == CANOPY:
+			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			instance.visibility_range_end = canopy_ranges[level]
+			if level == 0:
+				instance.visibility_range_begin = canopy_range_begin
+		elif group == STREET_LIGHTS:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_add_glows(parent, share)
 		elif group >= SMALL_FURNITURE:

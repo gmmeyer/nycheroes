@@ -8,6 +8,7 @@ extends Node3D
 ##         trains run on
 ##   lod1: 1 km tiles, simplified
 ##   lod2: 4 km tiles, coarse, out to the horizon
+## Tiles of every level also carry woods seen from afar, as clumps of crowns.
 ## A level's tiles load when their parent tile is near the camera. A tile is
 ## drawn until all its children have loaded; then the children are drawn
 ## instead, so there's never doubled-up or missing geometry. Collision comes
@@ -24,7 +25,7 @@ extends Node3D
 ## (StreetLightMap). The manifest's citywide
 ## tree canopy map (how much of each 16 m square is under trees) loads once at
 ## the start; the ground shader paints woods from it on parks and yards, out
-## past where tree props draw. For comparison,
+## past where tree props draw, under the clumps of crowns. For comparison,
 ## ?aerial=1 on the page URL (--aerial=1 on desktop) drapes the city's aerial
 ## photos over the ground and roofs of tiles marked "aerial" in the manifest
 ## (aerial/<level>/<i>_<j>.jpg, fetched once the tile is built; web builds
@@ -254,6 +255,13 @@ func set_city_lights(amount: float) -> void:
 ## built from then on, so set it before the city loads (Quality does).
 func set_furniture_fade(small: Vector2, large: Vector2) -> void:
 	_props.set_furniture_fade(small, large)
+
+
+## How far woods' clumps of crowns draw, by tile level (CityProps.canopy_ranges;
+## 0: not at all). Takes effect for tiles built from then on, so set it before
+## the city loads (Quality does).
+func set_canopy_ranges(ranges: Array[float]) -> void:
+	_props.set_canopy_ranges(ranges)
 
 
 ## Where cars, parked and moving, shrink away from the camera (m;
@@ -556,7 +564,7 @@ func _build_tile_node(tile: Tile, data: PackedByteArray) -> Node3D:
 			node.add_child(_water_node(surface.mesh, near))
 			continue
 		if surface.kind == CityTileDecoder.SURFACE_PROPS:
-			tile.prop_count = _props.add_to(node, surface)
+			tile.prop_count = _props.add_to(node, surface, tile.level)
 			prop_count += tile.prop_count
 			continue
 		if surface.kind == CityTileDecoder.SURFACE_MARKINGS:

@@ -24,6 +24,8 @@ extends RefCounted
 ## crown's blobs only just touch, so there's sky between them; the shader
 ## nudges each blob about per tree, raises the crown to the tree's size and
 ## thins it out up close. A conifer's blobs become stacked five-sided cones.
+## Woods seen from afar are clumps of crowns, a mesh of their own in the
+## round shape's layout (blobs, no trunk) that the same shader draws.
 ## Water towers (shaders/water_tower.gdshader):
 ##   UV = (part, 0 at the part's bottom .. 1 at its top)
 ##   UV2.x = around the tank (0..1) on the wall and roof, for staves and seams
@@ -232,6 +234,17 @@ static func tree_shadow() -> ArrayMesh:
 	_trunk(conifer, 0.3)
 	_Crown.new(CONIFER_BOTTOM, 1.0, conifer).cone(CONIFER_BOTTOM, 0.42, 1.0, 0.0, 0)
 	return round.commit([narrow, conifer])
+
+
+## Woods seen from afar (CityTileDecoder.PROP_CANOPY): a clump of crowns,
+## one lumpy blob and no trunk (the woods' clumps overlap into one lumpy
+## canopy that hides them). Drawn by tree.gdshader in the round shape's
+## place. 20 triangles: there are a lot of them, and from a few hundred
+## meters off a second blob (tried) looked the same and cost twice as much.
+static func canopy() -> ArrayMesh:
+	var b := _Builder.new()
+	_Crown.new(0.25, 1.0, b).blob(Vector3(0.0, 0.62, 0.0), Vector3(0.48, 0.38, 0.48), 0.2, 1)
+	return b.commit()
 
 
 ## New York's rooftop water tank: a wooden (or steel) tank with a conical

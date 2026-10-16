@@ -18,7 +18,8 @@ MARKING_LIFT above the road, with no collision. Its uv2.x is a GROUND_MARKING_*
 kind, uv is local to each strip of paint in meters (x along the street, y
 across it; see the kinds for what the shader paints), normals face up and
 positions are rounded to 1 cm.
-The props surface (lod0) is one point per prop, no indices:
+The props surface (lod0; mid and far tiles too, with clumps of crowns only)
+is one point per prop, no indices:
   position = where it stands (a tree's trunk on the ground, a water tower's
              legs on the roof)
   normal   = (height m, width m, yaw radians): total height to the top; the
@@ -129,6 +130,9 @@ PROP_NEWSSTAND = 14
 # Parked cars at the curbs (traffic.py): normal = (height, length, yaw), the
 # front facing along (sin yaw, 0, cos yaw); uv = (model CAR_*, paint 0..11).
 PROP_PARKED_CAR = 15
+# A clump of crowns: woods seen from afar (props.canopy_clumps), in tiles of
+# every level; uv = (foliage tone, 1 for conifers else 0).
+PROP_CANOPY = 16
 CAR_SEDAN, CAR_HATCHBACK, CAR_SUV, CAR_MINIVAN, CAR_PICKUP, CAR_VAN, CAR_TAXI, CAR_BOX_TRUCK = range(8)
 # Trees' foliage tones (uv.x of the props surface).
 PROP_TONE_GREEN = 0
