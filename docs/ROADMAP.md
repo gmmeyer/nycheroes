@@ -15,7 +15,7 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
-| 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, busy streets, facade materials and stoops, ground details, first landmarks, landmarks in stone, waterfront landmarks, sound done) |
+| 6 | Realism from open data | Done (real shape, facades, trees, roofs, night, street furniture, cars, traffic and busy streets, sound, landmarks, churches, waterfront, shop signs, poles and wires; four rounds of photo checks, backlog in REFERENCE.md) |
 | 7 | Phones and tablets | Done in emulation; real phones to check |
 | 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions, elevated railways and their trains) |
 | 9 | Mac and Windows versions | Planned (last) |
@@ -191,7 +191,7 @@ peer can drive one later. Nearby tiles get collision.
   in the room within 13 s of losing it, a fourth joined with the code, and
   closing the host's tab passed its role on in a fifth of a second.
 
-## 6. Realism from open data (in progress)
+## 6. Realism from open data (done)
 
 Chosen over Google's Photorealistic 3D Tiles, which can't run in our browser
 game without switching engines, cost money per player session, can't be
@@ -215,7 +215,7 @@ In order:
    storefronts, fire escapes, cornices, blank side walls; rooftop water
    towers.
 4. **Street life:** trees, street paint, street lights and street
-   furniture (done, below); parked cars and traffic.
+   furniture, parked cars and traffic (done, below).
 5. **Landmarks:** about 25 hand-made iconic buildings and bridges (two
    batches, 22 buildings done, and four bridges, below; self-made and free,
    decided 2026-10-15).
@@ -223,6 +223,25 @@ In order:
    reflections, night mode with lit windows and street lights.
 7. **Check against reality:** about 10 reference viewpoints compared side by
    side with real photos after each phase (`?cam=` start positions).
+
+**Check against reality (done; REFERENCE.md round 4, 2026-10-16):** sixteen
+views a player sees (street corners, Top of the Rock, the Brooklyn Bridge, the
+waterfronts, rowhouse blocks in Brooklyn and Queens, the Grand Concourse, the
+7 in Jackson Heights, three landmarks), each a free-licensed Wikimedia Commons
+photo next to the game at the same camera pose and field of view, measured by
+`tools/reference/compare.py` over four rounds; each round's differences
+became the next work (round 1's 15 improvements and round 3's 16, all done).
+Over the 13 views every round has, the lower half of the frame (buildings and
+street) went from 0.45 in mean brightness in round 1 to 0.36 (the photos
+0.37), with seven views within 0.03 of their own photo (three in round 1);
+saturation from 0.33 to 0.28 (0.27), and brick and stone from 0.36 to 0.26
+(0.27), each view's now 0.06 from its photo's (0.14). With
+`?weather=overcast` the gray-day views measure 0.40 (the photos 0.41) under a
+#C8-#D8 sky (#D4-#E1), and at a photo's dusk the sky stays blue overhead.
+Still short: contrast (0.17 vs 0.20) and detail (strong-edge share 0.10 vs
+0.22): crowds, relief and ornament up close, open lattices, the far city's
+contrast, plus Times Square's screens and blue shade on the ground. Those are
+REFERENCE.md's backlog (#32-41), left for after step 9. Step 6 is done.
 
 **Terrain (done):**
 - Ground heights come from the USGS 3DEP 1/3 arc-second elevation model
