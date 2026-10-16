@@ -15,9 +15,9 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
-| 6 | Realism from open data | In progress (real shape, stylized facades, trees, water towers, street paint, roofs and night done) |
+| 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, first landmarks, sound done) |
 | 7 | Phones and tablets | Done in emulation; real phones to check |
-| 8 | Overpasses and missing bridges | Planned |
+| 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions) |
 | 9 | Mac and Windows versions | Planned (last) |
 
 ## 1. Manhattan you can fly around (done)
@@ -589,26 +589,46 @@ phone, in the phone's browser, at https://nycheroes.party.
   stick, look speed and buttons feel, "Copy link" on iOS, and whether edge
   swipes (back gestures) leave the game. `?stats` shows FPS on a phone.
 
-## 8. Overpasses and missing bridges (planned)
+## 8. Overpasses and missing bridges (done)
 
 Comes after step 6 because it needs step 6's real ground heights.
 
-- **Overpasses:** about 1,000 bridge outlines in the city data cross land,
-  not water (2.3 km²): highway overpasses, raised stretches of expressways
-  like the Major Deegan, and rail bridges over streets. Today they're
-  skipped, and the roads on top are drawn flat at street level.
-- **How high:** the street centerline data marks which road sections are
-  bridges; deck heights come from the city's elevation data (step 6). Each
-  raised road ramps down where it meets the ground.
-- **Two levels of road:** the deck on top gets columns and collision (you can
-  land on it, run under it, and swing from it); the street underneath stays,
-  with its sidewalks and pedestrians.
-- **Missing bridges:** add by hand the bridges the data lacks or has only in
-  part, starting with the Kosciuszko Bridge (the BQE over Newtown Creek),
-  which the data has only as a 149 m² scrap. Check the full list of the
-  city's named bridges for others.
-- **Tower positions:** place suspension towers where they really stand
-  instead of centering them over the water (the Throgs Neck is off today).
+- **Overpasses** (`tools/citygen/overpasses.py`): raised roads from the
+  street centerlines' level codes (13 street level, 17 one level up, 21
+  two, 25 three), each level 7 m above the low ground around them (5 m
+  clearance under a 2 m deck). They ramp between the levels at their ends
+  and never dip below the ground; carriageways and ramps at one level merge
+  into one deck. Bridge outlines on land give viaducts their true edges
+  (the Gowanus, the Major Deegan). Outlines without a raised road (rail
+  bridges over streets, streets over rail cuts and sunken highways) span
+  between the ground at their ends and rise 7 m over streets passing
+  under. The city's elevation model is bare earth with bridges removed, so
+  it gives only the ground. 543 raised-road decks (about 490 km), 355 other
+  decks.
+- **Two levels of road:** decks have bents every 36 m that stand in the
+  medians of streets below or beside their lanes, parapets, lamps, and
+  collision (you can land on them, run under them, swing from them). Low
+  decks get abutment walls. On streets that cross dips on decks, the paint,
+  lanes and props ride on the deck; nothing pokes up through a deck
+  overhead.
+- **Driving lanes and paint on decks:** same lanes format, linked to the
+  streets through shared node ids, including street-level ramps and
+  bridges, so traffic uses them.
+- **Missing bridges:** the Kosciuszko (a pair of single-tower cable-stayed
+  spans, towers on the Queens bank); City Island, Macombs Dam and Cropsey
+  Avenue bridges now built; 21 small creek crossings the data lacks.
+- **Towers** where they really stand (OpenStreetMap's bridge supports, each
+  pair within a few meters of the published main span): the Verrazzano,
+  Brooklyn, Manhattan, Williamsburg, Throgs Neck and Bronx-Whitestone; the
+  RFK's suspension span over Hell Gate; the Queensboro's four cantilever
+  towers with truss chords.
+- **Cost:** near tiles about +25 MB (+2%), mid +7 MB, far +1.8 MB; 2-12%
+  more draw calls in viaduct views.
+- **Still to do:** the roadbed drawn on the ground under viaducts, elevated
+  subway lines, rail and pedestrian bridges over water (Hell Gate, the High
+  Bridge), sunken roads (the triple cantilever), walking lanes on decks,
+  signal phases where ramps meet streets; tall viaducts come out lower
+  than real (7 m per level).
 
 ## 9. Mac and Windows versions (planned, last)
 
@@ -670,7 +690,9 @@ templates for both are already installed.
   full build somewhere and run `build_tiles.py --out <copy>/nyc --only
   lod0:0,-1 lod1:0,-1 ...` (about 2 minutes: it rebuilds the bridges and
   those tiles and updates the copy's manifest), then serve the copy as
-  `tiles/`.
+  `tiles/`. In a git worktree (no `data/`), set `NYC_DATA_DIR` to the main
+  checkout's `data` folder for the tools, and run the game or tests with
+  `-- --tiles=<dir>`.
 - Web build: `tools/build_web.ps1` (add `-Serve` to play at
   http://localhost:8060; it also runs the co-op signaling server on port
   8070, after `npm install` in `tools/signaling`).

@@ -9,9 +9,20 @@
 //   UV2.y floor height in decimeters + the building's random seed (0..0.999).
 // Each building type picks a palette and a window system (punched windows with
 // lintels, arched loft windows, ribbon windows, curtain walls); street fronts
-// add storefronts with awnings, fire escapes and cornices. Every detail is
-// box-filtered or faded by its size on screen, so far away a facade settles
-// into its average color instead of shimmering.
+// add storefronts with awnings, fire escapes and cornices (rows' and
+// tenements' deep and bracketed). Masonry buildings carry a wall material
+// from facades.py (brownstone, red, brown or buff brick, limestone, paint,
+// siding; MATERIAL field), picked by borough, era and historic district, and
+// the shader picks each building's shade of it; without one (far merged
+// blocks, older tiles) the type's own mix decides. Palettes are tuned against
+// photos (docs/REFERENCE.md): muted, weathered masonry and dark glass. Every
+// detail is box-filtered or faded by its size on screen, so far away a facade
+// settles into its average color instead of shimmering.
+// Rowhouses' and walk-ups' stoops (tools/citygen/fronts.py: steps, cheek
+// walls, the doorway on the landing; FRONT_PART faces) are painted by
+// stoop(): stone treads and risers, solid cheek walls or iron railings, double
+// doors under a transom in a stone surround, lit at night. The walls of a
+// house with a stoop (STOOP) have no front door of their own.
 // Lighting is the shared toon model (toon.gdshaderinc); glass also reflects a
 // simple sky. With an aerial photo (?aerial=1), roofs show it.
 // At night (the time of day: shaders/night.gdshaderinc) a share of windows is
@@ -93,11 +104,13 @@ const int STEPS = 1;       // treads and landing; UV = (m across from its left s
 const int STOOP_SIDE = 2;  // a cheek wall's outside, down to the ground; UV = (m out from the wall, m above the landing)
 const int CHEEK = 3;       // a cheek wall's inside, above the steps; the same UV
 const int DOORWAY = 4;     // the front door on the landing; UV = (m across from its left edge, m above the landing)
+const int AREAWAY = 5;     // the wall or fence along the front yard; UV = (m along it, m above the ground)
 const float STOOP_LANDING = 1.2;  // the landing's depth (m)
 const float STEP_RISE = 0.19;
 const float STEP_RUN = 0.28;
 const float CHEEK_HEIGHT = 0.85;  // the cheek walls' height above the steps
 const float DOORWAY_HEIGHT = 3.0;
+const float AREAWAY_HEIGHT = 0.8;
 
 // Landmark materials (archetype 16 and up), as tools/citygen/landmarks.py numbers them.
 const int LM_FIRST = 16;
@@ -151,20 +164,20 @@ const vec3 RED_BRICK[6] = vec3[](vec3(0.58, 0.39, 0.34), vec3(0.54, 0.37, 0.33),
 const vec3 BROWN_BRICK[5] = vec3[](vec3(0.47, 0.36, 0.32), vec3(0.52, 0.40, 0.35), vec3(0.44, 0.35, 0.32),
 		vec3(0.55, 0.43, 0.37), vec3(0.49, 0.40, 0.36));
 // Chocolate-brown sandstone.
-const vec3 BROWNSTONE[5] = vec3[](vec3(0.48, 0.38, 0.34), vec3(0.53, 0.42, 0.37), vec3(0.45, 0.36, 0.33),
-		vec3(0.56, 0.45, 0.40), vec3(0.50, 0.41, 0.38));
+const vec3 BROWNSTONE[5] = vec3[](vec3(0.47, 0.38, 0.35), vec3(0.52, 0.42, 0.38), vec3(0.44, 0.36, 0.34),
+		vec3(0.55, 0.45, 0.41), vec3(0.49, 0.41, 0.39));
 // Buff, tan and "blond" brick (Ridgewood, the Grand Concourse).
 const vec3 BUFF_BRICK[5] = vec3[](vec3(0.70, 0.62, 0.51), vec3(0.74, 0.66, 0.55), vec3(0.66, 0.58, 0.47),
 		vec3(0.71, 0.63, 0.52), vec3(0.65, 0.60, 0.51));
-const vec3 WHITE_BRICK[3] = vec3[](vec3(0.80, 0.79, 0.75), vec3(0.84, 0.83, 0.79), vec3(0.74, 0.73, 0.69));
+const vec3 WHITE_BRICK[3] = vec3[](vec3(0.77, 0.76, 0.72), vec3(0.81, 0.80, 0.76), vec3(0.71, 0.70, 0.66));
 // Limestone and cream.
-const vec3 LIMESTONE[5] = vec3[](vec3(0.78, 0.74, 0.66), vec3(0.74, 0.70, 0.61), vec3(0.82, 0.79, 0.71),
-		vec3(0.70, 0.67, 0.60), vec3(0.79, 0.73, 0.62));
+const vec3 LIMESTONE[5] = vec3[](vec3(0.74, 0.70, 0.63), vec3(0.70, 0.66, 0.58), vec3(0.78, 0.75, 0.68),
+		vec3(0.66, 0.63, 0.57), vec3(0.75, 0.69, 0.59));
 // Landmark stone: pale gray Indiana limestone; gray, pink and dark granite;
 // cream and ivory glazed terracotta.
-const vec3 LANDMARK_LIMESTONE[3] = vec3[](vec3(0.80, 0.78, 0.72), vec3(0.76, 0.74, 0.69), vec3(0.84, 0.82, 0.77));
+const vec3 LANDMARK_LIMESTONE[3] = vec3[](vec3(0.77, 0.75, 0.69), vec3(0.73, 0.71, 0.66), vec3(0.81, 0.79, 0.74));
 const vec3 GRANITE[3] = vec3[](vec3(0.66, 0.65, 0.62), vec3(0.69, 0.60, 0.55), vec3(0.50, 0.49, 0.47));
-const vec3 TERRACOTTA[3] = vec3[](vec3(0.86, 0.83, 0.74), vec3(0.84, 0.80, 0.70), vec3(0.88, 0.86, 0.79));
+const vec3 TERRACOTTA[3] = vec3[](vec3(0.83, 0.80, 0.71), vec3(0.81, 0.77, 0.67), vec3(0.85, 0.83, 0.76));
 const vec3 CAST_IRON[5] = vec3[](vec3(0.86, 0.83, 0.76), vec3(0.74, 0.73, 0.69), vec3(0.60, 0.67, 0.61),
 		vec3(0.65, 0.70, 0.75), vec3(0.80, 0.74, 0.60));
 const vec3 SIDING_PAINT[6] = vec3[](vec3(0.85, 0.83, 0.78), vec3(0.70, 0.76, 0.80), vec3(0.74, 0.77, 0.66),
@@ -1401,12 +1414,13 @@ Surface parapet_inside(vec2 p, vec2 footprint, int archetype, int flags, float s
 }
 
 // A stoop (tools/citygen/fronts.py): steps up to the parlor floor between
-// cheek walls, and the front door on its landing. Brownstone and limestone
-// houses' stoops are their own stone; brick rows' are brownstone, their trim
-// stone or cast concrete, some with iron railings on a low curb instead of
-// solid cheek walls. The doorway: double doors with glass panes under a
-// transom, in a stone surround with a hood; at night the glass glows and a
-// lamp lights the landing.
+// cheek walls, the front door on its landing, and the wall along the front
+// yard. Brownstone and limestone houses' stoops are their own stone; brick
+// rows' are brownstone, their trim stone or cast concrete, some with iron
+// railings on a low curb instead of solid cheek walls (and an iron fence
+// between stone posts along the yard instead of a stone wall). The doorway:
+// double doors with glass panes under a transom, in a stone surround with a
+// hood; at night the glass glows and a lamp lights the landing.
 Surface stoop(int part, vec2 p, vec2 fp, int archetype, int flags, float seed) {
 	int material = (flags / MATERIAL) % 8;
 	Facade f = facade_for(archetype, seed, false, material);
@@ -1461,6 +1475,28 @@ Surface stoop(int part, vec2 p, vec2 fp, int archetype, int flags, float seed) {
 			float panel = (band(h, 0.16, 0.2, fp.y) + band(h, CHEEK_HEIGHT - 0.3, CHEEK_HEIGHT - 0.26, fp.y))
 					* float(material == MAT_BROWNSTONE) * detail;
 			color = mix(color, color * (1.0 - 0.25 * panel) * mix(1.0, 0.7, under_cap) * mix(1.0, 1.14, cap), above);
+		}
+		s.albedo = color;
+		return s;
+	}
+	if (part == AREAWAY) {
+		// A stone wall under a coping, or an iron fence on a curb between
+		// capped stone posts.
+		float h = p.y;
+		vec3 color = wall_texture(stone, STONE, p, fp);
+		color *= mix(0.84, 1.0, smoothstep(-0.2, 0.25, h));
+		float cap = band(h, AREAWAY_HEIGHT - 0.1, 1e4, fp.y);
+		float under_cap = band(h, AREAWAY_HEIGHT - 0.15, AREAWAY_HEIGHT - 0.1, fp.y);
+		if (iron) {
+			const float POSTS = 2.4;
+			float post = centered_stripes(p.x / POSTS, 0.32 / POSTS, fp.x / POSTS);
+			float rail = band(h, 0.3, 1e4, fp.y) * (1.0 - post);
+			float bars = max(stripes(p.x / 0.13, 0.22, fp.x / 0.13) * detail + 0.22 * (1.0 - detail),
+					max(band(h, AREAWAY_HEIGHT - 0.06, 1e4, fp.y), band(h, 0.3, 0.35, fp.y)));
+			color = mix(color, mix(stone * 0.42, srgb(IRON) * 1.4, bars), rail);
+			color *= mix(1.0, 1.14, cap * post);
+		} else {
+			color *= mix(1.0, 0.7, under_cap) * mix(1.0, 1.14, cap);
 		}
 		s.albedo = color;
 		return s;

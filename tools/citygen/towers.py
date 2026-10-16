@@ -1,19 +1,25 @@
 """Massing for towers the city's 3-D building model doesn't have.
 
 The 3-D Building Model (buildings3d.py) is from 2014, so dozens of newer
-towers have no shape there, or an obsolete one (111 West 57th Street's is
-Steinway Hall), and their footprint record alone would draw a flat-topped box
-over the whole footprint or lot, up to the spire's tip: One Vanderbilt over
-its whole block, the Shops at Hudson Yards at 30 Hudson Yards' 386 m. Some
-footprint heights were measured during construction, so finished towers
-stand as stumps (55 Hudson Yards at 24 m, 270 Park Avenue at half height).
+towers have no shape there, or an obsolete one (432 Park Avenue half-built,
+111 West 57th Street's the 70 m building that stood on part of its lot), and
+their footprint record alone would draw a flat-topped box over the whole
+footprint or lot, up to the spire's tip: One Vanderbilt over its whole
+block, the Shops at Hudson Yards at 30 Hudson Yards' 386 m. Some footprint
+heights were measured during construction, so finished towers stand as
+stumps (55 Hudson Yards at 24 m, 270 Park Avenue at half height).
 
-Here each tower over about 150 m without a usable model gets a simple,
-recognizable massing from a table: which part of its footprint the tower
-really stands on, its podium, setbacks, taper, crown and spire, at its
-published heights (sources with each tower). build_tiles.py draws them in
-place of the footprint prism at every detail level (they're all far taller
-than LEVELS' shapes_from).
+Here each of the worst of them (the ones over about 200 m, and some lower
+ones whose box covers a whole podium) gets a simple, recognizable massing
+from a table: which part of its footprint the tower really stands on, its
+podium, setbacks, taper, crown and spire, at its published heights (sources
+with each tower; where a tower stands on its lot is checked against the
+city's 2024 aerial photos, or taken from OpenStreetMap's 3-D building parts
+where the photo can't show it). Slender towers whose footprint is the tower
+keep their prisms. build_tiles.py draws the table's towers in place of the
+footprint prism at every detail level (all far taller than LEVELS'
+shapes_from) and keeps them out of far tiles' merged blocks and off the
+water tower list.
 
 Faces carry the same uv/uv2 as other buildings (facades.py): the building's
 type (modern glass offices and apartments, mostly), FRONT on walls that face
@@ -59,7 +65,7 @@ class Block:
     points, or FOOTPRINT, or Minus(...)), and a roof. With `top` (the same
     number of points), the walls lean in or out to it (tapers, flares); with
     `slope`, the top rises by that many meters per meter along local x and y
-    (z1 at the frame's origin). `kind` overrides the tower's building type
+    (z1 at the frame's origin). `top` needs a points outline. `kind` overrides the tower's building type
     (facades.py; landmarks.STEEL for metal), `flags` adds facade flags.
     `soffit` closes the bottom (cantilevers); `details` lists the detail
     levels it's drawn at; `seed` gives the part its own look."""
@@ -129,18 +135,6 @@ def chamfered(x0, y0, x1, y1, c):
             (x1 - c, y1), (x0 + c, y1), (x0, y1 - c), (x0, y0 + c)]
 
 
-def rounded(x0, y0, x1, y1, r, detail, n=None):
-    """A rectangle with corners rounded to radius r."""
-    n = n or max(1, ROUND[detail] // 8)
-    out = []
-    for cx, cy, start in ((x1 - r, y0 + r, -90.0), (x1 - r, y1 - r, 0.0), (x0 + r, y1 - r, 90.0),
-                          (x0 + r, y0 + r, 180.0)):
-        for k in range(n + 1):
-            a = math.radians(start + 90.0 * k / n)
-            out.append((cx + r * math.cos(a), cy + r * math.sin(a)))
-    return out
-
-
 def ngon(cx, cy, r, n, start=0.0):
     return [(cx + r * math.cos(math.radians(start + 360.0 * k / n)),
              cy + r * math.sin(math.radians(start + 360.0 * k / n))) for k in range(n)]
@@ -151,10 +145,6 @@ def scaled(points, sx, sy=None, about=None):
     p = np.asarray(points, np.float64)
     c = p.mean(axis=0) if about is None else np.asarray(about, np.float64)
     return [tuple(v) for v in c + (p - c) * [sx, sx if sy is None else sy]]
-
-
-def moved(points, dx, dy):
-    return [(x + dx, y + dy) for x, y in points]
 
 
 def turned(points, degrees, about=None):
@@ -170,11 +160,6 @@ def spire(cx, cy, z0, z1, r0, r1=0.15, n=4, details=(0, 1, 2)):
     """A tapering steel mast."""
     return Block(ngon(cx, cy, r0, n, 45.0 if n == 4 else 0.0), z0, z1, top=ngon(cx, cy, r1, n, 45.0 if n == 4 else 0.0),
                  kind=landmarks.STEEL, details=details)
-
-
-def stepped(outlines, heights, **kw):
-    """Blocks stacked on each other: outlines[k] from heights[k] to heights[k + 1]."""
-    return [Block(o, z0, z1, **kw) for o, z0, z1 in zip(outlines, heights[:-1], heights[1:])]
 
 
 def outline_of(geom, detail):
@@ -246,7 +231,8 @@ def glass_residential(tone):
 
 
 def glass_office(tone, dark_frame=False):
-    return look(lambda r: _in(r[0] * 5, tone, tone + 1, 0.15) and (_in(r[1], 0.7, 1.0) if dark_frame else _in(r[1], 0.0, 0.7)))
+    frame = (0.7, 1.0) if dark_frame else (0.0, 0.7)
+    return look(lambda r: _in(r[0] * 5, tone, tone + 1, 0.15) and _in(r[1], *frame))
 
 
 # MODERN_RESIDENTIAL's other look: a light gray concrete grid with big windows.
@@ -351,18 +337,16 @@ def _vanderbilt(d):
 def _w53_53(d):
     """53 West 53rd Street (Jean Nouvel, 2019), 320 m: a through-block tower
     west of MoMA (gallery floors in its base) whose north and south faces
-    lean in as it rises while the east and west faces stay plumb, splitting
-    above about the 60th floor into three peaks, the middle one highest.
-    Concrete diagrid, gray panels and glass. Wikipedia, "53 West 53rd
-    Street"."""
+    lean in as it rises while the east and west faces stay plumb; above
+    about the 60th floor it splits into faceted peaks, the middle one
+    highest, with lower shoulders either side. Concrete diagrid, gray panels
+    and glass. Wikipedia, "53 West 53rd Street"."""
     x0, x1 = -16.0, 16.0
-    parts = [Block(FOOTPRINT, 0.0, 22.0),
-             Block(rect(x0, -28.0, x1, 28.0), 22.0, 250.0, top=rect(x0, -8.0, x1, 8.0))]
-    thirds = np.linspace(x0, x1, 4)
-    for (a, b), peak, dy in zip(zip(thirds[:-1], thirds[1:]), (285.0, 320.0, 302.0), (2.0, 0.0, -2.0)):
-        c = (a + b) / 2
-        parts.append(Block(rect(a, -8.0, b, 8.0), 250.0, peak, top=rect(c - 2.0, dy - 1.5, c + 2.0, dy + 1.5)))
-    return parts
+    return [Block(FOOTPRINT, 0.0, 22.0),
+            Block(rect(x0, -28.0, x1, 28.0), 22.0, 250.0, top=rect(x0, -8.0, x1, 8.0)),
+            Block(rect(-10.0, -8.0, 10.0, 8.0), 250.0, 320.0, top=rect(-1.2, -1.0, 1.2, 1.0)),
+            Block(rect(x0, -7.5, -6.0, 7.5), 250.0, 284.0, top=rect(-12.5, 0.5, -10.5, 2.5)),
+            Block(rect(6.0, -7.5, x1, 7.5), 250.0, 300.0, top=rect(10.5, -2.5, 12.5, -0.5))]
 
 
 def _hudson_yards_30(d):
@@ -933,14 +917,12 @@ def _walls(builder, bottom, top, bottom_z, top_z, ground, facade, faces_street, 
     n = len(bottom)
     nxt = np.roll(np.arange(n), -1)
     a, b, c, d = bottom, bottom[nxt], top[nxt], top
-    za, zb = np.full(n, bottom_z), np.full(n, bottom_z)
-    zc, zd = top_z[nxt], top_z
     edge = b - a
     length = np.hypot(edge[:, 0], edge[:, 1])
     top_edge = c - d
     top_length = np.hypot(top_edge[:, 0], top_edge[:, 1])
     keep = (length > 0.05) | (top_length > 0.05)
-    along = np.where(length[:, None] > 0.05, edge, top_edge) / np.maximum(np.maximum(length, top_length), 1e-9)[:, None]
+    along = np.where(length[:, None] > 0.05, edge, top_edge)
     along /= np.maximum(np.linalg.norm(along, axis=1, keepdims=True), 1e-9)
     outward = np.column_stack([along[:, 1], -along[:, 0]])
     start = np.concatenate([[0.0], np.cumsum(length)[:-1]])
@@ -948,7 +930,7 @@ def _walls(builder, bottom, top, bottom_z, top_z, ground, facade, faces_street, 
     front = faces_street(middles, outward) if not steel else np.zeros(n, dtype=bool)
     count = 0
     for k in np.flatnonzero(keep):
-        p = np.array([[*a[k], za[k]], [*b[k], zb[k]], [*c[k], zc[k]], [*d[k], zd[k]]])
+        p = np.array([[*a[k], bottom_z], [*b[k], bottom_z], [*c[k], top_z[nxt[k]]], [*d[k], top_z[k]]])
         # The face's normal (east/north/up), pointing out.
         normal = np.cross(p[1] - p[0], p[3] - p[0]) if length[k] > 0.05 else np.cross(p[2] - p[0], p[3] - p[0])
         if np.linalg.norm(normal) < 1e-9:

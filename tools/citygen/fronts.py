@@ -1,5 +1,6 @@
 """Stoops on rowhouse and walk-up fronts, up close (lod0 tiles): steps up to
-the parlor floor between cheek walls, and the front door on the landing.
+the parlor floor between cheek walls, the front door on the landing, and the
+low wall or iron fence along the front yard (the areaway).
 
 build_tiles.py calls add() for every building it draws in full detail. A
 building with stoop steps (facades.py: brownstones 8-10, later rows 3-7,
@@ -14,19 +15,27 @@ sidewalk and front yard are shallow the stoop has fewer steps, or none. Its
 walls are then marked STOOP, so the shader draws the front door up on the
 landing instead of at the sidewalk.
 
+A rowhouse with a stoop and a front yard gets an areaway wall (or iron
+fence) along the yard's edge, CURB_CLEAR from the curb (so neighbors' line up
+and the stoops end at or inside it), from the far lot line to a gate GATE
+wide beside the stoop: every yard has a way out, so heroes and thugs never get
+boxed in between stoops, walls and fences.
+
 A stoop is a few faces of the building's own surface (so it has collision,
 and it's a ramp the hero walks up): the landing and the steps' slope (drawn
 as steps by the shader), each cheek wall's outside reaching down to the
 ground and its inside above the steps (two faces back to back, so they need
 no thickness), and the doorway, a panel standing just off the wall: 20
-triangles, 34 vertices. The parts are told apart by facades.FRONT_PART in
-uv2.x; the shader (shaders/building.gdshader, stoop()) paints them.
+triangles, 34 vertices; the areaway wall is two faces back to back, 4
+triangles. The parts are told apart by facades.FRONT_PART in uv2.x; the
+shader (shaders/building.gdshader, stoop()) paints them.
 
 Uv per part (meters; the shader relies on them and on the measures below):
   STEPS       (across from the left side, out from the wall)
   STOOP_SIDE  (out from the wall, above the landing)
   CHEEK       (out from the wall, above the landing)
   DOORWAY     (across from its left edge, above the landing)
+  AREAWAY     (along it, above the ground)
 """
 
 import numpy as np
@@ -40,6 +49,7 @@ STEPS = 1
 STOOP_SIDE = 2
 CHEEK = 3
 DOORWAY = 4
+AREAWAY = 5
 
 # Measures (m); the shader has the same.
 LANDING = 1.2          # the landing's depth, from the wall
@@ -48,6 +58,7 @@ CHEEK_HEIGHT = 0.85    # the cheek walls stand this high above the steps
 DOORWAY_WIDTH = 1.5
 DOORWAY_HEIGHT = 3.0
 DOORWAY_OUT = 0.08     # the doorway panel stands this far off the wall
+AREAWAY_HEIGHT = 0.8
 
 # Stoops are this wide (cheek walls included): brownstones' high stoops,
 # lower ones, walk-ups'.
@@ -73,6 +84,11 @@ NEIGHBOR_SLACK = 0.3
 # stoop stands against.
 SAME_FRONT = 0.64
 STOOP_WALL = 0.96
+# Areaway walls: the gate beside the stoop, and the least yard depth and wall
+# length worth one.
+GATE = 1.0
+MIN_YARD = 1.5
+MIN_AREAWAY = 0.8
 # The 3-D model's outline at the ground must cover at least this share of
 # the footprint's area (else its walls are too odd to stand a stoop on).
 MODEL_OUTLINE_SHARE = 0.6
@@ -117,8 +133,16 @@ def add(builder, index: int, facade: tuple, shape, w: dict, settings: dict, face
     if stoop is None:
         return facade
     flags |= facades.STOOP
-    _build(builder, door, out, along, width, stoop, w["ground"]["lod0"],
-           lambda part: facades.encode(archetype, flags | part * facades.FRONT_PART, floor_dm, seed))
+
+    def uv2_of(part):
+        return facades.encode(archetype, flags | part * facades.FRONT_PART, floor_dm, seed)
+
+    ground = w["ground"]["lod0"]
+    _build(builder, door, out, along, width, stoop, ground, uv2_of)
+    if archetype == facades.ROWHOUSE:
+        areaway = _areaway(w, index, poly, shift, door, out, along, width)
+        if areaway is not None:
+            _build_areaway(builder, door, out, along, areaway, ground, uv2_of)
     return archetype, flags, floor_dm, seed
 
 
@@ -232,6 +256,57 @@ def _fit(w: dict, index: int, own, shift, door, out, along, width: float, steps:
         foot = float(ground.height((door + out * depth)[None])[0])
         return count, foot, foot + count * RISE
     return None
+
+
+def _areaway(w: dict, index: int, own, shift, door, out, along, width: float):
+    """Where the areaway wall goes: (meters out from the wall, from and to
+    meters along it), or None: from the far lot line (the outline's widest
+    point at the front) to the gate beside the stoop."""
+    streets = w["streets"]
+    if streets.is_empty:
+        return None
+    ray = shapely.LineString([door, door + out * 30.0])
+    hit = shapely.intersection(ray, streets)
+    if hit.is_empty:
+        return None
+    gap = float(np.min((shapely.get_coordinates(hit) - door) @ out))
+    yard = gap - CURB_CLEAR
+    if yard < MIN_YARD:
+        return None
+    corners = shapely.get_coordinates(own.exterior) - door
+    front = corners[corners @ out > -2.0] @ along
+    if not len(front):
+        return None
+    low, high = float(front.min()), float(front.max())
+    # The stoop is at one lot line; the wall runs to the other.
+    if high - width / 2 > -width / 2 - low:
+        start, end = width / 2 + GATE, high - 0.02
+    else:
+        start, end = low + 0.02, -width / 2 - GATE
+    if end - start < MIN_AREAWAY:
+        return None
+    line = shapely.LineString([door + out * yard + along * start, door + out * yard + along * end])
+    if shapely.dwithin(streets, line, CURB_CLEAR - 0.5):
+        return None
+    moved = shapely.transform(line, lambda c: c + shift)  # among the footprints
+    if np.any(w["building_index_tree"].query(shapely.buffer(moved, 0.05), predicate="intersects") != index):
+        return None
+    return yard, start, end
+
+
+def _build_areaway(builder, door, out, along, areaway: tuple, ground, uv2_of) -> None:
+    """The areaway wall's two faces (see _areaway)."""
+    yard, start, end = areaway
+    ends = np.array([door + out * yard + along * start, door + out * yard + along * end])
+    feet = ground.height(ends)
+    pos = np.array([[e[0], y - SINK, -e[1]] for e, y in zip(ends, feet)]
+                   + [[e[0], y + AREAWAY_HEIGHT, -e[1]] for e, y in zip(ends, feet)])
+    length = end - start
+    uv = np.array([[0.0, -SINK], [length, -SINK], [0.0, AREAWAY_HEIGHT], [length, AREAWAY_HEIGHT]])
+    quad = [(0, 1, 3), (0, 3, 2)]
+    normal = np.array([out[0], 0.0, -out[1]])
+    for side in (1.0, -1.0):
+        builder.add(pos[quad], uv[quad], uv2_of(AREAWAY), normal * side)
 
 
 def _build(builder, door, out, along, width: float, stoop: tuple, ground, uv2_of) -> None:

@@ -27,10 +27,15 @@ The city's elevation model can't give deck heights: it's bare earth, with
 bridges removed (and its 10 m pixels blur embankments). It does give the
 ground the levels count up from.
 
+Streets crossing a creek where the data has no bridge at all get a low deck
+from bank to bank; on decks that carry a street over a dip, the street's
+paint, lanes and props ride on the deck (OnDecks).
+
 prepare() makes data/cache/overpasses.pkl from the raw downloads. Network
 holds the raised roads and their heights; build() adds the decks to the
 bridge buckets (bridges.build's format, so they get collision up close), and
-lanes() / paint() give each near tile its driving lanes and paint on decks.
+lanes() / add_paint() give each near tile its driving lanes and paint on
+decks; clear_of_decks() keeps props from standing up through them.
 """
 
 import numpy as np
@@ -104,7 +109,6 @@ DETAILED = ("lod0", "lod1")
 # Node ids for raised roads' ends that aren't at a street-level node:
 # above any street node id (markings.prepare), below 2^24 (exact as floats).
 NODE_BASE = 4_000_000
-# Lanes over water without a deck (bridges left out of the world) are dropped.
 
 
 def prepare() -> dict:
@@ -153,9 +157,10 @@ def rise(level) -> np.ndarray:
 
 
 class Network:
-    """The raised roads (and street-level ramps): their heights, their decks'
-    groups, and their attributes in markings.prepare's format (for traffic.lanes
-    and markings.quads), with node ids that match the streets'.
+    """The raised roads (and the street-level ramps and bridges that link them
+    to the streets): their heights, their decks' groups, and their attributes
+    in markings.prepare's format (for traffic.lanes and markings.quads), with
+    node ids that match the streets'.
 
     `terrain` is a terrain.Terrain; `streets` the prepared street centerlines
     (markings.prepare)."""
@@ -176,14 +181,14 @@ class Network:
         self.tree = shapely.STRtree(self.lines)
         self._stations = [None] * self.count
         self.attrs = self._attributes(streets)
-        # Street-level roads, for what passes under a deck: the streets and
-        # our street-level ramps.
-        ramps = ~self.raised & (data["rw"] != PATH)
+        # Street-level roads, for what passes under (or along) a deck: the
+        # streets and our street-level ramps and bridges.
+        level = ~self.raised & (data["rw"] != PATH)
         street_half = np.where(streets["width"] > 0, streets["width"] / 2.0,
                                np.maximum(streets["lanes"], 1) * markings.LANE_WIDTH / 2.0 + 1.0)
-        self.under_lines = np.concatenate([streets["lines"], self.lines[ramps]])
-        self.under_half = np.concatenate([street_half, self.width[ramps] / 2.0])
-        self.under_two_way = np.concatenate([streets["trafdir"] == BOTH, data["trafdir"][ramps] == BOTH])
+        self.under_lines = np.concatenate([streets["lines"], self.lines[level]])
+        self.under_half = np.concatenate([street_half, self.width[level] / 2.0])
+        self.under_two_way = np.concatenate([streets["trafdir"] == BOTH, data["trafdir"][level] == BOTH])
         self.under_tree = shapely.STRtree(self.under_lines)
 
     def _widths(self) -> np.ndarray:
@@ -389,7 +394,7 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
     decks = 0
     for group in sorted(set(network.group[roads].tolist())):
         members = roads[network.group[roads] == group]
-        strips = shapely.buffer(network.lines[members], network.width[members] / 2.0, cap_style="flat", quad_segs=2)
+        strips = shapely.buffer(network.lines[members], network.width[members] / 2.0, quad_segs=2)
         area = shapely.union_all(list(strips) + groups.get(group, []))
         area = shapely.difference(area, keep_out)
         tree = shapely.STRtree(network.lines[members])
@@ -569,12 +574,12 @@ def _missing_crossings(network: Network, land, covered) -> list:
             poly = max(polygons_of(poly, 20.0), key=lambda p: p.area, default=None)
             if poly is None:
                 continue
-            banks = network.street(np.vstack([ends[0] - direction * 3.0, ends[1] + direction * 3.0]))
+            street = network.street(np.vstack([ends[0] - direction * 3.0, ends[1] + direction * 3.0]))
             length = float(np.linalg.norm(ends[1] - ends[0]))
 
-            def deck_y(en, a=ends[0], d=direction, banks=banks, length=length):
+            def deck_y(en, a=ends[0], d=direction, street=street, length=length):
                 t = np.clip(((np.asarray(en, np.float64).reshape(-1, 2) - a) @ d) / max(length, 1e-6), 0.0, 1.0)
-                return banks[0] + (banks[1] - banks[0]) * t + CROSSING_LIFT
+                return street[0] + (street[1] - street[0]) * t + CROSSING_LIFT
             out.append((shapely.orient_polygons(poly), deck_y))
     return out
 
@@ -584,7 +589,7 @@ def _plain_profile(poly, network: Network):
     its two ends (along its long axis), lifted LEVEL_RISE over streets that
     pass under it. Returns (deck_y, carries a street) or (None, False) if it
     wouldn't rise MIN_RISE above the street anywhere."""
-    u, v, center, length = _axis(poly)
+    u, v, center, length = bridges._axis(poly)
     ring = np.asarray(shapely.segmentize(poly.exterior, 2.0).coords)[:, :2]
     s = (ring - center) @ u
     s_min, s_max = float(s.min()), float(s.max())
@@ -640,17 +645,6 @@ def _grid_points(poly, step: float) -> np.ndarray:
     return pts[shapely.contains_xy(poly, pts[:, 0], pts[:, 1])] if len(pts) else pts
 
 
-def _axis(geom):
-    """Direction (unit vector along the long side of its minimum rotated
-    rectangle), perpendicular, center, and length of a shape."""
-    rect = np.asarray(shapely.minimum_rotated_rectangle(geom).exterior.coords)[:4]
-    sides = rect[1:] - rect[:-1]
-    longest = int(np.argmax(np.hypot(sides[:, 0], sides[:, 1])))
-    length = float(np.hypot(*sides[longest]))
-    u = sides[longest] / max(length, 1e-6)
-    return u, np.array([-u[1], u[0]]), rect.mean(axis=0), length
-
-
 def _clear_of_streets(points: np.ndarray, network: Network) -> np.ndarray:
     """Which column spots are off the traffic lanes of the street-level roads
     passing underneath (a two-way street's middle is fine: a median)."""
@@ -684,16 +678,14 @@ def _add_road_columns(poly, segments, deck_y, network: Network, builders: dict) 
             if top - ground < COLUMN_CLEARANCE + CAP_DEPTH:
                 continue
             # Where columns could go across the road, best first: a pair under
-            # a wide road, the middles of two-way streets running underneath,
-            # the middle, then near the edges.
-            options = [0.0, -(half - 2.0), half - 2.0, -half / 2, half / 2]
-            for m in _medians_under(point, across, half, network):
-                options.insert(0, m)
+            # a wide road, then one by one the middles of two-way streets
+            # running underneath, the middle, and near the edges.
+            options = [-half / 2, half / 2] + _medians_under(point, across, half, network) + [0.0, -(half - 2.0),
+                                                                                              half - 2.0]
             spots = point + np.outer(options, across)
             ok = shapely.covers(poly, shapely.points(spots)) & _clear_of_streets(spots, network)
-            pair = width >= WIDE_DECK and ok[3] and ok[4]
-            chosen = [3, 4] if pair else []
-            for i in np.flatnonzero(ok):
+            chosen = [0, 1] if width >= WIDE_DECK and ok[0] and ok[1] else []
+            for i in np.flatnonzero(ok[2:]) + 2:
                 if len(chosen) >= (2 if width >= WIDE_DECK else 1):
                     break
                 if all(abs(options[i] - options[j]) >= 4.0 for j in chosen):
@@ -726,7 +718,7 @@ def _medians_under(point: np.ndarray, across: np.ndarray, half: float, network: 
 def _add_axis_columns(poly, deck_y, network: Network, builders: dict) -> None:
     """Columns every COLUMN_SPACING along an outline's long axis (for decks
     without a road of their own to follow)."""
-    u, v, center, length = _axis(poly)
+    u, v, center, length = bridges._axis(poly)
     ring = np.asarray(poly.exterior.coords)[:, :2]
     s = (ring - center) @ u
     width = float(np.clip(poly.area / max(length, 1.0), 4.0, 60.0))
