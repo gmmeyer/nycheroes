@@ -18,4 +18,8 @@
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "nyc-hero-files" }],
   "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Rooms" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Rooms"] }]
+  // Secrets, set with `npx wrangler secret put <NAME> --config
+  // tools/cloudflare/wrangler.jsonc` (and in .dev.vars here for `wrangler
+  // dev`, never committed): TURN_KEY_ID and TURN_KEY_API_TOKEN, the
+  // account's TURN key "nycheroes-coop" for co-op's relay (see worker.mjs).
 }

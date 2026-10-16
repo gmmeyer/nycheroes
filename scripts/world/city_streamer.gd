@@ -3,8 +3,8 @@ extends Node3D
 ## Streams the city around the camera from a three-level tile tree, built by
 ## tools/citygen/build_tiles.py into data/tiles/<region>/:
 ##   lod0: 500 m tiles, full detail, with collision, walking lanes, road
-##         markings, trees, rooftop water towers, street lights and street
-##         furniture
+##         markings, trees, rooftop water towers, street lights, street
+##         furniture and parked cars
 ##   lod1: 1 km tiles, simplified
 ##   lod2: 4 km tiles, coarse, out to the horizon
 ## A level's tiles load when their parent tile is near the camera. A tile is
@@ -15,8 +15,9 @@ extends Node3D
 ## (tools/build_web.ps1 copies them there).
 ## Buildings and ground are drawn by their own shaders (stylized facades from
 ## the tiles' per-building data), and so are road markings; trees, water
-## towers, street lights and street furniture are a few MultiMeshes per tile
-## (CityProps). At
+## towers, street lights, street furniture and parked cars are a few
+## MultiMeshes per tile (CityProps). Signal poles and traffic keep time by one
+## clock (TrafficSignals; the signal_clock shader global, set here). At
 ## night (city_lights, from TimeOfDay) street lights glow, and their pools of
 ## light go into a map around the camera that the shaders look up
 ## (StreetLightMap). The manifest's citywide
@@ -29,9 +30,13 @@ extends Node3D
 ## need tools/build_web.ps1 -Aerial); ?aerial_shadow=0.75&aerial_brightness=0.7
 ## tune their look (see shaders/aerial.gdshaderinc). ?tree_shadows=0 leaves
 ## out trees' shadows, for slower machines (they're about a third of what
-## trees cost).
+## trees cost). On desktop, --tiles=DIR reads the tiles from DIR/<region>/
+## instead (e.g. a copy with a few tiles rebuilt, for tests).
 
 signal initial_load_finished(seconds: float)
+## A near tile's driving lanes (world-space polylines, see
+## CityTileDecoder.SURFACE_TRAFFIC) loaded, or unloaded (both empty).
+signal traffic_lanes_changed(key: Vector2i, lanes: Array[PackedVector3Array], info: PackedFloat32Array)
 
 const LEVEL_NEAR := 0
 const LEVEL_COUNT := 3
@@ -91,6 +96,10 @@ const PHOTO_OPTIONS := {"aerial_shadow": "aerial_shadow_softening", "aerial_brig
 @export var street_light_pool_material: Material
 ## Street furniture, small and large (shaders/street_furniture.gdshader).
 @export var street_furniture_material: Material
+## Cars, parked (near tiles' props) and moving (traffic draws its own
+## MultiMesh with it and PropMeshes.car()): shaders/car.gdshader, whose
+## header has the instance layout.
+@export var car_material: Material
 
 var loaded_counts: Array[int] = [0, 0, 0]
 ## World positions that need the ground loaded around them besides the
@@ -99,7 +108,8 @@ var loaded_counts: Array[int] = [0, 0, 0]
 var extra_foci: Array[Vector3] = []
 ## Time the last tile took to turn into meshes and collision, in milliseconds.
 var last_build_msec := 0.0
-## Trees, water towers, street lights and furniture in loaded near tiles.
+## Trees, water towers, street lights, furniture and parked cars in loaded
+## near tiles.
 var prop_count := 0
 ## Loaded tiles that are showing their aerial photo.
 var photo_count := 0
@@ -143,7 +153,12 @@ class Tile:
 	var children: Array[Tile] = []
 	## Sidewalk walking lanes (world-space polylines), lod0 only, while loaded.
 	var lanes: Array[PackedVector3Array] = []
-	## Trees, water towers, street lights and furniture, lod0 only, while loaded.
+	## Driving lanes (world-space polylines) and their info, lod0 only, while
+	## loaded.
+	var traffic_lanes: Array[PackedVector3Array] = []
+	var traffic_info := PackedFloat32Array()
+	## Trees, water towers, street lights, furniture and parked cars, lod0
+	## only, while loaded.
 	var prop_count := 0
 	## The aerial photo's state for the current node.
 	var photo := Photo.NONE
@@ -166,7 +181,7 @@ func _ready() -> void:
 		_merged_building_material = building_material.duplicate()
 		_merged_building_material.set_shader_parameter("merged_blocks", true)
 	_props = CityProps.new(tree_material, water_tower_material, street_light_material, street_light_glow_material,
-		street_furniture_material)
+		street_furniture_material, car_material)
 	_props.tree_shadows = LaunchOptions.get_string("tree_shadows", "1") != "0"
 	_light_map = StreetLightMap.new(street_light_pool_material)
 	add_child(_light_map)
@@ -186,6 +201,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# Signal poles and traffic follow the same clock (TrafficSignals).
+	RenderingServer.global_shader_parameter_set("signal_clock", TrafficSignals.clock())
 	if _levels.is_empty():
 		return
 	_update_cooldown -= delta
@@ -224,6 +241,13 @@ func set_furniture_fade(small: Vector2, large: Vector2) -> void:
 	_props.set_furniture_fade(small, large)
 
 
+## Where cars, parked and moving, shrink away from the camera (m;
+## CityProps.car_fade). Parked cars' tiles built from then on draw them to
+## match, so set it before the city loads (Quality does).
+func set_car_fade(fade: Vector2) -> void:
+	_props.set_car_fade(fade)
+
+
 ## The street light map's pools: one MultiMeshInstance2D per near tile with lamps.
 func light_pool_count() -> int:
 	return _light_map.get_child_count() if _light_map else 0
@@ -251,6 +275,18 @@ func lanes_near(world_position: Vector3, radius: float) -> Array[PackedVector3Ar
 	for tile: Tile in _levels[LEVEL_NEAR]["tiles"]:
 		if not tile.lanes.is_empty() and tile.distance_to(world_position.x, world_position.z) < radius:
 			found.append_array(tile.lanes)
+	return found
+
+
+## Driving lanes of every loaded near tile: {Vector2i(i, j): [lanes, info]}
+## (see traffic_lanes_changed).
+func traffic_lanes() -> Dictionary:
+	var found := {}
+	if _levels.is_empty():
+		return found
+	for tile: Tile in _levels[LEVEL_NEAR]["tiles"]:
+		if not tile.traffic_lanes.is_empty():
+			found[Vector2i(tile.i, tile.j)] = [tile.traffic_lanes, tile.traffic_info]
 	return found
 
 
@@ -430,6 +466,8 @@ func _build_ready_tiles() -> void:
 		add_child(node)
 		tile.node = node
 		loaded_counts[tile.level] += 1
+		if not tile.traffic_lanes.is_empty():
+			traffic_lanes_changed.emit(Vector2i(tile.i, tile.j), tile.traffic_lanes, tile.traffic_info)
 		changed = true
 		if _photos_enabled and tile.info.get("aerial"):
 			tile.photo = Photo.WANTED
@@ -470,6 +508,14 @@ func _build_tile_node(tile: Tile, data: PackedByteArray) -> Node3D:
 				for p in lane.size():
 					lane[p] += node.position
 				tile.lanes.append(lane)
+			continue
+		if surface.kind == CityTileDecoder.SURFACE_TRAFFIC:
+			tile.traffic_lanes.clear()
+			for lane: PackedVector3Array in surface.lanes:
+				for p in lane.size():
+					lane[p] += node.position
+				tile.traffic_lanes.append(lane)
+			tile.traffic_info = surface.info
 			continue
 		if surface.kind == CityTileDecoder.SURFACE_WATER:
 			node.add_child(_water_node(surface.mesh, near))
@@ -596,6 +642,10 @@ func _unload(tile: Tile) -> void:
 	tile.node.queue_free()
 	tile.node = null
 	tile.lanes.clear()
+	if not tile.traffic_lanes.is_empty():
+		tile.traffic_lanes.clear()
+		tile.traffic_info = PackedFloat32Array()
+		traffic_lanes_changed.emit(Vector2i(tile.i, tile.j), tile.traffic_lanes, tile.traffic_info)
 	prop_count -= tile.prop_count
 	tile.prop_count = 0
 	loaded_counts[tile.level] -= 1
@@ -630,6 +680,8 @@ func _on_request_completed(result: int, code: int, _headers: PackedStringArray, 
 
 
 func _local_dir() -> String:
+	if LaunchOptions.has("tiles"):
+		return LaunchOptions.get_string("tiles").path_join(region) + "/"
 	if OS.has_feature("editor"):
 		return "res://data/tiles/%s/" % region
 	return OS.get_executable_path().get_base_dir().path_join("tiles/%s/" % region)

@@ -17,7 +17,13 @@ extends Node
 ## one directional light once the sun is down.
 ##
 ## Launch options: ?time=HH:MM a fixed clock (default 15:30);
-## ?daylength=MINUTES a running cycle, a whole day in that many real minutes.
+## ?daylength=MINUTES a running cycle, a whole day in that many real minutes;
+## ?weather=overcast a gray day (default clear): the sky closes into a deck of
+## gray cloud (sky.gdshader's overcast), the sun dims to a soft light with
+## faint shadows, the shade fills in from the bright sky (the city materials'
+## toon ambient), glass and water turn gray, and the fog thickens and grays;
+## dusk and night follow with their own overcast looks (no moon or stars, the
+## city's glow on the clouds).
 ## T (Game) steps on to the next of day, dusk, night and dawn. With
 ## ?sun_dir=az,el (LightingOverrides) the sun keeps that direction while up.
 
@@ -87,6 +93,85 @@ const NIGHT := {
 	"cloud_lit": Color(0.20, 0.23, 0.32),
 	"cloud_shade": Color(0.06, 0.07, 0.11),
 }
+## Overcast: the day, dusk, dawn and night looks under a closed gray sky,
+## used instead of the scene's day and the keyframes above. below_color
+## matches the fog here too, and the horizon fades into it.
+const OVERCAST := {
+	"light_color": Color(0.96, 0.97, 1.0),
+	"fog_color": Color(0.74, 0.76, 0.79),
+	"ambient_color": Color(0.80, 0.82, 0.86),
+	"ambient_energy": 0.85,
+	"exposure": 1.08,
+	"zenith_color": Color(0.58, 0.62, 0.68),
+	"horizon_color": Color(0.74, 0.76, 0.79),
+	"below_color": Color(0.74, 0.76, 0.79),
+	"sun_color": Color(1.0, 0.97, 0.92),
+	"sun_glow": 0.0,
+	"cloud_lit": Color(0.82, 0.84, 0.87),
+	"cloud_shade": Color(0.50, 0.53, 0.59),
+}
+const OVERCAST_DUSK := {
+	"light_color": Color(1.0, 0.78, 0.62),
+	"fog_color": Color(0.54, 0.50, 0.52),
+	"ambient_color": Color(0.68, 0.66, 0.74),
+	"ambient_energy": 0.6,
+	"exposure": 1.1,
+	"zenith_color": Color(0.30, 0.31, 0.37),
+	"horizon_color": Color(0.54, 0.50, 0.52),
+	"below_color": Color(0.54, 0.50, 0.52),
+	"sun_color": Color(1.0, 0.62, 0.40),
+	"sun_glow": 0.0,
+	"cloud_lit": Color(0.58, 0.50, 0.50),
+	"cloud_shade": Color(0.31, 0.30, 0.35),
+}
+const OVERCAST_DAWN := {
+	"light_color": Color(1.0, 0.82, 0.72),
+	"fog_color": Color(0.56, 0.53, 0.57),
+	"ambient_color": Color(0.70, 0.69, 0.78),
+	"ambient_energy": 0.6,
+	"exposure": 1.1,
+	"zenith_color": Color(0.32, 0.33, 0.40),
+	"horizon_color": Color(0.56, 0.53, 0.57),
+	"below_color": Color(0.56, 0.53, 0.57),
+	"sun_color": Color(1.0, 0.70, 0.55),
+	"sun_glow": 0.0,
+	"cloud_lit": Color(0.60, 0.55, 0.58),
+	"cloud_shade": Color(0.33, 0.32, 0.38),
+}
+const OVERCAST_NIGHT := {
+	"light_color": Color(0.55, 0.66, 1.0),
+	"fog_color": Color(0.15, 0.13, 0.15),
+	"ambient_color": Color(0.56, 0.56, 0.72),
+	"ambient_energy": 0.55,
+	"exposure": 1.15,
+	"zenith_color": Color(0.05, 0.05, 0.07),
+	"horizon_color": Color(0.15, 0.13, 0.15),
+	"below_color": Color(0.15, 0.13, 0.15),
+	"sun_color": Color(1.0, 0.55, 0.28),
+	"sun_glow": 0.0,
+	"cloud_lit": Color(0.13, 0.12, 0.14),
+	"cloud_shade": Color(0.07, 0.07, 0.09),
+}
+## Overcast: the sun's (and moon's) energy and shadows' strength as a share
+## of a clear day's, and how much thicker the fog is.
+const OVERCAST_SUN_ENERGY := 0.3
+const OVERCAST_SHADOW_OPACITY := 0.6
+const OVERCAST_FOG := 1.8
+## Overcast: uniforms of the city's materials (the toon ambient of
+## toon.gdshaderinc: the bright gray sky fills in the shade, and walls get
+## less bounce from sunlit streets; building glass's reflections) and the
+## ocean's (its sky reflection and depth), wherever a material has them.
+## Colors replace, numbers scale.
+const OVERCAST_MATERIALS := {
+	"ambient_sky": Color(0.80, 0.82, 0.86),
+	"ambient_ground": Color(0.70, 0.69, 0.68),
+	"ambient_energy": 1.45,
+	"ambient_wall_bounce": 0.6,
+	"reflect_zenith": Color(0.60, 0.63, 0.68),
+	"reflect_horizon": Color(0.77, 0.79, 0.82),
+	"sky_tint": Color(0.62, 0.65, 0.69),
+	"deep_color": Color(0.05, 0.11, 0.13),
+}
 ## The sky material's uniforms the keyframes set.
 const SKY_KEYS: Array[String] = ["zenith_color", "horizon_color", "below_color", "sun_color", "sun_glow",
 	"cloud_lit", "cloud_shade"]
@@ -98,8 +183,11 @@ const MOON_ENERGY := 0.2
 
 @export var sun: DirectionalLight3D
 @export var world_environment: WorldEnvironment
-## Told how far the city's lights are on (its lamps' glow and light map).
+## Told how far the city's lights are on (its lamps' glow and light map);
+## its materials turn gray with an overcast.
 @export var city: CityStreamer
+## Its water turns gray with an overcast.
+@export var ocean: GeometryInstance3D
 ## How long T takes to get to the next time of day (s).
 @export var transition_seconds := 2.0
 
@@ -111,6 +199,9 @@ var day_length := 0.0
 var night := 0.0
 var dusk := 0.0
 var city_lights := 0.0
+## The weather (?weather): "clear" or "overcast", and how overcast (0..1).
+var weather := "clear"
+var overcast := 0.0
 
 var _day := {}
 var _sky: ShaderMaterial
@@ -144,6 +235,8 @@ func _ready() -> void:
 	if not time.is_empty():
 		clock = parse_clock(time)
 	day_length = maxf(LaunchOptions.get_string("daylength", "0").to_float(), 0.0)
+	if LaunchOptions.get_string("weather") == "overcast":
+		_set_overcast()
 	_apply()
 
 
@@ -240,11 +333,13 @@ func _apply() -> void:
 		# The light shines along its -z axis: the sky's sun is exactly where it is.
 		sun_direction = sun.global_basis.z.normalized()
 		sun.light_color = look.light_color
-		sun.light_energy = _day.light_energy * lerpf(1.0, DUSK_SUN_ENERGY, dusk) * _ramp(MOON_TAKES_OVER, 3.0, elevation)
+		sun.light_energy = (_day.light_energy * lerpf(1.0, DUSK_SUN_ENERGY, dusk) * _ramp(MOON_TAKES_OVER, 3.0, elevation)
+			* lerpf(1.0, OVERCAST_SUN_ENERGY, overcast))
 	else:
 		sun.rotation = LightingOverrides.sun_rotation(moon_at.x, moon_at.y)
 		sun.light_color = MOON_COLOR
-		sun.light_energy = MOON_ENERGY * _ramp(MOON_TAKES_OVER, -8.0, elevation) * _ramp(-3.0, 8.0, moon_at.y)
+		sun.light_energy = (MOON_ENERGY * _ramp(MOON_TAKES_OVER, -8.0, elevation) * _ramp(-3.0, 8.0, moon_at.y)
+			* lerpf(1.0, OVERCAST_SUN_ENERGY, overcast))
 
 	var env := world_environment.environment
 	env.fog_light_color = look.fog_color
@@ -266,26 +361,79 @@ func _apply() -> void:
 		city.city_lights = city_lights
 
 
-## The day's look blended toward dusk (or dawn, in the morning), then night.
+## The day's look blended toward dusk (or dawn, in the morning), then night;
+## with an overcast, its own looks.
 func _look(dusk_amount: float, night_amount: float, morning: bool) -> Dictionary:
-	var warm := DAWN if morning else DUSK
+	var warm := _blend(DAWN if morning else DUSK, OVERCAST_DAWN if morning else OVERCAST_DUSK, overcast)
+	var dark := _blend(NIGHT, OVERCAST_NIGHT, overcast)
 	var look := {}
 	for key: String in _day:
 		var value: Variant = _day[key]
+		if OVERCAST.has(key):
+			value = lerp(value, OVERCAST[key], overcast)
 		if warm.has(key):
 			value = lerp(value, warm[key], dusk_amount)
-		if NIGHT.has(key):
-			value = lerp(value, NIGHT[key], night_amount)
+		if dark.has(key):
+			value = lerp(value, dark[key], night_amount)
 		look[key] = value
 	return look
+
+
+## Keyframe `a` blended toward `b` (the same keys) by t.
+static func _blend(a: Dictionary, b: Dictionary, t: float) -> Dictionary:
+	if t <= 0.0:
+		return a
+	var out := {}
+	for key: String in a:
+		out[key] = lerp(a[key], b[key], t)
+	return out
+
+
+## Turns the day overcast (see OVERCAST...): the sky's deck of cloud, faint
+## shadows, the materials' gray ambient, and (once Quality has set the
+## preset's fog, after every node's _ready) thicker fog.
+func _set_overcast() -> void:
+	weather = "overcast"
+	overcast = 1.0
+	if _sky:
+		_sky.set_shader_parameter("overcast", overcast)
+	sun.shadow_opacity = lerpf(1.0, OVERCAST_SHADOW_OPACITY, overcast)
+	var materials: Array[ShaderMaterial] = []
+	if city:
+		for material in [city.building_material, city.ground_material, city.markings_material, city.tree_material,
+				city.water_tower_material, city.street_light_material, city.street_furniture_material, city.car_material]:
+			if material is ShaderMaterial:
+				materials.append(material)
+	if ocean and ocean.material_override is ShaderMaterial:
+		materials.append(ocean.material_override)
+	for material in materials:
+		for key: String in OVERCAST_MATERIALS:
+			var value: Variant = _material_value(material, key)
+			if value == null:
+				continue
+			var target: Variant = OVERCAST_MATERIALS[key]
+			material.set_shader_parameter(key, lerp(value, target if target is Color else value * target, overcast))
+	if not LaunchOptions.has("fog"):
+		_thicken_fog.call_deferred()
+
+
+func _thicken_fog() -> void:
+	var env := world_environment.environment
+	env.fog_density *= lerpf(1.0, OVERCAST_FOG, overcast)
 
 
 ## The sky material's value of a uniform (its shader's default if never set),
 ## as a Color for colors.
 func _sky_value(key: String) -> Variant:
-	var value: Variant = _sky.get_shader_parameter(key)
-	if value == null:
-		value = RenderingServer.shader_get_parameter_default(_sky.shader.get_rid(), key)
+	return _material_value(_sky, key)
+
+
+## A material's value of a uniform (its shader's default if never set; null
+## if it has none), as a Color for colors.
+static func _material_value(material: ShaderMaterial, key: String) -> Variant:
+	var value: Variant = material.get_shader_parameter(key)
+	if value == null and material.shader:
+		value = RenderingServer.shader_get_parameter_default(material.shader.get_rid(), key)
 	if value is Vector3:
 		value = Color(value.x, value.y, value.z)
 	return value

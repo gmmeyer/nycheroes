@@ -1,0 +1,247 @@
+{
+  "about": "Reference viewpoints: a real photo (Wikimedia Commons, free license; downloaded to build/reference/photos, never committed) and the game camera pose that matches it. cam is ?cam=x,y,z,yaw,pitch: x meters east and z meters south of 40.758,-73.9855 in the tiles' transverse mercator projection (game.projection), y meters above sea level, yaw in degrees (0 looks north, positive turns left/west, so yaw = -compass heading), pitch in degrees up. spawn puts the hero 40 m behind the camera, out of sight. photo.hfov is the photo's horizontal field of view from its EXIF 35 mm equivalent focal length; photo.principal is where the optical axis crosses the photo (fractions; default the center; lower for photos straightened in post, whose horizon sits below the middle). camera_lat_lon is the photo's own geotag; pose_note says how the pose was fitted. game.vfov is the free camera's vertical field of view (scenes/world.tscn); game.hud_boxes are screen areas (pixels at 2560x1440, negative = from the right/bottom) kept out of the crops. See docs/REFERENCE.md.",
+  "game": {
+    "vfov": 70,
+    "hud_boxes": [[0, 0, 1500, 110], [0, -95, 480, -1]],
+    "projection": "+proj=tmerc +lat_0=40.758 +lon_0=-73.9855 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +units=m +no_defs"
+  },
+  "views": [
+    {
+      "name": "times_square",
+      "title": "Times Square at street level, looking south from 46th Street",
+      "cam": "13,16.1,-67,159.5,10.0",
+      "photo": {
+        "file": "File:Times Square looking south from 46th Street.jpeg",
+        "page": "https://commons.wikimedia.org/wiki/File:Times_Square_looking_south_from_46th_Street.jpeg",
+        "author": "Dough4872",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "date": "2019-09-13",
+        "camera": "iPhone SE, 29 mm equivalent",
+        "hfov": 61.6
+      },
+      "camera_lat_lon": [40.75866944, -73.9852],
+      "spawn": "27,17,-105",
+      "pose_note": "Geotag moved 14 m to the Duffy Square plaza; heading from One Times Square (center) and the Paramount Building's tower."
+    },
+    {
+      "name": "fifth_ave_esb",
+      "title": "Fifth Avenue at 29th Street: Marble Collegiate Church and the Empire State Building",
+      "cam": "-127,14.2,1445,3.8,17.0",
+      "photo": {
+        "file": "File:29th St 5th Av 03 - Marble Collegiate Church.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:29th_St_5th_Av_03_-_Marble_Collegiate_Church.jpg",
+        "author": "Tdorante10",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "date": "2018-03-15",
+        "camera": "Sony DSC-RX100, 28 mm equivalent",
+        "hfov": 65.5
+      },
+      "camera_lat_lon": [40.744986, -73.986955],
+      "spawn": "-124,15,1485",
+      "pose_note": "Fitted to three bearings (church tower corner, church's west end, Empire State Building): lands 4 m from the geotag, at the 29th Street crosswalk."
+    },
+    {
+      "name": "flatiron",
+      "title": "The Flatiron Building from the Fifth Avenue / Broadway plaza at 23rd Street",
+      "cam": "-291,13.8,1711,167.1,13.0",
+      "photo": {
+        "file": "File:Flatiron Building - panoramio (5).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Flatiron_Building_-_panoramio_(5).jpg",
+        "author": "qwesy qwesy",
+        "license": "CC BY 3.0",
+        "license_url": "https://creativecommons.org/licenses/by/3.0",
+        "date": "2015-08-27",
+        "camera": "Nikon Coolpix AW110, 33 mm equivalent",
+        "hfov": 55.3
+      },
+      "camera_lat_lon": [40.742295, -73.989217],
+      "spawn": "-282,14,1672",
+      "pose_note": "Moved 40 m north-north-east of the geotag onto the 23rd Street plaza so the Flatiron's prow and the tower at left line up as in the photo."
+    },
+    {
+      "name": "park_ave",
+      "title": "Park Avenue at 53rd Street looking south to the MetLife Building",
+      "cam": "1090,17.4,-122,150.3,0.0",
+      "photo": {
+        "file": "File:Park Ave - panoramio.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Park_Ave_-_panoramio.jpg",
+        "author": "Elvis Boaventura",
+        "license": "CC BY 3.0",
+        "license_url": "https://creativecommons.org/licenses/by/3.0",
+        "date": "2015-11-29",
+        "camera": "Nikon D5200, 18 mm (27 mm equivalent)",
+        "hfov": 67.9,
+        "principal": [0.5, 0.85]
+      },
+      "camera_lat_lon": [40.759115, -73.972546],
+      "spawn": "1110,18,-156",
+      "pose_note": "On the Park Avenue median line in the 53rd Street crosswalk, 9 m north of the median's nose, as in the photo."
+    },
+    {
+      "name": "totr_south",
+      "title": "Midtown skyline from Top of the Rock, looking south",
+      "cam": "510,280.0,-117,158.7,-0.8",
+      "photo": {
+        "file": "File:New York skyline from Top of the Rock.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:New_York_skyline_from_Top_of_the_Rock.jpg",
+        "author": "Hugo Maestá",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "date": "2024-04-12",
+        "camera": "iPhone 15, 26 mm equivalent",
+        "hfov": 67.3
+      },
+      "camera_lat_lon": [40.759056, -73.979461],
+      "spawn": "524,21,-155",
+      "pose_note": "Top of the Rock terrace at 280 m; heading from the Empire State Building's position in the frame."
+    },
+    {
+      "name": "totr_north",
+      "title": "Central Park and the 57th Street towers from Top of the Rock, looking north",
+      "cam": "525,280.0,-137,-25.0,-2.5",
+      "photo": {
+        "file": "File:Sunset at the Top of the Rock (north side) - Flickr - Nicolas Lh..jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Sunset_at_the_Top_of_the_Rock_(north_side)_-_Flickr_-_Nicolas_Lh..jpg",
+        "author": "Nicolas Lh. from Canada",
+        "license": "CC BY-SA 2.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/2.0",
+        "date": "2022-08-10",
+        "camera": "Ricoh GR III, 28 mm equivalent",
+        "hfov": 65.5
+      },
+      "camera_lat_lon": [40.759238, -73.979283],
+      "spawn": "508,22,-101",
+      "pose_note": "Top of the Rock terrace at 280 m; heading from One57 and 111 West 57th in the frame."
+    },
+    {
+      "name": "brooklyn_bridge",
+      "title": "Brooklyn Bridge promenade by the Brooklyn tower, looking toward Lower Manhattan",
+      "cam": "-809,46.0,5924,42.2,1.5",
+      "photo": {
+        "file": "File:Brooklyn Bridge, New York City, 20231005 0939 2163.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Brooklyn_Bridge,_New_York_City,_20231005_0939_2163.jpg",
+        "author": "Jakub Hałun",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "date": "2023-10-05",
+        "camera": "Nikon D750, 35 mm",
+        "hfov": 54.4
+      },
+      "camera_lat_lon": [40.70422432, -73.99446815],
+      "spawn": "-782,2,5953",
+      "pose_note": "On the deck's center line, 70 m Manhattan-side of the geotag: the game's Brooklyn tower stands where the photographer did, so the camera is moved just past it. 5 m above the 41 m deck (the photo is from the raised promenade, which the game doesn't have)."
+    },
+    {
+      "name": "dumbo",
+      "title": "DUMBO: Washington Street framing the Manhattan Bridge",
+      "cam": "-346,6.2,6100,-6.7,0.0",
+      "photo": {
+        "file": "File:Manhattan Bridge and Empire State Building from Washington Street, Dumbo, Brooklyn, New York.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Manhattan_Bridge_and_Empire_State_Building_from_Washington_Street,_Dumbo,_Brooklyn,_New_York.jpg",
+        "author": "Christian David",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "date": "2026-04-17",
+        "camera": "Fujifilm X-T5, 27 mm equivalent",
+        "hfov": 47.9,
+        "principal": [0.5, 0.8]
+      },
+      "camera_lat_lon": [40.703072, -73.9896],
+      "spawn": "-351,7,6139",
+      "pose_note": "Geotag on Washington Street's center line, looking along the street."
+    },
+    {
+      "name": "promenade",
+      "title": "Lower Manhattan across the East River from the Brooklyn Heights Promenade",
+      "cam": "-1086,19.6,6948,38.0,0.0",
+      "photo": {
+        "file": "File:2024-05-22 13 06 18 View across the East River towards Lower Manhattan from the Brooklyn Heights Promenade in Brooklyn, New York City, New York.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2024-05-22_13_06_18_View_across_the_East_River_towards_Lower_Manhattan_from_the_Brooklyn_Heights_Promenade_in_Brooklyn,_New_York_City,_New_York.jpg",
+        "author": "Famartin",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "date": "2024-05-22",
+        "camera": "iPhone X, 28 mm equivalent",
+        "hfov": 63.4
+      },
+      "camera_lat_lon": [40.69542967, -73.99835389],
+      "spawn": "-1062,7,6980",
+      "pose_note": "Geotag, at the promenade's height (19.6 m; the geotag falls over the expressway below it)."
+    },
+    {
+      "name": "park_slope",
+      "title": "Park Slope: a brownstone row on a side street",
+      "cam": "834,34.7,9675,48.0,12.8",
+      "photo": {
+        "file": "File:Park Slope.JPG",
+        "page": "https://commons.wikimedia.org/wiki/File:Park_Slope.JPG",
+        "author": "Mark O'Neill",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+        "date": "2012-04-08",
+        "camera": "iPhone 4S, 35 mm equivalent",
+        "hfov": 40.8
+      },
+      "camera_lat_lon": [40.670833, -73.975667],
+      "spawn": "864,35,9702",
+      "pose_note": "On the north-east sidewalk of the side street at the geotag, 1.5 m from the front yards."
+    },
+    {
+      "name": "queens_ridgewood",
+      "title": "Ridgewood, Queens: brick rowhouses on 60th Lane",
+      "cam": "7674,26.2,6639,-32.5,10.0",
+      "photo": {
+        "file": "File:60th Lane Ridgewood.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:60th_Lane_Ridgewood.jpg",
+        "author": "Kidfly182",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "date": "2022-04-09",
+        "camera": "iPad (5th generation), 31 mm equivalent",
+        "hfov": 58.3
+      },
+      "camera_lat_lon": [40.698169, -73.894828],
+      "spawn": "7653,27,6673",
+      "pose_note": "On the east sidewalk of 60th Lane at the geotag, near the areaway fences."
+    },
+    {
+      "name": "grand_concourse",
+      "title": "The Grand Concourse, Bronx, looking north from Elliott Place / East 170th Street",
+      "cam": "6081,35.6,-9032,-27.4,0.0",
+      "photo": {
+        "file": "File:Grand Concourse, Bronx - 20220616.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Grand_Concourse,_Bronx_-_20220616.jpg",
+        "author": "Andre Carrotflower",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0",
+        "date": "2022-06-16",
+        "camera": "iPhone 11 ultra-wide (14 mm equivalent), cropped",
+        "hfov": 92.1,
+        "principal": [0.5, 0.66]
+      },
+      "camera_lat_lon": [40.8392, -73.9139],
+      "spawn": "6063,36,-8996",
+      "pose_note": "No geotag: placed from the description (between Elliott Place and East 170th Street), in the main roadway's left lane."
+    },
+    {
+      "name": "st_george",
+      "title": "St. George, Staten Island, from the arriving ferry",
+      "cam": "-6892,10.0,12442,112.5,6.0",
+      "photo": {
+        "file": "File:St. George Ferry Terminal, Staten Island, New York City, 20231002 1621 1749.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:St._George_Ferry_Terminal,_Staten_Island,_New_York_City,_20231002_1621_1749.jpg",
+        "author": "Jakub Hałun",
+        "license": "CC BY 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0",
+        "date": "2023-10-02",
+        "camera": "Nikon D750, 40 mm",
+        "hfov": 48.5
+      },
+      "camera_lat_lon": [40.64592543, -74.0669758],
+      "spawn": "-6855,2,12427",
+      "pose_note": "Ferry position from the geotag, 10 m above the water; heading from the terminal slips in the frame."
+    }
+  ]
+}

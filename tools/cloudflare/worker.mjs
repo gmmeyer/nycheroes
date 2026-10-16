@@ -2,7 +2,8 @@
 // city tiles as static assets, the engine (index.wasm, too big for a static
 // asset) from an R2 bucket, and co-op signaling at /signal from a Durable
 // Object (the same protocol as tools/signaling/server.mjs, which stays the
-// local server). Deploy with tools/deploy_cloudflare.ps1.
+// local server, plus TURN relay credentials for players whose networks block
+// direct connections). Deploy with tools/deploy_cloudflare.ps1.
 
 const MAX_PLAYERS = 8;
 const HOST_ID = 1;
@@ -10,7 +11,20 @@ const HOST_ID = 1;
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const MAX_MESSAGE = 64 * 1024;
+// STUN only: what players get when the TURN relay isn't available.
 const ICE_SERVERS = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+// Cloudflare's TURN relay (Realtime TURN), from the TURN key in the Worker
+// secrets TURN_KEY_ID and TURN_KEY_API_TOKEN (tools/cloudflare/.dev.vars for
+// `wrangler dev`). It hands out short-lived credentials for it.
+const TURN_API = 'https://rtc.live.cloudflare.com/v1/turn/keys';
+// A relayed connection drops when its credentials expire, so they outlast a
+// long evening's game (seconds).
+const TURN_TTL = 6 * 3600;
+// Players hosting or joining within this long share credentials, so a burst
+// of joins asks Cloudflare once; after a failed request, STUN only for a bit.
+const TURN_REUSE_MS = 5 * 60 * 1000;
+const TURN_RETRY_MS = 30 * 1000;
+const TURN_TIMEOUT_MS = 3000;
 
 export default {
   async fetch(request, env) {
@@ -49,8 +63,10 @@ async function wasm(request, env) {
 // Rooms of players, kept in the sockets' attachments ({code, id}) so they
 // survive the Durable Object sleeping between messages.
 export class Rooms {
-  constructor(ctx) {
+  constructor(ctx, env) {
     this.ctx = ctx;
+    this.env = env;
+    this.ice = null; // {servers: Promise, until}: the ICE servers being handed out
   }
 
   async fetch() {
@@ -68,13 +84,16 @@ export class Rooms {
     } catch {
       return send(socket, { type: 'error', message: 'Bad message' });
     }
+    // Hosting and joining hand out ICE servers: get them first, so the rooms
+    // can't change between the checks below and the replies.
+    const ice = message?.type === 'host' || message?.type === 'join' ? await this.iceServers() : null;
     const me = socket.deserializeAttachment() ?? {};
     switch (message?.type) {
       case 'host': {
         if (me.code) return send(socket, { type: 'error', message: 'Already in a game' });
         const code = this.newCode();
         socket.serializeAttachment({ code, id: HOST_ID });
-        send(socket, { type: 'hosted', code, id: HOST_ID, ice: ICE_SERVERS });
+        send(socket, { type: 'hosted', code, id: HOST_ID, ice });
         break;
       }
       case 'join': {
@@ -87,8 +106,9 @@ export class Rooms {
         while (players.has(id)) id++;
         if (id > MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full' });
         socket.serializeAttachment({ code, id });
-        send(socket, { type: 'joined', code, id, ice: ICE_SERVERS });
-        send(players.get(HOST_ID), { type: 'peer_joined', id });
+        send(socket, { type: 'joined', code, id, ice });
+        // The host's credentials may be older than a long game; these are fresh.
+        send(players.get(HOST_ID), { type: 'peer_joined', id, ice });
         break;
       }
       case 'signal': {
@@ -142,6 +162,43 @@ export class Rooms {
       for (let i = 0; i < CODE_LENGTH; i++) code += CODE_LETTERS[Math.floor(Math.random() * CODE_LETTERS.length)];
       if (this.players(code).size === 0) return code;
     }
+  }
+
+  /** STUN and TURN servers for a player, with credentials shared for a few minutes. */
+  iceServers() {
+    if (!this.ice || Date.now() > this.ice.until) {
+      // Players asking while the request is out wait for the same answer.
+      const ice = (this.ice = { servers: turnServers(this.env), until: Infinity });
+      ice.servers.then((servers) => {
+        ice.until = Date.now() + (servers === ICE_SERVERS ? TURN_RETRY_MS : TURN_REUSE_MS);
+      });
+    }
+    return this.ice.servers;
+  }
+}
+
+/** Cloudflare's STUN and TURN servers with fresh credentials, else STUN only. */
+async function turnServers(env) {
+  if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return ICE_SERVERS;
+  try {
+    const response = await fetch(`${TURN_API}/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ ttl: TURN_TTL }),
+      signal: AbortSignal.timeout(TURN_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const { iceServers } = await response.json();
+    if (!Array.isArray(iceServers)) throw new Error('no iceServers');
+    // Browsers block port 53, so trying it would only slow connecting down.
+    const servers = iceServers
+      .map((server) => ({ ...server, urls: [server.urls].flat().filter((url) => !/:53(\?|$)/.test(url)) }))
+      .filter((server) => server.urls.length > 0);
+    if (!servers.some((server) => server.username)) throw new Error('no TURN server');
+    return servers;
+  } catch (error) {
+    console.log(`TURN credentials unavailable (${error}), handing out STUN only`);
+    return ICE_SERVERS;
   }
 }
 

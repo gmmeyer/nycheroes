@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/hero/modes/melee_mode.gd" id="8_melee"]
 [ext_resource type="Script" path="res://scripts/hero/modes/dive_mode.gd" id="9_dive"]
 [ext_resource type="Script" path="res://scripts/hero/modes/knocked_out_mode.gd" id="10_knocked_out"]
+[ext_resource type="Script" path="res://scripts/audio/hero_sounds.gd" id="11_sounds"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
 radius = 0.35
@@ -71,3 +72,6 @@ material_override = SubResource("StandardMaterial3D_web")
 script = ExtResource("7_web_line")
 hero = NodePath("..")
 animator = NodePath("../Model")
+
+[node name="Sounds" type="Node3D" parent="."]
+script = ExtResource("11_sounds")

@@ -42,9 +42,17 @@ LIGHT_GENERA = {"Gleditsia", "Ginkgo", "Betula", "Salix", "Robinia", "Cladrastis
                 "Gymnocladus", "Liriodendron", "Styphnolobium", "Sophora"}
 DARK_GENERA = {"Quercus", "Tilia", "Fagus", "Magnolia", "Ilex", "Aesculus", "Ulmus"}
 RED_SPECIES = ("cerasifera", "purple", "copper", "crimson", "canada red", "not green leaf")
-# Crown diameter as a share of the height.
+# Crown diameter as a share of the height. Callery pears are teardrops once
+# grown, not columns; small flowering trees spread about as wide as they're
+# tall.
 CROWN_RATIO = {PROP_TREE: 0.62, PROP_TREE_NARROW: 0.38, PROP_CONIFER: 0.42}
-GENUS_CROWN_RATIO = {"Platanus": 0.72, "Gleditsia": 0.68, "Quercus": 0.66, "Zelkova": 0.7}
+GENUS_CROWN_RATIO = {"Platanus": 0.72, "Gleditsia": 0.68, "Quercus": 0.66, "Zelkova": 0.7, "Pyrus": 0.55,
+                     "Prunus": 0.85, "Malus": 0.85, "Cercis": 0.85, "Cornus": 0.8, "Crataegus": 0.8}
+# Heights come from trunk size, as for a shade tree (a London plane or oak of
+# 12 inches is about 10 m, of 24 inches about 16 m); small flowering trees
+# stay shorter by this share.
+GENUS_HEIGHT_SCALE = {"Prunus": 0.8, "Malus": 0.75, "Cercis": 0.75, "Syringa": 0.7, "Cornus": 0.7,
+                      "Amelanchier": 0.75, "Crataegus": 0.75, "Maackia": 0.8, "Koelreuteria": 0.85}
 DEFAULT_DBH = 6.0  # inches, when the inventory has none
 MAX_TREE_HEIGHT = 28.0
 INCH = 0.0254
@@ -123,6 +131,7 @@ def prepare_trees() -> dict:
     kinds = np.full(len(en), PROP_TREE, dtype=np.int8)
     tones = np.full(len(en), PROP_TONE_GREEN, dtype=np.int8)
     ratio = np.full(len(en), CROWN_RATIO[PROP_TREE])
+    scale = np.ones(len(en))
     for k, name in enumerate(species):
         genus = name.split(" ", 1)[0]
         if genus in CONIFER_GENERA:
@@ -136,9 +145,10 @@ def prepare_trees() -> dict:
         if any(word in name.lower() for word in RED_SPECIES):
             tones[k] = PROP_TONE_RED
         ratio[k] = GENUS_CROWN_RATIO.get(genus, CROWN_RATIO[int(kinds[k])])
+        scale[k] = GENUS_HEIGHT_SCALE.get(genus, 1.0)
 
     dbh = np.where(dbh > 0, dbh, DEFAULT_DBH)
-    height = np.minimum(3.0 + 0.9 * dbh ** 0.85, MAX_TREE_HEIGHT) * (0.9 + 0.2 * _hash(seed, 1))
+    height = np.minimum(3.0 + 0.9 * dbh ** 0.85, MAX_TREE_HEIGHT) * scale * (0.9 + 0.2 * _hash(seed, 1))
     width = height * ratio * (0.88 + 0.24 * _hash(seed, 2))
     return {"en": en, "height": height.astype(np.float32), "width": width.astype(np.float32),
             "trunk": (dbh * INCH).astype(np.float32), "type": kinds, "tone": tones, "seed": seed.astype(np.float32)}

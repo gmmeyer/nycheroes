@@ -33,6 +33,7 @@ tree canopy (landcover.write_canopy_map) for the ground shader.
 
 import json
 import math
+import os
 import struct
 from pathlib import Path
 
@@ -42,9 +43,12 @@ from pyproj import Transformer
 from shapely.geometry import box
 
 ROOT = Path(__file__).resolve().parents[2]
-RAW_DIR = ROOT / "data" / "raw"
-CACHE_DIR = ROOT / "data" / "cache"
-TILES_DIR = ROOT / "data" / "tiles"
+# The data lives in data/ (gitignored); NYC_DATA_DIR points a git worktree at
+# the main checkout's.
+DATA_DIR = Path(os.environ["NYC_DATA_DIR"]) if os.environ.get("NYC_DATA_DIR") else ROOT / "data"
+RAW_DIR = DATA_DIR / "raw"
+CACHE_DIR = DATA_DIR / "cache"
+TILES_DIR = DATA_DIR / "tiles"
 
 ORIGIN_LAT = 40.7580  # Times Square
 ORIGIN_LON = -73.9855
@@ -60,7 +64,7 @@ CURB_HEIGHT = 0.15
 SEAWALL_BOTTOM_Y = -6.0
 FEET = 0.3048
 
-FORMAT_VERSION = 6
+FORMAT_VERSION = 7
 SURFACE_BUILDINGS = 0
 SURFACE_GROUND = 1
 SURFACE_LANES = 2
@@ -68,6 +72,13 @@ SURFACE_STRUCTURES = 3
 SURFACE_WATER = 4
 SURFACE_PROPS = 5
 SURFACE_MARKINGS = 6
+# Driving lanes, near tiles only (traffic.py): polylines like the sidewalk
+# lanes, separated by LANE_BREAK, on the road surface; every point of a lane
+# carries normal = (from node, to node, speed m/s), uv = (lane number from the
+# center line, lanes its way), uv2 = (signal phase at its end or -1, how it
+# ends: 0 the street goes on, 1 at an intersection, 2 at one where its street
+# is the widest, so it has the right of way where there's no signal).
+SURFACE_TRAFFIC = 7
 LANE_BREAK = 0xFFFFFFFF
 
 # Props (uv2.x of the props surface).
@@ -86,11 +97,16 @@ PROP_LINKNYC = 7           # uv.x 0 kiosk (Link1.0), 1 tall Link5G pole
 PROP_BENCH = 8             # benches and leaning bars (CityBench seating)
 PROP_SUBWAY_ENTRANCE = 9   # stairs down, railing and globe lamps; uv.x 0 entrance
                            # (green globes), 1 exit only (red), 2 elevator
-PROP_TRAFFIC_SIGNAL = 10   # pole at an intersection; faces the traffic it controls
+PROP_TRAFFIC_SIGNAL = 10   # pole at an intersection; faces the traffic it controls;
+                           # uv.y its phase (markings.prepare)
 PROP_LITTER_BASKET = 11    # uv.x 0 wire basket, 1 other (solar compactor)
 PROP_BIKE_RACK = 12        # uv.x 0 hoop, 1 other
 PROP_PARKING_METER = 13    # pay station (Muni-Meter)
 PROP_NEWSSTAND = 14
+# Parked cars at the curbs (traffic.py): normal = (height, length, yaw), the
+# front facing along (sin yaw, 0, cos yaw); uv = (model CAR_*, paint 0..11).
+PROP_PARKED_CAR = 15
+CAR_SEDAN, CAR_HATCHBACK, CAR_SUV, CAR_MINIVAN, CAR_PICKUP, CAR_VAN, CAR_TAXI, CAR_BOX_TRUCK = range(8)
 # Trees' foliage tones (uv.x of the props surface).
 PROP_TONE_GREEN = 0
 PROP_TONE_LIGHT = 1   # yellow-green: honeylocust, ginkgo, birch, willow

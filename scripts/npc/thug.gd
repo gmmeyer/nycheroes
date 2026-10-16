@@ -120,6 +120,16 @@ func body_center() -> Vector3:
 	return global_position + Vector3.UP
 
 
+## Where the thug is on the ground (scene space): under its feet, or where its
+## body lies once it's down (the ragdoll may have flown).
+func ground_position() -> Vector3:
+	if _ragdoll:
+		var hips := _ragdoll.get_node_or_null("DEF-hips") as Node3D
+		if hips:
+			return Vector3(hips.global_position.x, global_position.y, hips.global_position.z)
+	return global_position
+
+
 func take_hit(damage: float, push: Vector3, launch: bool) -> void:
 	if state == State.DOWN:
 		return
@@ -127,10 +137,13 @@ func take_hit(damage: float, push: Vector3, launch: bool) -> void:
 	_release_attack_slot()
 	if Combat.effects:
 		Combat.effects.blood_burst(body_center(), push.normalized(), 1.5 if launch else 0.6)
+	GameAudio.play(&"punch_heavy" if launch else &"punch", body_center())
 	if launch or health <= 0.0:
 		go_down(push if launch else push + Vector3.UP * 3.0)
 		return
 	_play(&"Hit_Head" if randf() < 0.5 else &"Hit_Chest", 1.0, 0.05, true)
+	if randf() < 0.5:
+		GameAudio.play(&"thug_hurt", body_center())
 	if puppet:
 		_local_animation_until = Time.get_ticks_msec() + int(STAGGER_TIME * 1000.0)
 		return
@@ -151,6 +164,10 @@ func go_down(launch: Vector3, counts := true) -> void:
 	_ragdoll = Ragdoll.start(_skeleton, launch)
 	if counts:
 		Combat.on_thug_down(self, launch)
+		GameAudio.play(&"thug_down", body_center())
+		# The body hits the ground about when a throw upward this fast comes back down.
+		var rise := maxf(launch.y, 0.0)
+		GameAudio.play_later(&"body_fall", (rise + sqrt(rise * rise + 20.0)) / 9.8, self)
 
 
 func _process(delta: float) -> void:
@@ -183,6 +200,8 @@ func _physics_process(delta: float) -> void:
 		if target:
 			hero = target
 			state = State.CHASE
+			if randf() < 0.5:
+				GameAudio.play(&"thug_shout", body_center())  # (one of a gang at a time)
 	elif not is_instance_valid(hero):
 		hero = null
 		_release_attack_slot()
@@ -204,6 +223,7 @@ func _physics_process(delta: float) -> void:
 					state = State.PUNCH
 					_timer = PUNCH_HIT_TIME
 					_play(&"Punch_Jab" if randf() < 0.5 else &"Punch_Cross", 1.3, 0.1, true)
+					_punch_sound()
 				else:
 					desired = _surround_velocity(reachable)
 			State.PUNCH:
@@ -288,6 +308,8 @@ func _follow_host(delta: float) -> void:
 	if Time.get_ticks_msec() >= _local_animation_until:
 		var restart := _shown_restarts >= 0 and restarts != _shown_restarts
 		_play(ANIMATIONS[clampi(newer[3], 0, ANIMATIONS.size() - 1)], newer[4], 0.05 if restart else 0.2, restart)
+		if restart and (newer[3] == 3 or newer[3] == 4):  # Punch_Jab, Punch_Cross
+			_punch_sound()
 	_shown_restarts = restarts
 	_model.rotation.y = lerp_angle(_model.rotation.y, _facing, 1.0 - exp(-10.0 * delta))
 
@@ -326,6 +348,13 @@ func _play(animation: StringName, speed := 1.0, blend := 0.2, restart := false) 
 	_player.speed_scale = speed
 	anim_index = maxi(ANIMATIONS.find(animation), 0)
 	anim_speed = speed
+
+
+## A punch swinging: a whoosh, and now and then a grunt.
+func _punch_sound() -> void:
+	GameAudio.play(&"whoosh_punch", body_center(), -4.0, 0.85)
+	if randf() < 0.35:
+		GameAudio.play(&"thug_effort", body_center())
 
 
 func _release_attack_slot() -> void:

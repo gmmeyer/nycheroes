@@ -7,6 +7,7 @@
 //                    moves it to its base on the sidewalk
 //   INSTANCE_CUSTOM  (yaw radians: its front faces (sin, 0, cos) of it, toward
 //                    the street; variant; seed 0..1; prop type 5..14)
+//   COLOR.r          a traffic signal's phase offset (0..1 of its cycle)
 // Each mesh holds all its pieces' shapes, tagged per vertex (CUSTOM0: type,
 // variant bits, the size it's built at; see PropMeshes). This shader folds
 // away every shape but the instance's own, scales that one to the piece's
@@ -17,8 +18,10 @@
 // The look: toon-lit painted steel, cartoon glass (sky-blue with bright
 // streaks, not see-through), ads and screens made of simple shapes, wire mesh
 // and perforations that fade to their average color with distance. Lights:
-// traffic signals cycle green, yellow and red (offset per pole) with a
-// pedestrian signal that shows the walking person while the light is red;
+// traffic signals cycle green, yellow and red on the signals' shared clock
+// (the signal_clock global, TrafficSignals: crossing approaches half a cycle
+// apart, so traffic stops where the poles show red), with a pedestrian
+// signal that shows the walking person while the crossing traffic is green;
 // subway globes (green entrance, red exit), kiosk screens and shelter ads
 // glow a little by day and more at night, when shelters and newsstands are
 // lit inside. Signal lenses and globes stay at least light_min_pixels across
@@ -109,10 +112,16 @@ uniform vec2 large_fade_distance = vec2(420.0, 580.0);
 // grow at most this many times.
 uniform float light_min_pixels = 1.6;
 uniform float light_max_growth = 4.0;
-// A traffic signal's cycle (s), and the shares of it that are green, yellow,
-// and (once red) the walking person's; the hand flashes for walk_flash after.
-uniform float signal_cycle = 60.0;
-uniform vec4 signal_shares = vec4(0.45, 0.05, 0.28, 0.12);
+// The signals' clock (s; TrafficSignals.clock(), set every frame by
+// CityStreamer).
+global uniform float signal_clock;
+// As TrafficSignals has them (traffic goes by its numbers, so these must
+// match): a traffic signal's cycle (s); the shares of it that are green and
+// yellow (red the rest); when the walking person comes on, and the shares it
+// and then the flashing hand last.
+const float SIGNAL_CYCLE = 60.0;
+const vec2 SIGNAL_LIGHTS = vec2(0.43, 0.05);
+const vec3 SIGNAL_WALK = vec3(0.5, 0.18, 0.22);
 // Glow of lights by day and at night (multiplies their color).
 uniform vec2 signal_glow = vec2(1.6, 3.0);
 uniform vec2 globe_glow = vec2(0.5, 2.2);
@@ -174,10 +183,11 @@ void vertex() {
 		vec3 v = VERTEX * scale;
 		float signal_state = 0.0;
 		if (type == TYPE_TRAFFIC_SIGNAL) {
-			float phase = fract(TIME / signal_cycle + hash(vec2(seed, 31.0)));
-			float lens = phase < signal_shares.x ? 2.0 : (phase < signal_shares.x + signal_shares.y ? 1.0 : 0.0);
-			float red = phase - signal_shares.x - signal_shares.y;
-			float walk = red < 0.0 ? 0.0 : (red < signal_shares.z ? 1.0 : (red < signal_shares.z + signal_shares.w ? 2.0 : 0.0));
+			// Where this pole is in its cycle (TrafficSignals.phase()).
+			float phase = fract(signal_clock / SIGNAL_CYCLE + COLOR.r);
+			float lens = phase < SIGNAL_LIGHTS.x ? 2.0 : (phase < SIGNAL_LIGHTS.x + SIGNAL_LIGHTS.y ? 1.0 : 0.0);
+			float since = fract(phase - SIGNAL_WALK.x);
+			float walk = since < SIGNAL_WALK.y ? 1.0 : (since < SIGNAL_WALK.y + SIGNAL_WALK.z ? 2.0 : 0.0);
 			signal_state = lens + 4.0 * walk;
 			// The lit lens is built at the top (red) one.
 			if (part == SIGNAL_LAMP) {
@@ -536,7 +546,7 @@ void fragment() {
 			}
 			d = min(d, segment_distance(q, vec2(0.62, 0.36), vec2(0.74, 0.52)) - 0.03);
 			symbol = fill(d);
-			if (walk == 2 && fract(TIME) > 0.5) {
+			if (walk == 2 && fract(signal_clock) > 0.5) {
 				symbol = 0.0;
 			}
 			lamp = srgb(vec3(1.0, 0.50, 0.10));

@@ -27,6 +27,7 @@ import os
 import pickle
 import shutil
 import time
+from pathlib import Path
 from collections import defaultdict
 from compression import zstd
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -38,23 +39,31 @@ from shapely.geometry import Polygon
 import bridges
 import buildings3d
 import facades
+import fronts
 import landcover
+import landmarks
 import markings
+import overpasses
 import prepare
 import props
+import towers
+import traffic
 from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT,
                     GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_YARD, LANE_BREAK, MARKING_LIFT, ORIGIN_LAT,
-                    ORIGIN_LON, PROJECTION, PROP_HYDRANT, PROP_PARKING_METER, PROP_TRAFFIC_SIGNAL,
-                    PROP_WATER_TOWER, SEAWALL_BOTTOM_Y,
+                    ORIGIN_LON, PROJECTION, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR, PROP_PARKING_METER,
+                    PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y,
                     STRUCTURE_CONCRETE,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
-                    SURFACE_STRUCTURES, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
+                    SURFACE_STRUCTURES, SURFACE_TRAFFIC, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
                     polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangles_of,
                     triangulate_planar)
 from terrain import Terrain
 
 REGION = "nyc"
-OUT_DIR = TILES_DIR / REGION
+# --out (passed on to the worker processes through the environment) puts the
+# tiles, and the bridges they're built from, somewhere else.
+OUT_DIR = Path(os.environ["NYC_TILES_OUT"]) if os.environ.get("NYC_TILES_OUT") else TILES_DIR / REGION
+BRIDGE_PATH = OUT_DIR.parent / f"{REGION}_bridges.pkl" if os.environ.get("NYC_TILES_OUT") else CACHE_DIR / "bridges.pkl"
 
 # ground_cell: the ground bends with the terrain at least this often (meters).
 # shapes_from: buildings at least this tall (meters) get their real shape
@@ -107,8 +116,11 @@ SHORE_PROBE = 4.0
 
 # Real building shapes (buildings3d.py) replace a footprint prism only when
 # the model still matches today's building: outlines overlapping at least
-# this much (intersection over union of their convex hulls), and heights
-# within the larger of these.
+# this much (intersection over union of their convex hulls), and the model
+# not shorter than the footprint's height by more than the larger of these
+# (then it's a building since replaced by a taller one). A taller model is
+# right: footprint heights often measure a podium (the MetLife Building's is
+# Grand Central's 48 m) or stop below a spire (One World Trade Center).
 SHAPE_MIN_OVERLAP = 0.6
 SHAPE_HEIGHT_TOLERANCE = (6.0, 0.25)  # meters, fraction of the height
 
@@ -151,7 +163,17 @@ _W = {}  # per-worker data, filled by _init_worker
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) - 2))
+    parser.add_argument("--out", type=Path, help="build into this tiles directory instead of data/tiles/nyc")
+    parser.add_argument("--only", nargs="+", metavar="LEVEL:I,J",
+                        help="rebuild just these tiles (e.g. lod0:0,-1) in an existing build in --out, "
+                             "updating its manifest; for trying changes quickly")
     args = parser.parse_args()
+    if args.out:
+        os.environ["NYC_TILES_OUT"] = str(args.out.resolve())
+        _set_out(args.out.resolve())
+    if args.only:
+        _rebuild(args.only, args.workers)
+        return
     started = time.time()
 
     buildings = prepare.load("buildings")
@@ -166,11 +188,7 @@ def main() -> None:
     buildings3d.load()
     print(f"{len(buildings['geoms']):,} buildings", flush=True)
 
-    bridge_path = CACHE_DIR / "bridges.pkl"
-    print("building bridges...", flush=True)
-    bridge_buckets = bridges.build(ground["land"], Terrain(), {level: s["size"] for level, s in LEVELS.items()})
-    with open(bridge_path, "wb") as f:
-        pickle.dump(bridge_buckets, f, protocol=pickle.HIGHEST_PROTOCOL)
+    bridge_buckets = _build_bridges(ground)
 
     land_parts = np.array(polygons_of(ground["land"], min_area=1.0), dtype=object)
     land_tree = shapely.STRtree(land_parts)
@@ -208,7 +226,8 @@ def main() -> None:
                 entries[level].append(entry)
                 for key in ("bytes", "vertices", "triangles"):
                     totals[f"{level}_{key}"] += entry.pop(key)
-                for key in ("lane_points", "props", "trees", "water_towers", "street_lights", "furniture"):
+                for key in ("lane_points", "props", "trees", "water_towers", "street_lights", "furniture",
+                            "parked_cars", "traffic_lanes"):
                     totals[key] += entry.pop(key, 0)
             if n % 250 == 0 or n == len(tasks):
                 print(f"  {n:,}/{len(tasks):,} tiles ({time.time() - started:.0f} s)", flush=True)
@@ -241,7 +260,9 @@ def main() -> None:
               f"{totals[f'{level}_vertices']:,} vertices, {totals[f'{level}_triangles']:,} triangles")
     print(f"  walking lanes: {totals['lane_points']:,} points")
     print(f"  props: {totals['trees']:,} trees, {totals['water_towers']:,} water towers, "
-          f"{totals['street_lights']:,} street lights, {totals['furniture']:,} pieces of street furniture")
+          f"{totals['street_lights']:,} street lights, {totals['furniture']:,} pieces of street furniture, "
+          f"{totals['parked_cars']:,} parked cars")
+    print(f"  driving lanes: {totals['traffic_lanes']:,}")
     if failed:
         print(f"  {len(failed)} tiles FAILED and are missing: {failed}")
         raise SystemExit(1)
@@ -253,10 +274,66 @@ def _anchor_tiles(anchor: np.ndarray, size: float) -> list[tuple[int, int]]:
     return list(zip(ii.tolist(), jj.tolist()))
 
 
+def _set_out(path: Path) -> None:
+    global OUT_DIR, BRIDGE_PATH
+    OUT_DIR = path
+    BRIDGE_PATH = path.parent / f"{REGION}_bridges.pkl"
+
+
+def _build_bridges(ground) -> dict:
+    print("building bridges...", flush=True)
+    terrain = Terrain()
+    sizes = {level: s["size"] for level, s in LEVELS.items()}
+    # Raised roads first: bridge approaches come down to them (overpasses.py).
+    network = overpasses.Network(prepare.load("overpasses"), prepare.load("centerline"), terrain)
+    buckets = bridges.build(ground["land"], terrain, sizes, approach=network.approach)
+    overpasses.build(network, ground["land"], buckets, sizes)
+    BRIDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(BRIDGE_PATH, "wb") as f:
+        pickle.dump(buckets, f, protocol=pickle.HIGHEST_PROTOCOL)
+    return buckets
+
+
+def _rebuild(only: list[str], workers: int) -> None:
+    """Rebuilds the listed tiles (level:i,j) of the build in OUT_DIR, with the
+    bridges, and updates their manifest entries and the build id."""
+    started = time.time()
+    manifest_path = OUT_DIR / "manifest.json"
+    if OUT_DIR == TILES_DIR / REGION or not manifest_path.exists():
+        raise SystemExit("--only needs --out pointing at a copy of a full build (with its manifest.json)")
+    _build_bridges(prepare.load("ground"))
+    tasks = []
+    for item in only:
+        level, ij = item.split(":")
+        i, j = (int(v) for v in ij.split(","))
+        tasks.append((level, i, j))
+    manifest = json.loads(manifest_path.read_text())
+    levels = {data["name"]: data for data in manifest["levels"]}
+    with ProcessPoolExecutor(max_workers=min(workers, len(tasks)), initializer=_init_worker) as pool:
+        for (level, i, j), (_, entry) in zip(tasks, pool.map(_build_tile, tasks)):
+            tiles = levels[level]["tiles"]
+            old = next((e for e in tiles if e["i"] == i and e["j"] == j), None)
+            if entry is None:
+                if old:
+                    tiles.remove(old)
+                print(f"  {level} {i},{j}: empty", flush=True)
+                continue
+            counts = {key: entry.pop(key) for key in list(entry) if key not in ("i", "j", "raw_bytes")}
+            if old:
+                old.update(entry)
+            else:
+                tiles.append(entry)
+                tiles.sort(key=lambda e: (e["i"], e["j"]))
+            print(f"  {level} {i},{j}: {counts}", flush=True)
+    manifest["build"] = f"{int(started):x}"
+    manifest_path.write_text(json.dumps(manifest, separators=(",", ":")))
+    print(f"rebuilt {len(tasks)} tiles in {time.time() - started:.0f} s", flush=True)
+
+
 def _init_worker() -> None:
     buildings = prepare.load("buildings")
     ground = prepare.load("ground")
-    with open(CACHE_DIR / "bridges.pkl", "rb") as f:
+    with open(BRIDGE_PATH, "rb") as f:
         _W["bridges"] = pickle.load(f)
     _W["b"] = buildings
     _W["groups"] = {}
@@ -274,6 +351,8 @@ def _init_worker() -> None:
     _W["park_tree"] = shapely.STRtree(ground["parks"])
     _W["terrain"] = Terrain()
     _W["ground"] = {level: _W["terrain"].lattice(settings["ground_cell"]) for level, settings in LEVELS.items()}
+    # Things on streets that cross dips on decks stand on the deck (overpasses.py).
+    _W["ground"]["lod0"] = overpasses.OnDecks(_W["ground"]["lod0"], _W["bridges"].get("street_decks", []))
     _W["creeks"] = {level: _W["terrain"].lattice(settings["ground_cell"], raw=True) for level, settings in LEVELS.items()}
     _W["water"] = prepare.load("water")
     _W["shapes"] = buildings3d.load()
@@ -282,6 +361,7 @@ def _init_worker() -> None:
     _W["water_tree"] = shapely.STRtree(_W["water"]["geoms"])
     _W["centerline"] = prepare.load("centerline")
     _W["centerline_tree"] = shapely.STRtree(_W["centerline"]["lines"])
+    _W["overpasses"] = overpasses.Network(prepare.load("overpasses"), _W["centerline"], _W["terrain"])
     trees = prepare.load("trees")
     _W["trees"] = trees
     groups = defaultdict(list)
@@ -294,6 +374,10 @@ def _init_worker() -> None:
     for index, key in enumerate(_anchor_tiles(furniture["en"], LEVELS["lod0"]["size"])):
         groups[key].append(index)
     _W["furniture_groups"] = {key: np.array(value) for key, value in groups.items()}
+    blockers = np.isin(furniture["type"], (PROP_HYDRANT, PROP_BUS_SHELTER))
+    _W["car_blockers"] = (furniture["en"][blockers],
+                          np.where(furniture["type"][blockers] == PROP_HYDRANT, traffic.HYDRANT_CLEAR,
+                                   traffic.BUS_STOP_CLEAR))
     _W["landcover"] = landcover.LandCover()
 
 
@@ -308,11 +392,14 @@ def _build_tile(task):
     _W["level"] = level
     _W["streets"] = _streets_near(bounds)
     indices = _W["groups"][level].get((i, j), np.array([], dtype=np.int64))
+    # Hand-made landmarks (landmarks.py) stand in for their data buildings.
+    indices = landmarks.without(indices, _W["b"]["bin"])
     if settings.get("blocks"):
         _add_blocks(building_mesh, indices, settings)
     else:
         for index in indices:
             _add_building(building_mesh, index, settings)
+    landmarks.add_to_tile(building_mesh, level, size, i, j, _W["b"], _W["shapes"], _footprint_ground)
     _add_ground(ground_mesh, bounds, settings)
     _add_raised_water(water_mesh, ground_mesh, bounds, settings)
     bridge = _W["bridges"][level].get((i, j))
@@ -346,6 +433,10 @@ def _build_tile(task):
             surfaces.append((SURFACE_MARKINGS, built))
             stats["vertices"] += len(built[0])
             stats["triangles"] += len(built[-1]) // 3
+        lanes_surface = _build_traffic(bounds, origin)
+        if lanes_surface is not None:
+            surfaces.append((SURFACE_TRAFFIC, lanes_surface))
+            stats["traffic_lanes"] = int(np.sum(lanes_surface[-1] == LANE_BREAK))
         prop_surface, counts = _build_props(i, j, bounds, indices, origin)
         if prop_surface is not None:
             surfaces.append((SURFACE_PROPS, prop_surface))
@@ -523,21 +614,29 @@ def _add_pitched(builder: MeshBuilder, poly, height: float, facade: tuple) -> bo
 def _footprint_ground(geom) -> float:
     """Where a building stands: the ground at its lowest corner."""
     ring = shapely.get_coordinates(shapely.get_exterior_ring(shapely.get_parts(geom)))
-    return float(_W["ground"][_W["level"]].height(ring).min())
+    return float(overpasses.bare(_W["ground"][_W["level"]]).height(ring).min())
 
 
 def _add_building(builder: MeshBuilder, index: int, settings: dict) -> None:
     b = _W["b"]
+    # Towers newer than the 3-D model have their massing from a table (towers.py).
+    if towers.has(int(b["bin"][index])):
+        towers.add(builder, index, _W, settings, _footprint_ground, _faces_street, _add_shape)
+        return
     height = float(b["height"][index])
     shape = _W["shapes"].get(int(b["bin"][index])) if height >= settings["shapes_from"] else None
     # Houses get pitched roofs instead (the 3-D model's roofs are flat levels).
     if settings.get("roofs") and _W["facades"]["archetype"][index] == facades.HOUSE:
         shape = None
-    if shape is not None and _shape_matches(shape, b["geoms"][index], height):
-        _add_shape(builder, shape, _footprint_ground(b["geoms"][index]), _facade(index))
+    if shape is not None and not _shape_matches(shape, b["geoms"][index], height):
+        shape = None
+    facade = _facade(index)
+    if settings.get("roofs"):  # stoops on rowhouse and walk-up fronts (fronts.py)
+        facade = fronts.add(builder, index, facade, shape, _W, settings, _faces_street)
+    if shape is not None:
+        _add_shape(builder, shape, _footprint_ground(b["geoms"][index]), facade)
         return
     geom = shapely.simplify(b["geoms"][index], settings["building_tolerance"], preserve_topology=True)
-    facade = _facade(index)
     roofs = settings.get("roofs", False)
     for poly in polygons_of(geom, settings["min_area"]):
         if not settings["keep_holes"]:
@@ -559,7 +658,7 @@ def _shape_matches(shape, footprint, height: float) -> bool:
         return False
     model_height = float(vertices[:, 2].max() - model_ground)
     meters, fraction = SHAPE_HEIGHT_TOLERANCE
-    return abs(model_height - height) <= max(meters, fraction * height)
+    return model_height - height >= -max(meters, fraction * height)
 
 
 def _add_shape(builder: MeshBuilder, shape, ground: float, facade: tuple) -> None:
@@ -608,7 +707,7 @@ def _add_blocks(builder: MeshBuilder, indices: np.ndarray, settings: dict) -> No
         return
     blocks = settings["blocks"]
     b = _W["b"]
-    heights = b["height"][indices]
+    heights = towers.heights(b["bin"][indices], b["height"][indices])
     for index in indices[heights >= blocks["individual_from"]]:
         _add_building(builder, index, settings)
     gap = blocks["merge_gap"]
@@ -630,14 +729,19 @@ def _add_blocks(builder: MeshBuilder, indices: np.ndarray, settings: dict) -> No
             seed = float((hash((round(center.x), round(center.y))) % 1000) / 1000.0)
             # The block looks like most of the buildings in it (by area).
             members = band[band_tree.query(poly, predicate="intersects")]
+            block_flags = 0
             if len(members):
-                votes = np.bincount(archetypes[members], weights=shapely.area(b["geoms"][members]), minlength=16)
+                areas = shapely.area(b["geoms"][members])
+                votes = np.bincount(archetypes[members], weights=areas, minlength=16)
                 archetype = int(np.argmax(votes))
+                # ... and their wall material.
+                block_flags = facades.block_flags(archetypes[members], _W["facades"]["flags"][members], areas, archetype)
             else:
                 archetype = facades.UNKNOWN
             floor_dm = int(round(np.clip(block_height / max(1, round(block_height / facades.DEFAULT_FLOOR)),
                                          facades.MIN_FLOOR, facades.MAX_FLOOR) * 10))
-            _add_prism(builder, Polygon(poly.exterior), block_height, (archetype, 0, floor_dm, seed), fronts=False)
+            _add_prism(builder, Polygon(poly.exterior), block_height, (archetype, block_flags, floor_dm, seed),
+                       fronts=False)
 
 
 def _add_ground(builder: MeshBuilder, bounds, settings: dict) -> None:
@@ -647,7 +751,7 @@ def _add_ground(builder: MeshBuilder, bounds, settings: dict) -> None:
         # GEOS overlays occasionally fail on nearly-coincident edges; snapping
         # everything to a 1 cm grid first gets them through.
         layers = _ground_layers(bounds, settings, grid=0.01)
-    terrain = _W["ground"][_W["level"]]
+    terrain = overpasses.bare(_W["ground"][_W["level"]])
     cell = settings["ground_cell"]
     for kind, geom in layers:
         geom = shapely.simplify(geom, settings["ground_tolerance"], preserve_topology=True)
@@ -789,7 +893,10 @@ def _polygonal(geom):
 
 
 def _add_markings(builder: MeshBuilder, bounds) -> None:
-    """Paint on the tile's streets (markings.py), draped over the road."""
+    """Paint on the tile's streets (markings.py), draped over the road, and on
+    raised roads' decks (overpasses.py)."""
+    overpasses.add_paint(builder, _W["overpasses"], _W["bridges"]["lod0"], bounds, LEVELS["lod0"]["ground_cell"],
+                         _W["g"]["land"])
     segments = _W["centerline_tree"].query(shapely.buffer(bounds, MARKING_REACH, join_style="mitre"))
     if not len(segments) or _W["streets"].is_empty:
         return
@@ -813,14 +920,15 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     towers = _water_towers(indices)
     lamps = _street_lights(i, j, bounds)
     furniture = _furniture(i, j, bounds)
-    parts = [street, canopy, towers, lamps, furniture]
+    cars = _parked_cars(bounds)
+    parts = [street, canopy, towers, lamps, furniture, cars]
     en = np.concatenate([p["en"] for p in parts])
     if len(en) == 0:
         return None, {}
     trees = len(street["en"]) + len(canopy["en"])
     ground = _W["ground"]["lod0"]
     y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]), towers["y"], lamps["y"],
-                        furniture["y"]])
+                        furniture["y"], cars["y"]])
     seed = np.concatenate([p["seed"] for p in parts])
     # Trees and towers face any way; lamps reach over the street.
     yaw = np.concatenate([p["yaw"] if "yaw" in p else props.location_seed(p["en"] * 3.7) * (2 * np.pi)
@@ -830,12 +938,17 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
                                np.concatenate([p["width"] for p in parts]), yaw])
     uv = np.column_stack([np.concatenate([p["tone"] for p in parts]), np.concatenate([p["trunk"] for p in parts])])
     kinds = np.concatenate([p["type"] for p in parts])
+    # Centimeters, except signals' phases (exact 1024ths, see markings.prepare).
+    uv = np.where((kinds == PROP_TRAFFIC_SIGNAL)[:, None], uv, np.round(uv, 2))
     uv2 = np.column_stack([kinds, np.minimum(np.round(seed, 3), 0.999)])
-    order = np.argsort(kinds, kind="stable")  # grouped by type, for the game
+    # Nothing stands up through a deck overhead (overpasses.py).
+    keep = overpasses.clear_of_decks(_W["bridges"]["lod0"], bounds, en, y, normals[:, 0])
+    order = np.flatnonzero(keep)[np.argsort(kinds[keep], kind="stable")]  # grouped by type, for the game
     surface = (positions[order], np.round(normals, 2).astype(np.float32)[order],
-               np.round(uv, 2).astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
+               uv.astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
     return surface, {"props": len(en), "trees": trees, "water_towers": len(towers["en"]),
-                     "street_lights": len(lamps["en"]), "furniture": len(furniture["en"])}
+                     "street_lights": len(lamps["en"]), "furniture": len(furniture["en"]),
+                     "parked_cars": len(cars["en"])}
 
 
 def _furniture(i: int, j: int, bounds) -> dict:
@@ -852,24 +965,62 @@ def _furniture(i: int, j: int, bounds) -> dict:
         curbside = np.flatnonzero(np.isin(found["type"], CURBSIDE_TYPES))
         found["en"][curbside] = _to_curb(found["en"][curbside])
         found["yaw"] = _toward_street(found["en"], found["seed"])
+        found["trunk"] = np.zeros(len(found["en"]))
         parts.append(found)
     if not _W["streets"].is_empty:
         segments = _W["centerline_tree"].query(shapely.buffer(bounds, MARKING_REACH, join_style="mitre"))
-        points, facing = markings.signals(_W["centerline"], segments, bounds.bounds, _W["streets"])
+        points, facing, phases = markings.signals(_W["centerline"], segments, bounds.bounds, _W["streets"])
         if len(points):
             ok = _on_open_ground(points) & ~shapely.contains_xy(_W["streets"], points[:, 0], points[:, 1])
-            points, facing = points[ok], facing[ok]
+            points, facing, phases = points[ok], facing[ok], phases[ok]
             height, width = props.TRAFFIC_SIGNAL_SIZE
             parts.append({"en": points, "type": np.full(len(points), PROP_TRAFFIC_SIGNAL, dtype=np.int8),
                           "tone": np.zeros(len(points), dtype=np.int8), "height": np.full(len(points), height),
                           "width": np.full(len(points), width), "seed": props.location_seed(points),
-                          "yaw": np.arctan2(facing[:, 0], -facing[:, 1])})
+                          "yaw": np.arctan2(facing[:, 0], -facing[:, 1]), "trunk": phases})
     if not parts:
         return _no_props()
     out = {key: np.concatenate([p[key] for p in parts]) for key in parts[0]}
-    out["trunk"] = np.zeros(len(out["en"]))
     out["y"] = _W["ground"]["lod0"].height(out["en"])
     return out
+
+
+def _parked_cars(bounds) -> dict:
+    """Parked cars at the tile's curbs (traffic.parked_cars), on the road."""
+    if _W["streets"].is_empty:
+        return _no_props()
+    segments = _W["centerline_tree"].query(shapely.buffer(bounds, MARKING_REACH, join_style="mitre"))
+    cars = traffic.parked_cars(_W["centerline"], segments, bounds, _W["streets"], _W["car_blockers"])
+    if len(cars["en"]) == 0:
+        return _no_props()
+    return {"en": cars["en"], "type": np.full(len(cars["en"]), PROP_PARKED_CAR, dtype=np.int8),
+            "tone": cars["model"], "trunk": cars["paint"], "height": cars["height"], "width": cars["length"],
+            "seed": cars["seed"], "yaw": cars["yaw"],
+            "y": _W["ground"]["lod0"].height(cars["en"]) - CURB_HEIGHT}
+
+
+def _build_traffic(bounds, origin):
+    """The tile's driving lanes surface (traffic.lanes; see common.SURFACE_TRAFFIC),
+    or None."""
+    segments = _W["centerline_tree"].query(shapely.buffer(bounds, 1.0, join_style="mitre"))
+    terrain = _W["ground"]["lod0"]
+    found = traffic.lanes(_W["centerline"], segments, bounds, lambda en: terrain.height(en) - CURB_HEIGHT)
+    found += overpasses.lanes(_W["overpasses"], _W["bridges"]["lod0"], bounds, _W["g"]["land"])
+    if not found:
+        return None
+    points, normals, uv, uv2, indices = [], [], [], [], []
+    for lane, (from_node, to_node, speed, number, count, phase, crossing) in found:
+        start = sum(len(p) for p in points)
+        points.append(to_godot(lane[:, :2], lane[:, 2]) - np.asarray(origin))
+        n = len(lane)
+        normals.append(np.tile([from_node, to_node, speed], (n, 1)))
+        uv.append(np.tile([number, count], (n, 1)))
+        uv2.append(np.tile([phase, crossing], (n, 1)))
+        indices.extend(range(start, start + n))
+        indices.append(LANE_BREAK)
+    return (np.round(np.concatenate(points), 2).astype(np.float32), np.concatenate(normals).astype(np.float32),
+            np.concatenate(uv).astype(np.float32), np.concatenate(uv2).astype(np.float32),
+            np.asarray(indices, dtype=np.uint32))
 
 
 def _onto_sidewalk(en: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -1066,7 +1217,8 @@ def _water_towers(indices: np.ndarray) -> dict:
     floors = height / np.maximum(f["floor_dm"][indices] / 10.0, 1.0)
     borough = b["bbl"][indices] // 1_000_000_000
     found = defaultdict(list)
-    for k in np.flatnonzero(props.tower_mask(f["archetype"][indices], floors, height, borough, b["seed"][indices])):
+    found_mask = props.tower_mask(f["archetype"][indices], floors, height, borough, b["seed"][indices])
+    for k in np.flatnonzero(found_mask & ~towers.mask(b["bin"][indices])):
         index = int(indices[k])
         parts = polygons_of(b["geoms"][index], 20.0)
         if not parts:

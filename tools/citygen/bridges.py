@@ -5,7 +5,10 @@ cables on the big suspension bridges.
 Outlines come from the planimetric Transportation Structures dataset (bridges
 are feature code 2300). Only bridges that cross water and have land at both
 ends are built, which also leaves out bridges to New Jersey and Nassau County
-(ocean in this world). Heights of the major bridges are rounded public figures.
+(ocean in this world); outlines mostly over land (a highway viaduct that
+crosses a canal on its way) are overpasses (overpasses.py). Heights of the
+major bridges are rounded public figures; their towers stand where
+OpenStreetMap's mappers put them (TOWERS).
 
 build(land, terrain, sizes) returns, per LOD level, the bridge triangles bucketed by tile:
 {level: {(i, j): (pos, uv, uv2, front)}} in Godot world space.
@@ -22,17 +25,24 @@ from common import (CURB_HEIGHT, GROUND_ROAD, STRUCTURE_CABLE, STRUCTURE_CONCRET
 BRIDGE_CODE = "2300"
 # Name in the data -> (style, deck height above the water, tower top above the
 # water, main span between the towers), meters. "girder" bridges get columns
-# but no towers.
+# but no towers; "cantilever" ones (the Queensboro) steel towers over their
+# piers with truss chords between; "cable_stayed" ones (the Kosciuszko) a
+# tower with stay cables fanning out over a main and a back span.
 MAJOR_BRIDGES = {
     "Brooklyn Bridge": ("stone_suspension", 41.0, 84.0, 486.0),
     "Manhatten Bridge": ("suspension", 41.0, 102.0, 448.0),  # sic, as spelled in the data
-    "Williamsburg Bridge": ("suspension", 41.0, 102.0, 488.0),
+    "Williamsburg Bridge": ("suspension", 41.0, 94.0, 488.0),
     "Verrazano-Narrows Bridge": ("suspension", 69.0, 211.0, 1298.0),
     "THROGS NECK BRIDGE": ("suspension", 43.0, 109.0, 549.0),
     "BRONX-WHITESTONE BRIDGE": ("suspension", 46.0, 115.0, 701.0),
-    # The RFK outline covers the whole Y-shaped complex, so towers can't be placed reliably.
-    "ROBERT F KENNEDY BRG": ("girder", 43.0, 0.0, 0.0),
-    "ED KOCH QUEENSBORO BRIDGE": ("girder", 40.0, 0.0, 0.0),
+    # The RFK's outline covers the whole Y-shaped complex; its suspension span
+    # crosses Hell Gate between the towers in TOWERS.
+    "ROBERT F KENNEDY BRG": ("suspension", 43.0, 96.0, 421.0),
+    "ED KOCH QUEENSBORO BRIDGE": ("cantilever", 40.0, 107.0, 0.0),
+    # A pair of single-tower cable-stayed spans (2017, 2019), the towers on the
+    # Queens bank, 27 m over Newtown Creek: main span 190 m across the creek,
+    # back span 115 m into Queens (NYSDOT; Roads & Bridges).
+    "Kosciuszko Bridge": ("cable_stayed", 30.0, 90.0, 190.0),
     "HENRY HUDSON BRIDGE": ("girder", 43.0, 0.0, 0.0),
     "Washington Bridge": ("girder", 46.0, 0.0, 0.0),
     "ALEXANDER HAMILTON BRIDGE": ("girder", 31.0, 0.0, 0.0),
@@ -43,8 +53,40 @@ MAJOR_BRIDGES = {
 # Bridges to New Jersey or Nassau County.
 EXCLUDED = {"George Washington Bridge", "Bayonne Bridge", "Outerbridge Crossing",
             "Atlantic Beach Bridge", "Ellis Island Bridge"}
+# Outlines the data leaves unnamed (or has only a scrap of), named by a point
+# (latitude, longitude) on them.
+NAMED_AT = {
+    "Kosciuszko Bridge": (40.72765, -73.92899),  # the data names only a 149 m^2 scrap
+}
+# Where the towers stand (latitude, longitude): the centers of OpenStreetMap's
+# bridge:support ways (ODbL), which match the main spans above to a few
+# meters. The Queensboro's four are its piers (Manhattan, Roosevelt Island
+# west and east, Queens). The Kosciuszko's is an estimate: on the Queens
+# bank, 15 m inland, where the axis crosses it.
+TOWERS = {
+    "Brooklyn Bridge": ((40.7072684, -73.9983348), (40.7041035, -73.9943545)),
+    "Manhatten Bridge": ((40.7088123, -73.9914889), (40.7051158, -73.9894365)),
+    "Williamsburg Bridge": ((40.7143945, -73.9748202), (40.7127579, -73.9694585)),
+    "Verrazano-Narrows Bridge": ((40.6040556, -74.0525057), (40.6086185, -74.0383771)),
+    "THROGS NECK BRIDGE": ((40.8027528, -73.7936472), (40.7978062, -73.7935992)),
+    "BRONX-WHITESTONE BRIDGE": ((40.8048870, -73.8315735), (40.7992136, -73.8279270)),
+    "ROBERT F KENNEDY BRG": ((40.7813077, -73.9279451), (40.7780319, -73.9254442)),
+    "ED KOCH QUEENSBORO BRIDGE": ((40.7588769, -73.9591299), (40.7572668, -73.9554167),
+                                  (40.7564098, -73.9534525), (40.7550719, -73.9503566)),
+    "Kosciuszko Bridge": ((40.72802, -73.92858),),
+}
+# The Kosciuszko's back span (m), on the far side of its tower from the main span.
+BACK_SPAN = {"Kosciuszko Bridge": 115.0}
 
 MIN_WATER_AREA = 150.0
+# Outlines with less of their area over water than this share are overpasses
+# (unless they're a major bridge).
+OVERPASS_WATER_SHARE = 0.1
+# Ends of a bridge that stop right at the shore (no land under the outline to
+# ramp down over) ramp over the deck itself, as steep as this at most; such
+# low bridges (drawbridges, causeways) get a lower default clearance.
+SHORE_RAMP_GRADE = 0.08
+SHORE_CONTACT = 1.0
 DECK_THICKNESS = 2.0
 PARAPET_HEIGHT = 1.1
 COLUMN_SPACING = 60.0
@@ -56,22 +98,29 @@ WATER_FOOTING_Y = -8.0
 ALL_LEVELS = ("lod0", "lod1", "lod2")
 
 
-def build(land, terrain, level_sizes: dict) -> dict:
+def build(land, terrain, level_sizes: dict, approach=None) -> dict:
     """Bridge triangles for every level, bucketed by tile of that level's size.
-    `terrain` is a terrain.Terrain (ground and water heights)."""
+    `terrain` is a terrain.Terrain (ground and water heights). approach(en)
+    gives the height a bridge's approach comes down to at (N, 2) points on
+    land: the street by default, or a raised road it goes on as
+    (overpasses.Network.approach)."""
     shapely.prepare(land)
     features = [f for f in load_features("transport_structures")
                 if str(f["properties"].get("feat_code")) == BRIDGE_CODE
                 and f["properties"].get("name") not in EXCLUDED]
     geoms = shapely.make_valid(project(np.array([shape(f["geometry"]) for f in features], dtype=object)))
+    if approach is None:
+        def approach(en):
+            return terrain.height(en) - CURB_HEIGHT
 
     builders = {level: MeshBuilder() for level in ALL_LEVELS}
     builders["lamps"] = []  # (positions, heights, arm directions) per deck
+    builders["towers"] = set()  # bridges whose towers are built (some have more than one outline)
     built = []
     for feat, geom in zip(features, geoms):
-        name = feat["properties"].get("name") or "NO NAME"
         for poly in polygons_of(geom, min_area=50.0):
-            if _build_bridge(shapely.orient_polygons(poly), name, land, terrain, builders):
+            name = outline_name(poly, feat["properties"].get("name"))
+            if _build_bridge(shapely.orient_polygons(poly), name, land, terrain, builders, approach):
                 built.append(name)
     named = sorted({n for n in built if n != "NO NAME"})
     print(f"  bridges: {len(built)} decks ({len(named)} named: {', '.join(named)})", flush=True)
@@ -81,6 +130,27 @@ def build(land, terrain, level_sizes: dict) -> dict:
         buckets[level] = _bucket(builders[level], size)
     buckets["lamps"] = _bucket_lamps(builders["lamps"], level_sizes["lod0"])
     return buckets
+
+
+def outline_name(poly, name) -> str:
+    """An outline's name: from the data, or NAMED_AT."""
+    for named, (lat, lon) in NAMED_AT.items():
+        if shapely.dwithin(poly, project(shapely.Point(lon, lat)), 20.0):
+            return named
+    return name or "NO NAME"
+
+
+def local_land(land, geom, margin: float = 10.0):
+    """The land around a shape (overlays with the whole city's are slow)."""
+    min_e, min_n, max_e, max_n = geom.bounds
+    return shapely.make_valid(shapely.clip_by_rect(land, min_e - margin, min_n - margin, max_e + margin, max_n + margin))
+
+
+def is_overpass(poly, water_area: float, name: str) -> bool:
+    """Whether an outline (part) is an overpass rather than a bridge: too
+    little water under it, or mostly over land and not a major bridge."""
+    return water_area < MIN_WATER_AREA or (water_area < OVERPASS_WATER_SHARE * poly.area
+                                           and name not in MAJOR_BRIDGES)
 
 
 def _bucket_lamps(found: list, size: float) -> dict:
@@ -116,15 +186,15 @@ def _bucket(builder: MeshBuilder, size: float) -> dict:
     return out
 
 
-def _build_bridge(poly, name: str, land, terrain, builders: dict) -> bool:
+def _build_bridge(poly, name: str, land, terrain, builders: dict, approach) -> bool:
+    land = local_land(land, poly)
     water = shapely.difference(poly, land)
-    if water.area < MIN_WATER_AREA:
-        return False  # an overpass over land; those stay at street level for now
+    if is_overpass(poly, water.area, name):
+        return False  # overpasses.py's
 
     # The whole bridge's direction (columns run along it), and the biggest
-    # stretch over water, where a suspension bridge's towers stand. (Without
-    # depth data the main span is centered on it; the real channel can be
-    # off-center, as at the Throgs Neck.)
+    # stretch over water, where a suspension bridge's towers stand if TOWERS
+    # doesn't say (the main span is centered on it).
     u, v, center, length = _axis(poly)
     width = float(np.clip(poly.area / max(length, 1.0), 6.0, 60.0))
     ring = np.asarray(poly.exterior.coords)[:, :2]
@@ -134,47 +204,130 @@ def _build_bridge(poly, name: str, land, terrain, builders: dict) -> bool:
     span_width = float(np.clip(main_span.area / max(span_length, 1.0), 6.0, 60.0))
 
     # Land under the bridge: approaches (land meeting the water on one side)
-    # ramp down with distance from the water, reaching the street at their far
-    # end; islands the bridge crosses (water on both sides) stay at full height.
+    # ramp down with distance from the water, reaching the street (or the
+    # raised road the bridge goes on as) at their far end; islands the bridge
+    # crosses (water on both sides) stay at full height. Each ramp is
+    # (where, how far along it a point is (0 at the water, 1 at its end), the
+    # height it comes down to).
     ramps = []
     for part in polygons_of(shapely.intersection(poly, land), min_area=5.0):
         if _shores(part, water) != 1:
             continue
         part_ring = np.asarray(part.exterior.coords)[:, :2]
-        reach = float(shapely.distance(shapely.points(part_ring), water).max())
+        reach = max(float(shapely.distance(shapely.points(part_ring), water).max()), 1.0)
         shapely.prepare(part)
-        ramps.append((part, max(reach, 1.0)))
-    if len(ramps) < 2:
+        ramps.append((part, lambda geoms, reach=reach: shapely.distance(geoms, water) / reach, approach))
+    shore_ends = _shore_ends(poly, land, [r[0] for r in ramps])
+    if len(ramps) + len(shore_ends) < 2:
         return False  # doesn't reach land at both ends
 
-    style, clearance, tower_top, main_span_length = MAJOR_BRIDGES.get(
-        name, ("girder", float(np.clip(6.0 + 0.03 * span_length, 6.0, 20.0)), 0.0, 0.0))
+    default_clearance = float(np.clip(6.0 + 0.03 * span_length, 6.0, 20.0))
+    if shore_ends:
+        default_clearance = float(np.clip(3.0 + 0.02 * span_length, 3.0, 10.0))
+    style, clearance, tower_top, main_span_length = MAJOR_BRIDGES.get(name, ("girder", default_clearance, 0.0, 0.0))
     # Clearance is over the water, which inland can be well above sea level.
     water_level = max(0.0, float(terrain.raw(shapely.get_coordinates(shapely.point_on_surface(main_span)))[0]))
     deck_top = water_level + clearance
 
+    # Ends at the shore ramp down over the deck, from the street where it
+    # meets the land.
+    ramp_length = float(np.clip(clearance / SHORE_RAMP_GRADE, 20.0, 0.3 * length))
+    for contact in shore_ends:
+        region = shapely.intersection(poly, shapely.buffer(contact, ramp_length))
+        shapely.prepare(region)
+        street = float(approach(shapely.get_coordinates(shapely.line_interpolate_point(contact, 0.5, normalized=True)))[0])
+        ramps.append((region, lambda geoms, contact=contact: 1.0 - shapely.distance(geoms, contact) / ramp_length,
+                      lambda en, street=street: np.full(len(en), street)))
+
     def deck_y(points: np.ndarray) -> np.ndarray:
         y = np.full(len(points), deck_top)
         geoms = shapely.points(points)
-        for part, reach in ramps:
+        for region, along, comes_to in ramps:
             # Deck points sit right on the approach's edge, where floating point
             # puts them a hair outside; a small tolerance keeps them in.
-            inside = shapely.dwithin(part, geoms, 0.5)
+            inside = shapely.dwithin(region, geoms, 0.5)
             if inside.any():
-                t = np.clip(shapely.distance(geoms[inside], water) / reach, 0.0, 1.0)
-                street = terrain.height(points[inside]) - CURB_HEIGHT  # meet the road, not the sidewalk
+                t = np.clip(along(geoms[inside]), 0.0, 1.0)
+                street = comes_to(points[inside])  # meet the road, not the sidewalk
                 y[inside] = street + (np.maximum(deck_top, street + 1.0) - street) * (1.0 - t * t * (3.0 - 2.0 * t))
         return y
 
     _add_deck(poly, deck_y, builders)
     builders["lamps"].append(props.deck_lamps(np.asarray(poly.exterior.coords)[:, :2], deck_y))
-    suspended = style.endswith("suspension") and span_length > 100.0
-    if suspended:
+    towers = _towers(name, poly)
+    held = None  # where cables hold the deck up (no columns)
+    if style.endswith("suspension") and len(towers) == 2:
+        tower_u = (towers[1] - towers[0]) / np.linalg.norm(towers[1] - towers[0])
+        middle = towers.mean(axis=0)
+        span = float(np.linalg.norm(towers[1] - towers[0]))
+        tower_width = _width_at(poly, middle, np.array([-tower_u[1], tower_u[0]]), span_width)
+        held = _span_box(middle, tower_u, span, tower_width)
+        if name not in builders["towers"]:
+            builders["towers"].add(name)
+            _add_suspension(poly, middle, tower_u, tower_width, span, deck_y, deck_top, tower_top,
+                            style.startswith("stone"), builders)
+    elif style.endswith("suspension") and span_length > 100.0:
         main_span_length = min(main_span_length, span_length * MAX_SPAN_OF_WATER)
+        held = main_span
         _add_suspension(poly, span_center, span_u, span_width, main_span_length, deck_y, deck_top, tower_top,
                         style.startswith("stone"), builders)
-    _add_columns(poly, center, u, v, width, s_range, main_span if suspended else None, deck_y, land, terrain, builders)
+    elif style == "cantilever" and len(towers) >= 2:
+        if name not in builders["towers"]:
+            builders["towers"].add(name)
+            _add_cantilever(poly, towers, span_width, deck_y, deck_top, tower_top, builders)
+    elif style == "cable_stayed" and len(towers):
+        held = _add_cable_stayed(poly, towers[0], main_span, main_span_length, BACK_SPAN.get(name, 0.5 * main_span_length),
+                                 deck_y, tower_top, name not in builders["towers"], builders)
+        builders["towers"].add(name)
+    _add_columns(poly, center, u, v, width, s_range, held, deck_y, land, terrain, builders)
     return True
+
+
+def _shore_ends(poly, land, ramps: list) -> list:
+    """Where a bridge's outline stops at the shore with no land under it to
+    ramp down over: one line per such end."""
+    contact = shapely.intersection(poly.boundary, shapely.buffer(land, SHORE_CONTACT))
+    if contact.geom_type == "MultiLineString":
+        contact = shapely.line_merge(contact)
+    pieces = [line for line in lines_of(contact) if line.length >= 3.0]
+    if not pieces:
+        return []
+    covered = shapely.union_all([shapely.buffer(r, 5.0) for r in ramps]) if ramps else shapely.Polygon()
+    # Bits of shore close together are one end (on short bridges, closer still).
+    gap = min(25.0, 0.2 * _axis(poly)[3])
+    ends = []
+    for cluster in polygons_of(shapely.union_all([shapely.buffer(line, gap) for line in pieces])):
+        lines = [line for line in pieces if shapely.intersects(cluster, line)]
+        if any(shapely.intersects(covered, line) for line in lines):
+            continue  # an approach's own shore
+        ends.append(max(lines, key=lambda line: line.length))
+    return ends
+
+
+def _towers(name: str, poly) -> np.ndarray:
+    """The bridge's towers (TOWERS) on or near this outline, (N, 2) east/north."""
+    if name not in TOWERS:
+        return np.zeros((0, 2))
+    points = shapely.get_coordinates(project(shapely.points([(lon, lat) for lat, lon in TOWERS[name]])))
+    near = shapely.dwithin(poly, shapely.points(points), 30.0)
+    return points if near.all() else points[near]
+
+
+def _width_at(poly, point: np.ndarray, across: np.ndarray, default: float) -> float:
+    """The deck's width across `point` (the piece of a cross line through it)."""
+    line = shapely.LineString([point - across * 80.0, point + across * 80.0])
+    pieces = lines_of(shapely.intersection(line, poly))
+    if not pieces:
+        return default
+    best = min(pieces, key=lambda p: shapely.distance(p, shapely.Point(point)))
+    return float(np.clip(best.length, 6.0, 60.0))
+
+
+def _span_box(middle: np.ndarray, u: np.ndarray, span: float, width: float):
+    """The rectangle a main span hangs over, with a margin."""
+    v = np.array([-u[1], u[0]])
+    a, b = span / 2 + 10.0, width / 2 + 10.0
+    return shapely.Polygon([middle + u * su * a + v * sv * b for su, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
 
 
 def _axis(geom):
@@ -275,6 +428,80 @@ def _add_suspension(poly, center, u, width, span, deck_y, deck_top, tower_top, s
         for s in np.arange(t1 + SUSPENDER_SPACING, t2 - SUSPENDER_SPACING * 0.5, SUSPENDER_SPACING):
             top_y = cable_top - (cable_top - cable_low) * (1.0 - (s / half) ** 2)
             _add_box(center + u * s + offset, u, 0.15, 0.15, deck_top, top_y, STRUCTURE_CABLE, ("lod0",), builders)
+
+
+def _add_cantilever(poly, towers: np.ndarray, width: float, deck_y, deck_top, tower_top, builders) -> None:
+    """Steel towers over a cantilever bridge's piers, the truss's top chords
+    dipping between them toward the deck, and posts between chords and deck
+    up close."""
+    for k, base in enumerate(towers):
+        # Lean the tower across the deck as the bridge runs here.
+        ahead = towers[min(k + 1, len(towers) - 1)] - towers[max(k - 1, 0)]
+        u = ahead / max(np.linalg.norm(ahead), 1e-6)
+        v = np.array([-u[1], u[0]])
+        deck_width = _width_at(poly, base, v, width)
+        leg = 2.5
+        for side in (-1.0, 1.0):
+            _add_box(base + v * side * (deck_width * 0.5 + leg), u, leg, leg, WATER_FOOTING_Y, tower_top,
+                     STRUCTURE_CONCRETE, ALL_LEVELS, builders)
+        for y0 in (deck_top - DECK_THICKNESS - 3.0, deck_top + 12.0, tower_top - 6.0):
+            _add_box(base, u, leg, deck_width * 0.5 + 2.0 * leg, y0, y0 + 2.5, STRUCTURE_CONCRETE, ALL_LEVELS, builders)
+    chord_low = deck_top + 10.0
+    for a, b in zip(towers[:-1], towers[1:]):
+        u = (b - a) / np.linalg.norm(b - a)
+        v = np.array([-u[1], u[0]])
+        middle = (a + b) / 2
+        deck_width = _width_at(poly, middle, v, width)
+        k = np.linspace(0.0, 1.0, 17)
+        chord_y = tower_top - 4.0 - (tower_top - 4.0 - chord_low) * np.sin(np.pi * k) ** 0.7
+        for side in (-1.0, 1.0):
+            en = a + np.outer(k, b - a) + v * side * (deck_width * 0.5 + 2.5)
+            _add_tube(np.column_stack([en[:, 0], chord_y, -en[:, 1]]), 1.0, ALL_LEVELS, builders)
+            for j in range(1, len(k) - 1):
+                _add_box(en[j], u, 0.4, 0.4, deck_top, chord_y[j], STRUCTURE_CABLE, ("lod0", "lod1"), builders)
+
+
+def _add_cable_stayed(poly, tower, main_span, main_length, back_length, deck_y, tower_top, add_tower, builders):
+    """A cable-stayed bridge's tower (two legs either side of each deck under
+    it) at `tower`, stays fanning from the top of each leg to the deck's edges
+    over the main span (toward the water, `main_span`) and the back span.
+    Returns the stretch the stays hold up (no columns there)."""
+    to_water = np.asarray(main_span.centroid.coords)[0] - tower
+    u = to_water / max(np.linalg.norm(to_water), 1e-6)
+    # Follow the deck's own direction (the outline's axis), facing the water.
+    axis_u, _, _, _ = _axis(poly)
+    u = axis_u if axis_u @ u > 0 else -axis_u
+    v = np.array([-u[1], u[0]])
+    cross = shapely.LineString([tower - v * 80.0, tower + v * 80.0])
+    decks = [p for p in lines_of(shapely.intersection(cross, poly)) if p.length >= 8.0]
+    stays = 14
+    for piece in decks:
+        ends = shapely.get_coordinates(piece)
+        lo, hi = sorted(float((e - tower) @ v) for e in ends)
+        for edge in (lo - 1.5, hi + 1.5):
+            base = tower + v * edge
+            if add_tower:
+                _add_box(base, u, 1.6, 1.0, -2.0, tower_top, STRUCTURE_CONCRETE, ALL_LEVELS, builders)
+            for direction, length in ((1.0, main_length), (-1.0, back_length)):
+                reach = np.linspace(22.0, 0.94 * length, stays)
+                anchors = tower + np.outer(direction * reach, u) + v * (edge - np.sign(edge - (lo + hi) / 2) * 1.0)
+                anchor_y = deck_y(anchors) + 0.5
+                top_y = np.linspace(tower_top - 4.0, tower_top - 26.0, stays)
+                for anchor, ay, ty in zip(anchors, anchor_y, top_y):
+                    _add_tube(np.array([[base[0], ty, -base[1]], [anchor[0], ay, -anchor[1]]]), 0.12,
+                              ("lod0", "lod1"), builders)
+        if add_tower:
+            # A strut under the deck and one near the top between the legs.
+            middle = tower + v * (lo + hi) / 2
+            half = (hi - lo) / 2 + 1.5
+            y = float(deck_y(middle[None])[0])
+            for y0 in (y - DECK_THICKNESS - 2.5, tower_top - 12.0):
+                _add_box(middle, u, 1.2, half, y0, y0 + 2.0, STRUCTURE_CONCRETE, ALL_LEVELS, builders)
+    back = tower - u * back_length
+    front = tower + u * main_length
+    a, b = (back, front)
+    across = 60.0
+    return shapely.Polygon([a - v * across, b - v * across, b + v * across, a + v * across])
 
 
 def _reach_on_deck(poly, center, u, start, direction, limit) -> float:

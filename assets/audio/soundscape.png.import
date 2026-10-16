@@ -1,0 +1,14 @@
+[remap]
+
+importer="image"
+type="Image"
+uid="uid://bp04yxntr7m8t"
+path="res://.godot/imported/soundscape.png-e82cb4790cfa1c9c38fec5bd534f79f5.image"
+
+[deps]
+
+source_file="res://assets/audio/soundscape.png"
+dest_files=["res://.godot/imported/soundscape.png-e82cb4790cfa1c9c38fec5bd534f79f5.image"]
+
+[params]
+

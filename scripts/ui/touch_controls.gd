@@ -12,7 +12,8 @@ extends Control
 ##   FLY    fly_toggle (lit while flying)
 ##   SPEED  super speed as a toggle (lit while on): it stays on until tapped
 ##          again or the stick has been let go for a moment
-##   CO-OP  the co-op menu, and a full screen button where the browser can
+##   CO-OP  the co-op menu, a full screen button where the browser can, and
+##          a speaker that switches the sound off and on (GameAudio)
 ## A finger holding WEB or JUMP that slides also turns the camera.
 ##
 ## Buttons press the same input actions as the keyboard (Input.action_press),
@@ -111,6 +112,9 @@ var _page_poll := 0.0
 var _portrait := false
 var _pill_style: StyleBoxFlat
 var _pill_style_pressed: StyleBoxFlat
+var _pill_style_on: StyleBoxFlat
+## The sound is off (the speaker button shows it crossed out).
+var _muted := false
 
 
 func _ready() -> void:
@@ -121,6 +125,8 @@ func _ready() -> void:
 	_font = ThemeDB.fallback_font
 	_pill_style = _pill(FILL)
 	_pill_style_pressed = _pill(FILL_PRESSED)
+	_pill_style_on = _pill(FILL_ON)
+	_muted = GameAudio.is_muted()
 	_add(&"punch", "PUNCH", &"attack")
 	_add(&"jump", "JUMP", &"jump", false, true)
 	_add(&"down", "DOWN", &"descend")
@@ -129,6 +135,7 @@ func _ready() -> void:
 	_add(&"speed", "SPEED", &"sprint", true)
 	_add(&"coop", "CO-OP", &"")
 	_add(&"fullscreen", "", &"")
+	_add(&"sound", "", &"")
 	if not started_by_touch:
 		Input.emulate_mouse_from_touch = false
 	coop_panel.toggled.connect(_on_coop_toggled)
@@ -165,6 +172,9 @@ func _process(delta: float) -> void:
 	_stick_idle = _stick_idle + delta if _stick_touch == -1 else 0.0
 	if speed.on and _stick_idle > SPEED_IDLE_OFF:
 		_set_toggle(speed, false)
+	if _muted != GameAudio.is_muted():  # (N on a keyboard switches it too)
+		_muted = GameAudio.is_muted()
+		queue_redraw()
 	_page_poll -= delta
 	if _page_poll <= 0.0:
 		_page_poll = PAGE_POLL_INTERVAL
@@ -272,6 +282,9 @@ func _press(button: TouchButton, index: int, at: Vector2) -> void:
 			_send_action(&"coop_menu")
 		&"fullscreen":
 			Device.request_fullscreen()
+		&"sound":
+			GameAudio.toggle_mute()
+			_muted = GameAudio.is_muted()
 		_:
 			if button.toggle:
 				_set_toggle(button, not button.on)
@@ -399,13 +412,15 @@ func _layout() -> void:
 	_place(&"web", punch + Vector2(6.0, -100.0), 36.0)
 	_place(&"speed", punch + Vector2(-88.0, -84.0), 31.0)
 	_place(&"fly", punch + Vector2(-14.0, -182.0), 31.0)
-	# Co-op in the top right corner, full screen to its left.
+	# Co-op in the top right corner, full screen to its left, then the speaker.
 	var top := safe_insets.y + 10.0
 	var coop := Rect2(size.x - safe_insets.z - 12.0 - 84.0, top, 84.0, 44.0)
 	(_by_id[&"coop"] as TouchButton).rect = coop
 	var fullscreen: TouchButton = _by_id[&"fullscreen"]
 	fullscreen.rect = Rect2(coop.position.x - 10.0 - 44.0, top, 44.0, 44.0)
 	fullscreen.shown = _can_fullscreen and not _fullscreen
+	var left_of := fullscreen.rect.position.x if fullscreen.shown else coop.position.x
+	(_by_id[&"sound"] as TouchButton).rect = Rect2(left_of - 10.0 - 44.0, top, 44.0, 44.0)
 	_stick_home = Vector2(safe_insets.x + MARGIN + 30.0 + STICK_RADIUS, bottom - 20.0 - STICK_RADIUS)
 	queue_redraw()
 
@@ -466,10 +481,14 @@ func _draw_button(button: TouchButton) -> void:
 		draw_circle(center, button.radius, fill, true, -1.0, true)
 		draw_arc(center, button.radius - 1.0, 0.0, TAU, 40, RING, 2.5, true)
 	else:
-		draw_style_box(_pill_style_pressed if pressed else _pill_style, button.rect)
+		var muted := button.id == &"sound" and _muted
+		draw_style_box(_pill_style_pressed if pressed else (_pill_style_on if muted else _pill_style), button.rect)
 		center = button.rect.get_center()
 	if button.id == &"fullscreen":
 		_draw_fullscreen_icon(center)
+		return
+	if button.id == &"sound":
+		_draw_speaker_icon(center, _muted)
 		return
 	var font_size := 15 if button.radius >= 40.0 else 13
 	var width := _font.get_string_size(button.label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
@@ -486,6 +505,19 @@ func _draw_fullscreen_icon(center: Vector2) -> void:
 		var tip: Vector2 = center + corner * r
 		draw_polyline(PackedVector2Array([tip - Vector2(corner.x * arm, 0.0), tip, tip - Vector2(0.0, corner.y * arm)]),
 			Color.WHITE, 2.5, true)
+
+
+## A speaker with sound waves, or crossed out when the sound is off.
+func _draw_speaker_icon(center: Vector2, muted: bool) -> void:
+	var c := center + Vector2(-4.0, 0.0)
+	draw_colored_polygon(PackedVector2Array([c + Vector2(-7.0, -4.0), c + Vector2(-3.0, -4.0), c + Vector2(3.0, -9.0),
+		c + Vector2(3.0, 9.0), c + Vector2(-3.0, 4.0), c + Vector2(-7.0, 4.0)]), Color.WHITE)
+	if muted:
+		draw_line(c + Vector2(7.0, -5.0), c + Vector2(15.0, 5.0), Color.WHITE, 2.5, true)
+		draw_line(c + Vector2(7.0, 5.0), c + Vector2(15.0, -5.0), Color.WHITE, 2.5, true)
+		return
+	draw_arc(c + Vector2(3.0, 0.0), 6.0, -0.9, 0.9, 10, Color.WHITE, 2.0, true)
+	draw_arc(c + Vector2(3.0, 0.0), 11.0, -0.9, 0.9, 14, Color.WHITE, 2.0, true)
 
 
 static func _pill(color: Color) -> StyleBoxFlat:

@@ -8,9 +8,11 @@ extends Node
 ## (see Combat), and Godot relays messages between the other players. Desktop
 ## builds have no WebRTC, so tests connect over ENet instead.
 ##
-## Launch options (read by Game): ?host hosts a game, ?join=CODE joins one, and
+## Launch options (read by Game): ?host hosts a game, ?join=CODE joins one,
 ## ?signal=wss://... picks the signaling server (default: /signal on the page's
-## host over https, else the page's host on port 8070).
+## host over https, else the page's host on port 8070), and ?relay=1 connects
+## only through the TURN relay the signaling server hands out, to test the path
+## players on strict networks need.
 
 signal state_changed
 signal player_joined(id: int)
@@ -227,6 +229,9 @@ func _on_signaling_message(message: Dictionary) -> void:
 			_add_connection(HOST_ID)  # the host sends the offer
 			print("[net] joining room %s as player %d" % [room_code, int(message.id)])
 		"peer_joined":
+			# Fresh relay credentials, if the server sends them: a game can be
+			# hosted for longer than they last.
+			_ice_servers = message.get("ice", _ice_servers)
 			_add_connection(int(message.id)).create_offer()
 		"peer_left":
 			var id := int(message.id)
@@ -243,7 +248,12 @@ func _on_signaling_message(message: Dictionary) -> void:
 
 func _add_connection(id: int) -> WebRTCPeerConnection:
 	var connection := WebRTCPeerConnection.new()
-	connection.initialize({"iceServers": _ice_servers})
+	var config := {"iceServers": _ice_servers}
+	if LaunchOptions.get_string("relay", "0") != "0":
+		config.iceTransportPolicy = "relay"
+		if not JSON.stringify(_ice_servers).contains("turn"):
+			push_warning("[net] ?relay=1, but the co-op server offers no TURN relay")
+	connection.initialize(config)
 	connection.session_description_created.connect(func(type: String, sdp: String) -> void:
 		connection.set_local_description(type, sdp)
 		_send({type = "signal", to = id, data = {kind = type, sdp = sdp}}))

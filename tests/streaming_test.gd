@@ -8,18 +8,21 @@ extends Node
 ## trees, water towers, street lights and street furniture (as many as the
 ## tile holds), the street lights' glows, and road markings, that each near
 ## tile's small and large furniture MultiMeshes hold exactly the pieces of
-## their types in the tile's file, that each near tile with street lights,
-## bus shelters or newsstands has its pools in the street light map (and none
-## are left of tiles that have gone), and that the tree canopy map has
-## reached the ground material (if the city has one).
+## their types in the tile's file (and its parked cars' MultiMesh exactly its
+## parked cars), that each near tile with street lights, bus shelters or
+## newsstands has its pools in the street light map (and none are left of
+## tiles that have gone), and that the tree canopy map has reached the ground
+## material (if the city has one).
 ## Run: godot --headless --path . res://tests/streaming_test.tscn
 
-## Street furniture's MultiMeshes and the prop types each holds.
+## Street furniture's and parked cars' MultiMeshes and the prop types each
+## holds.
 const FURNITURE_GROUPS := {
 	"SmallFurniture": [CityTileDecoder.PROP_HYDRANT, CityTileDecoder.PROP_BENCH, CityTileDecoder.PROP_LITTER_BASKET,
 		CityTileDecoder.PROP_BIKE_RACK, CityTileDecoder.PROP_PARKING_METER],
 	"LargeFurniture": [CityTileDecoder.PROP_BUS_SHELTER, CityTileDecoder.PROP_LINKNYC,
 		CityTileDecoder.PROP_SUBWAY_ENTRANCE, CityTileDecoder.PROP_TRAFFIC_SIGNAL, CityTileDecoder.PROP_NEWSSTAND],
+	"ParkedCars": [CityTileDecoder.PROP_PARKED_CAR],
 }
 
 ## [name, world position of the camera]
@@ -134,6 +137,7 @@ func _check() -> void:
 	var water_towers := 0
 	var street_lights := 0
 	var furniture := 0
+	var parked_cars := 0
 	var with_markings := 0
 	var with_pools := 0
 	var miscounted := 0
@@ -151,6 +155,8 @@ func _check() -> void:
 					water_towers += child.multimesh.instance_count
 				elif child.name == "StreetLights":
 					lamps = child.multimesh.instance_count
+				elif child.name == "ParkedCars":
+					parked_cars += child.multimesh.instance_count
 			elif child.name == CityProps.GLOW_NAME:
 				glows = child.multimesh.instance_count
 			elif child.name == "Markings":
@@ -175,10 +181,10 @@ func _check() -> void:
 	var ok := doubled == 0 and holes == 0 and missing == 0 and leaked == 0 and near_ok and canopy_ok and _time < MAX_WAIT
 	if not ok:
 		_problems += 1
-	print("%-24s %5.1fs  loaded %s  drawn %s  doubled %d  holes %d  photos %d (missing %d, leaked %d)  props %d (%d water towers, %d street lights, %d furniture, %d miscounted, %d furniture miscounted)  light pools in %d of %d  markings in %d  canopy %s  %s" % [
+	print("%-24s %5.1fs  loaded %s  drawn %s  doubled %d  holes %d  photos %d (missing %d, leaked %d)  props %d (%d water towers, %d street lights, %d furniture, %d parked cars, %d miscounted, %d furniture or cars miscounted)  light pools in %d of %d  markings in %d  canopy %s  %s" % [
 		SPOTS[_spot][0], _time, loaded, visible, doubled, holes, photos, missing, leaked, props, water_towers, street_lights,
-		furniture, miscounted, furniture_miscounted, pools, with_pools, with_markings, "ok" if canopy_ok else "MISSING",
-		"ok" if ok else "PROBLEM"])
+		furniture - parked_cars, parked_cars, miscounted, furniture_miscounted, pools, with_pools, with_markings,
+		"ok" if canopy_ok else "MISSING", "ok" if ok else "PROBLEM"])
 
 
 ## Checks a near tile's furniture MultiMeshes against its file: each holds

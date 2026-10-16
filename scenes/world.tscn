@@ -27,6 +27,9 @@
 [ext_resource type="Shader" path="res://shaders/street_light_glow.gdshader" id="25_street_light_glow"]
 [ext_resource type="Shader" path="res://shaders/street_light_pool.gdshader" id="26_street_light_pool"]
 [ext_resource type="Shader" path="res://shaders/street_furniture.gdshader" id="27_street_furniture"]
+[ext_resource type="Shader" path="res://shaders/car.gdshader" id="28_car"]
+[ext_resource type="Script" path="res://scripts/world/traffic.gd" id="40_traffic"]
+[ext_resource type="Script" path="res://scripts/audio/game_audio.gd" id="50_audio"]
 
 [sub_resource type="ShaderMaterial" id="SkyMaterial_sky"]
 shader = ExtResource("19_sky")
@@ -43,8 +46,9 @@ ambient_light_energy = 0.6
 tonemap_mode = 4
 tonemap_agx_contrast = 1.05
 fog_enabled = true
-fog_light_color = Color(0.76, 0.83, 0.9, 1)
-fog_density = 5e-05
+fog_light_color = Color(0.79, 0.87, 0.98, 1)
+fog_sun_scatter = 0.1
+fog_density = 0.0001
 fog_sky_affect = 0.0
 adjustment_enabled = true
 adjustment_saturation = 1.1
@@ -78,6 +82,9 @@ shader = ExtResource("26_street_light_pool")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_street_furniture"]
 shader = ExtResource("27_street_furniture")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_car"]
+shader = ExtResource("28_car")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ocean"]
 shader = ExtResource("7_ocean")
@@ -114,11 +121,12 @@ light_energy = 1.15
 shadow_enabled = true
 directional_shadow_max_distance = 1500.0
 
-[node name="TimeOfDay" type="Node" parent="." node_paths=PackedStringArray("sun", "world_environment", "city")]
+[node name="TimeOfDay" type="Node" parent="." node_paths=PackedStringArray("sun", "world_environment", "city", "ocean")]
 script = ExtResource("23_time_of_day")
 sun = NodePath("../Sun")
 world_environment = NodePath("../WorldEnvironment")
 city = NodePath("../City")
+ocean = NodePath("../Ocean")
 
 [node name="City" type="Node3D" parent="."]
 script = ExtResource("1_city")
@@ -132,6 +140,7 @@ street_light_material = SubResource("ShaderMaterial_street_light")
 street_light_glow_material = SubResource("ShaderMaterial_street_light_glow")
 street_light_pool_material = SubResource("ShaderMaterial_street_light_pool")
 street_furniture_material = SubResource("ShaderMaterial_street_furniture")
+car_material = SubResource("ShaderMaterial_car")
 
 [node name="Ocean" type="MeshInstance3D" parent="."]
 cast_shadow = 0
@@ -149,6 +158,11 @@ script = ExtResource("14_crowd")
 city = NodePath("../City")
 hero = NodePath("../Hero")
 
+[node name="Traffic" type="Node3D" parent="." node_paths=PackedStringArray("city", "crowd")]
+script = ExtResource("40_traffic")
+city = NodePath("../City")
+crowd = NodePath("../Crowd")
+
 [node name="Encounters" type="Node3D" parent="." node_paths=PackedStringArray("city", "hero")]
 script = ExtResource("15_encounters")
 city = NodePath("../City")
@@ -158,6 +172,10 @@ hero = NodePath("../Hero")
 script = ExtResource("17_player_sync")
 hero = NodePath("../Hero")
 city = NodePath("../City")
+
+[node name="Audio" type="Node" parent="." node_paths=PackedStringArray("time_of_day")]
+script = ExtResource("50_audio")
+time_of_day = NodePath("../TimeOfDay")
 
 [node name="PlayerInput" type="Node" parent="." node_paths=PackedStringArray("hero", "camera_rig")]
 script = ExtResource("12_player_input")

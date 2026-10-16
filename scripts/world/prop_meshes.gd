@@ -14,13 +14,16 @@ extends RefCounted
 ##   CUSTOM0, CUSTOM1         (position, UV.y), (normal, UV2.x) of a narrow one
 ##   CUSTOM2, CUSTOM3         the same of a conifer
 ##   UV = (PART_TRUNK or PART_CROWN, 0 at the crown's bottom .. 1 at its top)
-##   UV2.x = a shade offset per blob (-1..1), so lumps read apart
+##   UV2 = (a shade offset per blob (-1..1), so lumps read apart; the blob's
+##   number, 1..4, 0 on the trunk), the same in every shape
 ##   trunks TRUNK_RADIUS (of the crown's width) around, which the shader
 ##   scales to the tree's real trunk
 ## Crowns are clusters of lumpy blobs (icosahedra) whose normals lean toward
 ## the normals of one ellipsoid around the whole crown, so the toon light
-## wraps the crown as one soft ball while the outline stays lumpy. A
-## conifer's blobs become stacked five-sided cones.
+## wraps the crown as one soft ball while the outline stays lumpy. A round
+## crown's blobs only just touch, so there's sky between them; the shader
+## nudges each blob about per tree, raises the crown to the tree's size and
+## thins it out up close. A conifer's blobs become stacked five-sided cones.
 ## Water towers (shaders/water_tower.gdshader):
 ##   UV = (part, 0 at the part's bottom .. 1 at its top)
 ##   UV2.x = around the tank (0..1) on the wall and roof, for staves and seams
@@ -51,6 +54,30 @@ extends RefCounted
 ##   CUSTOM1 = (the face's width and height m, 0, 0), or for a light that
 ##             stays visible far away (signal lenses, subway globes) (its
 ##             center, radius m), about which the shader grows it
+## Cars (shaders/car.gdshader), parked and moving, one mesh for every model
+## (CityTileDecoder.CAR_*): the shader builds each model from its own table,
+## so the mesh only says which point of a car each vertex is. Cars face +z
+## (their right toward -x), stand on y = 0 and are centered on their
+## footprint. A body below the windows (each side a fan about its middle, and
+## the faces round its side profile), a cabin on it, a tire across each axle
+## with a wheel at each end, the box truck's box, the taxi's roof sign, and a
+## contact shadow under it all (an octagon on the ground).
+##   UV = (part (Car), 0), UV2 = 0..1 across a wheel, box, sign or shadow
+##   CUSTOM0 = which point:
+##     body and cabin  (outline point, 0, side -1 or 1, 0); the outline runs
+##                     round the profile from the rear bumper's bottom (0)
+##                     over the deck, belt and hood to the front bumper's
+##                     bottom (9); the cabin's from the rear window's base
+##                     over the roof to the windshield's base (10..13); 14 is
+##                     a body side's middle. The faces round the outline are
+##                     numbered (Car) like the point they end at (rear) or
+##                     start from (front).
+##     tire and wheel  (axle: 0 rear or 1 front, corner 0..7 round it, side, 0)
+##     box and sign    (x, y, z: 0 or 1, its low or high end, 0)
+##     shadow          (x, z: -1..1 across the footprint, 0, 0)
+## VERTEX is a rough sedan at unit size, for the editor only; the mesh's
+## custom AABB holds every model at unit size (the instances scale it by
+## their length and height).
 
 const PART_TRUNK := 0
 const PART_CROWN := 1
@@ -78,7 +105,11 @@ const POST_TOP_HEIGHT := 4.4
 ## How far blob normals lean toward the whole crown's (0 = each blob its own
 ## ball, 1 = one smooth ball).
 const CROWN_NORMAL_BLEND := 0.6
-## Where conifers' crowns start (share of the height).
+## Where the three shapes' crowns start (share of the height); the shader
+## moves these heights to the tree's own crown base (shaders/tree.gdshader's
+## CROWN_BOTTOM has the same numbers).
+const ROUND_BOTTOM := 0.38
+const NARROW_BOTTOM := 0.22
 const CONIFER_BOTTOM := 0.12
 ## Trees' trunks' radius halfway up (they flare at the foot), as a share of
 ## the crown's width; shaders/tree.gdshader assumes it.
@@ -102,50 +133,81 @@ const SIGNAL_LAMP_SPACING := 0.35
 const STAIR_LENGTH := 4.2
 const STAIR_WIDTH := 1.8
 
+## Cars' parts (UV.x); shaders/car.gdshader has the same numbers.
+enum Car {
+	BODY_SIDE, REAR_LOW, REAR, REAR_TOP, DECK, HOOD, NOSE, FRONT, FRONT_LOW, CABIN_SIDE, REAR_WINDOW, ROOF,
+	WINDSHIELD, TIRE, WHEEL, BOX, SIGN, SHADOW,
+}
+## Every car model's size (length, width, height m) and wheels' radius (m),
+## by CityTileDecoder.CAR_*, as shaders/car.gdshader builds them: traffic
+## sizes its instances by them (and rolls the wheels by distance over radius).
+const CAR_SIZES: Array[Vector3] = [Vector3(4.7, 1.85, 1.45), Vector3(4.2, 1.8, 1.5), Vector3(4.9, 1.95, 1.75),
+	Vector3(5.1, 2.0, 1.8), Vector3(5.7, 2.0, 1.85), Vector3(5.6, 2.05, 2.5), Vector3(4.8, 1.85, 1.5),
+	Vector3(7.5, 2.4, 3.3), Vector3(12.2, 2.6, 3.2)]
+const CAR_WHEEL_RADII: Array[float] = [0.33, 0.31, 0.37, 0.35, 0.4, 0.36, 0.33, 0.48, 0.5]
+## Corners round a wheel.
+const CAR_WHEEL_SIDES := 8
+## Every model at unit size (length and height 1), with its wheels, the
+## taxi's sign and the contact shadow, turned any way (the shader turns each
+## car to its yaw, so the box is as wide as it's long).
+const CAR_BOUNDS := AABB(Vector3(-0.56, -0.02, -0.56), Vector3(1.12, 1.27, 1.12))
+## The rough sedan's outline at unit size (z, y), numbered as above, and a
+## side's middle; its half width.
+const _CAR_OUTLINE: Array[Vector2] = [Vector2(-0.474, 0.207), Vector2(-0.5, 0.29), Vector2(-0.5, 0.607),
+	Vector2(-0.474, 0.69), Vector2(-0.266, 0.662), Vector2(0.245, 0.662), Vector2(0.457, 0.552), Vector2(0.5, 0.414),
+	Vector2(0.5, 0.29), Vector2(0.474, 0.207), Vector2(-0.266, 0.662), Vector2(-0.128, 1.0), Vector2(0.096, 1.0),
+	Vector2(0.245, 0.662), Vector2(-0.01, 0.434)]
+const _CAR_HALF_WIDTH := 0.19
 
-## Every tree: a short trunk under a crown of four blobs, in three shapes
-## (see above). 90 triangles.
+static var _car_mesh: ArrayMesh
+
+
+## Every tree: a trunk up into a crown of four blobs, in three shapes (see
+## above). 90 triangles.
 static func tree() -> ArrayMesh:
 	var round := _Builder.new()
-	_trunk(round, 0.5)
-	var crown := _Crown.new(0.36, 1.0, round)
-	# Blobs: center, radii (unit space: 1 = the crown's width and the tree's height).
-	crown.blob(Vector3(0.02, 0.80, -0.03), Vector3(0.30, 0.20, 0.30), 0.3)
-	crown.blob(Vector3(-0.21, 0.61, 0.11), Vector3(0.27, 0.18, 0.27), -0.5)
-	crown.blob(Vector3(0.20, 0.63, 0.13), Vector3(0.27, 0.18, 0.27), 0.9)
-	crown.blob(Vector3(0.04, 0.59, -0.21), Vector3(0.27, 0.17, 0.27), -0.1)
+	_trunk(round, 0.62)
+	var crown := _Crown.new(ROUND_BOTTOM, 1.0, round)
+	# Blobs: center, radii (unit space: 1 = the crown's width and the tree's
+	# height). A top blob over three clumps around it, each at its own height
+	# and only just touching the next, like a street tree's scaffold limbs.
+	crown.blob(Vector3(0.03, 0.82, -0.04), Vector3(0.26, 0.18, 0.26), 0.3, 1)
+	crown.blob(Vector3(-0.24, 0.68, 0.08), Vector3(0.24, 0.20, 0.24), -0.5, 2)
+	crown.blob(Vector3(0.22, 0.62, 0.14), Vector3(0.24, 0.20, 0.24), 0.9, 3)
+	crown.blob(Vector3(0.05, 0.56, -0.25), Vector3(0.22, 0.18, 0.22), -0.1, 4)
 	# Columnar or oval (Callery pear, ginkgo): stacked blobs on a slimmer trunk.
 	var narrow := _Builder.new()
 	_trunk(narrow, 0.4)
-	crown = _Crown.new(0.22, 1.0, narrow)
-	crown.blob(Vector3(0.0, 0.42, 0.01), Vector3(0.47, 0.21, 0.47), -0.4)
-	crown.blob(Vector3(0.03, 0.62, -0.02), Vector3(0.45, 0.21, 0.45), 0.6)
-	crown.blob(Vector3(-0.02, 0.80, 0.01), Vector3(0.35, 0.16, 0.35), 0.0)
-	crown.blob(Vector3(0.01, 0.92, 0.0), Vector3(0.21, 0.08, 0.21), 0.4)
+	crown = _Crown.new(NARROW_BOTTOM, 1.0, narrow)
+	crown.blob(Vector3(0.0, 0.42, 0.01), Vector3(0.47, 0.21, 0.47), -0.4, 1)
+	crown.blob(Vector3(0.03, 0.62, -0.02), Vector3(0.45, 0.21, 0.45), 0.6, 2)
+	crown.blob(Vector3(-0.02, 0.80, 0.01), Vector3(0.35, 0.16, 0.35), 0.0, 3)
+	crown.blob(Vector3(0.01, 0.92, 0.0), Vector3(0.21, 0.08, 0.21), 0.4, 4)
 	# Conifer: four cones (base height, radius, apex height), smaller going up.
 	var conifer := _Builder.new()
 	_trunk(conifer, 0.3)
 	crown = _Crown.new(CONIFER_BOTTOM, 1.0, conifer)
-	crown.cone(CONIFER_BOTTOM, 0.5, 0.56, -0.3)
-	crown.cone(0.33, 0.42, 0.73, 0.4)
-	crown.cone(0.53, 0.32, 0.88, -0.1)
-	crown.cone(0.70, 0.2, 1.0, 0.5)
+	crown.cone(CONIFER_BOTTOM, 0.5, 0.56, -0.3, 1)
+	crown.cone(0.33, 0.42, 0.73, 0.4, 2)
+	crown.cone(0.53, 0.32, 0.88, -0.1, 3)
+	crown.cone(0.70, 0.2, 1.0, 0.5, 4)
 	return round.commit([narrow, conifer])
 
 
 ## A stand-in that casts trees' shadows, cheaper than a tree: a trunk and one
 ## plain ball (or cone) a little inside the crown, so the crown's own lumps on
-## the sunny side stay lit. In the same three shapes. 30 triangles.
+## the sunny side stay lit. In the same three shapes (its blob is number 0:
+## the shader leaves it whole and where it is). 30 triangles.
 static func tree_shadow() -> ArrayMesh:
 	var round := _Builder.new()
-	_trunk(round, 0.5)
-	_Crown.new(0.36, 1.0, round).blob(Vector3(0.0, 0.68, 0.0), Vector3(0.4, 0.26, 0.4), 0.0)
+	_trunk(round, 0.62)
+	_Crown.new(ROUND_BOTTOM, 1.0, round).blob(Vector3(0.0, 0.69, 0.0), Vector3(0.38, 0.25, 0.38), 0.0, 0)
 	var narrow := _Builder.new()
 	_trunk(narrow, 0.4)
-	_Crown.new(0.22, 1.0, narrow).blob(Vector3(0.0, 0.62, 0.0), Vector3(0.38, 0.33, 0.38), 0.0)
+	_Crown.new(NARROW_BOTTOM, 1.0, narrow).blob(Vector3(0.0, 0.62, 0.0), Vector3(0.38, 0.33, 0.38), 0.0, 0)
 	var conifer := _Builder.new()
 	_trunk(conifer, 0.3)
-	_Crown.new(CONIFER_BOTTOM, 1.0, conifer).cone(CONIFER_BOTTOM, 0.42, 1.0, 0.0)
+	_Crown.new(CONIFER_BOTTOM, 1.0, conifer).cone(CONIFER_BOTTOM, 0.42, 1.0, 0.0, 0)
 	return round.commit([narrow, conifer])
 
 
@@ -520,6 +582,100 @@ static func _newsstand(k: _Kit) -> void:
 	_panel(k, Vector3(-1.2, 0.5, 0.81), Vector3(2.4, 0.0, 0.0), Vector3(0.0, 1.6, 0.0), Furniture.POSTER)
 
 
+## Every car model (see above), one mesh shared by parked cars and traffic.
+## 186 vertices, 128 triangles; a car draws all but the box and sign it
+## hasn't (the shader folds them away).
+static func car() -> ArrayMesh:
+	if _car_mesh:
+		return _car_mesh
+	var k := _CarKit.new()
+	# The body below the windows: each side a fan about its middle, then the
+	# faces round its profile (but the bottom, and the top under the cabin).
+	for side: float in [-1.0, 1.0]:
+		var middle := k.outline_point(14, side, Car.BODY_SIDE)
+		var ring: Array[int] = []
+		for id in 10:
+			ring.append(k.outline_point(id, side, Car.BODY_SIDE))
+		for i in 10:
+			k.triangle(middle, ring[i], ring[(i + 1) % 10], Vector3(side, 0.0, 0.0))
+	for part: int in [Car.REAR_LOW, Car.REAR, Car.REAR_TOP, Car.DECK, Car.HOOD, Car.NOSE, Car.FRONT, Car.FRONT_LOW]:
+		var from := part - 1 if part <= Car.DECK else part
+		_car_outline_face(k, from, part)
+	# The cabin: its sides (the windows), the rear window, the roof and the
+	# windshield.
+	for side: float in [-1.0, 1.0]:
+		var corners: Array[int] = []
+		for id in range(10, 14):
+			corners.append(k.outline_point(id, side, Car.CABIN_SIDE))
+		k.quad(corners[0], corners[1], corners[2], corners[3], Vector3(side, 0.0, 0.0))
+	for part: int in [Car.REAR_WINDOW, Car.ROOF, Car.WINDSHIELD]:
+		_car_outline_face(k, part, part)
+	# A tire across each axle (its middle hidden under the car), a wheel at
+	# each end.
+	for axle in 2:
+		var rings: Array[PackedInt32Array] = [PackedInt32Array(), PackedInt32Array()]
+		for end in 2:
+			var side := -1.0 if end == 0 else 1.0
+			var cap := PackedInt32Array()
+			for i in CAR_WHEEL_SIDES:
+				var a := TAU * i / CAR_WHEEL_SIDES
+				var around := Vector2(sin(a), cos(a))
+				var rough := Vector3(side * _CAR_HALF_WIDTH, 0.07 * (1.0 + around.y), (axle - 0.5) * 0.6 + 0.07 * around.x)
+				var code := Vector4(axle, i, side, 0.0)
+				rings[end].append(k.coded(rough, Vector3(0.0, around.y, around.x), Car.TIRE, code))
+				cap.append(k.coded(rough, Vector3(side, 0.0, 0.0), Car.WHEEL, code, Vector2(around.x, around.y) * 0.5 + Vector2(0.5, 0.5)))
+			for i in range(1, CAR_WHEEL_SIDES - 1):
+				k.triangle(cap[0], cap[i], cap[i + 1], Vector3(side, 0.0, 0.0))
+		for i in CAR_WHEEL_SIDES:
+			var j := (i + 1) % CAR_WHEEL_SIDES
+			var a := TAU * (i + 0.5) / CAR_WHEEL_SIDES
+			k.quad(rings[0][i], rings[0][j], rings[1][j], rings[1][i], Vector3(0.0, cos(a), sin(a)))
+	# The box truck's box, and the taxi's roof sign.
+	_car_box(k, Car.BOX, AABB(Vector3(-0.16, 0.34, -0.5), Vector3(0.32, 0.66, 0.7)))
+	_car_box(k, Car.SIGN, AABB(Vector3(-0.03, 1.0, -0.1), Vector3(0.06, 0.2, 0.2)))
+	# The contact shadow: an octagon a little bigger than the footprint.
+	var shadow := PackedInt32Array()
+	for corner: Vector2 in [Vector2(1.0, 0.88), Vector2(0.8, 1.0), Vector2(-0.8, 1.0), Vector2(-1.0, 0.88),
+			Vector2(-1.0, -0.88), Vector2(-0.8, -1.0), Vector2(0.8, -1.0), Vector2(1.0, -0.88)]:
+		var rough := Vector3(corner.x * (_CAR_HALF_WIDTH + 0.03), 0.0, corner.y * 0.54)
+		shadow.append(k.coded(rough, Vector3.UP, Car.SHADOW, Vector4(corner.x, corner.y, 0.0, 0.0),
+			corner * 0.5 + Vector2(0.5, 0.5)))
+	for i in range(1, shadow.size() - 1):
+		k.triangle(shadow[0], shadow[i], shadow[i + 1], Vector3.UP)
+	_car_mesh = k.build()
+	_car_mesh.custom_aabb = CAR_BOUNDS
+	return _car_mesh
+
+
+## A face round a car's outline (or its cabin's), from point `from` to the
+## next, across the car.
+static func _car_outline_face(k: _CarKit, from: int, part: int) -> void:
+	var d := _CAR_OUTLINE[from + 1] - _CAR_OUTLINE[from]
+	var out := Vector3(0.0, d.x, -d.y)
+	k.quad(k.outline_point(from, -1.0, part), k.outline_point(from + 1, -1.0, part),
+		k.outline_point(from + 1, 1.0, part), k.outline_point(from, 1.0, part), out)
+
+
+## A car's box (the box truck's, or the taxi's sign): its sides, top, front
+## and back (no bottom), as corners 0..1 of a box the shader places; `rough`
+## is where it roughly is at unit size.
+static func _car_box(k: _CarKit, part: int, rough: AABB) -> void:
+	# Each face: a corner, and its two edges (UV2 runs along them).
+	for face: Array in [
+			[Vector3(1, 0, 1), Vector3(0, 0, -1), Vector3(0, 1, 0)], [Vector3(0, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0)],
+			[Vector3(0, 0, 1), Vector3(1, 0, 0), Vector3(0, 1, 0)], [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 1, 0)],
+			[Vector3(0, 1, 1), Vector3(1, 0, 0), Vector3(0, 0, -1)]]:
+		var corner: Vector3 = face[0]
+		var along: Vector3 = face[1]
+		var up: Vector3 = face[2]
+		var normal := along.cross(up)
+		var corners := PackedInt32Array()
+		for uv: Vector2 in [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]:
+			var code := corner + along * uv.x + up * uv.y
+			corners.append(k.coded(rough.position + rough.size * code, normal, part, Vector4(code.x, code.y, code.z, 0.0), uv))
+		k.quad(corners[0], corners[1], corners[2], corners[3], normal)
+
+
 ## A box's faces ("+x", "-x", "+y", "-y", "+z", "-z") all as `part`, but
 ## those in `skip` (space-separated).
 static func _faces(part: int, skip := "") -> Dictionary:
@@ -850,6 +1006,31 @@ class _Kit extends _Builder:
 		return mesh
 
 
+## Collects a car's vertices: a _Builder whose vertices also carry which
+## point of a car they are (CUSTOM0), as the header describes.
+class _CarKit extends _Builder:
+	var codes := PackedFloat32Array()
+
+	## A vertex at `rough` (the rough unit-size sedan) with its code.
+	func coded(rough: Vector3, normal: Vector3, part: int, code: Vector4, uv2 := Vector2.ZERO) -> int:
+		codes.append_array([code.x, code.y, code.z, code.w])
+		return vertex(rough, normal, Vector2(part, 0.0), uv2)
+
+	## A point of the outline (see the header) on a side (-1 or 1).
+	func outline_point(id: int, side: float, part: int) -> int:
+		var p: Vector2 = PropMeshes._CAR_OUTLINE[id]
+		var rough := Vector3(side * PropMeshes._CAR_HALF_WIDTH, p.y, p.x)
+		return coded(rough, Vector3(side, 0.0, 0.0), part, Vector4(id, 0.0, side, 0.0))
+
+	func build() -> ArrayMesh:
+		var arrays := base_arrays()
+		arrays[Mesh.ARRAY_CUSTOM0] = codes
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {},
+			Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT)
+		return mesh
+
+
 ## A tree crown being built from blobs between heights `bottom` and `top`.
 ## Blobs are icosahedra with a corner at each pole: the top corner, a ring of
 ## five above the middle, a ring of five below (turned half a step), and the
@@ -882,8 +1063,9 @@ class _Crown:
 		return out
 
 	## An icosahedron blob at `blob_center` with `blob_radii`, turned by an
-	## angle from `shade` (which also shades it a little lighter or darker).
-	func blob(blob_center: Vector3, blob_radii: Vector3, shade: float) -> void:
+	## angle from `shade` (which also shades it a little lighter or darker);
+	## `number` goes in UV2.y.
+	func blob(blob_center: Vector3, blob_radii: Vector3, shade: float, number: int) -> void:
 		var turn := Basis(Vector3(0.3, 1.0, 0.2).normalized(), 1.3 + shade * 2.0)
 		var first := builder.positions.size()
 		for corner in corners():
@@ -892,7 +1074,7 @@ class _Crown:
 			var own := dir / blob_radii
 			var whole := (p - center) / (radii * radii)
 			var n := own.normalized().lerp(whole.normalized(), PropMeshes.CROWN_NORMAL_BLEND)
-			builder.vertex(p, n, Vector2(PropMeshes.PART_CROWN, _up(p.y)), Vector2(shade, 0.0))
+			builder.vertex(p, n, Vector2(PropMeshes.PART_CROWN, _up(p.y)), Vector2(shade, number))
 		# Faces: the top cap, the band between the rings, the bottom cap.
 		for k in 5:
 			var u0 := first + 1 + k
@@ -907,7 +1089,7 @@ class _Crown:
 	## upper ring part way up the cone, the lower ring around its base, the
 	## bottom corner in the middle of its shallow underside. Adds no triangles
 	## (it's a second shape for a blob's).
-	func cone(base_y: float, radius: float, apex_y: float, shade: float) -> void:
+	func cone(base_y: float, radius: float, apex_y: float, shade: float, number: int) -> void:
 		var slope := Vector2(apex_y - base_y, radius).normalized()
 		var places: Array[Vector3] = [Vector3(0.0, apex_y, 0.0)]
 		var faces: Array[Vector3] = [Vector3.UP]
@@ -923,7 +1105,7 @@ class _Crown:
 		places.append(Vector3(0.0, base_y + 0.05, 0.0))
 		faces.append(Vector3.DOWN)
 		for i in places.size():
-			builder.vertex(places[i], faces[i], Vector2(PropMeshes.PART_CROWN, _up(places[i].y)), Vector2(shade, 0.0))
+			builder.vertex(places[i], faces[i], Vector2(PropMeshes.PART_CROWN, _up(places[i].y)), Vector2(shade, number))
 
 	func _up(y: float) -> float:
 		return clampf((y - bottom) / (top - bottom), 0.0, 1.0)

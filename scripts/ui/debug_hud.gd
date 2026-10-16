@@ -8,8 +8,8 @@ const ORIGIN_LON := -73.9855
 const METERS_PER_DEGREE := 111320.0
 const REFRESH_INTERVAL := 0.25
 const LOG_INTERVAL := 2.0
-const HERO_HELP := "WASD move  ·  Left mouse punch (in the air: dive attack)  ·  Space jump (hold: super jump)  ·  Shift super speed  ·  F fly (Space/C up/down)  ·  E / right mouse web swing  ·  M co-op  ·  T time of day  ·  F1 free camera"
-const FREE_CAMERA_HELP := "Free camera: WASD move  ·  Space/C up/down  ·  Shift boost  ·  Wheel speed  ·  T time of day  ·  F1 back to hero"
+const HERO_HELP := "WASD move  ·  Left mouse punch (in the air: dive attack)  ·  Space jump (hold: super jump)  ·  Shift super speed  ·  F fly (Space/C up/down)  ·  E / right mouse web swing  ·  M co-op  ·  T time of day  ·  N mute  ·  F1 free camera"
+const FREE_CAMERA_HELP := "Free camera: WASD move  ·  Space/C up/down  ·  Shift boost  ·  Wheel speed  ·  T time of day  ·  N mute  ·  F1 back to hero"
 
 @export var city: CityStreamer
 @export var hero: Hero
@@ -53,6 +53,9 @@ func _process(delta: float) -> void:
 	var standing := Combat.thugs.filter(func(thug: Thug) -> bool: return not thug.is_down()).size()
 	var people := "Pedestrians %d  ·  thugs %d standing, %d down  ·  health %d" % [
 		get_tree().get_node_count_in_group("pedestrians"), standing, Combat.defeated_count, int(hero.health)]
+	var traffic := get_node_or_null("../../Traffic") as Traffic
+	if traffic:
+		people += "  ·  %d cars (%.2f ms)" % [traffic.car_count, traffic.update_msec]
 	tiles += "  ·  " + people
 	text = "\n".join([render, status, tiles, FREE_CAMERA_HELP if free else HERO_HELP])
 

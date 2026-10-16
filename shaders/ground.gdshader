@@ -8,9 +8,13 @@
 //        Bridge deck tops are road.
 // UV: world x/z on flat ground; (meters along, meters up) on walls.
 // Parks, yards and marshes under trees (the citywide canopy map, see
-// CityStreamer) read as woods seen from above: dark, mottled crown clumps,
-// strongest past where the tree props draw, so wooded parks don't end where
-// the near tiles do; up close, just the trees' shade.
+// CityStreamer) read as woods seen from above past where the tree props
+// draw, so wooded parks don't end where the near tiles do: round crowns in
+// the trees' own tones, each bulging (its normal leans out, so the sun lights
+// one side), dark gaps between them, stands of lighter and darker trees, and
+// at a slant the ground behind trees hidden by them (from Top of the Rock,
+// Central Park's canopy closes over most of its lawns); up close, just the
+// trees' shade.
 // Lighting is the shared toon model (toon.gdshaderinc). At night (see
 // shaders/night.gdshaderinc) street lights' pools light the ground near the
 // camera; further out streets and sidewalks get the lamps' average glow, so
@@ -59,16 +63,31 @@ uniform vec3 yard_color : source_color = vec3(0.42, 0.56, 0.30);
 // (left, top, width, height in meters), set by CityStreamer once it loads.
 uniform sampler2D canopy : hint_default_black, filter_linear_mipmap, repeat_disable;
 uniform vec4 canopy_rect = vec4(0.0, 0.0, 1.0, 1.0);
-// Woods seen from above: crown tops and the gaps between them, in the
-// trees' greens (shaders/tree.gdshader), darker than their lit side since
-// flat ground takes the sun full on where crowns turn half away from it.
-uniform vec3 woods_light : source_color = vec3(0.25, 0.42, 0.15);
-uniform vec3 woods_dark : source_color = vec3(0.11, 0.22, 0.09);
-// Crowns' size in the woods pattern (m).
-uniform float woods_crown = 9.0;
+// Woods seen from afar: round crowns on a jittered grid woods_crown meters
+// apart, each in one of the trees' tones (shaders/tree.gdshader's FOLIAGE,
+// in the shares tools/citygen/props.py gives canopy trees) times
+// woods_albedo (crowns shade each other), with dark gaps (woods_gap)
+// between them. Each crown's normal bulges by woods_bump, so the sun lights
+// one side and leaves the other in shade, as on the trees; once crowns are a
+// few pixels they calm to their average, darkened by woods_far_shade (the
+// shaded sides a flat surface no longer has).
+uniform float woods_albedo = 0.85;
+uniform vec3 woods_gap : source_color = vec3(0.10, 0.19, 0.08);
+uniform float woods_bump = 1.1;
+uniform float woods_far_shade = 0.5;
+// Crowns' spacing in the woods pattern, and the size of stands of lighter
+// and darker trees (m).
+uniform float woods_crown = 8.0;
+uniform float woods_stand = 70.0;
 // From these distances (m) woods go from the trees' shade on the grass to
 // the full woods pattern; the tree props shrink away between 650 and 850.
 uniform vec2 woods_distance = vec2(450.0, 800.0);
+// Seen at a slant, trees hide the ground behind them: a wood's crowns (about
+// woods_height m tall) cover the ground up to woods_height / tan(the view's
+// angle down) beyond them, at most woods_reach m (so from Top of the Rock
+// Central Park's lawns mostly disappear behind its trees, as they do).
+uniform float woods_height = 12.0;
+uniform float woods_reach = 220.0;
 // How much darker (and a touch cooler) the grass in the trees' shade is, up close.
 uniform float woods_shade : hint_range(0.0, 1.0) = 0.25;
 // Sidewalk flags: size (m) and the street grid's angle (Manhattan's grid
@@ -199,23 +218,96 @@ vec3 flat_ground(int kind, vec2 p, vec2 footprint, vec3 color) {
 	return color;
 }
 
+// The trees' foliage tones (shaders/tree.gdshader's FOLIAGE and CONIFER, in
+// sRGB): mid, dark, light, conifer, red; and the share of a wood's crowns in
+// each (props.py's CANOPY_TONES, with conifers' patches).
+const vec3 WOODS_TONES[5] = vec3[](vec3(0.43, 0.60, 0.25), vec3(0.31, 0.50, 0.22), vec3(0.62, 0.72, 0.31),
+		vec3(0.24, 0.42, 0.30), vec3(0.45, 0.25, 0.29));
+const float WOODS_SHARES[5] = float[](0.5, 0.28, 0.11, 0.08, 0.03);
+
 // Parks, yards and marshes under trees: shade up close, woods seen from
-// above further away. `cover` is the canopy map's 0..1 here.
-vec3 woods(vec3 color, vec2 p, float pixel, float cover, float distance_to_camera) {
+// above further away. `cover` is the canopy map's 0..1 at canopy_uv;
+// `ray` runs from the camera to here (world); canopy_dx and canopy_dy are
+// canopy_uv's screen derivatives; `normal` (world) bulges with the crowns.
+vec3 woods(vec3 color, vec2 p, vec2 footprint, float cover, vec2 canopy_uv, vec2 canopy_dx, vec2 canopy_dy,
+		vec3 ray, inout vec3 normal) {
+	float far = smoothstep(woods_distance.x, woods_distance.y, length(ray));
 	float amount = smoothstep(0.1, 0.7, cover);
-	if (amount <= 0.0) {
+	float seen = amount;
+	if (far > 0.0) {
+		// The most canopy toward the camera within the crowns' reach (see
+		// woods_height), at two points along the way...
+		float across = max(length(ray.xz), 1e-3);
+		float reach = min(woods_height * across / max(-ray.y, 1.0), woods_reach);
+		vec2 back = -ray.xz * (reach / across) / canopy_rect.zw;
+		float hidden = max(textureGrad(canopy, canopy_uv + back * 0.45, canopy_dx, canopy_dy).r,
+				textureGrad(canopy, canopy_uv + back, canopy_dx, canopy_dy).r);
+		// ...and a line of sight skimming `reach` meters over ground that's
+		// that much under crowns (a crown about every 2 woods_crown) gets
+		// through to the ground (1 - cover) to the power of the crowns it passes.
+		float crowns_passed = 1.0 + far * reach / (2.0 * woods_crown);
+		seen = smoothstep(0.1, 0.7, 1.0 - pow(1.0 - mix(cover, max(cover, hidden), far), crowns_passed));
+	}
+	if (seen <= 0.0) {
 		return color;
 	}
-	// Crown clumps with soft edges, a few big tone swings like the trees',
-	// all calming to their average once crowns are a few pixels.
-	float detail = visible(woods_crown, pixel);
-	float n = value_noise(p / woods_crown) * 0.65 + value_noise(p / (woods_crown * 0.4) + 17.0) * 0.35;
-	float crowns = mix(0.55, smoothstep(0.4, 0.62, n), detail);
-	vec3 top = woods_light * mix(vec3(0.9, 0.93, 1.05), vec3(1.12, 1.08, 0.9), value_noise(p / 60.0 + 5.0));
-	vec3 woods_color = mix(woods_dark, top, crowns);
 	vec3 shaded = color * (1.0 - woods_shade) * vec3(0.9, 1.0, 1.02);
-	float far = smoothstep(woods_distance.x, woods_distance.y, distance_to_camera);
-	return mix(mix(color, shaded, amount), woods_color, amount * far);
+	color = mix(color, shaded, amount);
+	if (far <= 0.0) {
+		return color;
+	}
+	vec3 average = vec3(0.0);
+	for (int k = 0; k < 5; k++) {
+		average += srgb(WOODS_TONES[k]) * WOODS_SHARES[k];
+	}
+	average = mix(woods_gap, average * woods_albedo, 0.8);
+	// Stands of lighter and darker trees, big enough to show from anywhere.
+	float stand = value_noise(p / woods_stand + 3.1) * 0.6 + value_noise(p / (woods_stand * 0.37) + 9.4) * 0.4;
+	vec3 stand_tint = mix(vec3(0.74, 0.78, 0.9), vec3(1.2, 1.12, 0.84), smoothstep(0.3, 0.7, stand));
+	vec3 woods_color = average * stand_tint * woods_far_shade;
+	vec3 bulge = vec3(0.0, 1.0, 0.0);
+	// Crowns stay while they're a few pixels across, even where the ground is
+	// seen at a slant and they're squeezed thin (their edges then blur over
+	// the squeezed pixel instead of flickering).
+	float detail = visible(woods_crown, sqrt(footprint.x * footprint.y));
+	if (detail > 0.0) {
+		// The nearest crown, measured in crown radii, so big crowns take more ground.
+		vec2 q = p / woods_crown;
+		vec2 home = floor(q);
+		float nearest = 9.0;
+		vec2 offset = vec2(0.0);
+		vec3 pick = vec3(0.0);
+		for (int j = -1; j <= 1; j++) {
+			for (int i = -1; i <= 1; i++) {
+				vec2 cell = home + vec2(float(i), float(j));
+				vec2 center = cell + 0.5 + (vec2(hash(cell), hash(cell + 17.3)) - 0.5) * 0.7;
+				float radius = mix(0.5, 0.72, hash(cell + 41.9));
+				vec2 d = (q - center) / radius;
+				float r = length(d);
+				if (r < nearest) {
+					nearest = r;
+					offset = d;
+					pick = vec3(hash(cell + 63.1), hash(cell + 87.7), radius);
+				}
+			}
+		}
+		int tone = 0;
+		float share = 0.0;
+		for (int k = 0; k < 4; k++) {
+			share += WOODS_SHARES[k];
+			tone = pick.x >= share ? k + 1 : tone;
+		}
+		vec3 crown = srgb(WOODS_TONES[tone]) * stand_tint * (woods_albedo * mix(0.85, 1.12, pick.y));
+		float blur = max(footprint.x, footprint.y) / (woods_crown * pick.z);
+		float inside = 1.0 - smoothstep(1.0 - max(0.15, blur), 1.0, nearest);
+		woods_color = mix(woods_color, mix(woods_gap, crown, inside), detail);
+		// A dome: its normal leans out toward the crown's edge.
+		vec3 dome = vec3(offset.x * woods_bump, sqrt(max(1.0 - nearest * nearest, 0.0)) + 0.1, offset.y * woods_bump);
+		bulge = normalize(mix(bulge, normalize(dome), detail * inside));
+	}
+	float woods_amount = seen * far;
+	normal = normalize(mix(normal, bulge, woods_amount));
+	return mix(color, woods_color, woods_amount);
 }
 
 vec3 wall_surface(int kind, vec2 p, vec2 footprint, vec3 color) {
@@ -241,9 +333,14 @@ void fragment() {
 	int kind = int(UV2.x + 0.5);
 	vec2 footprint = max(fwidth(UV), vec2(1e-4));
 	vec3 world_normal = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	// The woods' crowns bulge the normal the light sees.
+	vec3 shading_normal = world_normal;
 	vec3 photo = aerial_albedo(aerial_uv);
 	// Sampled here, outside any branch, so its mipmaps get good derivatives.
-	float cover = texture(canopy, (UV - canopy_rect.xy) / canopy_rect.zw).r;
+	vec2 canopy_uv = (UV - canopy_rect.xy) / canopy_rect.zw;
+	float cover = texture(canopy, canopy_uv).r;
+	vec2 canopy_dx = dFdx(canopy_uv);
+	vec2 canopy_dy = dFdy(canopy_uv);
 
 	// Broad, soft variation so large areas don't look flat.
 	float variation = value_noise(UV * 0.04) * 0.6 + value_noise(UV * 0.31) * 0.4;
@@ -251,7 +348,11 @@ void fragment() {
 	if (world_normal.y > 0.7) {
 		color = flat_ground(kind, UV, footprint, color);
 		if (kind == PARK || kind == YARD || kind == MARSH) {
-			color = woods(color, UV, max(footprint.x, footprint.y), cover, length(VERTEX));
+			vec3 ray = (INV_VIEW_MATRIX * vec4(VERTEX, 0.0)).xyz;
+			color = woods(color, UV, footprint, cover, canopy_uv, canopy_dx, canopy_dy, ray, shading_normal);
+			if (shading_normal != world_normal) {
+				NORMAL = normalize((VIEW_MATRIX * vec4(shading_normal, 0.0)).xyz);
+			}
 		}
 	} else {
 		color = wall_surface(kind, UV, footprint, color);
@@ -264,7 +365,7 @@ void fragment() {
 	bool photographed = (kind <= MARSH && kind != SEAWALL) || kind == YARD;
 	float far_enough = smoothstep(aerial_near_fade.x, aerial_near_fade.y, length(VERTEX));
 	ALBEDO = toon_night_albedo(mix(color, photo, photographed ? aerial_amount(aerial_uv) * far_enough : 0.0));
-	EMISSION = ALBEDO * toon_ambient(world_normal, 1.0);
+	EMISSION = ALBEDO * toon_ambient(shading_normal, 1.0);
 	toon_glint = kind == CABLE ? 0.3 : 0.0;
 
 	if (city_lights > 0.0) {

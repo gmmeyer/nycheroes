@@ -17,8 +17,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-RAW_DIR = ROOT / "data" / "raw"
+from common import RAW_DIR
 API = "https://data.cityofnewyork.us/resource"
 STATE_API = "https://data.ny.gov/resource"  # New York State's open data (the MTA's)
 PAGE_SIZE = 10000
@@ -91,7 +90,7 @@ TABLES = {
     "pluto": (
         "64uk-42ks",  # Primary Land Use Tax Lot Output (PLUTO): per tax lot
         {"$select": "bbl,borough,bldgclass,numfloors,yearbuilt,landmark,histdist,"
-                    "retailarea,comarea,officearea,resarea,unitsres"},
+                    "retailarea,comarea,officearea,resarea,unitsres,proxcode"},
     ),
     "building_lots": (
         "5zhs-2jue",  # Building Footprints: each building's PLUTO tax lot

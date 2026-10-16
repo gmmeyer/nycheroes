@@ -215,6 +215,7 @@ func _thug_hit(net_id: int, push: Vector3, launch: bool, attacker: int) -> void:
 		return  # we showed our own hits already
 	if effects:
 		effects.blood_burst(thug.body_center(), push.normalized(), 1.5 if launch else 0.6)
+	GameAudio.play(&"punch_heavy" if launch else &"punch", thug.body_center())
 
 
 @rpc("authority", "call_remote", "reliable")

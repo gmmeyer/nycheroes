@@ -5,10 +5,11 @@ extends RefCounted
 ## meshes from PropMeshes: one MultiMeshInstance3D for every kind of tree
 ## (they share a mesh with three shapes), one that casts the trees' shadows,
 ## one for water towers, one for street lights (both styles share a mesh),
-## and two for street furniture: small pieces (hydrants, benches, litter
-## baskets, bike racks, parking meters) and large ones (bus shelters, LinkNYC
-## kiosks, subway entrances, traffic signals, newsstands), each mesh holding
-## all its pieces' shapes. Draw calls are what props cost most on the web
+## two for street furniture: small pieces (hydrants, benches, litter baskets,
+## bike racks, parking meters) and large ones (bus shelters, LinkNYC kiosks,
+## subway entrances, traffic signals, newsstands), each mesh holding all its
+## pieces' shapes, and one for parked cars (every model on one mesh, which
+## traffic's cars share). Draw calls are what props cost most on the web
 ## (measured), hence so few.
 ##
 ## At night street lights add a MultiMesh of glows around their heads (shown
@@ -24,7 +25,11 @@ extends RefCounted
 ## seed 0..1, type). The shaders turn the mesh to its yaw (rotating there
 ## keeps the transform free of sines and cosines). A street light's "width"
 ## is its arm's length (0 for post-tops), so its shader places its vertices
-## itself, and so does the furniture's (its meshes are in meters).
+## itself, and so does the furniture's (its meshes are in meters). A parked
+## car's "width" is its length, and its color (paint, 0, 0, 0): the layout
+## shaders/car.gdshader expects (traffic's cars add light flags and their
+## wheels' roll). A traffic signal's "trunk" is its phase offset
+## (TrafficSignals).
 ##
 ## Tiles are built under a few milliseconds a frame on the web, where a
 ## GDScript loop writing thousands of props would take too long, so the
@@ -35,18 +40,21 @@ extends RefCounted
 
 ## The MultiMeshes: their node names, and the prop types
 ## (CityTileDecoder.PROP_*) each holds, as ranges (first, last).
-const GROUP_NAMES: Array[String] = ["Trees", "WaterTowers", "StreetLights", "SmallFurniture", "LargeFurniture"]
+const GROUP_NAMES: Array[String] = ["Trees", "WaterTowers", "StreetLights", "SmallFurniture", "LargeFurniture",
+	"ParkedCars"]
 const GROUP_TYPES: Array[Array] = [
 	[Vector2i(0, 2)], [Vector2i(3, 3)], [Vector2i(4, 4)],
 	# Hydrants; benches; litter baskets, bike racks and parking meters.
 	[Vector2i(5, 5), Vector2i(8, 8), Vector2i(11, 13)],
 	# Bus shelters and LinkNYC; subway entrances and traffic signals; newsstands.
 	[Vector2i(6, 7), Vector2i(9, 10), Vector2i(14, 14)],
+	[Vector2i(15, 15)],
 ]
 const WATER_TOWERS := 1
 const STREET_LIGHTS := 2
 const SMALL_FURNITURE := 3
 const LARGE_FURNITURE := 4
+const PARKED_CARS := 5
 ## Street lights' glows: their node name, and the group they're all in.
 const GLOW_NAME := "StreetLightGlow"
 const GLOW_GROUP := &"street_light_glow"
@@ -93,9 +101,12 @@ const GLOW_CULL_MARGIN := 8.0
 ## Furniture's boxes don't know its yaw or its meshes' real sizes either: a
 ## signal's arm reaches 4.6 m from its pole.
 const FURNITURE_CULL_MARGIN := 5.0
-## A tile's furniture draws until its tile's center is this much further from
-## the camera than where its pieces have shrunk away (half a 500 m tile's
-## diagonal, and a little).
+## Cars' boxes are their length wide either way (PropMeshes.CAR_BOUNDS), so
+## they hold them however they're turned; a little more for good measure.
+const CAR_CULL_MARGIN := 0.5
+## A tile's furniture (and parked cars) draws until its tile's center is this
+## much further from the camera than where its pieces have shrunk away (half a
+## 500 m tile's diagonal, and a little).
 const FURNITURE_RANGE_PAST_FADE := 370.0
 
 ## Trees stop drawing once their tile's center is this far from the camera
@@ -121,6 +132,9 @@ var glow_range := 1900.0
 ## and large ones. Each tile's furniture stops drawing past them.
 var small_furniture_fade := Vector2(180.0, 260.0)
 var large_furniture_fade := Vector2(420.0, 580.0)
+## Parked cars shrink away between these distances (m; set_car_fade()), and
+## so does traffic, which shares their material.
+var car_fade := Vector2(320.0, 460.0)
 ## Whether new tiles' glows show (the city's lights are on).
 var lights_on := false
 ## Where street lights' pools go (null: nowhere).
@@ -134,16 +148,17 @@ var _glow_material: Material
 
 
 func _init(tree_material: Material, water_tower_material: Material, street_light_material: Material,
-		street_light_glow_material: Material, street_furniture_material: Material) -> void:
+		street_light_glow_material: Material, street_furniture_material: Material, car_material: Material) -> void:
 	_meshes = [PropMeshes.tree(), PropMeshes.water_tower(), PropMeshes.street_light(),
-		PropMeshes.street_furniture_small(), PropMeshes.street_furniture_large()]
-	# Water towers cast their own shadows; street lights and furniture cast
-	# none (thin, or small next to the buildings' shadows, and each would cost
-	# a draw call per shadow split: large furniture's shadows measured 3-11%
-	# of the frame rate in midtown for little to see).
-	_shadow_meshes = [PropMeshes.tree_shadow(), null, null, null, null]
+		PropMeshes.street_furniture_small(), PropMeshes.street_furniture_large(), PropMeshes.car()]
+	# Water towers cast their own shadows; street lights, furniture and cars
+	# cast none (thin, or small next to the buildings' shadows, and each would
+	# cost a draw call per shadow split: large furniture's shadows measured
+	# 3-11% of the frame rate in midtown for little to see; cars draw a
+	# contact shadow of their own).
+	_shadow_meshes = [PropMeshes.tree_shadow(), null, null, null, null, null]
 	_materials = [tree_material, water_tower_material, street_light_material, street_furniture_material,
-		street_furniture_material]
+		street_furniture_material, car_material]
 	_glow_mesh = PropMeshes.street_light_glow()
 	_glow_material = street_light_glow_material
 	# Fade distances already set on the material (?sh_small_fade_distance=...,
@@ -155,6 +170,11 @@ func _init(tree_material: Material, water_tower_material: Material, street_light
 		small_furniture_fade = small if small is Vector2 else small_furniture_fade
 		large_furniture_fade = large if large is Vector2 else large_furniture_fade
 	set_furniture_fade(small_furniture_fade, large_furniture_fade)
+	var cars := car_material as ShaderMaterial
+	if cars:
+		var fade: Variant = cars.get_shader_parameter("fade_distance")
+		car_fade = fade if fade is Vector2 else car_fade
+	set_car_fade(car_fade)
 
 
 ## Sets where street furniture shrinks away (see small_furniture_fade), in
@@ -166,6 +186,15 @@ func set_furniture_fade(small: Vector2, large: Vector2) -> void:
 	if material:
 		material.set_shader_parameter("small_fade_distance", small)
 		material.set_shader_parameter("large_fade_distance", large)
+
+
+## Sets where cars shrink away (see car_fade), in their shader too, parked
+## and moving alike. Tiles built from then on draw parked cars to match.
+func set_car_fade(fade: Vector2) -> void:
+	car_fade = fade
+	var material := _materials[PARKED_CARS] as ShaderMaterial
+	if material:
+		material.set_shader_parameter("fade_distance", fade)
 
 
 ## Adds a tile's props (a decoded props surface) under its node. Returns how
@@ -282,6 +311,9 @@ func _instance(group: int, buffer: PackedFloat32Array, mesh: Mesh) -> MultiMeshI
 		LARGE_FURNITURE:
 			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
 			instance.visibility_range_end = large_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
+		PARKED_CARS:
+			instance.extra_cull_margin = CAR_CULL_MARGIN
+			instance.visibility_range_end = car_fade.y + FURNITURE_RANGE_PAST_FADE
 		_:
 			instance.extra_cull_margin = CULL_MARGIN
 			instance.visibility_range_end = tree_range

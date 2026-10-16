@@ -71,6 +71,8 @@ func is_panicking() -> bool:
 
 ## Something dangerous happened at `from_world`: run the other way.
 func scare(from_world: Vector3) -> void:
+	if _panic <= 0.0 and visible and randf() < 0.3:
+		GameAudio.play(&"scream", global_position + Vector3.UP * 1.6)  # (one in a few seconds, at most)
 	_panic = CALM_DOWN_TIME + randf() * 3.0
 	_threat = from_world
 	_pause = 0.0

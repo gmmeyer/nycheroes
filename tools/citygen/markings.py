@@ -64,6 +64,14 @@ MAX_SETBACK = 25.0
 SIGNAL_WIDTH, SIGNAL_LANES = 14.0, 3
 SIGNAL_SETBACK = 0.9
 SIGNAL_BEHIND = 0.6  # meters behind the crosswalk
+# A signal's approaches take turns: those within 45 degrees of the widest
+# street's axis go green while the others are red, half a cycle apart (the
+# game's TrafficSignals). Signals along a street are timed as a green wave
+# for traffic on its widest street going WAVE_SPEED (both ways on two-way
+# streets can't be; there it favors north and east).
+CROSSING_ANGLE = np.cos(np.radians(45.0))
+SIGNAL_CYCLE = 60.0  # s, as in the game
+WAVE_SPEED = 10.0    # m/s, about what drivers do on a 25 mph street
 
 
 def prepare() -> dict:
@@ -105,6 +113,7 @@ def prepare() -> dict:
     np.logical_or.at(signal, node, wide_end)
     widest = np.zeros(degree.size)
     second = np.zeros(degree.size)
+    widest_end = np.zeros(degree.size, dtype=np.int64)
     major = np.zeros(degree.size, dtype=bool)
     # The widest and second-widest street at each node: an end's setback is the
     # widest *other* street's half width.
@@ -113,11 +122,40 @@ def prepare() -> dict:
         n = node[e]
         second[n] = widest[n]
         widest[n] = both_half[e]
+        widest_end[n] = e
     np.logical_or.at(major, node, major_end)
     other = np.where(both_half >= widest[node], second[node], widest[node])
     setback = np.minimum(other + CROSSWALK_SETBACK, MAX_SETBACK)
     is_crossing = degree[node] >= 3
     setback = np.where(is_crossing, setback, 0.0)
+
+    # Each end's direction into its segment, and its signal phase (-1: none).
+    length = shapely.length(lines)
+    step = np.minimum(3.0, length / 2)
+    inward = np.vstack([shapely.get_coordinates(shapely.line_interpolate_point(lines, step)) - starts,
+                        shapely.get_coordinates(shapely.line_interpolate_point(lines, length - step)) - ends])
+    inward /= np.maximum(np.linalg.norm(inward, axis=1, keepdims=True), 1e-9)
+    across = np.abs(np.sum(inward * inward[widest_end[node]], axis=1)) < CROSSING_ANGLE
+    # The green wave: the widest street's direction of travel at each node
+    # (north or east first where it's two-way), and how far along it the node
+    # is; a car going WAVE_SPEED reaches each signal as the last one's
+    # green has moved on with it.
+    trafdir2 = np.concatenate([attrs[:, 1], attrs[:, 1]])
+    along_line = np.concatenate([np.ones(count), -np.ones(count)])  # inward is along the line at starts
+    travel = inward * np.where(trafdir2 == AGAINST, -along_line, along_line)[:, None]
+    wide = widest_end
+    axis = travel[wide]
+    two_way = trafdir2[wide] == BOTH
+    flip = two_way & ((axis[:, 1] < -1e-6) | ((np.abs(axis[:, 1]) <= 1e-6) & (axis[:, 0] < 0)))
+    axis[flip] *= -1.0
+    place = np.zeros((degree.size, 2))
+    place[node] = keys / 2.0
+    start_at = np.mod(-np.sum(place * axis, axis=1) / (WAVE_SPEED * SIGNAL_CYCLE), 1.0)
+    # In 1024ths: the game reads poles' phases as half floats, exact in 1024ths.
+    start_at = np.floor(start_at * 1024.0) / 1024.0
+    phase = np.where(signal[node] & is_crossing, np.mod(start_at[node] + 0.5 * across, 1.0), -1.0)
+    # Right of way where there's no signal: the widest street's ends.
+    priority = both_half >= widest[node] - 0.01
     return {
         "lines": lines,
         "rw": rw.astype(np.int8),
@@ -128,6 +166,13 @@ def prepare() -> dict:
         "setback": setback.reshape(2, count).T.astype(np.float32),  # (start, end)
         "major": (major[node] & is_crossing).reshape(2, count).T,
         "signal": (signal[node] & is_crossing).reshape(2, count).T,
+        "phase": phase.reshape(2, count).T.astype(np.float32),
+        # Node ids (shared by the ends that meet there) and whether 3 or more
+        # streets meet there.
+        "nodes": node.reshape(2, count).T.astype(np.int32),
+        "crossing": is_crossing.reshape(2, count).T,
+        # Whether an end's street is the widest there (has the right of way).
+        "priority": priority.reshape(2, count).T,
     }
 
 
@@ -152,11 +197,11 @@ def quads(data: dict, segments: np.ndarray, center_box, road) -> dict:
     return result
 
 
-def signals(data: dict, segments: np.ndarray, center_box, road) -> tuple[np.ndarray, np.ndarray]:
+def signals(data: dict, segments: np.ndarray, center_box, road) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Traffic signal poles for these segments inside center_box: positions
-    (N, 2) and the directions (N, 2) they face (toward the drivers they
-    control)."""
-    points, facing = [], []
+    (N, 2), the directions (N, 2) they face (toward the drivers they
+    control) and their phases (N,; see prepare)."""
+    points, facing, phases = [], [], []
     for k in segments:
         k = int(k)
         if int(data["rw"][k]) != STREET:
@@ -167,8 +212,8 @@ def signals(data: dict, segments: np.ndarray, center_box, road) -> tuple[np.ndar
         width = float(data["width"][k])
         lanes = max(int(data["lanes"][k]), 1)
         span = width if width > 0 else lanes * LANE_WIDTH + int(data["parking"][k]) * PARKING_WIDTH
-        for at_start, setback, signal in ((True, float(data["setback"][k][0]), data["signal"][k][0]),
-                                          (False, float(data["setback"][k][1]), data["signal"][k][1])):
+        for end, at_start in ((0, True), (1, False)):
+            setback, signal = float(data["setback"][k][end]), data["signal"][k][end]
             # Only where traffic comes toward the intersection.
             if not signal or setback <= 0 or setback + CROSSWALK_DEPTH > length / 2:
                 continue
@@ -186,12 +231,13 @@ def signals(data: dict, segments: np.ndarray, center_box, road) -> tuple[np.ndar
             offset = across[1] + SIGNAL_SETBACK if at_start else across[0] - SIGNAL_SETBACK
             points.append(point[0] + normal[0] * offset)
             facing.append(tangent if at_start else -tangent)
+            phases.append(float(data["phase"][k][end]))
     if not points:
-        return np.zeros((0, 2)), np.zeros((0, 2))
-    points, facing = np.array(points), np.array(facing)
+        return np.zeros((0, 2)), np.zeros((0, 2)), np.zeros(0)
+    points, facing, phases = np.array(points), np.array(facing), np.array(phases)
     min_e, min_n, max_e, max_n = center_box
     inside = (points[:, 0] >= min_e) & (points[:, 0] < max_e) & (points[:, 1] >= min_n) & (points[:, 1] < max_n)
-    return points[inside], facing[inside]
+    return points[inside], facing[inside], phases[inside]
 
 
 def keep(q: np.ndarray, road) -> np.ndarray:
@@ -205,19 +251,25 @@ def _add(out: dict, kind: int, quads: np.ndarray, uv: np.ndarray, check: bool) -
         out.setdefault(kind, []).append((quads, uv, check))
 
 
+def lane_layout(data: dict, k: int) -> tuple[int, float]:
+    """Segment k's travel lanes (both ways together) and their width, as
+    painted."""
+    trafdir, lanes = int(data["trafdir"][k]), int(data["lanes"][k])
+    parking, width = int(data["parking"][k]), float(data["width"][k])
+    if lanes <= 0:
+        lanes = 2 if (trafdir == BOTH and width >= CENTER_LINE_MIN_WIDTH) else 1
+    if width > 0:
+        return lanes, float(np.clip((width - parking * PARKING_WIDTH) / lanes, MIN_LANE, MAX_LANE))
+    return lanes, LANE_WIDTH
+
+
 def _segment(data: dict, k: int, out: dict, road) -> None:
     line = data["lines"][k]
     length = line.length
     rw, trafdir = int(data["rw"][k]), int(data["trafdir"][k])
-    lanes, parking, width = int(data["lanes"][k]), int(data["parking"][k]), float(data["width"][k])
+    parking, width = int(data["parking"][k]), float(data["width"][k])
     start_setback, end_setback = (float(v) for v in data["setback"][k])
-
-    if lanes <= 0:
-        lanes = 2 if (trafdir == BOTH and width >= CENTER_LINE_MIN_WIDTH) else 1
-    if width > 0:
-        lane = float(np.clip((width - parking * PARKING_WIDTH) / lanes, MIN_LANE, MAX_LANE))
-    else:
-        lane = LANE_WIDTH
+    lanes, lane = lane_layout(data, k)
 
     # Lines stop short of intersections: past the crosswalk and stop line.
     trim = CROSSWALK_DEPTH + STOP_GAP + STOP_WIDTH + 1.0

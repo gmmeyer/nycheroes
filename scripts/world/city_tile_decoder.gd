@@ -19,11 +19,17 @@ extends RefCounted
 ##   uv        (variant, trunk diameter m): trees' foliage tone (TONE_*) and
 ##             trunk; water towers' tank (0 wood, 1 steel) and 0; street
 ##             lights' style (STREET_LIGHT_*) and 0; furniture's variant (see
-##             the PROP_* types) and 0
+##             the PROP_* types) and 0, but a traffic signal's phase offset
+##             (0..1 of TrafficSignals.CYCLE; the approaches crossing it are
+##             half a cycle off)
 ##   uv2       (PROP_* type, seed 0..1)
+## Parked cars (PROP_PARKED_CAR) are props too: position the middle of the
+## car's footprint on the road, normal (height m, length m, yaw radians: its
+## front faces (sin yaw, 0, cos yaw)), uv (model CAR_*, paint 0..11, see
+## shaders/car.gdshader).
 
 const MAGIC := "NYCT"
-const VERSION := 6
+const VERSION := 7
 const SURFACE_BUILDINGS := 0
 const SURFACE_GROUND := 1
 const SURFACE_LANES := 2
@@ -44,6 +50,23 @@ const MARKING_WHITE := 10      ## solid: stop lines, highway edge lines
 const MARKING_YELLOW := 11     ## double yellow center line
 const MARKING_DASHED := 12     ## white lane line, 3 m dashes, 9 m gaps
 const MARKING_CROSSWALK := 13  ## high-visibility crosswalk bars
+## Driving lanes (near tiles only): one polyline on the road per lane and
+## direction of a street segment, in driving order, separated by LANE_BREAK
+## like the sidewalk lanes. Every point of a lane carries the lane's facts:
+## normal (node it starts at, node it ends at, speed limit m/s), uv (lane
+## number counted from the center line 0.., lanes its way) and uv2 (its
+## signal's phase offset 0..1 where it ends, -1 without a signal; how it
+## ends: 0 where the street just goes on, 1 at an intersection, 2 at one
+## where its street is the widest, so it has the right of way without a
+## signal). Nodes are
+## intersection ids shared by all tiles, so lanes link up across tiles. A
+## lane starts where it leaves an intersection and ends at the stop line (or
+## the crossing street's curb line). A segment's lanes are in the tile
+## holding its middle, whole, so they can reach past the tile's edges.
+const SURFACE_TRAFFIC := 7
+## Floats per lane in a decoded traffic surface's info: from node, to node,
+## speed, lane, lanes, signal phase, how it ends (0, 1, 2 as above).
+const TRAFFIC_INFO_STRIDE := 7
 ## 0xFFFFFFFF read as a signed 32-bit index.
 const LANE_BREAK := -1
 
@@ -66,7 +89,8 @@ const PROP_LITTER_BASKET := 11     ## variant BASKET_*
 const PROP_BIKE_RACK := 12         ## variant BIKE_RACK_*
 const PROP_PARKING_METER := 13     ## Muni-Meter pay station [1.6 x 0.35]
 const PROP_NEWSSTAND := 14         ## [2.7 x 3.0]
-const PROP_TYPE_COUNT := 15
+const PROP_PARKED_CAR := 15        ## at the curb, model CAR_*
+const PROP_TYPE_COUNT := 16
 ## Trees' foliage tones (uv.x of the props surface).
 const TONE_GREEN := 0
 const TONE_LIGHT := 1  ## yellow-green: honeylocust, ginkgo, birch, willow
@@ -85,6 +109,19 @@ const BASKET_WIRE := 0        ## the green wire basket [0.9 x 0.6]
 const BASKET_COMPACTOR := 1   ## solar compactor [1.2 x 0.7]
 const BIKE_RACK_HOOP := 0     ## round CityRack hoop [0.9 x 0.9]
 const BIKE_RACK_U := 1        ## U or wave rack [0.9 x 1.2]
+## Car models (uv.x of a parked car; traffic's cars use the same numbers),
+## length x width x height (m) in brackets (PropMeshes.CAR_SIZES). Buses only
+## drive, they never park.
+const CAR_SEDAN := 0          ## [4.7 x 1.85 x 1.45]
+const CAR_HATCHBACK := 1      ## [4.2 x 1.8 x 1.5]
+const CAR_SUV := 2            ## [4.9 x 1.95 x 1.75]
+const CAR_MINIVAN := 3        ## [5.1 x 2.0 x 1.8]
+const CAR_PICKUP := 4         ## [5.7 x 2.0 x 1.85]
+const CAR_VAN := 5            ## delivery van with a high roof [5.6 x 2.05 x 2.5]
+const CAR_TAXI := 6           ## NYC yellow taxi with its roof sign [4.8 x 1.85 x 1.5]
+const CAR_BOX_TRUCK := 7      ## [7.5 x 2.4 x 3.3]
+const CAR_BUS := 8            ## MTA bus [12.2 x 2.6 x 3.2]
+const CAR_MODEL_COUNT := 9
 
 
 ## Returns one dictionary per surface: {kind, mesh: ArrayMesh} for meshes,
@@ -144,6 +181,9 @@ static func decode_unpacked(data: PackedByteArray) -> Array[Dictionary]:
 		if kind == SURFACE_PROPS:
 			surfaces.append({"kind": kind, "positions": positions, "normals": normals, "uv": uv, "uv2": uv2})
 			continue
+		if kind == SURFACE_TRAFFIC:
+			surfaces.append(_traffic(positions, normals, uv, uv2, indices))
+			continue
 		if index_count == 0:
 			continue
 		var arrays := []
@@ -157,6 +197,29 @@ static func decode_unpacked(data: PackedByteArray) -> Array[Dictionary]:
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		surfaces.append({"kind": kind, "mesh": mesh})
 	return surfaces
+
+
+## {kind, lanes: Array[PackedVector3Array] (tile-local), info:
+## PackedFloat32Array (TRAFFIC_INFO_STRIDE floats per lane)}.
+static func _traffic(points: PackedVector3Array, normals: PackedVector3Array, uv: PackedVector2Array,
+		uv2: PackedVector2Array, indices: PackedInt32Array) -> Dictionary:
+	var lanes: Array[PackedVector3Array] = []
+	var info := PackedFloat32Array()
+	var lane := PackedVector3Array()
+	var first := -1
+	for index in indices:
+		if index != LANE_BREAK:
+			if first < 0:
+				first = index
+			lane.append(points[index])
+			continue
+		if lane.size() > 1:
+			lanes.append(lane)
+			var n := normals[first]
+			info.append_array([n.x, n.y, n.z, uv[first].x, uv[first].y, uv2[first].x, uv2[first].y])
+		lane = PackedVector3Array()
+		first = -1
+	return {"kind": SURFACE_TRAFFIC, "lanes": lanes, "info": info}
 
 
 static func _split_lanes(points: PackedVector3Array, indices: PackedInt32Array) -> Array[PackedVector3Array]:

@@ -29,6 +29,13 @@
 // showing cartoon ads that change every few seconds. They glow by day and
 // blaze at night, washing the facade above them in their colors; only SIGNS
 // walls pay for any of it.
+// Hand-made landmarks (tools/citygen/landmarks.py: the Empire State, Chrysler
+// and Woolworth Buildings, One World Trade Center, the Flatiron, 30 Rock,
+// Grand Central, the Statue of Liberty) carry their own materials (archetype
+// 16 and up): landmark_wall() and landmark_roof() paint limestone piers and
+// aluminum spandrels, Nirosta arches with triangular windows, curtain walls,
+// terracotta, copper, granite, the torch's gold and Grand Central's clock, and
+// light their crowns at night.
 shader_type spatial;
 render_mode ambient_light_disabled;
 
@@ -64,8 +71,61 @@ const int LANDMARK = 32;
 const int PARAPET = 64;          // the wall's top PARAPET_HEIGHT stands above its roof
 const int PARAPET_INSIDE = 128;  // the inner side of a parapet, facing the roof
 const int SIGNS = 256;           // a street wall in Times Square's sign district: billboards
+const int MATERIAL = 512;        // flags / MATERIAL % 8: the wall material (MAT_*)
+const int STOOP = 4096;          // the building has a stoop: its front door is up there
+const int FRONT_PART = 8192;     // flags / FRONT_PART: the part of a stoop this face is (0: none)
 // Same as tools/citygen/facades.py.
 const float PARAPET_HEIGHT = 1.0;
+
+// Wall materials (facades.py picks one per building by borough, era and
+// historic district; MAT_AUTO leaves it to the type's own mix).
+const int MAT_AUTO = 0;
+const int MAT_BROWNSTONE = 1;
+const int MAT_RED_BRICK = 2;
+const int MAT_BUFF_BRICK = 3;
+const int MAT_LIMESTONE = 4;
+const int MAT_BROWN_BRICK = 5;
+const int MAT_PAINTED = 6;
+const int MAT_SIDING = 7;
+
+// Parts of a stoop (tools/citygen/fronts.py), and its measures (same there).
+const int STEPS = 1;       // treads and landing; UV = (m across from its left side, m out from the wall)
+const int STOOP_SIDE = 2;  // a cheek wall's outside, down to the ground; UV = (m out from the wall, m above the landing)
+const int CHEEK = 3;       // a cheek wall's inside, above the steps; the same UV
+const int DOORWAY = 4;     // the front door on the landing; UV = (m across from its left edge, m above the landing)
+const float STOOP_LANDING = 1.2;  // the landing's depth (m)
+const float STEP_RISE = 0.19;
+const float STEP_RUN = 0.28;
+const float CHEEK_HEIGHT = 0.85;  // the cheek walls' height above the steps
+const float DOORWAY_HEIGHT = 3.0;
+
+// Landmark materials (archetype 16 and up), as tools/citygen/landmarks.py numbers them.
+const int LM_FIRST = 16;
+const int LM_PLAIN_STONE = 16;
+const int LM_PAVING = 17;
+const int LM_ESB_BASE = 18;
+const int LM_ESB_SHAFT = 19;
+const int LM_ESB_CROWN = 20;
+const int LM_ESB_MAST = 21;
+const int LM_ANTENNA = 22;
+const int LM_CHRYSLER_SHAFT = 23;
+const int LM_CHRYSLER_CROWN = 24;
+const int LM_STEEL = 25;
+const int LM_WTC_PODIUM = 26;
+const int LM_WTC_GLASS = 27;
+const int LM_WTC_SPIRE = 28;
+const int LM_FLATIRON = 29;
+const int LM_WOOLWORTH = 30;
+const int LM_COPPER = 31;
+const int LM_LIBERTY = 32;
+const int LM_GOLD = 33;
+const int LM_PEDESTAL = 34;
+const int LM_FORT = 35;
+const int LM_GC_FACADE = 36;
+const int LM_GC_SCULPTURE = 37;
+const int LM_CLOCK = 38;
+const int LM_ROCK_SHAFT = 39;
+const int LM_WTC_RING = 40;
 
 // Window systems.
 const int PUNCHED = 0;   // separate windows in a masonry wall
@@ -80,35 +140,47 @@ const int STONE = 1;
 const int SIDING = 2;
 const int SMOOTH = 3;
 
-// Palettes, in sRGB.
-const vec3 RED_BRICK[6] = vec3[](vec3(0.68, 0.35, 0.27), vec3(0.72, 0.42, 0.31), vec3(0.62, 0.31, 0.25),
-		vec3(0.75, 0.47, 0.33), vec3(0.65, 0.38, 0.30), vec3(0.58, 0.31, 0.26));
-const vec3 BROWNSTONE[4] = vec3[](vec3(0.53, 0.37, 0.30), vec3(0.58, 0.42, 0.33), vec3(0.48, 0.33, 0.27),
-		vec3(0.62, 0.45, 0.35));
-const vec3 BUFF_BRICK[4] = vec3[](vec3(0.80, 0.70, 0.55), vec3(0.85, 0.77, 0.63), vec3(0.76, 0.65, 0.50),
-		vec3(0.80, 0.69, 0.52));
-const vec3 WHITE_BRICK[3] = vec3[](vec3(0.86, 0.84, 0.78), vec3(0.90, 0.88, 0.83), vec3(0.80, 0.78, 0.72));
-const vec3 LIMESTONE[4] = vec3[](vec3(0.89, 0.83, 0.70), vec3(0.85, 0.78, 0.64), vec3(0.91, 0.87, 0.78),
-		vec3(0.80, 0.74, 0.60));
+// Palettes, in sRGB. Measured against photos (docs/REFERENCE.md): weathered
+// masonry is darker and much less saturated than its name suggests, and the
+// toon light and tone mapping saturate dark warm colors further, so bricks
+// sit at about 0.3-0.4 saturation and stone lower.
+// Deep red brick, weathered.
+const vec3 RED_BRICK[6] = vec3[](vec3(0.58, 0.39, 0.34), vec3(0.54, 0.37, 0.33), vec3(0.62, 0.44, 0.38),
+		vec3(0.52, 0.36, 0.32), vec3(0.57, 0.41, 0.36), vec3(0.53, 0.39, 0.35));
+// Dark brown and red-brown brick (Bronx apartments, Upper West Side, DUMBO).
+const vec3 BROWN_BRICK[5] = vec3[](vec3(0.47, 0.36, 0.32), vec3(0.52, 0.40, 0.35), vec3(0.44, 0.35, 0.32),
+		vec3(0.55, 0.43, 0.37), vec3(0.49, 0.40, 0.36));
+// Chocolate-brown sandstone.
+const vec3 BROWNSTONE[5] = vec3[](vec3(0.48, 0.38, 0.34), vec3(0.53, 0.42, 0.37), vec3(0.45, 0.36, 0.33),
+		vec3(0.56, 0.45, 0.40), vec3(0.50, 0.41, 0.38));
+// Buff, tan and "blond" brick (Ridgewood, the Grand Concourse).
+const vec3 BUFF_BRICK[5] = vec3[](vec3(0.70, 0.62, 0.51), vec3(0.74, 0.66, 0.55), vec3(0.66, 0.58, 0.47),
+		vec3(0.71, 0.63, 0.52), vec3(0.65, 0.60, 0.51));
+const vec3 WHITE_BRICK[3] = vec3[](vec3(0.80, 0.79, 0.75), vec3(0.84, 0.83, 0.79), vec3(0.74, 0.73, 0.69));
+// Limestone and cream.
+const vec3 LIMESTONE[5] = vec3[](vec3(0.78, 0.74, 0.66), vec3(0.74, 0.70, 0.61), vec3(0.82, 0.79, 0.71),
+		vec3(0.70, 0.67, 0.60), vec3(0.79, 0.73, 0.62));
 // Landmark stone: pale gray Indiana limestone; gray, pink and dark granite;
 // cream and ivory glazed terracotta.
-const vec3 LANDMARK_LIMESTONE[3] = vec3[](vec3(0.86, 0.83, 0.76), vec3(0.82, 0.80, 0.74), vec3(0.89, 0.87, 0.81));
-const vec3 GRANITE[3] = vec3[](vec3(0.72, 0.71, 0.68), vec3(0.75, 0.64, 0.58), vec3(0.55, 0.54, 0.52));
-const vec3 TERRACOTTA[3] = vec3[](vec3(0.93, 0.89, 0.78), vec3(0.91, 0.86, 0.74), vec3(0.95, 0.92, 0.84));
-const vec3 CAST_IRON[5] = vec3[](vec3(0.91, 0.88, 0.80), vec3(0.80, 0.79, 0.74), vec3(0.66, 0.73, 0.66),
-		vec3(0.71, 0.76, 0.81), vec3(0.86, 0.79, 0.63));
-const vec3 SIDING_PAINT[6] = vec3[](vec3(0.90, 0.88, 0.83), vec3(0.76, 0.82, 0.86), vec3(0.80, 0.83, 0.71),
-		vec3(0.87, 0.81, 0.68), vec3(0.70, 0.75, 0.78), vec3(0.91, 0.84, 0.70));
-const vec3 STUCCO[5] = vec3[](vec3(0.86, 0.82, 0.73), vec3(0.76, 0.76, 0.73), vec3(0.92, 0.91, 0.87),
-		vec3(0.90, 0.84, 0.62), vec3(0.74, 0.79, 0.70));
-const vec3 GLASS_DARK[4] = vec3[](vec3(0.27, 0.34, 0.42), vec3(0.24, 0.31, 0.36), vec3(0.30, 0.36, 0.44),
-		vec3(0.28, 0.33, 0.37));
-const vec3 GLASS_TOWER[5] = vec3[](vec3(0.30, 0.47, 0.58), vec3(0.27, 0.43, 0.47), vec3(0.36, 0.52, 0.64),
-		vec3(0.40, 0.53, 0.57), vec3(0.26, 0.36, 0.45));
-const vec3 SPANDREL[5] = vec3[](vec3(0.30, 0.36, 0.36), vec3(0.24, 0.26, 0.29), vec3(0.58, 0.65, 0.70),
-		vec3(0.84, 0.85, 0.82), vec3(0.44, 0.38, 0.31));
-const vec3 FRAME_PAINT[5] = vec3[](vec3(0.93, 0.92, 0.88), vec3(0.14, 0.14, 0.14), vec3(0.17, 0.25, 0.20),
-		vec3(0.30, 0.23, 0.17), vec3(0.93, 0.92, 0.88));
+const vec3 LANDMARK_LIMESTONE[3] = vec3[](vec3(0.80, 0.78, 0.72), vec3(0.76, 0.74, 0.69), vec3(0.84, 0.82, 0.77));
+const vec3 GRANITE[3] = vec3[](vec3(0.66, 0.65, 0.62), vec3(0.69, 0.60, 0.55), vec3(0.50, 0.49, 0.47));
+const vec3 TERRACOTTA[3] = vec3[](vec3(0.86, 0.83, 0.74), vec3(0.84, 0.80, 0.70), vec3(0.88, 0.86, 0.79));
+const vec3 CAST_IRON[5] = vec3[](vec3(0.86, 0.83, 0.76), vec3(0.74, 0.73, 0.69), vec3(0.60, 0.67, 0.61),
+		vec3(0.65, 0.70, 0.75), vec3(0.80, 0.74, 0.60));
+const vec3 SIDING_PAINT[6] = vec3[](vec3(0.85, 0.83, 0.78), vec3(0.70, 0.76, 0.80), vec3(0.74, 0.77, 0.66),
+		vec3(0.81, 0.76, 0.64), vec3(0.64, 0.69, 0.72), vec3(0.86, 0.79, 0.66));
+// Painted brick and stucco.
+const vec3 STUCCO[5] = vec3[](vec3(0.80, 0.77, 0.69), vec3(0.69, 0.69, 0.66), vec3(0.86, 0.85, 0.81),
+		vec3(0.82, 0.76, 0.58), vec3(0.67, 0.72, 0.64));
+const vec3 GLASS_DARK[4] = vec3[](vec3(0.23, 0.29, 0.35), vec3(0.20, 0.26, 0.30), vec3(0.26, 0.31, 0.38),
+		vec3(0.24, 0.28, 0.31));
+// Towers' glass: dark blue-green and gray (it reflects the sky on top).
+const vec3 GLASS_TOWER[5] = vec3[](vec3(0.20, 0.29, 0.35), vec3(0.18, 0.27, 0.28), vec3(0.25, 0.33, 0.41),
+		vec3(0.27, 0.32, 0.35), vec3(0.15, 0.20, 0.25));
+const vec3 SPANDREL[5] = vec3[](vec3(0.27, 0.32, 0.32), vec3(0.21, 0.23, 0.26), vec3(0.48, 0.54, 0.58),
+		vec3(0.70, 0.71, 0.68), vec3(0.40, 0.35, 0.29));
+const vec3 FRAME_PAINT[5] = vec3[](vec3(0.90, 0.89, 0.85), vec3(0.14, 0.14, 0.14), vec3(0.17, 0.25, 0.20),
+		vec3(0.30, 0.23, 0.17), vec3(0.90, 0.89, 0.85));
 const vec3 SHADES[4] = vec3[](vec3(0.92, 0.88, 0.76), vec3(0.95, 0.94, 0.90), vec3(0.82, 0.74, 0.60),
 		vec3(0.72, 0.80, 0.86));
 const vec3 AWNING[8] = vec3[](vec3(0.74, 0.20, 0.17), vec3(0.15, 0.47, 0.29), vec3(0.15, 0.24, 0.43),
@@ -116,9 +188,14 @@ const vec3 AWNING[8] = vec3[](vec3(0.74, 0.20, 0.17), vec3(0.15, 0.47, 0.29), ve
 		vec3(0.18, 0.18, 0.19));
 const vec3 SIGN[6] = vec3[](vec3(0.12, 0.13, 0.15), vec3(0.62, 0.12, 0.12), vec3(0.10, 0.30, 0.20),
 		vec3(0.92, 0.90, 0.84), vec3(0.12, 0.20, 0.40), vec3(0.88, 0.70, 0.18));
-const vec3 CORNICE_PAINT[4] = vec3[](vec3(0.25, 0.29, 0.28), vec3(0.17, 0.17, 0.18), vec3(0.85, 0.80, 0.69),
-		vec3(0.55, 0.36, 0.24));
-const vec3 TRIM_STONE = vec3(0.90, 0.87, 0.79);
+const vec3 CORNICE_PAINT[4] = vec3[](vec3(0.25, 0.29, 0.28), vec3(0.17, 0.17, 0.18), vec3(0.80, 0.77, 0.68),
+		vec3(0.45, 0.32, 0.24));
+const vec3 TRIM_STONE = vec3(0.82, 0.79, 0.72);
+// Front doors: varnished oak, black, dark green, oxblood, gray-blue.
+const vec3 DOOR_PAINT[5] = vec3[](vec3(0.36, 0.22, 0.13), vec3(0.11, 0.11, 0.12), vec3(0.13, 0.24, 0.18),
+		vec3(0.38, 0.12, 0.11), vec3(0.24, 0.29, 0.34));
+// Concrete and cast stone (later stoops).
+const vec3 CONCRETE = vec3(0.64, 0.63, 0.60);
 const vec3 MORTAR = vec3(0.80, 0.79, 0.75);
 const vec3 IRON = vec3(0.12, 0.14, 0.14);
 const vec3 AIR_CONDITIONER = vec3(0.80, 0.80, 0.76);
@@ -224,6 +301,14 @@ uniform vec3 dusk_reflect_ground : source_color = vec3(0.30, 0.27, 0.30);
 uniform vec3 night_reflect_zenith : source_color = vec3(0.03, 0.05, 0.12);
 uniform vec3 night_reflect_horizon : source_color = vec3(0.30, 0.21, 0.22);
 uniform vec3 night_reflect_ground : source_color = vec3(0.13, 0.10, 0.09);
+// Landmarks at night: the Empire State's tower lights (from the 72nd floor up,
+// the crown, the mast; bottom to top, the colors change with the occasion),
+// how bright floodlit landmarks are, and the Statue of Liberty's torch.
+uniform vec3 esb_lights_low : source_color = vec3(1.0, 0.95, 0.86);
+uniform vec3 esb_lights_mid : source_color = vec3(1.0, 0.95, 0.86);
+uniform vec3 esb_lights_top : source_color = vec3(1.0, 0.98, 0.94);
+uniform float landmark_flood = 1.0;
+uniform float torch_glow = 4.0;
 
 // Moments of the wall height at the vertices (see wall_top_distance).
 varying vec4 wall_moments;
@@ -277,7 +362,53 @@ int pick(float r, int count) {
 	return min(int(r * float(count)), count - 1);
 }
 
-Facade facade_for(int archetype, float seed, bool landmark) {
+// A wall of `material` (MAT_*): its color (linear), the shade picked by r.
+vec3 material_wall(int material, float r) {
+	if (material == MAT_BROWNSTONE) {
+		return srgb(BROWNSTONE[pick(r, 5)]);
+	} else if (material == MAT_BUFF_BRICK) {
+		return srgb(BUFF_BRICK[pick(r, 5)]);
+	} else if (material == MAT_LIMESTONE) {
+		return srgb(LIMESTONE[pick(r, 5)]);
+	} else if (material == MAT_BROWN_BRICK) {
+		return srgb(BROWN_BRICK[pick(r, 5)]);
+	} else if (material == MAT_PAINTED) {
+		return srgb(STUCCO[pick(r, 5)]);
+	} else if (material == MAT_SIDING) {
+		return srgb(SIDING_PAINT[pick(r, 6)]);
+	}
+	return srgb(RED_BRICK[pick(r, 6)]);
+}
+
+// The surface of a wall of `material`.
+int material_surface(int material) {
+	return material == MAT_BROWNSTONE || material == MAT_LIMESTONE ? STONE
+			: (material == MAT_PAINTED ? SMOOTH : (material == MAT_SIDING ? SIDING : BRICK));
+}
+
+// Lintels, sills and coping for a wall of `material`: carved from the same
+// brownstone (a little lighter, so they read), limestone on brick (or
+// brownstone on old red brick), white on painted walls and siding.
+vec3 material_trim(int material, vec3 wall, float r) {
+	if (material == MAT_BROWNSTONE || material == MAT_LIMESTONE) {
+		return wall * 1.12;
+	} else if (material == MAT_PAINTED || material == MAT_SIDING) {
+		return srgb(FRAME_PAINT[0]);
+	} else if (material == MAT_RED_BRICK && r < 0.3) {
+		return srgb(BROWNSTONE[pick(fract(r * 7.3), 5)]);
+	}
+	return srgb(TRIM_STONE);
+}
+
+// The type's own mix of materials, for buildings without one (far merged
+// blocks, older tiles): the cut points of BROWNSTONE, RED_BRICK, BUFF_BRICK,
+// LIMESTONE and BROWN_BRICK in r; past the last, PAINTED.
+int mixed_material(float r, float brownstone, float red, float buff, float limestone, float brown) {
+	return r < brownstone ? MAT_BROWNSTONE : (r < red ? MAT_RED_BRICK : (r < buff ? MAT_BUFF_BRICK
+			: (r < limestone ? MAT_LIMESTONE : (r < brown ? MAT_BROWN_BRICK : MAT_PAINTED))));
+}
+
+Facade facade_for(int archetype, float seed, bool landmark, int material) {
 	float r1 = rnd(seed, 1.0);
 	float r2 = rnd(seed, 2.0);
 	float r3 = rnd(seed, 3.0);
@@ -316,7 +447,7 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 			f.wall = srgb(SIDING_PAINT[pick(r4, 6)]);
 			f.surface = SIDING;
 		} else {
-			f.wall = srgb(r4 < 0.5 ? RED_BRICK[pick(r2, 6)] : BROWNSTONE[pick(r2, 4)]);
+			f.wall = srgb(r4 < 0.5 ? RED_BRICK[pick(r2, 6)] : BROWN_BRICK[pick(r2, 5)]);
 		}
 		f.frame = srgb(FRAME_PAINT[0]);
 		f.accent = srgb(r2 < 0.5 ? vec3(0.16, 0.26, 0.20) : vec3(0.15, 0.17, 0.22));
@@ -327,37 +458,33 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 		f.side_open = 0.6;
 		f.shutters = r3 < 0.4;
 	} else if (archetype == ROWHOUSE) {
-		// Brownstones and brick rowhouses: tall parlor windows, heavy lintels.
-		if (r1 < 0.5) {
-			f.wall = srgb(BROWNSTONE[pick(r4, 4)]);
-			f.surface = STONE;
-			f.trim = f.wall * 1.25;
-		} else if (r1 < 0.9) {
-			f.wall = srgb(RED_BRICK[pick(r4, 6)]);
-		} else {
-			f.wall = srgb(LIMESTONE[pick(r4, 4)]);
-			f.surface = STONE;
+		// Brownstones, limestones and brick rows: tall parlor windows, heavy
+		// lintels, cornices painted dark (or light on buff brick).
+		int m = material != MAT_AUTO ? material : mixed_material(r1, 0.08, 0.39, 0.63, 0.68, 0.9);
+		f.wall = material_wall(m, r4);
+		f.surface = material_surface(m);
+		f.trim = material_trim(m, f.wall, r3);
+		f.cornice = srgb(m == MAT_BUFF_BRICK || m == MAT_PAINTED ? (r2 < 0.6 ? CORNICE_PAINT[2] : vec3(0.62, 0.63, 0.62))
+				: (r2 < 0.6 ? CORNICE_PAINT[1] : CORNICE_PAINT[pick(r3, 4)]));
+		if (m == MAT_BROWNSTONE && r2 >= 0.6) {
+			f.cornice = f.wall * 0.8;  // carved in the same stone
 		}
-		f.cornice = srgb(r2 < 0.6 ? CORNICE_PAINT[1] : CORNICE_PAINT[pick(r3, 4)]);
+		if (m == MAT_SIDING) {
+			f.frame = srgb(FRAME_PAINT[0]);
+		}
 		f.bay = 1.9;
 		f.window_width = 0.95;
 		f.window_height = 0.5;
 		f.sill = 0.24;
 		f.side_open = 0.04;
-		f.lintels = true;
+		f.lintels = m != MAT_SIDING;
 		f.air_conditioners = 0.12;
 	} else if (archetype == WALKUP) {
-		// Tenements: red, brown, tan or painted brick with white trim.
-		if (r1 < 0.45) {
-			f.wall = srgb(RED_BRICK[pick(r4, 6)]);
-		} else if (r1 < 0.65) {
-			f.wall = srgb(BROWNSTONE[pick(r4, 4)]) * 1.1;
-		} else if (r1 < 0.88) {
-			f.wall = srgb(BUFF_BRICK[pick(r4, 4)]);
-		} else {
-			f.wall = srgb(STUCCO[pick(r4, 5)]);
-			f.surface = SMOOTH;
-		}
+		// Tenements: red, brown, tan or painted brick with stone trim.
+		int m = material != MAT_AUTO ? material : mixed_material(r1, 0.05, 0.43, 0.64, 0.64, 0.89);
+		f.wall = material_wall(m, r4);
+		f.surface = material_surface(m);
+		f.trim = material_trim(m, f.wall, r3);
 		f.bay = 2.1;
 		f.window_width = 0.92;
 		f.window_height = 0.45;
@@ -367,17 +494,18 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 		f.air_conditioners = 0.22;
 	} else if (archetype == PREWAR_APARTMENT) {
 		// Brick over a limestone base, or all limestone.
-		f.base = srgb(LIMESTONE[pick(r2, 4)]);
-		if (r1 < 0.4) {
-			f.wall = srgb(BUFF_BRICK[pick(r4, 4)]);
-			f.base_floors = 2.0;
-		} else if (r1 < 0.72) {
-			f.wall = srgb(r4 < 0.5 ? RED_BRICK[pick(r3, 6)] : BROWNSTONE[pick(r3, 4)] * 1.15);
-			f.base_floors = 2.0;
-		} else {
-			f.wall = f.base;
-			f.surface = STONE;
+		int m = material != MAT_AUTO ? material : mixed_material(r1, 0.0, 0.22, 0.51, 0.67, 1.0);
+		f.base = srgb(LIMESTONE[pick(r2, 5)]);
+		f.wall = material_wall(m, r4);
+		f.surface = material_surface(m);
+		if (m == MAT_LIMESTONE) {
+			f.base = f.wall;
 			f.base_floors = 1.0;
+		} else if ((m == MAT_RED_BRICK || m == MAT_BROWN_BRICK) && r3 < 0.3) {
+			f.base = f.wall * 0.9;  // a plain brick base
+			f.base_floors = 1.0;
+		} else {
+			f.base_floors = 2.0;
 		}
 		f.cornice = f.base;
 		f.trim = f.base * 1.04;
@@ -389,16 +517,18 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 		f.lintels = true;
 		f.air_conditioners = 0.18;
 	} else if (archetype == POSTWAR_APARTMENT) {
-		// White, tan or red brick slabs with wide aluminum windows.
-		if (r1 < 0.4) {
+		// White, tan, red or brown brick slabs with wide aluminum windows.
+		if (r1 < 0.3) {
 			f.wall = srgb(WHITE_BRICK[pick(r4, 3)]);
-		} else if (r1 < 0.7) {
-			f.wall = srgb(BUFF_BRICK[pick(r4, 4)]);
-		} else {
+		} else if (r1 < 0.6) {
+			f.wall = srgb(BUFF_BRICK[pick(r4, 5)]);
+		} else if (r1 < 0.85) {
 			f.wall = srgb(RED_BRICK[pick(r4, 6)]);
+		} else {
+			f.wall = srgb(BROWN_BRICK[pick(r4, 5)]);
 		}
-		f.frame = srgb(r2 < 0.6 ? vec3(0.66, 0.68, 0.69) : vec3(0.27, 0.23, 0.19));
-		f.accent = srgb(vec3(0.82, 0.81, 0.77));
+		f.frame = srgb(r2 < 0.6 ? vec3(0.62, 0.64, 0.65) : vec3(0.27, 0.23, 0.19));
+		f.accent = srgb(vec3(0.76, 0.75, 0.71));
 		f.windows = r3 < 0.25 ? RIBBON : PUNCHED;
 		f.bay = 3.0;
 		f.window_width = 2.0;
@@ -414,44 +544,40 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 		if (r1 < 0.7) {
 			f.windows = CURTAIN;
 			f.glass = srgb(GLASS_TOWER[pick(r3, 5)]);
-			f.accent = srgb(r2 < 0.6 ? vec3(0.88, 0.88, 0.85) : vec3(0.55, 0.57, 0.58));
-			f.frame = srgb(vec3(0.55, 0.58, 0.60));
+			f.accent = srgb(r2 < 0.6 ? vec3(0.80, 0.80, 0.77) : vec3(0.50, 0.52, 0.53));
+			f.frame = srgb(vec3(0.50, 0.53, 0.55));
 			f.bay = 1.5;
 			f.mullion = 0.07;
 			f.spandrel = 0.4;
-			f.reflect = 0.8;
+			f.reflect = 0.7;
 			f.balconies = r4 < 0.5 ? 0.4 : 0.0;
 		} else {
-			f.wall = srgb(r4 < 0.5 ? BUFF_BRICK[pick(r2, 4)] : vec3(0.62, 0.62, 0.60));
+			f.wall = srgb(r4 < 0.5 ? BUFF_BRICK[pick(r2, 5)] : vec3(0.56, 0.56, 0.54));
 			f.surface = r4 < 0.5 ? BRICK : SMOOTH;
-			f.glass = srgb(GLASS_TOWER[pick(r3, 5)]) * 0.7;
+			f.glass = srgb(GLASS_TOWER[pick(r3, 5)]) * 0.8;
 			f.frame = srgb(vec3(0.22, 0.22, 0.23));
 			f.bay = 3.0;
 			f.window_width = 2.5;
 			f.window_height = 0.72;
 			f.sill = 0.1;
-			f.reflect = 0.6;
+			f.reflect = 0.55;
 		}
 		f.side_open = 0.9;
 		f.shades = 0.3;
 	} else if (archetype == PREWAR_OFFICE) {
 		// Masonry towers: windows in vertical strips between piers, with
-		// dark spandrels, over a tall stone base.
-		if (r1 < 0.5) {
-			f.wall = srgb(LIMESTONE[pick(r4, 4)]);
-			f.surface = STONE;
-		} else if (r1 < 0.8) {
-			f.wall = srgb(BUFF_BRICK[pick(r4, 4)]);
-		} else if (r1 < 0.9) {
-			f.wall = srgb(vec3(0.66, 0.66, 0.64));
-			f.surface = STONE;
-		} else {
-			f.wall = srgb(RED_BRICK[pick(r4, 6)]);
+		// dark spandrels, over a tall stone base: limestone and cream brick
+		// mostly, some gray stone, red and brown brick.
+		int m = material != MAT_AUTO ? material : mixed_material(r1, 0.0, 0.17, 0.48, 0.83, 1.0);
+		f.wall = material_wall(m, r4);
+		f.surface = material_surface(m);
+		if (m == MAT_LIMESTONE && r3 > 0.75) {
+			f.wall = srgb(vec3(0.62, 0.62, 0.60));  // gray granite or sandstone
 		}
-		f.base = srgb(LIMESTONE[pick(r2, 4)]);
+		f.base = srgb(LIMESTONE[pick(r2, 5)]);
 		f.trim = f.base;
 		f.cornice = f.base;
-		f.accent = srgb(r3 < 0.5 ? vec3(0.28, 0.26, 0.24) : vec3(0.42, 0.34, 0.28));
+		f.accent = srgb(r3 < 0.5 ? vec3(0.28, 0.26, 0.24) : vec3(0.40, 0.33, 0.28));
 		f.frame = srgb(vec3(0.20, 0.20, 0.19));
 		f.bay = 1.8;
 		f.window_width = 1.0;
@@ -466,41 +592,42 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 		if (r1 < 0.78) {
 			f.windows = CURTAIN;
 			f.accent = srgb(SPANDREL[pick(r4, 5)]);
-			f.frame = srgb(r2 < 0.6 ? vec3(0.22, 0.23, 0.24) : vec3(0.64, 0.66, 0.68));
-			f.glass = srgb(vec3(0.28, 0.35, 0.38));
+			f.frame = srgb(r2 < 0.6 ? vec3(0.22, 0.23, 0.24) : vec3(0.58, 0.60, 0.62));
+			f.glass = srgb(vec3(0.22, 0.28, 0.31));
 			f.bay = 1.5;
 			f.mullion = 0.1;
 			f.spandrel = 1.1;
-			f.reflect = 0.6;
+			f.reflect = 0.5;
 		} else {
-			f.wall = srgb(r4 < 0.5 ? WHITE_BRICK[pick(r2, 3)] : LIMESTONE[pick(r2, 4)]);
+			f.wall = srgb(r4 < 0.5 ? WHITE_BRICK[pick(r2, 3)] : LIMESTONE[pick(r2, 5)]);
 			f.surface = r4 < 0.5 ? BRICK : STONE;
 			f.windows = RIBBON;
 			f.frame = srgb(vec3(0.30, 0.31, 0.32));
-			f.glass = srgb(vec3(0.20, 0.26, 0.29));
+			f.glass = srgb(vec3(0.18, 0.23, 0.26));
 			f.bay = 1.5;
 			f.window_height = 0.45;
 			f.sill = 0.3;
-			f.reflect = 0.5;
+			f.reflect = 0.45;
 		}
 		f.side_open = 0.85;
 		f.shades = 0.3;
 	} else if (archetype == MODERN_OFFICE) {
-		// Glass towers with a fine silver grid.
+		// Glass towers with a fine silver or dark grid.
 		f.windows = CURTAIN;
 		f.glass = srgb(GLASS_TOWER[pick(r1, 5)]);
 		f.accent = f.glass * 0.7;
-		f.frame = srgb(r2 < 0.7 ? vec3(0.66, 0.70, 0.73) : vec3(0.22, 0.24, 0.26));
+		f.frame = srgb(r2 < 0.6 ? vec3(0.58, 0.62, 0.65) : vec3(0.20, 0.22, 0.24));
 		f.bay = 1.5;
 		f.mullion = 0.06;
 		f.spandrel = 0.7;
-		f.reflect = 1.0;
+		f.reflect = 0.75;
 		f.side_open = 1.0;
 		f.shades = 0.2;
 	} else if (archetype == LOFT) {
 		// Cast iron painted cream, gray or pastel, with tall arched windows
-		// between columns; or brick with stone trim.
-		if (r1 < 0.6) {
+		// between columns; or brick with stone trim (deep red and brown in
+		// the old warehouse districts).
+		if (material == MAT_AUTO && r1 < 0.6) {
 			f.wall = srgb(CAST_IRON[pick(r4, 5)]);
 			f.surface = SMOOTH;
 			f.windows = r3 < 0.65 ? ARCHED : PUNCHED;
@@ -509,7 +636,10 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 			f.piers = true;
 			f.accent = f.wall * 0.86;
 		} else {
-			f.wall = srgb(r4 < 0.6 ? RED_BRICK[pick(r3, 6)] : BROWNSTONE[pick(r3, 4)] * 1.15);
+			int m = material != MAT_AUTO ? material : (r4 < 0.6 ? MAT_RED_BRICK : MAT_BROWN_BRICK);
+			f.wall = material_wall(m, r3);
+			f.surface = material_surface(m);
+			f.trim = material_trim(m, f.wall, r2);
 			f.lintels = true;
 		}
 		f.frame = srgb(r2 < 0.6 ? FRAME_PAINT[1] : FRAME_PAINT[2]);
@@ -522,7 +652,7 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 	} else if (archetype == STORE) {
 		// Low shops: brick or stucco above the storefronts.
 		if (r1 < 0.5) {
-			f.wall = srgb(r4 < 0.6 ? RED_BRICK[pick(r3, 6)] : BUFF_BRICK[pick(r3, 4)]);
+			f.wall = srgb(r4 < 0.6 ? RED_BRICK[pick(r3, 6)] : BUFF_BRICK[pick(r3, 5)]);
 		} else {
 			f.wall = srgb(STUCCO[pick(r4, 5)]);
 			f.surface = SMOOTH;
@@ -534,18 +664,21 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 		f.side_open = 0.0;
 	} else if (archetype == INDUSTRIAL) {
 		// Warehouses and garages: brick or block, steel factory windows.
-		if (r1 < 0.5) {
-			f.wall = srgb(RED_BRICK[pick(r4, 6)]) * 0.95;
+		if (material != MAT_AUTO) {
+			f.wall = material_wall(material, r4);
+			f.surface = material_surface(material);
+		} else if (r1 < 0.5) {
+			f.wall = srgb(r4 < 0.6 ? RED_BRICK[pick(r3, 6)] : BROWN_BRICK[pick(r3, 5)]);
 		} else if (r1 < 0.75) {
-			f.wall = srgb(vec3(0.60, 0.59, 0.55));
+			f.wall = srgb(vec3(0.56, 0.55, 0.52));
 			f.surface = SMOOTH;
 		} else {
-			f.wall = srgb(r4 < 0.5 ? vec3(0.76, 0.71, 0.60) : vec3(0.50, 0.56, 0.50));
+			f.wall = srgb(r4 < 0.5 ? vec3(0.68, 0.64, 0.55) : vec3(0.47, 0.52, 0.47));
 			f.surface = SMOOTH;
 		}
 		f.windows = FACTORY;
 		f.frame = srgb(vec3(0.22, 0.26, 0.25));
-		f.glass = srgb(vec3(0.33, 0.37, 0.38));
+		f.glass = srgb(vec3(0.30, 0.34, 0.35));
 		f.bay = 4.0;
 		f.window_width = 2.8;
 		f.window_height = 0.48;
@@ -556,14 +689,14 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 	} else if (archetype == INSTITUTION) {
 		// Schools, hospitals, courthouses: civic brick or limestone, tall windows.
 		if (r1 < 0.5) {
-			f.wall = srgb(RED_BRICK[pick(r4, 6)]);
+			f.wall = srgb(r4 < 0.7 ? RED_BRICK[pick(r3, 6)] : BROWN_BRICK[pick(r3, 5)]);
 		} else if (r1 < 0.8) {
-			f.wall = srgb(LIMESTONE[pick(r4, 4)]);
+			f.wall = srgb(LIMESTONE[pick(r4, 5)]);
 			f.surface = STONE;
 		} else {
-			f.wall = srgb(BUFF_BRICK[pick(r4, 4)]);
+			f.wall = srgb(BUFF_BRICK[pick(r4, 5)]);
 		}
-		f.base = srgb(LIMESTONE[pick(r2, 4)]);
+		f.base = srgb(LIMESTONE[pick(r2, 5)]);
 		f.trim = f.base;
 		f.cornice = f.base;
 		f.frame = srgb(r2 < 0.5 ? FRAME_PAINT[0] : vec3(0.20, 0.22, 0.20));
@@ -578,20 +711,20 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 	} else if (archetype == HOTEL) {
 		// Masonry with a stone base (landmark hotels always), or a glass tower.
 		if (r1 < 0.5 || landmark) {
-			f.wall = srgb(r4 < 0.5 ? LIMESTONE[pick(r3, 4)] : BUFF_BRICK[pick(r3, 4)]);
+			f.wall = srgb(r4 < 0.5 ? LIMESTONE[pick(r3, 5)] : BUFF_BRICK[pick(r3, 5)]);
 			f.surface = r4 < 0.5 ? STONE : BRICK;
-			f.base = srgb(LIMESTONE[pick(r2, 4)]);
+			f.base = srgb(LIMESTONE[pick(r2, 5)]);
 			f.base_floors = 2.0;
 			f.lintels = true;
 			f.cornice = f.base;
 		} else {
 			f.windows = CURTAIN;
 			f.glass = srgb(GLASS_TOWER[pick(r3, 5)]);
-			f.accent = srgb(vec3(0.75, 0.75, 0.73));
-			f.frame = srgb(vec3(0.40, 0.42, 0.44));
+			f.accent = srgb(vec3(0.68, 0.68, 0.66));
+			f.frame = srgb(vec3(0.38, 0.40, 0.42));
 			f.bay = 1.8;
 			f.spandrel = 0.9;
-			f.reflect = 0.8;
+			f.reflect = 0.65;
 		}
 		f.bay = max(f.bay, 2.0);
 		f.window_width = 1.2;
@@ -602,7 +735,7 @@ Facade facade_for(int archetype, float seed, bool landmark) {
 		f.air_conditioners = 0.1;
 	} else if (archetype == OTHER) {
 		// Utilities, garages, terminals: plain walls, few windows.
-		f.wall = srgb(r1 < 0.5 ? vec3(0.66, 0.65, 0.61) : RED_BRICK[pick(r4, 6)]);
+		f.wall = srgb(r1 < 0.5 ? vec3(0.60, 0.59, 0.56) : RED_BRICK[pick(r4, 6)]);
 		f.surface = r1 < 0.5 ? SMOOTH : BRICK;
 		f.frame = srgb(vec3(0.25, 0.26, 0.26));
 		f.bay = 4.0;
@@ -931,7 +1064,7 @@ vec2 fire_escape(vec2 p, vec2 footprint, float floor_height, float bay, float si
 
 Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_height, float seed, float below_top) {
 	bool landmark = (flags & LANDMARK) != 0;
-	Facade f = facade_for(archetype, seed, landmark);
+	Facade f = facade_for(archetype, seed, landmark, (flags / MATERIAL) % 8);
 	bool front = (flags & FRONT) != 0 || merged_blocks;
 	bool street = (flags & FRONT) != 0 && !merged_blocks;
 	bool retail = street && ((flags & RETAIL) != 0 || archetype == STORE);
@@ -1134,8 +1267,9 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 			vec3 metal = srgb(METAL_DOOR) * (1.0 - 0.2 * stripes(p.y / 0.12, 0.3, footprint.y / 0.12));
 			ground_color = mix(wall, metal, door);
 			ground_glass = 0.0;
-		} else if (street) {
-			// Front doors in some bays, in place of the window.
+		} else if (street && (flags & STOOP) == 0) {
+			// Front doors in some bays, in place of the window (houses with a
+			// stoop have theirs up on its landing: stoop()).
 			float has_door = mix(0.0, step(rnd(seed, cell.x * 0.91 + 37.0), 0.22), detail);
 			float door = has_door * band(bx, -0.6, 0.6, footprint.x) * band(p.y, -1.0, min(2.5, floor_height - 0.4), footprint.y);
 			float door_glass = band(bx, -0.4, 0.4, footprint.x) * band(p.y, 1.4, 2.2, footprint.y);
@@ -1175,7 +1309,34 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 	// Top of the wall: a cornice on prewar street fronts, else a plain coping.
 	if (below_top < 4.0) {
 		bool masonry = f.windows != CURTAIN;
-		if (street && (flags & CORNICE) != 0) {
+		if (street && (flags & CORNICE) != 0 && (archetype == ROWHOUSE || archetype == WALKUP)) {
+			// Rows' and tenements' deep cornices (pressed metal or stone): a
+			// crown molding and fascia over a shadowed soffit, big scroll
+			// brackets across a frieze with modillions, a deep shadow below.
+			float height = clamp(0.36 * floor_height, 1.0, 1.6);
+			float t = below_top / height;
+			float ft = footprint.y / height;
+			const float SPACING = 1.25;
+			float bx = (fract(p.x / SPACING) - 0.5) * SPACING;  // m from the nearest bracket's middle
+			float half_width = mix(0.15, 0.07, clamp((t - 0.32) / 0.63, 0.0, 1.0));  // a console, narrowing down
+			float bracket = band(bx, -half_width, half_width, footprint.x) * band(t, 0.32, 0.95, ft);
+			float bracket_shadow = band(bx, half_width, half_width + 0.09, footprint.x) * band(t, 0.36, 0.99, ft);
+			float crown = band(t, -1.0, 0.12, ft);
+			float fascia = band(t, 0.12, 0.32, ft);
+			float soffit = band(t, 0.32, 0.42, ft);
+			float frieze = band(t, 0.42, 1.0, ft);
+			float modillions = stripes(p.x / 0.31, 0.45, footprint.x / 0.31) * band(t, 0.42, 0.52, ft);
+			float coverage = crown + fascia + soffit + frieze;
+			vec3 shaded = f.cornice * (crown * 1.25 + fascia * 1.02 + soffit * 0.42
+					+ frieze * mix(0.74, 0.5, modillions)) / max(coverage, 1e-3);
+			shaded = mix(shaded * (1.0 - 0.4 * bracket_shadow), f.cornice * mix(1.12, 0.9, t), bracket);
+			float drop = 0.7 / height;
+			float shadow = band(t, 1.0, 1.0 + drop, ft) * (1.0 - smoothstep(1.0, 1.0 + drop, t)) * 0.5;
+			color *= 1.0 - shadow;
+			color = mix(color, shaded, coverage);
+			glass *= (1.0 - coverage) * (1.0 - shadow);
+			glow *= 1.0 - coverage;
+		} else if (street && (flags & CORNICE) != 0) {
 			float height = clamp(0.3 * floor_height, 0.8, 1.5) * (landmark ? 1.35 : 1.0);
 			float t = below_top / height;
 			float ft = footprint.y / height;
@@ -1229,13 +1390,116 @@ Surface facade(vec2 p, vec2 footprint, int archetype, int flags, float floor_hei
 
 // The inside of a parapet, seen from the roof: plain wall under its coping.
 Surface parapet_inside(vec2 p, vec2 footprint, int archetype, int flags, float seed, float below_top) {
-	Facade f = facade_for(archetype, seed, (flags & LANDMARK) != 0);
+	Facade f = facade_for(archetype, seed, (flags & LANDMARK) != 0, (flags / MATERIAL) % 8);
 	vec3 color = f.windows == CURTAIN ? f.frame : wall_texture(f.wall, f.surface, p, footprint) * 0.9;
 	color = mix(color, f.trim, band(below_top, -1.0, 0.24, footprint.y));
 	Surface s;
 	s.albedo = color;
 	s.emission = vec3(0.0);
 	s.glass = 0.0;
+	return s;
+}
+
+// A stoop (tools/citygen/fronts.py): steps up to the parlor floor between
+// cheek walls, and the front door on its landing. Brownstone and limestone
+// houses' stoops are their own stone; brick rows' are brownstone, their trim
+// stone or cast concrete, some with iron railings on a low curb instead of
+// solid cheek walls. The doorway: double doors with glass panes under a
+// transom, in a stone surround with a hood; at night the glass glows and a
+// lamp lights the landing.
+Surface stoop(int part, vec2 p, vec2 fp, int archetype, int flags, float seed) {
+	int material = (flags / MATERIAL) % 8;
+	Facade f = facade_for(archetype, seed, false, material);
+	float r = rnd(seed, 31.0);
+	float pixel = max(fp.x, fp.y);
+	float detail = smoothstep(4.0, 10.0, 0.3 / pixel);
+	vec3 stone = f.trim;
+	if (material == MAT_BROWNSTONE || material == MAT_LIMESTONE) {
+		stone = f.wall;
+	} else if (material == MAT_SIDING || r < (archetype == WALKUP ? 0.5 : 0.25)) {
+		stone = srgb(CONCRETE);
+	} else if (material != MAT_PAINTED && r < 0.55) {
+		stone = srgb(BROWNSTONE[pick(fract(r * 5.7), 5)]);
+	}
+	bool iron = material != MAT_BROWNSTONE && rnd(seed, 32.0) < 0.45;
+	Surface s;
+	s.emission = vec3(0.0);
+	s.glass = 0.0;
+	if (part == STEPS) {
+		// Treads catching the light, risers in their shade, a bright nose.
+		float u = (p.y - STOOP_LANDING) / STEP_RUN;
+		float fu = fp.y / STEP_RUN;
+		float steps = band(p.y, STOOP_LANDING, 1e4, fp.y);
+		float riser = stripes(u, 0.4, fu) * steps;
+		float nose = stripes(u - 0.93, 0.07, fu) * steps;
+		vec3 color = wall_texture(stone, STONE, p * vec2(0.6, 1.0), fp * vec2(0.6, 1.0)) * 1.04;
+		color *= 1.0 - 0.3 * riser + 0.12 * nose;
+		s.albedo = color;
+		return s;
+	}
+	if (part == STOOP_SIDE || part == CHEEK) {
+		// Height above the steps' line (the landing, then down the steps).
+		float h = p.y + max(p.x - STOOP_LANDING, 0.0) * (STEP_RISE / STEP_RUN);
+		float above = band(h, 0.0, 1e4, fp.y);
+		vec3 color = wall_texture(stone, STONE, p, fp);
+		// The body under the steps: courses of stone, darker toward the ground.
+		color *= 1.0 - 0.25 * stripes(p.y / 0.38, 0.06, fp.y / 0.38) * visible(0.38, pixel) * (1.0 - above);
+		color *= mix(0.86, 1.0, smoothstep(-2.5, -0.5, p.y)) * mix(1.0, 0.92, above * float(part == CHEEK));
+		float cap = band(h, CHEEK_HEIGHT - 0.11, 1e4, fp.y);
+		float under_cap = band(h, CHEEK_HEIGHT - 0.17, CHEEK_HEIGHT - 0.11, fp.y);
+		if (iron) {
+			// A curb, then iron: a top rail, a bottom rail and balusters, the
+			// dark beyond showing between them.
+			float rail = band(h, 0.26, 1e4, fp.y);
+			float bars = max(stripes(p.x / 0.13, 0.22, fp.x / 0.13) * detail + 0.22 * (1.0 - detail),
+					max(band(h, CHEEK_HEIGHT - 0.06, 1e4, fp.y), band(h, 0.26, 0.31, fp.y)));
+			vec3 railing = mix(stone * 0.42, srgb(IRON) * 1.4, bars);
+			color = mix(color, mix(color * 1.06, railing, rail), above);
+		} else {
+			// A solid cheek wall under a molded coping; brownstones carry a
+			// sunken panel.
+			float panel = (band(h, 0.16, 0.2, fp.y) + band(h, CHEEK_HEIGHT - 0.3, CHEEK_HEIGHT - 0.26, fp.y))
+					* float(material == MAT_BROWNSTONE) * detail;
+			color = mix(color, color * (1.0 - 0.25 * panel) * mix(1.0, 0.7, under_cap) * mix(1.0, 1.14, cap), above);
+		}
+		s.albedo = color;
+		return s;
+	}
+	// The doorway: 1.5 m wide (fronts.DOORWAY_WIDTH), DOORWAY_HEIGHT tall.
+	const float WIDTH = 1.5;
+	const float PILASTER = 0.17;
+	const float OPENING_TOP = 2.6;
+	vec3 surround = wall_texture(stone, STONE, p, fp) * 1.04;
+	float x = p.x - 0.5 * WIDTH;  // m from the middle
+	float opening = band(x, -0.5 * WIDTH + PILASTER, 0.5 * WIDTH - PILASTER, fp.x) * band(p.y, -1.0, OPENING_TOP, fp.y);
+	vec3 door = srgb(DOOR_PAINT[pick(rnd(seed, 33.0), 5)]);
+	vec3 glass = f.glass * 0.8;
+	// Two leaves with glass panes over raised panels, a transom above.
+	float leaves = band(p.y, -1.0, 2.22, fp.y);
+	float transom = band(p.y, 2.3, 2.52, fp.y) * band(x, -0.5 * WIDTH + PILASTER + 0.06, 0.5 * WIDTH - PILASTER - 0.06, fp.x);
+	float lx = abs(x);  // m from the meeting stiles
+	float panes = band(lx, 0.09, 0.5 * WIDTH - PILASTER - 0.09, fp.x) * band(p.y, 1.12, 2.06, fp.y) * detail;
+	float raised = (band(lx, 0.09, 0.5 * WIDTH - PILASTER - 0.09, fp.x) * band(p.y, 0.2, 0.92, fp.y)
+			- band(lx, 0.13, 0.5 * WIDTH - PILASTER - 0.13, fp.x) * band(p.y, 0.24, 0.88, fp.y)) * detail;
+	float stile = band(lx, -1.0, 0.012, fp.x) * leaves * detail;
+	vec3 color = mix(door, glass, panes);
+	color *= 1.0 + 0.25 * raised - 0.5 * stile;
+	color = mix(mix(door * 0.7, glass, transom), color, leaves);
+	// The hood: a crown over a fascia, its shadow on the surround below.
+	float hood = band(p.y, OPENING_TOP + 0.06, 1e4, fp.y);
+	float crown = band(p.y, DOORWAY_HEIGHT - 0.1, 1e4, fp.y);
+	float hood_shadow = band(p.y, OPENING_TOP - 0.12, OPENING_TOP + 0.06, fp.y) * (1.0 - opening);
+	surround *= mix(1.0, 1.12, hood) * mix(1.0, 1.18, crown) * (1.0 - 0.35 * hood_shadow);
+	color = mix(surround, color, opening);
+	color = mix(color, color * 0.75, band(p.y, OPENING_TOP - 0.05, OPENING_TOP, fp.y) * opening);
+	float lit_glass = (panes * leaves + transom) * opening;
+	s.albedo = color;
+	s.glass = lit_glass * 0.5;
+	if (city_lights > 0.0) {
+		// The hall light through the glass, and a lamp over the door.
+		float lamp = 1.0 - smoothstep(0.0, 0.9, length(vec2(x, p.y - OPENING_TOP - 0.25)));
+		s.emission = srgb(LAMP_WARM) * ((lit_glass * 1.3 + lamp * 0.4) * city_lights);
+	}
 	return s;
 }
 
@@ -1624,6 +1888,495 @@ vec3 roof(vec2 xz, vec2 footprint, int archetype, float seed) {
 	return color;
 }
 
+// --- Hand-made landmarks (tools/citygen/landmarks.py) ---
+// Their faces carry a landmark material in the archetype slot (16 and up),
+// and UV2.y's whole part is a param: on walls the face's width in dm * 4 + a
+// variant. UV is (m from the face's left corner, m above the landmark's
+// ground) unless a material says otherwise. Each material is painted here;
+// windows fit each face exactly (piers on the corners), and at night offices
+// light up like the data buildings' while crowns, the statue and the torch
+// are floodlit.
+
+// The Empire State: limestone, aluminum spandrels, the chrome-nickel steel
+// strips running up beside every column of windows.
+const vec3 ESB_LIMESTONE = vec3(0.86, 0.82, 0.72);
+const vec3 ESB_ALUMINUM = vec3(0.60, 0.62, 0.65);
+const vec3 ESB_STEEL = vec3(0.93, 0.94, 0.96);
+const vec3 LM_GLASS = vec3(0.22, 0.28, 0.34);
+// The Chrysler Building: white and gray brick, Nirosta steel.
+const vec3 CHRYSLER_WHITE = vec3(0.91, 0.90, 0.86);
+const vec3 CHRYSLER_GRAY = vec3(0.50, 0.51, 0.54);
+const vec3 NIROSTA = vec3(0.70, 0.73, 0.78);
+// One World Trade Center: blue-gray glass, silver mullions, prismatic fins.
+const vec3 WTC_GLASS_COLOR = vec3(0.34, 0.48, 0.60);
+const vec3 WTC_MULLION = vec3(0.66, 0.70, 0.74);
+// Stone and terracotta.
+const vec3 FLATIRON_STONE = vec3(0.88, 0.80, 0.66);
+const vec3 WOOLWORTH_CREAM = vec3(0.94, 0.90, 0.80);
+const vec3 GC_LIMESTONE = vec3(0.88, 0.84, 0.75);
+const vec3 ROCK_LIMESTONE = vec3(0.87, 0.83, 0.74);
+const vec3 STONY_CREEK = vec3(0.82, 0.74, 0.68);   // the pedestal's pink granite
+const vec3 FORT_GRANITE = vec3(0.64, 0.63, 0.60);
+const vec3 PAVING_STONE = vec3(0.70, 0.69, 0.66);
+// Copper gone green, the statue's lighter verdigris, the torch's gold leaf.
+const vec3 VERDIGRIS = vec3(0.40, 0.68, 0.58);
+const vec3 LIBERTY_GREEN = vec3(0.47, 0.74, 0.64);
+const vec3 GOLD_LEAF = vec3(1.00, 0.78, 0.30);
+// Grand Central's Tiffany clock: opalescent face, colored ring.
+const vec3 CLOCK_FACE = vec3(0.98, 0.94, 0.80);
+const vec3 CLOCK_RING[3] = vec3[](vec3(0.80, 0.22, 0.16), vec3(0.95, 0.72, 0.20), vec3(0.18, 0.36, 0.62));
+const vec3 FLOOD_WARM = vec3(1.0, 0.88, 0.70);
+const vec3 FLOOD_COOL = vec3(0.86, 1.0, 0.96);
+
+// A window grid fitted to a face `width` m wide: bays of about `bay` m, as
+// many as fit, so piers land on the corners; floors `floor_height` m, each
+// window from `sill` to `head` m above its floor. Returns (glass, the window
+// columns' coverage, lines along the columns' edges, how far up its window)
+// and the window's cell and the cells' size.
+vec4 lm_grid(vec2 p, vec2 fp, float width, float bay, float window_width, float floor_height, float sill,
+		float head, float edge_width, out vec2 cell, out vec2 cell_size) {
+	float n = max(1.0, floor(width / bay + 0.5));
+	float b = width > 0.5 ? width / n : bay;
+	cell_size = vec2(b, floor_height);
+	vec2 q = p / cell_size;
+	vec2 fq = fp / cell_size;
+	cell = floor(q);
+	float w = min(window_width / b, 0.92);
+	float column = centered_stripes(q.x - 0.5, w, fq.x);
+	float rows = stripes(q.y - sill / floor_height, (head - sill) / floor_height, fq.y);
+	float edges = 0.0;
+	if (edge_width > 0.0) {
+		edges = min(centered_stripes(q.x - 0.5 + 0.5 * w, edge_width / b, fq.x)
+				+ centered_stripes(q.x - 0.5 - 0.5 * w, edge_width / b, fq.x), 1.0);
+	}
+	float up = clamp((p.y - cell.y * floor_height - sill) / max(head - sill, 0.1), 0.0, 1.0);
+	return vec4(column * rows, column, edges, up);
+}
+
+// The Empire State's tower lights' color at this height.
+vec3 esb_light(float height) {
+	return height < 315.0 ? esb_lights_low : (height < 342.5 ? esb_lights_mid : esb_lights_top);
+}
+
+// A classical cornice from z0 to z1: lip, frieze with brackets, dentils.
+vec3 lm_cornice(vec3 color, vec2 p, vec2 fp, float z0, float z1) {
+	float h = z1 - z0;
+	float t = (p.y - z0) / h;
+	float ft = fp.y / h;
+	float brackets = centered_stripes(p.x / 1.1, 0.22, fp.x / 1.1);
+	float dentils = stripes(p.x / 0.26, 0.5, fp.x / 0.26);
+	float shade = band(t, -1.0, 0.18, ft) * 0.55 + band(t, 0.18, 0.62, ft) * mix(0.82, 1.08, brackets)
+			+ band(t, 0.62, 0.78, ft) * mix(0.62, 1.0, dentils) + band(t, 0.78, 2.0, ft) * 1.12;
+	return color * shade;
+}
+
+// A wall of a landmark (see the material list in landmarks.py). The windowed
+// walls share one grid painter fed by a few numbers per material, so the
+// heavier helpers (wall_texture, storefront, window_light) appear once each.
+Surface landmark_wall(int material, int variant, vec2 p, vec2 fp, float width, vec3 world_normal) {
+	Surface s;
+	s.emission = vec3(0.0);
+	s.glass = 0.0;
+	float pixel = max(fp.x, fp.y);
+	float salt = float(material) * 0.0371;
+
+	// The wall's stone or brick.
+	vec3 base = srgb(PAVING_STONE);
+	int surface = SMOOTH;
+	float scale = 1.0;
+	if (material <= LM_ESB_CROWN) {
+		base = srgb(ESB_LIMESTONE);
+		surface = STONE;
+	} else if (material == LM_CHRYSLER_SHAFT) {
+		base = srgb(CHRYSLER_WHITE);
+		surface = BRICK;
+	} else if (material == LM_FLATIRON) {
+		base = srgb(FLATIRON_STONE);
+		surface = STONE;
+	} else if (material == LM_WOOLWORTH) {
+		base = srgb(WOOLWORTH_CREAM);
+		surface = STONE;
+	} else if (material == LM_ROCK_SHAFT) {
+		base = srgb(ROCK_LIMESTONE);
+		surface = STONE;
+	} else if (material == LM_PEDESTAL) {
+		base = srgb(STONY_CREEK);
+		surface = STONE;
+	} else if (material == LM_FORT) {
+		base = srgb(FORT_GRANITE);
+		surface = STONE;
+		scale = 0.7;
+	} else if (material == LM_GC_FACADE) {
+		base = srgb(GC_LIMESTONE);
+		surface = STONE;
+	}
+	vec3 stone = wall_texture(base, surface, p * scale, fp * scale);
+	vec3 color = stone;
+
+	// Windowed walls: piers between columns of windows, fitted to the face.
+	float bay = 0.0;
+	float window = 1.0;
+	float floor_height = 3.8;
+	float sill = 0.8;
+	float head = 3.0;
+	float edge_width = 0.0;
+	vec3 column = stone;     // between a column's windows (spandrels)
+	vec3 edge = stone;       // lines along the columns' edges
+	vec3 glass = srgb(LM_GLASS);
+	float column_glass = 0.0;  // how reflective the spandrels are
+	float shops = 0.0;       // storefronts up to this height
+	float lobby = 0.0;       // lobby glass up to this height
+	int occupant = PREWAR_OFFICE;
+	if (material == LM_ESB_SHAFT || material == LM_ESB_BASE) {
+		stone *= 0.95 + 0.08 * value_noise(p * vec2(0.07, 0.02));
+		bool lower = material == LM_ESB_BASE;
+		bay = lower ? 3.1 : 2.6;
+		window = lower ? 1.9 : 1.2;
+		floor_height = lower ? 5.0 : 3.81;
+		sill = lower ? 1.0 : 0.85;
+		head = lower ? 4.1 : 3.05;
+		edge_width = lower ? 0.0 : 0.1;
+		column = srgb(ESB_ALUMINUM);
+		edge = srgb(ESB_STEEL);
+		column_glass = 0.3;
+		shops = lower ? 5.0 : 0.0;
+	} else if (material == LM_ESB_CROWN) {
+		// Aluminum fins up the crown's walls, narrow windows between.
+		bay = 1.6;
+		window = 0.55;
+		sill = 0.6;
+		head = 3.2;
+		column = mix(stone, srgb(ESB_STEEL) * 0.9, 0.8);
+		column_glass = 0.5;
+	} else if (material == LM_CHRYSLER_SHAFT) {
+		bay = 1.9;
+		window = 1.05;
+		floor_height = 3.7;
+		sill = 0.9;
+		head = 2.95;
+		// Gray brick between a column's windows, and down the corners.
+		float corners = min(band(p.x, -1.0, 0.9, fp.x) + band(p.x, width - 0.9, width + 1.0, fp.x), 1.0);
+		stone = mix(stone, srgb(CHRYSLER_GRAY), corners * 0.8);
+		column = mix(stone, srgb(CHRYSLER_GRAY), 0.85);
+		shops = 5.0;
+	} else if (material == LM_FLATIRON && variant != 1) {
+		// Bay windows bow out along the long sides; rusticated lower floors;
+		// string courses.
+		stone *= width > 30.0 ? 0.94 + 0.07 * sin(p.x * (2.0 * PI / 6.4)) : 1.0;
+		stone *= 1.0 - 0.25 * stripes(p.y / 0.62, 0.08, fp.y / 0.62) * (1.0 - band(p.y, 15.0, 1e4, fp.y));
+		stone = mix(stone, stone * 1.08, stripes((p.y - 14.8) / 22.2, 0.5 / 22.2, fp.y / 22.2));
+		bay = 1.6;
+		window = 0.95;
+		floor_height = 3.7;
+		sill = 0.85;
+		head = 2.9;
+		column = stone;
+		shops = 4.6;
+	} else if (material == LM_WOOLWORTH) {
+		// Spandrels with blue and gold ornament; a shadow line down the piers.
+		float ornament = stripes(p.x / 0.36, 0.5, fp.x / 0.36) * visible(0.36, pixel);
+		column = mix(srgb(vec3(0.88, 0.83, 0.71)), srgb(vec3(0.52, 0.62, 0.74)), ornament * 0.35);
+		edge = stone * 0.8;
+		edge_width = 0.12;
+		bay = 1.75;
+		window = 1.1;
+		floor_height = 3.9;
+		sill = 0.7;
+		head = 3.2;
+		shops = 6.0;
+	} else if (material == LM_ROCK_SHAFT) {
+		stone *= 0.96 + 0.06 * value_noise(p * vec2(0.05, 0.02));
+		column = srgb(vec3(0.30, 0.27, 0.24));
+		bay = 1.6;
+		window = 0.85;
+		sill = 0.8;
+		head = 3.1;
+		lobby = 7.0;
+	} else if (material == LM_WTC_GLASS) {
+		// A curtain wall: glass, slim mullions, a band at each floor's slab.
+		stone = srgb(WTC_MULLION);
+		column = srgb(WTC_MULLION);
+		glass = srgb(WTC_GLASS_COLOR);
+		bay = 1.52;
+		window = 1.45;
+		floor_height = 4.0;
+		sill = 0.4;
+		head = 4.0;
+		column_glass = 0.4;
+		occupant = MODERN_OFFICE;
+	}
+
+	if (bay > 0.0) {
+		vec2 cell;
+		vec2 size;
+		vec4 g = lm_grid(p, fp, width, bay, window, floor_height, sill, head, edge_width, cell, size);
+		float detail = smoothstep(5.0, 12.0, min(size.x, size.y) / pixel);
+		vec3 pane = glass * mix(1.0, mix(0.8, 1.2, hash(cell + salt * 97.0)), detail)
+				+ glass_sweep(p, occupant == MODERN_OFFICE ? 16.0 : 6.0, detail);
+		color = mix(stone, column, g.y);
+		color = mix(color, pane, g.x);
+		color = mix(color, edge, g.z * 0.9);
+		s.glass = g.x * 0.9 + g.z * 0.5 + (g.y - g.x) * column_glass + (1.0 - g.y) * column_glass * 0.5;
+		float lit = g.x;
+		vec3 after_dark = vec3(0.0);
+		float ground = 0.0;
+		if (shops > 0.0 && p.y < shops + 0.2) {
+			Surface shop = storefront(p, fp, shops, size.x, salt, color, stone * 0.92, detail);
+			ground = 1.0 - band(p.y, shops, 1e4, fp.y);
+			color = mix(color, shop.albedo, ground);
+			s.glass = mix(s.glass, shop.glass, ground);
+			after_dark = shop.emission * ground;
+		} else if (lobby > 0.0 && p.y < lobby + 0.2) {
+			ground = 1.0 - band(p.y, lobby, 1e4, fp.y);
+			float hall = band(p.y, 0.3, lobby - 0.6, fp.y) * (1.0 - centered_stripes(p.x / 2.4, 0.12, fp.x / 2.4));
+			color = mix(color, mix(stone, glass, hall), ground);
+			s.glass = mix(s.glass, hall * 0.8, ground);
+			after_dark = srgb(LOBBY_LIGHT) * (hall * lobby_glow * city_lights * ground);
+		}
+		lit *= 1.0 - ground;
+		if (city_lights > 0.0 && lit > 0.0) {
+			after_dark += window_light(occupant, occupant == MODERN_OFFICE, cell, salt, size / fp, g.w)
+					* (lit * window_glow * city_lights);
+		}
+		s.emission = after_dark;
+	} else if (material == LM_FLATIRON) {
+		color = lm_cornice(stone * 1.04, p, fp, 81.6, 83.4);
+	} else if (material == LM_ESB_MAST) {
+		// Aluminum ribs; the drum between the wings (variant 1) in strips of glass.
+		vec3 metal = srgb(vec3(0.66, 0.68, 0.72));
+		float ribs = stripes(p.x / 0.9, 0.3, fp.x / 0.9);
+		color = metal * (1.0 - 0.2 * ribs) * (0.95 + 0.1 * smoothstep(342.0, 380.0, p.y));
+		float windows = band(p.y, 371.0, 376.6, fp.y) * stripes(p.x / 1.15, 0.7, fp.x / 1.15);
+		if (variant == 1) {
+			windows = max(windows, stripes(p.x / 1.5, 0.45, fp.x / 1.5) * (1.0 - stripes(p.y / 3.8, 0.12, fp.y / 3.8)));
+		}
+		color = mix(color, srgb(LM_GLASS), windows);
+		s.glass = 0.55 + 0.35 * windows;
+		s.emission = srgb(LAMP_SOFT) * (windows * 1.2 * city_lights);
+	} else if (material == LM_ANTENNA) {
+		vec3 steel = srgb(vec3(0.52, 0.53, 0.55));
+		float lattice = max(stripes((p.x + p.y) / 1.4, 0.16, length(fp) / 1.4), stripes((p.x - p.y) / 1.4, 0.16, length(fp) / 1.4));
+		color = mix(steel * 0.7, steel * 1.25, lattice * visible(0.3, pixel));
+		s.glass = 0.2;
+		// Aircraft warning lights, blinking (the lower ones only at night).
+		float blink = step(0.45, fract(TIME * 0.5));
+		float lamps = band(p.y, 441.4, 443.2, fp.y) + (band(p.y, 418.0, 419.0, fp.y) + band(p.y, 400.0, 401.0, fp.y)) * city_lights;
+		s.emission = srgb(vec3(1.0, 0.1, 0.05)) * (lamps * blink * 6.0 * max(city_lights, 0.2));
+	} else if (material == LM_CHRYSLER_CROWN) {
+		// UV: m from the face's middle, m above the arch's springing; the
+		// arch's radius is the param's width. Triangular windows radiate
+		// around each arch like a sunburst, between steel ribs.
+		float radius = width;
+		float r = length(p);
+		float a = atan(max(p.y, 0.0), p.x);
+		float n = max(6.0, floor(PI * radius / 1.9));
+		float cells = a / PI * n;
+		float fcell = length(fp) / max(r, 0.5) / PI * n;
+		float r_in = radius - 3.0;
+		float r_out = radius - 0.4;
+		float t = (r - r_in) / (r_out - r_in);
+		float ft = length(fp) / (r_out - r_in);
+		float half_width = 0.42 * (1.0 - clamp(t, 0.0, 1.0));
+		float above = step(0.0, p.y);
+		// Far off, once the triangles are a few pixels, their average (they
+		// fill 42% of their band), so the crown still glows at night.
+		float exact = band(fract(cells) - 0.5, -half_width, half_width, fcell);
+		float pane = band(t, 0.0, 1.0, ft) * above * mix(0.42, exact, visible(1.5, pixel));
+		float ribs = centered_stripes(cells, 0.1, fcell) * above + stripes(p.x / 1.1, 0.12, fp.x / 1.1) * (1.0 - above);
+		float rim = band(r, radius - 0.35, radius + 1.0, length(fp)) * above;
+		vec3 steel = srgb(NIROSTA) * (0.9 + 0.12 * ribs + 0.12 * rim);
+		color = mix(steel, srgb(vec3(0.08, 0.09, 0.12)), pane);
+		s.glass = mix(0.55, 0.15, pane);
+		s.emission = srgb(vec3(1.0, 0.97, 0.90)) * (pane * 4.0 * city_lights) + steel * (0.4 * landmark_flood * city_lights);
+	} else if (material == LM_STEEL) {
+		color = srgb(NIROSTA) * (0.92 + 0.1 * stripes(p.x / 0.5, 0.3, fp.x / 0.5));
+		s.glass = 0.7;
+		s.emission = color * (0.35 * landmark_flood * city_lights);
+	} else if (material == LM_WTC_PODIUM) {
+		float fin = stripes(p.x / 1.52, 0.42, fp.x / 1.52);
+		color = mix(srgb(vec3(0.52, 0.60, 0.66)), srgb(vec3(0.82, 0.86, 0.90)), fin);
+		color *= 0.94 + 0.08 * value_noise(vec2(p.x * 0.05, p.y * 0.3));
+		s.glass = 0.75;
+		s.emission = color * (0.22 * city_lights);
+		// The lobby, glass from the street up 15 m.
+		float hall = 1.0 - band(p.y, 15.0, 1e4, fp.y);
+		if (hall > 0.0) {
+			float mullions = min(centered_stripes(p.x / 3.0, 0.05, fp.x / 3.0) + band(p.y, 7.3, 7.6, fp.y), 1.0);
+			color = mix(color, mix(srgb(LM_GLASS) * 1.2, srgb(WTC_MULLION), mullions), hall);
+			s.glass = mix(s.glass, 0.9 * (1.0 - mullions), hall);
+			s.emission = mix(s.emission, srgb(LOBBY_LIGHT) * ((1.0 - mullions) * lobby_glow * city_lights), hall);
+		}
+	} else if (material == LM_WTC_SPIRE || material == LM_WTC_RING) {
+		color = srgb(vec3(0.88, 0.89, 0.90));
+		if (material == LM_WTC_RING) {
+			// Open steelwork: diagonal members against the dark inside.
+			float members = max(stripes((p.x + p.y) / 3.0, 0.14, length(fp) / 3.0), stripes((p.x - p.y) / 3.0, 0.14, length(fp) / 3.0));
+			members = max(members, band(p.y, 425.0, 427.0, fp.y) + band(p.y, 416.0, 417.6, fp.y));
+			color = mix(srgb(vec3(0.16, 0.18, 0.21)), color, min(members, 1.0));
+		}
+		s.glass = 0.35;
+		// The beacon at the very top.
+		float beacon = band(p.y, 537.5, 542.0, fp.y);
+		s.emission = vec3(1.0) * beacon * (2.0 + 6.0 * city_lights) * (0.6 + 0.4 * sin(TIME * 2.0));
+	} else if (material == LM_COPPER) {
+		float seams = stripes(p.x / 0.6, 0.12, fp.x / 0.6) * visible(0.6, pixel);
+		color = srgb(VERDIGRIS) * (0.9 + 0.18 * value_noise(vec2(p.x * 0.8, p.y * 0.15))) * (1.0 - 0.15 * seams);
+		s.glass = 0.1;
+	} else if (material == LM_LIBERTY) {
+		color = srgb(LIBERTY_GREEN) * (0.9 + 0.14 * value_noise(p * vec2(0.7, 0.12)) + 0.05 * value_noise(p * 3.0));
+		if (variant == 1) {
+			// The tablet: JULY IV MDCCLXXVI.
+			float text = text_line(vec2(p.x - 0.4, p.y - 3.25), 0.62, 0.15, 17.0, fp) * band(p.x, 0.4, 3.75, fp.x);
+			color = mix(color, color * 0.55, text);
+		}
+		s.glass = 0.08;
+	} else if (material == LM_GOLD) {
+		color = srgb(GOLD_LEAF) * (0.85 + 0.3 * value_noise(p * vec2(2.0, 1.2)));
+		s.glass = 0.6;
+		float flicker = 0.9 + 0.1 * sin(TIME * 7.0 + p.y * 3.0);
+		s.emission = color * 0.35 + srgb(vec3(1.0, 0.62, 0.18)) * (torch_glow * city_lights * flicker);
+	} else if (material == LM_PEDESTAL || material == LM_FORT) {
+		color = stone * (0.93 + 0.1 * value_noise(p * 0.3));
+		if (variant == 1) {
+			// A loggia's back wall: dark openings over a balustrade.
+			float opening = band(p.y, 32.2, 37.0, fp.y) * (1.0 - centered_stripes(p.x / 2.0, 0.3, fp.x / 2.0));
+			color = mix(color * 0.85, color * 0.3, opening);
+		}
+	} else if (material == LM_GC_FACADE || material == LM_GC_SCULPTURE) {
+		float light = 0.0;  // glass lit from inside at night
+		if (material == LM_GC_SCULPTURE) {
+			color = srgb(vec3(0.82, 0.80, 0.74)) * (0.9 + 0.15 * value_noise(p * 0.8));
+		} else if (variant == 2) {
+			// A gable end of the concourse: a great lunette window.
+			vec2 d = vec2(p.x - width * 0.5, p.y - 33.3);
+			float r = length(d);
+			float pane = 1.0 - smoothstep(6.4 - pixel, 6.4 + pixel, r);
+			float bars = max(centered_stripes(atan(d.y, d.x) / PI * 9.0, 0.08, pixel / max(r, 0.5) * 3.0),
+					stripes(r / 1.6, 0.08, pixel / 1.6));
+			color = mix(stone, mix(srgb(LM_GLASS), srgb(vec3(0.30, 0.32, 0.30)), bars), pane);
+			s.glass = pane * (1.0 - bars) * 0.8;
+			light = s.glass;
+		} else {
+			float x = p.x - width * 0.5;
+			// Rusticated base.
+			color *= 1.0 - 0.3 * stripes(p.y / 0.7, 0.07, fp.y / 0.7) * (1.0 - band(p.y, 7.5, 1e4, fp.y));
+			if (variant == 1 && abs(x) < 20.0) {
+				// The three great windows, paired columns between them.
+				float ax = x - floor(x / 13.0 + 0.5) * 13.0;
+				float top = 21.5 + sqrt(max(4.6 * 4.6 - ax * ax, 0.0));
+				float pane = band(ax, -4.6, 4.6, fp.x) * band(p.y, 8.0, top, fp.y);
+				float grid = max(centered_stripes(ax / 1.15, 0.1, fp.x / 1.15), centered_stripes(p.y / 1.6, 0.08, fp.y / 1.6));
+				float columns = (band(abs(ax), 5.2, 6.3, fp.x) + band(abs(ax), 6.7, 7.8, fp.x) * step(abs(x), 16.0))
+						* band(p.y, 7.5, 26.2, fp.y);
+				vec3 fluted = stone * (1.04 - 0.12 * stripes(p.x / 0.22, 0.4, fp.x / 0.22));
+				color = mix(color, fluted * 1.05, min(columns, 1.0));
+				color = mix(color, mix(srgb(LM_GLASS) * 1.1, srgb(vec3(0.28, 0.30, 0.28)), grid), pane);
+				s.glass = pane * (1.0 - grid) * 0.8;
+				light = s.glass;
+				// The doors under the windows.
+				float door = band(ax, -2.2, 2.2, fp.x) * band(p.y, -1.0, 5.6, fp.y);
+				color = mix(color, srgb(vec3(0.24, 0.20, 0.16)), door);
+				light += door * 0.8;
+			} else {
+				// The wings: two rows of tall windows.
+				float wx = centered_stripes(x / 4.4 - 0.5, 2.0 / 4.4, fp.x / 4.4);
+				float pane = wx * (band(p.y, 9.5, 14.2, fp.y) + band(p.y, 17.4, 23.0, fp.y));
+				color = mix(color, srgb(LM_GLASS), pane);
+				s.glass = pane * 0.8;
+				light = pane * 0.6;
+			}
+			// Entablature, cornice and attic.
+			color = mix(color, stone * 1.07, band(p.y, 26.2, 26.6, fp.y));
+			color = mix(color, lm_cornice(stone, p, fp, 26.6, 28.0), band(p.y, 26.6, 28.0, fp.y));
+			color *= 1.0 - 0.18 * band(p.y, 28.0, 28.6, fp.y);
+		}
+		s.emission = srgb(SHOP_LIGHT) * (light * 1.1 * city_lights);
+	} else if (material == LM_CLOCK) {
+		// UV: m right of and above the clock's center. The hands keep the game's time.
+		float r = length(p);
+		float a = atan(p.x, p.y);  // clockwise from 12
+		color = srgb(CLOCK_FACE);
+		float ring = band(r, 1.55, 2.1, pixel);
+		color = mix(color, srgb(CLOCK_RING[int(mod(floor((a + PI) / (PI / 6.0)), 3.0))]), ring);
+		float marks = band(r, 1.18, 1.5, pixel) * centered_stripes(a / (PI / 6.0), 0.12, pixel / max(r, 0.3) / (PI / 6.0));
+		float hours = mod(clock_hours, 12.0);
+		vec2 hour_hand = vec2(sin(hours / 12.0 * 2.0 * PI), cos(hours / 12.0 * 2.0 * PI));
+		vec2 minute_hand = vec2(sin(fract(clock_hours) * 2.0 * PI), cos(fract(clock_hours) * 2.0 * PI));
+		float hand = band(abs(p.x * hour_hand.y - p.y * hour_hand.x), -1.0, 0.07, pixel) * band(dot(p, hour_hand), -0.15, 0.95, pixel);
+		hand = max(hand, band(abs(p.x * minute_hand.y - p.y * minute_hand.x), -1.0, 0.045, pixel) * band(dot(p, minute_hand), -0.2, 1.4, pixel));
+		hand = max(max(hand, 1.0 - smoothstep(0.1, 0.1 + pixel, r)), marks);
+		color = mix(color, srgb(vec3(0.12, 0.10, 0.08)), hand);
+		s.glass = 0.3;
+		s.emission = color * (1.0 - hand) * (1.4 * city_lights) * (1.0 - ring * 0.4);
+	}
+
+	// Floodlights at night.
+	if (city_lights > 0.0) {
+		vec3 flood = vec3(0.0);
+		if (material <= LM_ESB_MAST && material != LM_PAVING) {
+			// The Empire State's tower lights, from the 72nd floor up.
+			float strength = material == LM_ESB_MAST ? 2.2 : (material == LM_ESB_CROWN || material == LM_PLAIN_STONE ? 1.6 : 1.0);
+			flood = esb_light(p.y) * (strength * step(266.0, p.y));
+		} else if (material == LM_ANTENNA) {
+			flood = esb_light(400.0) * 0.6;
+		} else if (material == LM_WTC_SPIRE || material == LM_WTC_RING) {
+			flood = vec3(1.1);
+		} else if (material == LM_FLATIRON) {
+			flood = srgb(FLOOD_WARM) * (0.8 * smoothstep(70.0, 82.0, p.y));
+		} else if (material == LM_WOOLWORTH) {
+			// From the tower's shoulders up.
+			flood = srgb(FLOOD_WARM) * (0.45 * smoothstep(110.0, 130.0, p.y) + 0.9 * smoothstep(170.0, 185.0, p.y));
+		} else if (material == LM_COPPER) {
+			flood = srgb(FLOOD_WARM) * (1.2 * step(150.0, p.y));
+		} else if (material == LM_LIBERTY) {
+			// Floodlit from the fort below: faces turned down and out catch the most.
+			flood = srgb(FLOOD_COOL) * (0.9 * (0.35 + 0.65 * clamp(0.6 - world_normal.y, 0.0, 1.0)));
+		} else if (material == LM_PEDESTAL || material == LM_FORT) {
+			flood = srgb(FLOOD_WARM) * (material == LM_FORT ? 0.4 : 0.6);
+		} else if (material == LM_GC_FACADE || material == LM_GC_SCULPTURE) {
+			flood = srgb(FLOOD_WARM) * mix(1.0, 0.55, clamp(p.y / 40.0, 0.0, 1.0));
+		} else if (material == LM_ROCK_SHAFT) {
+			flood = srgb(vec3(1.0, 0.96, 0.9)) * smoothstep(236.0, 248.0, p.y);
+		} else if (material == LM_WTC_GLASS) {
+			// The observatory floors near the top.
+			s.emission += srgb(LAMP_COOL) * (0.8 * s.glass * step(384.0, p.y) * city_lights);
+		}
+		s.emission += color * flood * (landmark_flood * city_lights);
+	}
+	s.albedo = color;
+	return s;
+}
+
+// A landmark's roof: paving, copper, steel, the statue's copper or gold.
+Surface landmark_roof(int material, vec2 p, vec2 fp) {
+	Surface s;
+	s.emission = vec3(0.0);
+	s.glass = 0.0;
+	float pixel = max(fp.x, fp.y);
+	vec3 color;
+	if (material == LM_COPPER) {
+		color = srgb(VERDIGRIS) * (0.9 + 0.18 * value_noise(p * 0.5));
+	} else if (material == LM_STEEL || material == LM_CHRYSLER_CROWN || material == LM_ESB_MAST) {
+		color = srgb(NIROSTA) * 0.9;
+		s.glass = 0.6;
+	} else if (material == LM_LIBERTY) {
+		color = srgb(LIBERTY_GREEN) * (0.9 + 0.14 * value_noise(p * 0.7));
+		s.emission = color * srgb(FLOOD_COOL) * (0.45 * landmark_flood * city_lights);
+	} else if (material == LM_GOLD) {
+		color = srgb(GOLD_LEAF);
+		s.glass = 0.6;
+		s.emission = color * 0.35 + srgb(vec3(1.0, 0.62, 0.18)) * (torch_glow * city_lights);
+	} else if (material == LM_PEDESTAL || material == LM_FORT) {
+		color = wall_texture(srgb(material == LM_FORT ? FORT_GRANITE : STONY_CREEK), STONE, p, fp);
+	} else {
+		// Paving slabs on terraces and decks.
+		float joints = max(stripes(p.x / 1.2, 0.04, fp.x / 1.2), stripes(p.y / 1.2, 0.04, fp.y / 1.2)) * visible(1.2, pixel);
+		color = srgb(PAVING_STONE) * (0.92 + 0.12 * value_noise(p * 0.4)) * (1.0 - 0.18 * joints);
+	}
+	s.albedo = color;
+	return s;
+}
+
 // The sky as glass sees it, in direction r (world space).
 vec3 sky_reflection(vec3 r) {
 	vec3 zenith = reflect_zenith;
@@ -1664,7 +2417,22 @@ void fragment() {
 
 	Surface s;
 	float occlusion = 1.0;
-	if ((flags & ROOF) != 0) {
+	bool landmark = archetype >= LM_FIRST;
+	if (landmark) {
+		// UV2.y's whole part: the face's width in dm * 4 + a variant.
+		int param = int(data.y);
+		if ((flags & ROOF) != 0) {
+			s = landmark_roof(archetype, UV, footprint);
+		} else {
+			s = landmark_wall(archetype, param % 4, UV, footprint, float(param / 4) * 0.1, world_normal);
+			bool height_uv = archetype != LM_CHRYSLER_CROWN && archetype != LM_CLOCK && archetype != LM_LIBERTY
+					&& archetype != LM_GOLD;
+			occlusion = height_uv ? mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y)) : 1.0;
+		}
+	} else if (flags >= FRONT_PART) {
+		s = stoop(flags / FRONT_PART, UV, footprint, archetype, flags, seed);
+		occlusion = canyon_occlusion;
+	} else if ((flags & ROOF) != 0) {
 		s.albedo = mix(roof(UV, footprint, archetype, seed), photo, aerial_amount(aerial_uv));
 		s.emission = vec3(0.0);
 		s.glass = 0.0;
@@ -1690,7 +2458,11 @@ void fragment() {
 	EMISSION = ALBEDO * toon_ambient(world_normal, occlusion) + s.emission + reflection;
 	toon_glint = s.glass;
 
-	if (city_lights > 0.0 && (flags & (ROOF | PARAPET_INSIDE)) == 0) {
+	// Street lights reach landmarks' walls whose UV.y is the height above ground.
+	bool lit_feet = !landmark || archetype == LM_ESB_BASE || archetype == LM_CHRYSLER_SHAFT || archetype == LM_WTC_PODIUM
+			|| archetype == LM_FLATIRON || archetype == LM_WOOLWORTH || archetype == LM_FORT || archetype == LM_GC_FACADE
+			|| archetype == LM_ROCK_SHAFT;
+	if (city_lights > 0.0 && (flags & (ROOF | PARAPET_INSIDE)) == 0 && lit_feet) {
 		// Street lights on the feet of the walls near them.
 		float reach = 1.0 - smoothstep(street_light_reach.x, street_light_reach.y, UV.y);
 		if (reach > 0.0) {

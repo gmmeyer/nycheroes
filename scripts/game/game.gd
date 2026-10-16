@@ -10,6 +10,7 @@ extends Node3D
 ## (invite links use it). Players who join start next to the host's hero.
 ## T steps the time of day on to the next of dawn, day, dusk and night
 ## (TimeOfDay; ?time=HH:MM and ?daylength=MINUTES set the clock).
+## Sound is the Audio node's (GameAudio): N switches it off and on.
 ##
 ## Phones and tablets: touch screens get on-screen controls (TouchControls;
 ## ?touch=1 or ?touch=0 forces them on or off, see Device), and a graphics

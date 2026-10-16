@@ -109,9 +109,14 @@ peer can drive one later. Nearby tiles get collision.
   its tiles and signaling (a Durable Object at `/signal`) from one Worker
   (`tools/deploy_cloudflare.ps1`, see "Working on the project"); published
   after every step.
-- **Still to do:** a TURN relay for players whose networks block direct
-  connections (only STUN today). If the host leaves, the game ends for
-  everyone.
+- **Relay (2026-10-15):** players whose networks block direct connections
+  go through Cloudflare's TURN relay: the signaling Durable Object hands out
+  credentials (good for 6 hours, shared for 5 minutes) with Cloudflare's
+  STUN, falling back to STUN only if Cloudflare doesn't answer. Browsers use
+  the relay only when going direct fails; `?relay=1` forces it. The local
+  signaling server stays STUN only. Tested with two headless Chrome players
+  connected relay-only.
+- **Still to do:** if the host leaves, the game ends for everyone.
 
 ## 6. Realism from open data (in progress)
 
@@ -138,7 +143,8 @@ In order:
    towers.
 4. **Street life:** trees, street paint, street lights and street
    furniture (done, below); parked cars and traffic.
-5. **Landmarks:** about 25 hand-made iconic buildings and bridges.
+5. **Landmarks:** about 25 hand-made iconic buildings and bridges (first
+   batch of 8 done, below; self-made and free, decided 2026-10-15).
 6. **Light and atmosphere:** sun position for NYC, clouds, haze, glass
    reflections, night mode with lit windows and street lights.
 7. **Check against reality:** about 10 reference viewpoints compared side by
@@ -172,8 +178,12 @@ In order:
   towers and spires (the Empire State Building's tiers and mast, the
   Chrysler Building's crown).
 - They replace the footprint prisms by building ID (BIN) where the model
-  still matches today's building (outline and height): about 295,000 do.
-  Newer buildings keep their prisms. Some model surfaces face the wrong way;
+  still matches today's building (outline, and not shorter than the
+  footprint's height): about 299,000 do. A taller model wins, since
+  footprint heights often measure a podium or stop below a spire (fixed
+  2026-10-15 after the reference check: the MetLife Building had been
+  Grand Central's 48 m block, and One World Trade Center and the Bank of
+  America Tower lacked their spires). Newer buildings keep their prisms. Some model surfaces face the wrong way;
   roofs are turned up and walls toward open air.
 - The model is massing only: roofs are flat levels, not pitched.
 - Mid-detail tiles use real shapes for buildings 40 m and taller, far tiles
@@ -226,7 +236,9 @@ In order:
   New York types: house, rowhouse/brownstone, walk-up, prewar / postwar /
   modern apartments, prewar / midcentury / modern offices, cast-iron loft
   (also any prewar building in the SoHo cast-iron and Tribeca districts),
-  store, industrial, institution, hotel, other. Plus details: storefronts
+  store, industrial, institution, hotel, other. Houses are rowhouses where
+  PLUTO's proximity code says attached on both sides, houses where it says
+  detached (else by class, year and borough). Plus details: storefronts
   where there's retail space, fire escapes on walk-ups built before 1930,
   cornices before 1940, landmarks; and the floor height from the real floor
   count.
@@ -399,6 +411,112 @@ In order:
   so every stair opens the same way along its curb); wave bike racks are
   drawn as U racks.
 
+**Parked cars and traffic (in progress):**
+- Data (`tools/citygen/traffic.py`, from the street centerlines): driving
+  lanes for every street and at-grade highway, following the paint (the
+  same lane count and width as the dashed lines, keeping right of the
+  center line), from where they leave an intersection to their stop line,
+  with their intersections' ids (shared across tiles, so lanes link up),
+  speed limit (25 mph streets, 40 mph highways) and signal phase, in a new
+  tile surface (format v7): 178,574 lanes.
+- Coordinated signals: each signalized intersection starts its 60 s cycle
+  somewhere else, and approaches within 45 degrees of its widest street go
+  green while the others are red, half a cycle apart; the poles carry their
+  phase, so the lights and the cars agree.
+- Parked cars where the data has parking lanes (2: both curbs, 1: the
+  right-hand curb), short of crosswalks, 15 feet clear of hydrants (the
+  law) and clear of bus stops, out of the travel lanes; a mix of sedans,
+  SUVs, hatchbacks, minivans, pickups, vans, a few taxis and box trucks, in
+  real cars' colors; new prop type 15: 1.1 million cars.
+- Cost so far: full-detail tiles +35 MB (1,249 MB).
+- Cars (`PropMeshes.car()`, `shaders/car.gdshader`): one 128-triangle
+  mesh for nine models (sedan, hatchback, SUV, minivan, pickup, delivery
+  van, yellow taxi with its roof sign, box truck, MTA bus), shaped per model
+  by the shader from a table of proportions; toon paint in 12 real-car
+  colors, tinted glass, painted-on lights, grille, plates and door seams,
+  a contact shadow; at night headlights, taillights, brake lights and
+  blinkers from per-car flags. Parked cars are one MultiMesh per near tile
+  (no shadows: they'd cost 20-30 draw calls), shrinking away by 460 m
+  (medium 320 m, low 170 m); street lights light them at night.
+- `scripts/world/traffic_signals.gd` (TrafficSignals) is the one clock and
+  timing (60 s: green 43%, yellow 5%, 1.2 s all-red at each switch, WALK for
+  18% then the flashing hand) that the signal shader (through the
+  `signal_clock` shader global) and the traffic agree on; phases are exact
+  1024ths so the GPU's half floats hold them.
+- Moving traffic (`scripts/world/traffic.gd`, lane graph in
+  `traffic_lanes.gd`): cars drive the lanes at 82-97% of the limit, keep
+  their distance (also across intersections), stop at red and at yellow
+  when they can, never enter an intersection without room beyond it, and
+  drive curves between lanes through intersections, reserving them so
+  crossing paths are never used at once. Mostly straight on, right turns
+  from the right lane and left from the left, blinkers before turns,
+  U-turns only at dead ends. Without a signal the wider street has the
+  right of way. Signals along a street are timed as a green wave for
+  10 m/s. Cars stop for heroes, thugs (down or up) and pedestrians 25 m
+  ahead. They appear out of sight (or grow in far away) and leave beyond
+  360 m; 120 cars on high (medium 60, low 25), a third of them yellow cabs
+  in Manhattan below 110th Street, 2.5% buses. One MultiMesh for all of
+  them, plus headlight and taillight glows at night (one more draw call).
+  Script time about 0.25 ms a frame (driving steps at 30 Hz, far and
+  behind-the-camera cars redrawn less often).
+
+**Landmarks, first batch (done):**
+- `tools/citygen/landmarks.py` builds eight landmarks by hand, at their real
+  dimensions, in place of their data buildings (by BIN):
+  - the Empire State: setbacks, the 86th-floor deck, the crown's steps, the
+    mooring mast with its four wings, the antenna to 443.2 m;
+  - Chrysler: seven tiers of Nirosta arches with triangular windows, the
+    eagles, the spire to 318.9 m;
+  - One World Trade Center: glass-fin podium, eight triangles tapering to a
+    square turned 45 degrees at 417 m, the spire to 541.3 m;
+  - the Flatiron; the Woolworth (copper pyramid, turrets, lantern); Grand
+    Central (three great windows, the Glory of Commerce, the clock showing
+    the game's time); 30 Rock;
+  - the Statue of Liberty: Fort Wood's star, Hunt's pedestal with its
+    loggias, a low-poly statue facing south-east (robe, raised torch,
+    seven-rayed crown, tablet).
+- Setbacks come from the city's 3-D model, cut into terraces; crowns, masts
+  and spires from published heights. They're baked into each tile's
+  buildings surface at all three detail levels: no extra draw calls, and
+  collision up close (you can land on the Empire State's antenna).
+- Landmark materials (archetype ids 16 and up) get their own paint in the
+  building shader: limestone piers with aluminum spandrels, terracotta,
+  curtain walls, copper, granite, gold. At night the Empire State's tower
+  lights shine from the 72nd floor up (colors set by uniforms), Chrysler's
+  triangles glow, and the statue is floodlit with a blazing torch.
+- Cost: 9,160 / 5,141 / 3,022 triangles (near / mid / far); tiles 70 kB
+  smaller in total.
+- Next: Liberty Island's lawns (federal land, missing from the parks data),
+  more detail (the statue's face and drape, gargoyles, crown fins), and
+  more landmarks: the Guggenheim, the Unisphere, the Public Library, St.
+  Patrick's, Citigroup Center, the Met, the UN Secretariat, the Hearst
+  Tower, 432 Park, the Vessel and Edge, the Oculus, the Wonder Wheel and
+  Parachute Jump, Yankee Stadium; the Brooklyn and Manhattan Bridges.
+
+**Sound (done; added 2026-10-15 at the user's request):**
+- The hero: footsteps on the run animation's foot contacts (grass, boards,
+  concrete), super speed's wind and zoom, jumps and the super jump's
+  charge and boom, landings by fall speed, rushing air when flying,
+  falling, swinging or diving, web thwips, creaks and swing whooshes,
+  punches, dives, hits, splashes. Fights: hits, grunts, shouts, knockdowns,
+  bodies landing; fleeing pedestrians scream now and then.
+- The city (`scripts/audio/city_ambience.gd`): eight looping beds (day and
+  night streets, the far hum up high, the Times Square crowd, birds by day
+  and crickets at night in green areas, waves near water, wind up high)
+  crossfading with the time of day and with where you are, from a 64 m
+  soundscape map made from the land cover map; horns, far sirens, bird
+  calls and dogs around you. The nearest 4 moving cars get engine loops
+  pitched by speed, and cars held up by someone in the road honk.
+- Positional in co-op; buses Master, SFX, Ambience and UI; N or the touch
+  UI's speaker button mutes, remembered between visits (`?mute=1|0`,
+  `?audio=0` leaves sound out). Nothing plays before the first click, tap or
+  key (browsers' rule).
+- 118 sounds, CC0 (Kenney packs, Freesound uploads checked one by one,
+  listed in CREDITS.md) or synthesized; 1.6 MB with the soundscape map;
+  `tools/audio/build_sounds.py` rebuilds them. Cost: about 0.05-0.1 ms a
+  frame; in the browser 25-60 MB of decoded samples (Godot's web build keeps
+  them as float at the mix rate, set to 32 kHz on the web to save a third).
+
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
 for background decoding, and quality presets for weaker laptops.
@@ -454,6 +572,12 @@ phone, in the phone's browser, at https://nycheroes.party.
   0.75 GB for the whole tab on low (iOS Safari kills tabs at about
   1-1.5 GB); the canopy map was then cut to 16 m pixels, which saves about
   100 MB more.
+- **Low and medium were slow** (a quarter of high's frame rate in Chrome on
+  Windows): after drawing the smaller 3-D image, Godot copies its depth and
+  stencil up to the full-size screen, and ANGLE stretches stencil on the
+  CPU. `quality.gd` leaves stencil out of stretched copies (nothing reads
+  it), which took low at Times Square from about 100 to about 320 FPS
+  uncapped, faster than high. Unmeasured on real phones' browsers.
 - **Tested** with Chrome's phone emulation and scripted multi-touch
   (moving while looking, super speed, jumps, swinging, flying, punching and
   diving, typing a room code) on 844x390 and 667x375 screens, with notch
@@ -525,6 +649,10 @@ templates for both are already installed.
   `scripts/util/skin_warmup.gd` holds each character's pose briefly the
   first time it's on screen and stops animating characters off screen; that
   took a crowded Times Square from 22-35 FPS to the 180 FPS cap.
+- **3-D below screen resolution** in the Compatibility renderer ends with a
+  stretched depth+stencil copy; on ANGLE/D3D11 the stencil part runs on the
+  CPU and stalls every frame. `Quality.STRETCHED_BLIT_FIX` drops the
+  stencil from stretched copies.
 - **Floating origin.** World positions are scene positions plus
   `WorldOrigin.offset`; anything physics-driven must survive a shift.
 
@@ -538,7 +666,11 @@ templates for both are already installed.
   mark` re-adds them to the manifest). Python venv in `tools/citygen/.venv`,
   `requirements.txt` alongside.
   Prepared geometry is cached in `data/cache`; delete it after changing
-  `prepare.py` or re-downloading.
+  `prepare.py` or re-downloading. To try a change on a few tiles, copy a
+  full build somewhere and run `build_tiles.py --out <copy>/nyc --only
+  lod0:0,-1 lod1:0,-1 ...` (about 2 minutes: it rebuilds the bridges and
+  those tiles and updates the copy's manifest), then serve the copy as
+  `tiles/`.
 - Web build: `tools/build_web.ps1` (add `-Serve` to play at
   http://localhost:8060; it also runs the co-op signaling server on port
   8070, after `npm install` in `tools/signaling`).
@@ -553,13 +685,19 @@ templates for both are already installed.
   arrives brotli-compressed (9.6 MB). Tile URLs carry the build's id (from
   the manifest), and a tile that arrives broken or stale (an edge cache
   just after a deploy) is fetched again, past any cache, after 1.5 s and
-  3 s.
+  3 s. Co-op relay: TURN key "nycheroes-coop" in the Worker secrets
+  `TURN_KEY_ID` / `TURN_KEY_API_TOKEN` (for `wrangler dev`, in
+  `tools/cloudflare/.dev.vars`, gitignored); $0.05/GB after 1,000 GB free.
 - Tests (headless): `godot --headless --path . res://tests/hero_moves_test.tscn`,
-  `res://tests/combat_test.tscn`, `res://tests/streaming_test.tscn` and
-  `res://tests/coop_test.tscn`.
+  `res://tests/combat_test.tscn`, `res://tests/streaming_test.tscn`,
+  `res://tests/coop_test.tscn`, `res://tests/audio_test.tscn` and
+  `res://tests/traffic_test.tscn` (75 s of
+  midtown traffic: no red light run, no overlaps, cars stop for the hero,
+  and leave with their tiles).
 - Launch options (URL or `-- --name=value` on desktop): `?cam=x,y,z,yaw,pitch`
   free camera, `?spawn=x,y,z,yaw` hero start, `?stats` console stats,
-  `?peds=N`, `?gangs=N`, `?demo` / `?demo=fight` scripted tours for videos,
+  `?peds=N`, `?gangs=N`, `?traffic=N` (0: none), `?demo` / `?demo=fight` scripted tours for videos,
   `?host` / `?join=CODE` co-op, `?signal=wss://...` signaling server
-  (default: the page's host, port 8070), `?tree_shadows=0` trees without
-  shadows.
+  (default: the page's host, port 8070), `?relay=1` co-op only through the
+  TURN relay (testing), `?tree_shadows=0` trees without shadows,
+  `--tiles=DIR` (desktop and tests) read the city from a tile copy.

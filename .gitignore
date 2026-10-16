@@ -14,5 +14,6 @@ __pycache__/
 # Node
 node_modules/
 
-# Cloudflare: wrangler dev state
+# Cloudflare: wrangler dev state, and its local secrets (the TURN key)
 .wrangler/
+.dev.vars

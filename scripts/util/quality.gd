@@ -17,18 +17,22 @@ extends Node
 ##   street furniture    90/300          220/500         260/580
 ##   gone by (m, small/
 ##   large pieces)
+##   cars gone by (m)    170             320             460
 ##   fog density         0.00016         0.0001          0.00005
 ##   pedestrians         12              24              45
+##   moving cars         25              60              120
 ##   gangs (thugs; most  1 (2-4; 6)      2 (3-4; 10)     2 (3-5; 16)
 ##   bodies left lying)
 ##
 ## "Lines" is the 3-D image's height in pixels (its width follows the screen;
 ## never more than the screen's own pixels): the HUD and touch buttons stay
 ## sharp. The tile distances are CityStreamer.load_distances; the fog hides
-## where the city stops. Street furniture shrinks away piece by piece before
-## those distances (CityStreamer.set_furniture_fade()), and each tile's stops
-## drawing past them, so phones draw it in fewer tiles.
-## ?fog=, ?peds= and ?tree_shadows= still override their preset values.
+## where the city stops. Street furniture and cars (parked and moving) shrink
+## away one by one before those distances (CityStreamer.set_furniture_fade()
+## and set_car_fade()), and each tile's stop drawing past them, so phones
+## draw them in fewer tiles.
+## ?fog=, ?peds=, ?traffic= and ?tree_shadows= still override their preset
+## values.
 
 enum Level { LOW, MEDIUM, HIGH }
 
@@ -41,8 +45,10 @@ const PRESETS := {
 		"shadow_atlas": 1024,
 		"load_distances": [350.0, 800.0, 7000.0],
 		"furniture_fade": [Vector2(60.0, 90.0), Vector2(220.0, 300.0)],
+		"car_fade": Vector2(120.0, 170.0),
 		"fog_density": 0.00016,
 		"pedestrians": 12,
+		"cars": 25,
 		"gangs": 1,
 		"gang_size": Vector2i(2, 4),
 		"bodies": 6,
@@ -56,8 +62,10 @@ const PRESETS := {
 		"shadow_atlas": 2048,
 		"load_distances": [500.0, 1100.0, 12000.0],
 		"furniture_fade": [Vector2(150.0, 220.0), Vector2(360.0, 500.0)],
+		"car_fade": Vector2(220.0, 320.0),
 		"fog_density": 0.0001,
 		"pedestrians": 24,
+		"cars": 60,
 		"gangs": 2,
 		"gang_size": Vector2i(3, 4),
 		"bodies": 10,
@@ -65,6 +73,24 @@ const PRESETS := {
 }
 ## Never render 3-D at less than this share of the screen's pixels.
 const MIN_RENDER_SCALE := 0.25
+## After drawing a scaled-down 3-D image, Godot's Compatibility renderer
+## copies its depth and stencil to the full-size screen. Chrome on Windows
+## (ANGLE on Direct3D 11) stretches stencil on the CPU, which stalled every
+## frame: low and medium ran at a quarter of high's frame rate. Nothing drawn
+## after the 3-D image reads that stencil, so stretched copies leave it out.
+const STRETCHED_BLIT_FIX := """(function () {
+	if (typeof WebGL2RenderingContext === 'undefined' || window.nycStretchedBlitFix) return;
+	window.nycStretchedBlitFix = true;
+	var proto = WebGL2RenderingContext.prototype;
+	var blit = proto.blitFramebuffer;
+	proto.blitFramebuffer = function (x0, y0, x1, y1, dx0, dy0, dx1, dy1, mask, filter) {
+		if ((mask & 0x400) && (x1 - x0 !== dx1 - dx0 || y1 - y0 !== dy1 - dy0)) {
+			mask &= ~0x400;
+			if (!mask) return;
+		}
+		blit.call(this, x0, y0, x1, y1, dx0, dy0, dx1, dy1, mask, filter);
+	};
+})();"""
 const MEMORY_LOG_INTERVAL := 5.0
 
 static var _level := -1
@@ -96,13 +122,14 @@ static func level_name() -> String:
 
 
 ## Launch options that other nodes read when they start (call before they do):
-## no tree shadows and fewer pedestrians below "high".
+## no tree shadows and fewer pedestrians and cars below "high".
 static func set_launch_defaults() -> void:
 	if level() == Level.HIGH:
 		return
 	var preset: Dictionary = PRESETS[level()]
 	LaunchOptions.set_default("tree_shadows", "0")
 	LaunchOptions.set_default("peds", str(preset.pedestrians))
+	LaunchOptions.set_default("traffic", str(preset.cars))
 
 
 ## Applies the preset to the world's nodes (after they've started).
@@ -115,6 +142,8 @@ func apply(sun: DirectionalLight3D, environment: Environment, city: CityStreamer
 		root.msaa_3d = _preset.msaa
 		root.size_changed.connect(_update_render_scale)
 		_update_render_scale()
+		if Device.is_web():
+			JavaScriptBridge.eval(STRETCHED_BLIT_FIX, true)
 		sun.shadow_enabled = _preset.shadows
 		if _preset.shadows:
 			sun.directional_shadow_mode = _preset.shadow_mode
@@ -124,6 +153,7 @@ func apply(sun: DirectionalLight3D, environment: Environment, city: CityStreamer
 		distances.assign(_preset.load_distances)
 		city.load_distances = distances
 		city.set_furniture_fade(_preset.furniture_fade[0], _preset.furniture_fade[1])
+		city.set_car_fade(_preset.car_fade)
 		if environment and not LaunchOptions.has("fog"):
 			environment.fog_density = _preset.fog_density
 		encounters.max_gangs = _preset.gangs
