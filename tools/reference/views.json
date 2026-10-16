@@ -242,6 +242,60 @@
       "camera_lat_lon": [40.64592543, -74.0669758],
       "spawn": "-6855,2,12427",
       "pose_note": "Ferry position from the geotag, 10 m above the water; heading from the terminal slips in the frame."
+    },
+    {
+      "name": "roosevelt_ave",
+      "title": "Roosevelt Avenue at 82nd Street, Jackson Heights, under the 7 train",
+      "cam": "8557,21.9,1151.5,-53.0,0.0",
+      "photo": {
+        "file": "File:82 Street vc.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:82_Street_vc.jpg",
+        "author": "Doug Letterman",
+        "license": "CC BY 2.0",
+        "license_url": "https://creativecommons.org/licenses/by/2.0",
+        "date": "2009-12-31",
+        "camera": "Canon PowerShot SD800 IS, 4.6 mm (28 mm equivalent), cropped to 3:2",
+        "hfov": 63.4
+      },
+      "camera_lat_lon": [40.747557, -73.883925],
+      "spawn": "8525,21,1176",
+      "pose_note": "The geotag is in 82nd Street's roadway at Roosevelt Avenue's south curb; moved 22 m west into Roosevelt's eastbound lanes under the el, looking 29 degrees left of the avenue (its vanishing point is at the photo's right edge) across the 82nd Street crossing. Fitted to the crosswalk's distance (about 10 m, from its angle below the horizon) and the far corner. The side of 82nd Street is a judgment (the station stairs at the left aren't in the game)."
+    },
+    {
+      "name": "st_patricks",
+      "title": "St. Patrick's Cathedral from Fifth Avenue at Rockefeller Center",
+      "cam": "703,23.1,-105,-119.0,45.0",
+      "photo": {
+        "file": "File:Saint Patricks Cathedral in New York - NYC - USA - panoramio.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Saint_Patricks_Cathedral_in_New_York_-_NYC_-_USA_-_panoramio.jpg",
+        "author": "diego_cue",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+        "date": "2010-10-07",
+        "camera": "Nikon D3000, 18 mm (27 mm equivalent)",
+        "hfov": 67.4
+      },
+      "camera_lat_lon": [40.758802, -73.977127],
+      "spawn": "668,22,-124",
+      "pose_note": "On the cathedral's axis, about 50 m from its west front, in the International Building's forecourt by Atlas (the geotag is 12 m south of the axis, on the sidewalk); distance and the 45 degree pitch fitted to the spire tips and the front's width in the frame."
+    },
+    {
+      "name": "guggenheim",
+      "title": "The Guggenheim Museum from Fifth Avenue at 88th Street",
+      "cam": "2188.5,34.7,-2756.5,-68.0,14.0",
+      "photo": {
+        "file": "File:NYC - Guggenheim Museum.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:NYC_-_Guggenheim_Museum.jpg",
+        "author": "Jean-Christophe BENOIST",
+        "license": "CC BY 3.0",
+        "license_url": "https://creativecommons.org/licenses/by/3.0",
+        "date": "2012-04-28",
+        "camera": "Sony SLT-A77V, 16 mm (24 mm equivalent)",
+        "hfov": 73.7
+      },
+      "camera_lat_lon": [40.78281667, -73.959095],
+      "spawn": "2151,34,-2742",
+      "pose_note": "The geotag falls inside the rotunda. Placed at the south-west corner of Fifth Avenue and 88th Street (the 88th Street sign and the crosswalk are in the frame), clear of the park side's street trees, and fitted to the rotunda's and the Monitor's size and place."
     }
   ]
 }
