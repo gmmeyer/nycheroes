@@ -1060,6 +1060,38 @@ templates for both are already installed.
 - Web build: `tools/build_web.ps1` (add `-Serve` to play at
   http://localhost:8060; it also runs the co-op signaling server on port
   8070, after `npm install` in `tools/signaling`).
+- Shader compile time (measured 2026-10-16): on Windows, browsers (ANGLE on
+  D3D11) compile every shader a view needs with the D3D compiler, which
+  inlines every function call and takes time growing with about the square
+  of the code it ends up with: twice the code, four times the time. A first
+  visit's page freezes meanwhile (later visits use the browser's shader
+  cache). At Times Square, cold, on the dev machine (RTX 5090, Ryzen
+  9950X3D, idle), that was 87-155 s to the city's "ready", over half of it
+  on building.gdshader; now 19-27 s.
+  - Godot compiles four "default" variants of every 3-D shader before the
+    ones it draws with, and this game never draws with them. The page's
+    `html/head_include` (in `export_presets.cfg`) hands ANGLE empty shaders
+    for them: they're the 3-D shaders without a lightmap flag, and every
+    variant Godot draws with has one (DISABLE_LIGHTMAP here). That saved two
+    thirds of all compiling. After a Godot upgrade, check the console: "drew
+    with an emptied default shader variant" means it no longer holds.
+  - In shader code, call each heavy helper from one place: let the branches
+    set its arguments and make one call after them (building.gdshader:
+    `facade_for()`, `wall_texture()`, `window_light()` through
+    `WindowLight`, `screen()`'s `TextLine`; landmark.gdshader's
+    `landmark_wall_2()`). A helper called from three branches is compiled
+    three times over, and the total is then squared. Big features that few
+    tiles have belong in a shader of their own on a surface of their own
+    (landmark.gdshader), compiled only once they're in view. Avoid adding
+    dynamically indexed `const` arrays to the big shaders: ANGLE turns each
+    into a per-pixel copy, which made the building shader compile about a
+    third slower.
+  - Check after changing shaders: `node tools/shader_compile_check.mjs
+    http://localhost:8060/` (headless Chrome with a fresh profile: the time
+    to "ready", and the compile time per shader and per program; `--cam=`
+    and `--time=` pick the view). Keep Times Square around 20 s to ready on
+    the dev machine, building.gdshader's color variant under about 10 s and
+    every other shader under about 2 s.
 - Public site: `tools/deploy_cloudflare.ps1 [-Build]` publishes the web
   build to https://nycheroes.party (`tools/cloudflare`): one Worker serves the game and
   tiles as static assets (only changed files upload), `index.wasm` (over
