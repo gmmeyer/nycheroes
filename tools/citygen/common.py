@@ -102,6 +102,10 @@ SURFACE_CHURCHES = 10
 # posts, shrubs, awnings), near tiles only, which shaders/fronts.gdshader
 # paints (see fronts.py for its uv and uv2). Without collision.
 SURFACE_FRONTS = 11
+# The waterfront landmarks' faces in the materials shaders/waterfront.gdshader
+# paints (landmarks.py, 60 and up: ferry terminals, pier sheds, racks, docks
+# and boats), laid out like the landmarks surface. With collision up close.
+SURFACE_WATERFRONT = 12
 
 # Props (uv2.x of the props surface).
 PROP_TREE = 0         # broadleaf tree, round crown
