@@ -12,7 +12,10 @@ extends RefCounted
 ## traffic's cars share), one for shop fronts' signs and awnings (their own
 ## shader, shaders/shop_sign.gdshader, with the names texture), and two more
 ## with shaders/street_extras.gdshader: sidewalk sheds (many, so on a small
-## mesh of their own), and the bike share's docks with plaza furniture. Draw
+## mesh of their own), and the bike share's docks with plaza furniture; on
+## streets lined with houses, wooden utility poles (the street lights'
+## material on a mesh of their own) and the overhead wires between them and
+## to the houses (shaders/wires.gdshader, up close only). Draw
 ## calls are what props cost most on the web (measured), hence so few. Woods
 ## seen from afar are clumps of crowns, in tiles of every level (mid and far
 ## tiles have nothing else): one more MultiMesh, drawn by the trees' shader,
@@ -47,7 +50,7 @@ extends RefCounted
 ## The MultiMeshes: their node names, and the prop types
 ## (CityTileDecoder.PROP_*) each holds, as ranges (first, last).
 const GROUP_NAMES: Array[String] = ["Trees", "WaterTowers", "StreetLights", "SmallFurniture", "LargeFurniture",
-	"ParkedCars", "Canopy", "ShopFronts", "SidewalkSheds", "StreetExtras"]
+	"ParkedCars", "Canopy", "ShopFronts", "SidewalkSheds", "StreetExtras", "UtilityPoles", "Wires"]
 const GROUP_TYPES: Array[Array] = [
 	[Vector2i(0, 2)], [Vector2i(3, 3)], [Vector2i(4, 4)],
 	# Hydrants; benches; litter baskets, bike racks and parking meters.
@@ -58,6 +61,8 @@ const GROUP_TYPES: Array[Array] = [
 	[Vector2i(16, 16)],
 	# Shop signs and awnings; sidewalk sheds; bike docks, plaza tables, planters and kiosks.
 	[Vector2i(17, 18)], [Vector2i(19, 19)], [Vector2i(20, 23)],
+	# Utility poles; overhead wires.
+	[Vector2i(24, 24)], [Vector2i(25, 25)],
 ]
 const WATER_TOWERS := 1
 const STREET_LIGHTS := 2
@@ -68,6 +73,8 @@ const CANOPY := 6
 const SHOP_FRONTS := 7
 const SIDEWALK_SHEDS := 8
 const STREET_EXTRAS := 9
+const UTILITY_POLES := 10
+const WIRES := 11
 ## Street lights' glows: their node name, and the group they're all in.
 const GLOW_NAME := "StreetLightGlow"
 const GLOW_GROUP := &"street_light_glow"
@@ -131,6 +138,12 @@ const FURNITURE_RANGE_PAST_FADE := 370.0
 ## dev machine in Queens and Manhattan views).
 const SHOP_FADE_SHARE := 0.62
 const SHED_FADE_SHARE := 0.78
+## Overhead wires thin out and are gone at this share of the large
+## furniture's distances (210-290 m on high): they're a pixel wide long
+## before, and there are many. Their mesh's box already holds a span
+## whichever way it runs.
+const WIRE_FADE_SHARE := 0.5
+const WIRE_CULL_MARGIN := 2.0
 
 ## Trees stop drawing once their tile's center is this far from the camera
 ## (m). The tree shader shrinks each tree away before that (its
@@ -170,11 +183,13 @@ var car_fade := Vector2(320.0, 460.0)
 var lights_on := false
 ## Where street lights' pools go (null: nowhere).
 var light_map: StreetLightMap
-## Shop signs' and awnings' material (shaders/shop_sign.gdshader), and
+## Shop signs' and awnings' material (shaders/shop_sign.gdshader),
 ## sidewalk sheds', bike docks' and plaza furniture's
-## (shaders/street_extras.gdshader).
+## (shaders/street_extras.gdshader), and overhead wires'
+## (shaders/wires.gdshader).
 var shop_material: ShaderMaterial
 var extras_material: ShaderMaterial
+var wires_material: ShaderMaterial
 
 var _meshes: Array[Mesh] = []
 var _shadow_meshes: Array[Mesh] = []
@@ -187,13 +202,14 @@ func _init(tree_material: Material, water_tower_material: Material, street_light
 		street_light_glow_material: Material, street_furniture_material: Material, car_material: Material) -> void:
 	_meshes = [PropMeshes.tree(), PropMeshes.water_tower(), PropMeshes.street_light(),
 		PropMeshes.street_furniture_small(), PropMeshes.street_furniture_large(), PropMeshes.car(),
-		PropMeshes.canopy(), PropMeshes.shop_fronts(), PropMeshes.sidewalk_shed(), PropMeshes.street_furniture_extra()]
+		PropMeshes.canopy(), PropMeshes.shop_fronts(), PropMeshes.sidewalk_shed(), PropMeshes.street_furniture_extra(),
+		PropMeshes.utility_pole(), PropMeshes.wires()]
 	# Water towers cast their own shadows; street lights, furniture and cars
 	# cast none (thin, or small next to the buildings' shadows, and each would
 	# cost a draw call per shadow split: large furniture's shadows measured
 	# 3-11% of the frame rate in midtown for little to see; cars draw a
 	# contact shadow of their own).
-	_shadow_meshes = [PropMeshes.tree_shadow(), null, null, null, null, null, null, null, null, null]
+	_shadow_meshes = [PropMeshes.tree_shadow(), null, null, null, null, null, null, null, null, null, null, null]
 	# Shop fronts', sheds', docks' and plaza furniture's materials are the
 	# props' own (the first needs only the names texture).
 	shop_material = ShaderMaterial.new()
@@ -201,8 +217,12 @@ func _init(tree_material: Material, water_tower_material: Material, street_light
 	shop_material.set_shader_parameter("sign_names", preload("res://assets/signs/sign_names.png"))
 	extras_material = ShaderMaterial.new()
 	extras_material.shader = preload("res://shaders/street_extras.gdshader")
+	wires_material = ShaderMaterial.new()
+	wires_material.shader = preload("res://shaders/wires.gdshader")
+	# Utility poles are drawn by the street lights' shader.
 	_materials = [tree_material, water_tower_material, street_light_material, street_furniture_material,
-		street_furniture_material, car_material, tree_material, shop_material, extras_material, extras_material]
+		street_furniture_material, car_material, tree_material, shop_material, extras_material, extras_material,
+		street_light_material, wires_material]
 	_glow_mesh = PropMeshes.street_light_glow()
 	_glow_material = street_light_glow_material
 	# Fade distances already set on the material (?sh_small_fade_distance=...,
@@ -236,6 +256,7 @@ func set_furniture_fade(small: Vector2, large: Vector2) -> void:
 	extras_material.set_shader_parameter("small_fade_distance", small)
 	extras_material.set_shader_parameter("large_fade_distance", large)
 	extras_material.set_shader_parameter("shed_fade_distance", large * SHED_FADE_SHARE)
+	wires_material.set_shader_parameter("fade_distance", large * WIRE_FADE_SHARE)
 
 
 ## Sets where cars shrink away (see car_fade), in their shader too, parked
@@ -367,9 +388,12 @@ func _instance(group: int, buffer: PackedFloat32Array, mesh: Mesh) -> MultiMeshI
 		WATER_TOWERS:
 			instance.extra_cull_margin = CULL_MARGIN
 			instance.visibility_range_end = water_tower_range
-		STREET_LIGHTS:
+		STREET_LIGHTS, UTILITY_POLES:
 			instance.extra_cull_margin = STREET_LIGHT_CULL_MARGIN
 			instance.visibility_range_end = street_light_range
+		WIRES:
+			instance.extra_cull_margin = WIRE_CULL_MARGIN
+			instance.visibility_range_end = large_furniture_fade.y * WIRE_FADE_SHARE + FURNITURE_RANGE_PAST_FADE
 		SMALL_FURNITURE:
 			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
 			instance.visibility_range_end = small_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
