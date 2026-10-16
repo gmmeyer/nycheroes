@@ -141,8 +141,8 @@ OWN_MATERIAL_SHARE = 0.2
 CACHE_NAME = "facades"
 
 
-def prepare(buildings: dict) -> dict:
-    """Per building (same order as `buildings`): archetype, flags, floor height (dm)."""
+def lot_tables() -> tuple[dict, dict]:
+    """The tax lot of each building ID (BIN), and PLUTO's row for each lot (BBL)."""
     lots = {}
     for row in json.loads((RAW_DIR / "building_lots.json").read_text()):
         if row.get("bin") and row.get("mappluto_bbl"):
@@ -151,6 +151,12 @@ def prepare(buildings: dict) -> dict:
     for row in json.loads((RAW_DIR / "pluto.json").read_text()):
         if row.get("bbl"):
             pluto[int(float(row["bbl"]))] = row
+    return lots, pluto
+
+
+def prepare(buildings: dict) -> dict:
+    """Per building (same order as `buildings`): archetype, flags, floor height (dm)."""
+    lots, pluto = lot_tables()
 
     count = len(buildings["bin"])
     archetype = np.full(count, UNKNOWN, dtype=np.uint8)
@@ -176,7 +182,7 @@ def prepare(buildings: dict) -> dict:
 def _floors(lot, height: float) -> int:
     """The building's floor count: the tax lot's, if it fits the height (a lot's
     count is for its main building), else estimated from the height."""
-    floors = _number(lot, "numfloors") if lot else 0.0
+    floors = number(lot, "numfloors") if lot else 0.0
     if floors >= 1 and MIN_FLOOR <= height / floors <= MAX_FLOOR + 1.0:
         return int(round(floors))
     return max(1, int(round(height / DEFAULT_FLOOR)))
@@ -194,10 +200,10 @@ def _classify(lot: dict, floors: int, bin_number: int) -> tuple[int, int, int]:
     """The building's archetype, flags and stoop steps."""
     code = (lot.get("bldgclass") or "").upper()
     kind = code[:1]
-    year = int(_number(lot, "yearbuilt")) or 1950
+    year = int(number(lot, "yearbuilt")) or 1950
     prewar = year < PREWAR_YEAR
-    retail = _number(lot, "retailarea") > 0 or code in ("C7", "D6", "D7") or kind in ("S", "K")
-    residential = _number(lot, "resarea") >= max(_number(lot, "officearea"), 1.0)
+    retail = number(lot, "retailarea") > 0 or code in ("C7", "D6", "D7") or kind in ("S", "K")
+    residential = number(lot, "resarea") >= max(number(lot, "officearea"), 1.0)
 
     district = (lot.get("histdist") or "").upper()
     if year < 1920 and floors <= 12 and ("CAST IRON" in district or "TRIBECA" in district) and kind not in ("A", "B"):
@@ -271,9 +277,9 @@ def _material(lot: dict, archetype: int, year: int, district: str, bin_number: i
         return AUTO
     # A row: consecutive lots on the block, built the same year.
     bbl = int(float(lot.get("bbl") or 0))
-    r = _unit_hash(bbl // 10000, (bbl % 10000) // 5, year)
-    if _unit_hash(bin_number, 7) < OWN_MATERIAL_SHARE:
-        r = _unit_hash(bin_number, 11)
+    r = unit_hash(bbl // 10000, (bbl % 10000) // 5, year)
+    if unit_hash(bin_number, 7) < OWN_MATERIAL_SHARE:
+        r = unit_hash(bin_number, 11)
     cumulative = np.cumsum(odds) / float(sum(odds))
     return BROWNSTONE + min(int(np.searchsorted(cumulative, r, side="right")), len(odds) - 1)
 
@@ -283,7 +289,7 @@ def _stoop_steps(lot: dict, archetype: int, retail: bool, year: int, bin_number:
     up, later rows' fewer; walk-ups have a few (none behind shop fronts)."""
     if retail:
         return 0
-    r = _unit_hash(bin_number, 13)
+    r = unit_hash(bin_number, 13)
     if archetype == ROWHOUSE:
         if lot.get("borough") in ("QN", "SI"):
             steps = 5 if year < 1920 else (4 if year < PREWAR_YEAR else 3)
@@ -295,7 +301,7 @@ def _stoop_steps(lot: dict, archetype: int, retail: bool, year: int, bin_number:
     return 0
 
 
-def _unit_hash(*values: int) -> float:
+def unit_hash(*values: int) -> float:
     """A repeatable pseudo-random number in [0, 1) from whole numbers."""
     h = 2166136261
     for v in values:
@@ -304,7 +310,7 @@ def _unit_hash(*values: int) -> float:
     return ((h * 2654435761) & 0xFFFFFFFF) / 4294967296.0
 
 
-def _number(lot: dict, field: str) -> float:
+def number(lot: dict, field: str) -> float:
     try:
         return float(lot.get(field) or 0)
     except (TypeError, ValueError):

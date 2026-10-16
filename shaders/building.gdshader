@@ -20,9 +20,11 @@
 // settles into its average color instead of shimmering.
 // Rowhouses' and walk-ups' stoops (tools/citygen/fronts.py: steps, cheek
 // walls, the doorway on the landing; FRONT_PART faces) are painted by
-// stoop(): stone treads and risers, solid cheek walls or iron railings, double
-// doors under a transom in a stone surround, lit at night. The walls of a
-// house with a stoop (STOOP) have no front door of their own.
+// stoop(): stone treads and risers, cheek walls (or the curbs under iron
+// railings, which shaders/fronts.gdshader paints), double doors under a
+// transom in a stone surround, lit at night. The walls of a house with a
+// stoop (STOOP) have no front door of their own. Rows' deep cornices
+// (fronts.py) are FRONT walls, painted like the cornices on the walls.
 // Lighting is the shared toon model (toon.gdshaderinc); glass also reflects a
 // simple sky. With an aerial photo (?aerial=1), roofs show it.
 // At night (the time of day: shaders/night.gdshaderinc) a share of windows is
@@ -1527,17 +1529,17 @@ vec3 stoop_stone(Facade f, int archetype, int material, float seed) {
 // A stoop (tools/citygen/fronts.py): steps up to the parlor floor between
 // cheek walls, the front door on its landing, and the wall along the front
 // yard. Brownstone and limestone houses' stoops are their own stone; brick
-// rows' are brownstone, their trim stone or cast concrete, some with iron
-// railings on a low curb instead of solid cheek walls (and an iron fence
-// between stone posts along the yard instead of a stone wall). The doorway:
-// double doors with glass panes under a transom, in a stone surround with a
-// hood; at night the glass glows and a lamp lights the landing.
-// `stone` is stoop_stone(), `textured` its wall_texture() as STONE at p
-// (treads: at p * (0.6, 1)).
-Surface stoop(Facade f, vec3 stone, vec3 textured, int part, vec2 p, vec2 fp, int material, float seed) {
+// rows' are brownstone, their trim stone or cast concrete. Under iron
+// railings the cheek walls are low curbs, and under iron fences the yard's
+// wall (fronts.py makes them lower; the iron is in the fronts surface). The
+// doorway: double doors with glass panes under a transom, in a stone
+// surround with a hood; at night the glass glows and a lamp lights the
+// landing.
+// `textured` is stoop_stone()'s wall_texture() as STONE at p (treads: at
+// p * (0.6, 1)).
+Surface stoop(Facade f, vec3 textured, int part, vec2 p, vec2 fp, int material, float seed) {
 	float pixel = max(fp.x, fp.y);
 	float detail = smoothstep(4.0, 10.0, 0.3 / pixel);
-	bool iron = material != MAT_BROWNSTONE && rnd(seed, 32.0) < 0.45;
 	Surface s;
 	s.emission = vec3(0.0);
 	s.glass = 0.0;
@@ -1563,43 +1565,22 @@ Surface stoop(Facade f, vec3 stone, vec3 textured, int part, vec2 p, vec2 fp, in
 		color *= mix(0.86, 1.0, smoothstep(-2.5, -0.5, p.y)) * mix(1.0, 0.92, above * float(part == CHEEK));
 		float cap = band(h, CHEEK_HEIGHT - 0.11, 1e4, fp.y);
 		float under_cap = band(h, CHEEK_HEIGHT - 0.17, CHEEK_HEIGHT - 0.11, fp.y);
-		if (iron) {
-			// A curb, then iron: a top rail, a bottom rail and balusters, the
-			// dark beyond showing between them.
-			float rail = band(h, 0.26, 1e4, fp.y);
-			float bars = max(stripes(p.x / 0.13, 0.22, fp.x / 0.13) * detail + 0.22 * (1.0 - detail),
-					max(band(h, CHEEK_HEIGHT - 0.06, 1e4, fp.y), band(h, 0.26, 0.31, fp.y)));
-			vec3 railing = mix(stone * 0.42, srgb(IRON) * 1.4, bars);
-			color = mix(color, mix(color * 1.06, railing, rail), above);
-		} else {
-			// A solid cheek wall under a molded coping; brownstones carry a
-			// sunken panel.
-			float panel = (band(h, 0.16, 0.2, fp.y) + band(h, CHEEK_HEIGHT - 0.3, CHEEK_HEIGHT - 0.26, fp.y))
-					* float(material == MAT_BROWNSTONE) * detail;
-			color = mix(color, color * (1.0 - 0.25 * panel) * mix(1.0, 0.7, under_cap) * mix(1.0, 1.14, cap), above);
-		}
+		// A solid cheek wall under a molded coping; brownstones carry a sunken
+		// panel. (A curb under a railing is too low for either.)
+		float panel = (band(h, 0.3, 0.34, fp.y) + band(h, CHEEK_HEIGHT - 0.3, CHEEK_HEIGHT - 0.26, fp.y))
+				* float(material == MAT_BROWNSTONE) * detail;
+		color = mix(color, color * (1.0 - 0.25 * panel) * mix(1.0, 0.7, under_cap) * mix(1.0, 1.14, cap), above);
 		s.albedo = color;
 		return s;
 	}
 	if (part == AREAWAY) {
-		// A stone wall under a coping, or an iron fence on a curb between
-		// capped stone posts.
+		// A stone wall under a coping (a fence's curb is too low for one).
 		float h = p.y;
 		vec3 color = textured;
 		color *= mix(0.84, 1.0, smoothstep(-0.2, 0.25, h));
 		float cap = band(h, AREAWAY_HEIGHT - 0.1, 1e4, fp.y);
 		float under_cap = band(h, AREAWAY_HEIGHT - 0.15, AREAWAY_HEIGHT - 0.1, fp.y);
-		if (iron) {
-			const float POSTS = 2.4;
-			float post = centered_stripes(p.x / POSTS, 0.32 / POSTS, fp.x / POSTS);
-			float rail = band(h, 0.3, 1e4, fp.y) * (1.0 - post);
-			float bars = max(stripes(p.x / 0.13, 0.22, fp.x / 0.13) * detail + 0.22 * (1.0 - detail),
-					max(band(h, AREAWAY_HEIGHT - 0.06, 1e4, fp.y), band(h, 0.3, 0.35, fp.y)));
-			color = mix(color, mix(stone * 0.42, srgb(IRON) * 1.4, bars), rail);
-			color *= mix(1.0, 1.14, cap * post);
-		} else {
-			color *= mix(1.0, 0.7, under_cap) * mix(1.0, 1.14, cap);
-		}
+		color *= mix(1.0, 0.7, under_cap) * mix(1.0, 1.14, cap);
 		s.albedo = color;
 		return s;
 	}
@@ -2939,7 +2920,7 @@ void fragment() {
 		}
 		vec3 textured = wall_texture(stone, surface, UV * scale, footprint * scale);
 		if (stoop_part) {
-			s = stoop(f, stone, textured, part, UV, footprint, material, seed);
+			s = stoop(f, textured, part, UV, footprint, material, seed);
 			occlusion = canyon_occlusion;
 		} else if ((flags & PARAPET_INSIDE) != 0) {
 			s = parapet_inside(f, textured, footprint, below_top);
