@@ -134,6 +134,8 @@ var _photos_enabled := false
 var _merged_building_material: ShaderMaterial
 ## The second batch of landmarks' own materials (the landmarks surface).
 var landmark_material := _new_landmark_material()
+## The waterfront landmarks' materials (the waterfront surface).
+var waterfront_material := _new_waterfront_material()
 var _props: CityProps
 var _light_map: StreetLightMap
 var _in_flight := 0
@@ -577,6 +579,8 @@ func _build_tile_node(tile: Tile, data: PackedByteArray) -> Node3D:
 		instance.material_override = _building_material(tile.level) if is_buildings else ground_material
 		if surface.kind == CityTileDecoder.SURFACE_LANDMARKS:
 			instance.material_override = landmark_material
+		elif surface.kind == CityTileDecoder.SURFACE_WATERFRONT:
+			instance.material_override = waterfront_material
 		var casts_shadow: bool = near and surface.kind != CityTileDecoder.SURFACE_GROUND
 		if not casts_shadow:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -657,6 +661,12 @@ func _apply_photo(item: Array) -> bool:
 static func _new_landmark_material() -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = preload("res://shaders/landmark.gdshader")
+	return material
+
+
+static func _new_waterfront_material() -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = preload("res://shaders/waterfront.gdshader")
 	return material
 
 

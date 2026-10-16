@@ -2,8 +2,10 @@
 // Guggenheim, the Public Library, St. Patrick's, the UN, Citigroup Center,
 // the Hearst Tower, the Met, the Vessel, the Oculus, Yankee Stadium, the
 // Unisphere, the Wonder Wheel, the Parachute Jump and Radio City's marquee;
-// St. Patrick's carved work). Their faces with materials 41 and up come in each tile's landmarks surface
-// (CityTileDecoder.SURFACE_LANDMARKS); faces in the first batch's materials
+// St. Patrick's carved work; the Pier 3 berm's meadow). Their faces with
+// materials 41 to 59 come in each tile's landmarks surface
+// (CityTileDecoder.SURFACE_LANDMARKS; the waterfront's, 60 and up, have a
+// shader of their own, waterfront.gdshader); faces in the first batch's materials
 // (paving, plain stone, copper...) stay in the buildings surface, which
 // shaders/building.gdshader paints. They have a shader of their own so the
 // buildings' one stays small enough for browsers to compile quickly (ANGLE's
@@ -86,10 +88,6 @@ const vec3 LAMP_NEUTRAL = vec3(1.0, 0.88, 0.68);
 const vec3 TV_BLUE = vec3(0.45, 0.58, 1.0);
 const vec3 LOBBY_LIGHT = vec3(1.0, 0.88, 0.68);
 
-// Letter-like glyphs as seven-segment codes (bits: 1 top, 2 upper right,
-// 4 lower right, 8 bottom, 16 lower left, 32 upper left, 64 middle): A b C d
-// E F H J L o P S U y O 2.
-const int GLYPHS[16] = int[](119, 124, 57, 94, 121, 113, 118, 30, 56, 92, 115, 109, 62, 110, 63, 91);
 
 // The dark steel round screens, in sRGB.
 const vec3 SIGN_STEEL = vec3(0.10, 0.10, 0.12);
@@ -294,7 +292,7 @@ vec3 ad_color(float h) {
 	return srgb(0.56 + 0.36 * cos(2.0 * PI * (h + vec3(0.0, 0.33, 0.67))));
 }
 
-// A seven-segment glyph (GLYPHS) in its box: g runs 0..1 across and up the
+// A seven-segment glyph (LETTERS) in its box: g runs 0..1 across and up the
 // box, fg is the pixel's footprint in box units. Returns its coverage.
 float glyph(int code, vec2 g, vec2 fg) {
 	const vec2 STROKE = vec2(0.26, 0.15);  // stroke width across, height up (box units)
@@ -312,23 +310,6 @@ float glyph(int code, vec2 g, vec2 fg) {
 	return min(on, 1.0);
 }
 
-// A line of text `height` m tall; q is meters along it and up from its foot,
-// `spaces` the share of letters left out (gaps between words), `salt` picks
-// the words. Up close its letters are glyphs, from further away solid blocks
-// (the blocky bars a sign's text reads as from down the street), then their
-// average. Returns coverage.
-float text_line(vec2 q, float height, float spaces, float salt, vec2 footprint) {
-	float pitch = height * 0.8;
-	float width = height * 0.6;
-	float cell = floor(q.x / pitch);
-	float h = hash(vec2(cell, salt));
-	vec2 g = vec2((q.x - cell * pitch) / width, q.y / height);
-	vec2 fg = footprint / vec2(width, height);
-	float letter = step(spaces, h) * band(g.x, 0.0, 1.0, fg.x);
-	float shape = mix(0.6, glyph(GLYPHS[pick(fract(h * 13.7), 16)], g, fg), smoothstep(5.0, 10.0, height / footprint.y));
-	float line = band(q.y, 0.0, height, footprint.y);
-	return line * mix(0.45 * (1.0 - spaces), letter * shape, smoothstep(1.5, 4.0, pitch / footprint.x));
-}
 
 // A window grid fitted to a face `width` m wide: bays of about `bay` m, as
 // many as fit, so piers land on the corners; floors `floor_height` m, each
@@ -385,7 +366,7 @@ vec3 sky_reflection(vec3 r) {
 
 const vec3 GUGG_WHITE = vec3(0.89, 0.89, 0.87);     // painted concrete, white-gray
 const vec3 MARBLE = vec3(0.76, 0.75, 0.72);         // Vermont and the UN's marble, weathered gray-beige
-const vec3 CATHEDRAL_MARBLE = vec3(0.66, 0.62, 0.55);  // St. Patrick's Tuckahoe marble, weathered gray-tan
+const vec3 CATHEDRAL_MARBLE = vec3(0.65, 0.62, 0.56);  // St. Patrick's Tuckahoe marble, weathered gray-tan
 const vec3 SLATE_GRAY = vec3(0.37, 0.41, 0.43);
 const vec3 UN_GREEN = vec3(0.32, 0.52, 0.53);       // the Secretariat's blue-green glass
 const vec3 ALUMINUM = vec3(0.84, 0.85, 0.86);
@@ -404,14 +385,19 @@ const vec3 RIDE_BLUE = vec3(0.20, 0.38, 0.70);
 const vec3 RIDE_RED = vec3(0.74, 0.16, 0.12);
 const vec3 POOL_WATER = vec3(0.45, 0.72, 0.78);
 const vec3 BRONZE = vec3(0.30, 0.24, 0.17);
-// Words in seven-segment letters (see GLYPHS; 0 a space), one table looked up
-// in one place: YANKEE STADIUM from 0, WONDER WHEEL from WONDER, RADIO CITY
-// MUSIC HALL (and RADIO CITY) from RADIO_CITY.
-const int WORDS[47] = int[](110, 119, 55, 118, 121, 121, 0, 109, 120, 119, 94, 6, 62, 55,
+// Letters as seven-segment codes (bits: 1 top, 2 upper right, 4 lower right,
+// 8 bottom, 16 lower left, 32 upper left, 64 middle; 0 a space), one table
+// looked up in one place: first sixteen letter-like glyphs for made-up words
+// (A b C d E F H J L o P S U y O 2), then the words: YANKEE STADIUM from
+// WORDS, WONDER WHEEL from WONDER, RADIO CITY MUSIC HALL (and RADIO CITY)
+// from RADIO_CITY.
+const int LETTERS[63] = int[](119, 124, 57, 94, 121, 113, 118, 30, 56, 92, 115, 109, 62, 110, 63, 91,
+		110, 119, 55, 118, 121, 121, 0, 109, 120, 119, 94, 6, 62, 55,
 		62, 63, 55, 94, 121, 80, 0, 62, 118, 121, 121, 56,
 		80, 119, 94, 6, 63, 0, 57, 6, 120, 110, 0, 55, 62, 109, 6, 57, 0, 118, 119, 56, 56);
-const int WONDER = 14;
-const int RADIO_CITY = 26;
+const int WORDS = 16;
+const int WONDER = 30;
+const int RADIO_CITY = 42;
 // The Unisphere's continents (UNISPHERE_LAND in landmarks.py): 24 rows of 48
 // cells 7.5 degrees square, from 90 N and 180 W; two words a row, bit k of the
 // first for cell k, of the second for cell 32 + k.
@@ -489,7 +475,7 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 	vec2 cell_size = vec2(1.0);
 	float up = 0.5;
 	float seed = 0.5;
-	int word = -1;                 // a letter (its place in WORDS), its box's lower
+	int word = -1;                 // a letter (its place in LETTERS), its box's lower
 	vec2 letter_q = vec2(0.0);     // left and height, its color and glow
 	float letter_h = 1.0;
 	vec3 letter_color = vec3(1.0);
@@ -583,18 +569,16 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 				// Stained glass seen from outside, dark and muted, in stone tracery:
 				// the rose window (7.9 m: sixteen lights round a quatrefoil) on the
 				// central front, elsewhere lights between mullions and transoms.
+				// (Mullions across and transoms up; on the rose, spokes across and
+				// rings up, in polar coordinates.)
 				vec2 q = vec2(p.x - 0.5 * width, p.y - 26.0);
+				bool rose = width > 12.0;
 				float r = length(q) / 3.95;
-				float sector = atan(q.y, q.x) / PI * 8.0;
-				float tracery = max(centered_stripes(q.x / 1.05 + 0.5, 0.14, fp.x / 1.05), stripes(p.y / 2.4, 0.08, fp.y / 2.4));
-				float pane = floor(q.x / 1.05 + 0.5) + 7.0 * floor(p.y / 2.4);
-				if (width > 12.0) {
-					float fr = pixel / 3.95;
-					tracery = max(max(centered_stripes(sector, 0.14, fr / max(r, 0.05) * 2.5) * step(0.33, r),
-							band(abs(r - 0.33), 0.0, 0.05, fr)), max(band(abs(r - 0.7), 0.0, 0.035, fr), 1.0 - band(r, -1.0, 0.97, fr)));
-					tracery = max(tracery, band(abs(length(vec2(fract(sector) - 0.5, (r - 0.85) * 2.4)) - 0.42), 0.0, 0.06, fr * 3.0) * step(0.7, r));
-					pane = floor(sector + 8.0) + 16.0 * floor(r * 3.0);
-				}
+				vec2 t = rose ? vec2(atan(q.y, q.x) / PI * 8.0, r * 2.7 - 0.9) : vec2(q.x / 1.05 + 0.5, p.y / 2.4);
+				vec2 ft = rose ? vec2(pixel / max(r * 3.95, 0.2) * 2.5, 2.7 * pixel / 3.95) : fp / vec2(1.05, 2.4);
+				float tracery = max(centered_stripes(t.x, 0.14, ft.x) * step(0.33, r * float(rose) + float(!rose)),
+						stripes(t.y, 0.1, ft.y)) + (rose ? step(0.97, r) : 0.0);
+				float pane = floor(t.x) + 17.0 * floor(t.y);
 				float h = hash(vec2(pane, 3.7));
 				vec3 glass = srgb(mix(mix(vec3(0.11, 0.12, 0.19), vec3(0.22, 0.11, 0.12), step(0.55, h)), vec3(0.20, 0.17, 0.11), step(0.85, h)));
 				color = mix(glass, color * 0.8, tracery);
@@ -605,8 +589,8 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 				// with a row of niches.
 				float x = p.x - 0.5 * width;
 				float door_h = width > 12.0 ? 5.0 : 3.8;
-				float door = band(abs(x), -1.0, width > 12.0 ? 1.7 : 1.15, fp.x) * band(p.y, -2.0, door_h, fp.y);
-				vec3 bronze = srgb(BRONZE) * (1.0 - 0.35 * max(centered_stripes(x / 0.85, 0.08, fp.x / 0.85), stripes(p.y / 1.25, 0.08, fp.y / 1.25)));
+				float door = band(abs(x), -1.0, width > 12.0 ? 1.7 : 1.15, fp.x) * step(p.y, door_h);
+				vec3 bronze = srgb(BRONZE) * (1.0 - 0.35 * centered_stripes(x / 0.85, 0.08, fp.x / 0.85));
 				color = mix(color * 0.8, bronze, door);
 				arch_q = vec2(mod(x, 1.4) - 0.7, p.y);
 				arch = vec3(0.8, door_h + 0.9, door_h + 2.3);
@@ -634,11 +618,9 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 			// it a wheel of blind tracery (three foils in a ring).
 			vec2 q = vec2(p.x - 0.5 * width, p.y - 40.2);
 			float r = length(q);
-			float foil = min(min(abs(length(q - vec2(0.0, 1.1)) - 1.0), abs(length(q - vec2(0.95, -0.55)) - 1.0)),
-					abs(length(q - vec2(-0.95, -0.55)) - 1.0));
-			float bars = max(band(abs(r - 2.9), 0.0, 0.22, pixel), band(foil, 0.0, 0.14, pixel));
-			color *= mix(1.0, mix(0.7, 1.05, bars), (1.0 - band(r, 3.12, 1e4, pixel)) * step(34.5, p.y));
-			color *= 1.0 - 0.25 * band(abs(p.y - 33.7), 0.0, 0.3, fp.y);
+			float foil = min(min(abs(r - 2.9), abs(length(q - vec2(0.0, 1.1)) - 1.0)),
+					min(abs(length(q - vec2(0.95, -0.55)) - 1.0), abs(length(q - vec2(-0.95, -0.55)) - 1.0)));
+			color *= mix(1.0, mix(0.7, 1.05, band(foil, -1.0, 0.16, pixel)), step(r, 3.1) * step(34.5, p.y));
 		} else if (p.y < 41.6) {
 			// The towers: string courses; four small lancets a side under the
 			// battlement.
@@ -792,7 +774,7 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 			float ax = x - clamp(floor(x / 17.0 + 0.5), -1.0, 1.0) * 17.0;
 			color = mix(color, stone * 1.06, band(abs(ax), 3.7, 4.6, fp.x) * band(p.y, MET_FLOOR, MET_FLOOR + 14.3, fp.y));
 			// The wall in shadow behind each pair of columns.
-			color *= 1.0 - 0.28 * band(abs(abs(abs(x) - 17.5) - 8.0), -1.0, 2.0, fp.x) * band(p.y, MET_FLOOR, MET_FLOOR + 16.8, fp.y);
+			color *= 1.0 - 0.28 * band(abs(abs(abs(x) - 17.5) - 8.0), -1.0, 2.0, fp.x) * step(MET_FLOOR, p.y) * step(p.y, MET_FLOOR + 16.8);
 			arch_q = vec2(ax, p.y);
 			arch = vec3(7.4, MET_FLOOR, MET_FLOOR + 10.0);
 			cornice = vec2(MET_FLOOR + 16.8, MET_FLOOR + 19.6);
@@ -826,9 +808,8 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 		float level = p.y / 2.9;
 		float f = fp.x + 0.5 * fp.y / 2.9;
 		float flights = max(centered_stripes(p.x + 0.5 * level, 0.32, f), centered_stripes(p.x - 0.5 * level, 0.32, f));
-		float edges = max(centered_stripes(p.x + 0.5 * level - 0.17, 0.05, f), centered_stripes(p.x - 0.5 * level - 0.17, 0.05, f));
 		vec3 copper = srgb(COPPER_CLAD) * (0.9 + 0.15 * value_noise(p * vec2(4.0, 1.0)))
-				* (1.0 - 0.2 * stripes(p.y / 0.18, 0.4, fp.y / 0.18) * visible(0.18, pixel)) * (1.0 - 0.35 * edges);
+				* (1.0 - 0.2 * stripes(p.y / 0.18, 0.4, fp.y / 0.18) * visible(0.18, pixel));
 		// Through the openings: the flights across the bowl, lit or in shade.
 		vec3 beyond = srgb(COPPER_CLAD) * (variant == 1 ? 0.6 : mix(0.3, 0.55, hash(floor(vec2(p.x * 2.0 + level, level)))));
 		color = mix(beyond, copper, flights);
@@ -858,7 +839,7 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 			if (variant == 1) {
 				float q = p.x - 0.5 * width + 7.0 * 1.95;
 				int i = int(floor(q / 1.95));
-				word = (i >= 0 && i < 14) ? i : -1;
+				word = (i >= 0 && i < 14) ? WORDS + i : -1;
 				letter_q = vec2(q - float(i) * 1.95, p.y - 19.0);
 				letter_h = 2.4;
 				letter_color = srgb(GOLD_LEAF);
@@ -995,18 +976,36 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 	if (lit > 0.0 && city_lights > 0.0) {
 		s.emission += window_light(MODERN_OFFICE, true, cell, seed, cell_size / fp, up) * (lit * window_glow * city_lights);
 	}
-	int code = word >= 0 ? WORDS[min(word, 46)] : 0;
-	if (code != 0) {
+	if (word >= 0 || text_h > 0.0) {
+		// A letter of a word, or of a line of text (a face has one or the other,
+		// so glyph() is compiled once). A line of text's letters are made up,
+		// some left out for the gaps between words; up close they're glyphs,
+		// from further away solid blocks (the bars a sign's text reads as from
+		// down the street), then their average.
 		vec2 box = vec2(letter_h * 0.62, letter_h);
-		float letter = glyph(code, letter_q / box, fp / box);
-		color = mix(color, letter_color, letter);
-		s.glass = max(s.glass, letter * 0.5);
-		s.emission += letter_color * (letter * letter_glow);
-	}
-	if (text_h > 0.0) {
-		float text = text_line(text_q, text_h, 0.12, text_salt, fp);
-		color = mix(color, text_color, text * 0.9);
-		s.emission += text_color * (text * text_glow);
+		vec2 g = letter_q / box;
+		vec2 fg = fp / box;
+		int index = min(word, 62);
+		float pitch = text_h * 0.8;
+		float h = 0.0;
+		if (text_h > 0.0) {
+			float cell = floor(text_q.x / pitch);
+			h = hash(vec2(cell, text_salt));
+			g = vec2((text_q.x - cell * pitch) / (text_h * 0.6), text_q.y / text_h);
+			fg = fp / vec2(text_h * 0.6, text_h);
+			index = pick(fract(h * 13.7), 16);
+			letter_color = text_color;
+			letter_glow = text_glow;
+		}
+		float cover = glyph(LETTERS[max(index, 0)], g, fg);
+		if (text_h > 0.0) {
+			cover = band(text_q.y, 0.0, text_h, fp.y) * mix(0.45 * 0.88, step(0.12, h) * band(g.x, 0.0, 1.0, fg.x)
+					* mix(0.6, cover, smoothstep(5.0, 10.0, text_h / fp.y)), smoothstep(1.5, 4.0, pitch / fp.x)) * 0.9;
+		} else {
+			s.glass = max(s.glass, cover * 0.5);
+		}
+		color = mix(color, letter_color, cover);
+		s.emission += letter_color * (cover * letter_glow);
 	}
 	s.emission += color * flood_color * (flood * landmark_flood * city_lights);
 	s.albedo = color;
@@ -1082,12 +1081,13 @@ Surface landmark_roof_2(int material, int variant, vec2 p, vec2 fp) {
 			s.glass = 0.6 * (1.0 - jets);
 			s.emission = mix(srgb(vec3(0.5, 0.8, 1.0)), vec3(1.0), jets) * ((0.3 + jets) * city_lights);
 		} else {
-			color = srgb(TURF) * (0.9 + 0.12 * value_noise(p * 0.2));
+			// A meadow: long grasses, lighter and yellower in patches.
+			color = mix(srgb(vec3(0.33, 0.47, 0.22)), srgb(vec3(0.50, 0.53, 0.30)), 0.7 * value_noise(p * 0.12));
 		}
 	} else if (material == LM_GUGGENHEIM || material == LM_WHITE_STEEL) {
 		color = srgb(GUGG_WHITE) * 0.95;
 	} else if (material == LM_CATHEDRAL || material == LM_GOTHIC) {
-		color = srgb(CATHEDRAL_MARBLE) * (0.9 + 0.12 * value_noise(p * 0.5));
+		color = srgb(CATHEDRAL_MARBLE) * 0.95;
 	} else if (material == LM_VESSEL) {
 		color = srgb(COPPER_CLAD) * (0.9 + 0.12 * value_noise(p * 2.0));
 		s.glass = 0.3;

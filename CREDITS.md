@@ -14,9 +14,11 @@ lines below wherever a license asks for one (the aerial photos do).
 - **Building shapes:** NYC 3-D Building Model (LoD2 CityGML), NYC Office of
   Technology and Innovation, via NYC Open Data (tnru-abg2).
 - **Building footprints and heights, borough outlines, parks, roadbed,
-  hydrography, piers and bridge structures:** NYC Open Data (datasets
-  5zhs-2jue, gthc-hcne, enfh-gkve, i36f-5ih7, pjs3-c3z5, 6hbv-tek4,
-  r9cu-9r7b).
+  hydrography, piers (and the ferry slips' fender racks and the marinas'
+  docks) and bridge structures:** NYC Open Data (datasets 5zhs-2jue,
+  gthc-hcne, enfh-gkve, i36f-5ih7, pjs3-c3z5, 6hbv-tek4, r9cu-9r7b). The
+  boats moored in Brooklyn Bridge Park's marina are where the aerial photos
+  (above) show them.
 - **Street trees, street centerlines and land cover:** NYC Parks Forestry
   Tree Points (hn5i-inap), the Citywide Street Centerline (CSCL, inkn-q76z)
   and the 2017 LiDAR land cover map (he6d-2qns), via NYC Open Data.

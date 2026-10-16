@@ -94,6 +94,10 @@ SURFACE_LANDMARKS = 8
 # tile, its flags: trains.OPEN_START, ...). Node ids are shared by all
 # tiles, like the driving lanes'.
 SURFACE_TRAINS = 9
+# The waterfront landmarks' faces in the materials shaders/waterfront.gdshader
+# paints (landmarks.py, 60 and up: ferry terminals, pier sheds, racks, docks
+# and boats), laid out like the landmarks surface. With collision up close.
+SURFACE_WATERFRONT = 10
 
 # Props (uv2.x of the props surface).
 PROP_TREE = 0         # broadleaf tree, round crown

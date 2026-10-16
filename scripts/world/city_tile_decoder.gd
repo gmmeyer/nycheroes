@@ -79,6 +79,11 @@ const SURFACE_LANDMARKS := 8
 ## piece's number in the tile; its TRACK_* flags). Nodes are shared by all
 ## tiles, like the driving lanes'; a piece is in the tile holding its middle.
 const SURFACE_TRAINS := 9
+## The waterfront landmarks' faces (tools/citygen/landmarks.py, materials 60
+## and up: ferry terminals, pier sheds, the slips' racks, docks and boats) in
+## the materials shaders/waterfront.gdshader paints, laid out like the
+## landmarks surface. With collision up close.
+const SURFACE_WATERFRONT := 10
 ## Floats per lane in a decoded traffic surface's info: from node, to node,
 ## speed, lane, lanes, signal phase, how it ends (0, 1, 2 as above).
 const TRAFFIC_INFO_STRIDE := 7
