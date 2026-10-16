@@ -228,6 +228,12 @@ func arriving(node: int) -> Array:
 	return _arriving.get(node, [])
 
 
+## The box of the intersection at a node, or null if no way through it has
+## been built yet.
+func box_at(node: int) -> Box:
+	return _boxes.get(node)
+
+
 ## The connector from one lane to another (built the first time it's asked for).
 func connector(from: Lane, to: Lane) -> Connector:
 	var found: Connector = from.connectors.get(to)

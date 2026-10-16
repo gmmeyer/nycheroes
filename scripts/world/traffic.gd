@@ -16,7 +16,11 @@ extends Node3D
 ## keep going (slowing only for turns, or for a car crossing their way), and
 ## the others slow down and go once their way across is clear
 ## (TrafficLanes.box_free) with no car on the widest street about to cross
-## it. They never drive into an intersection without room on the other side. At each intersection a car picks its next
+## it (also one still on its way onto a short stretch of it), and give their
+## way back to one that turns up while they can still stop; no car appears
+## just short of an intersection it would have the right of way at while one
+## giving way crosses. They never drive into an intersection without room on
+## the other side. At each intersection a car picks its next
 ## lane (TrafficLanes.pick_next), blinking before it turns. They stop for
 ## heroes, thugs (standing or lying) and pedestrians in their way. Nothing
 ## collides with them yet. Yellow cabs make up about a third of the cars in
@@ -532,12 +536,19 @@ func _may_enter(i: int, lane: TrafficLanes.Lane, via: TrafficLanes.Connector, to
 					_leave_box(i)
 				return false
 			_going[i] = 1
+	var unsignaled := lane.signal_offset < 0.0 and lane.at_intersection
+	var gives_way := unsignaled and not lane.priority
 	if _in_box[i] == via:
-		return true  # its way is taken already
+		# Its way is taken already. A car giving way takes it once it can't stop
+		# comfortably, which coming fast is seconds before the line: while it
+		# could still stop as on yellow, it gives it back to a car with the right
+		# of way that turns up.
+		if not gives_way or v * v > 2.0 * YELLOW_BRAKE * maxf(to_end - 0.3, 0.0) or not _priority_coming(lane, via):
+			return true
+		_leave_box(i)
 	# Without a signal, cars on the widest street go first, whatever the others
 	# have claimed.
-	var unsignaled := lane.signal_offset < 0.0 and lane.at_intersection
-	var priority_coming := unsignaled and not lane.priority and _priority_coming(lane, via)
+	var priority_coming := gives_way and _priority_coming(lane, via)
 	var free := lanes.box_free(via, i, not (unsignaled and lane.priority))
 	if priority_coming or not free or not _room_after(i, via):
 		# Waiting at the line: after a while, go next (but not before a car
@@ -553,7 +564,9 @@ func _may_enter(i: int, lane: TrafficLanes.Lane, via: TrafficLanes.Connector, to
 
 ## Whether a car with the right of way is about to cross `via` (the way of a
 ## car on `lane`, which hasn't): a car on another lane into the same
-## intersection that has it, close to its stop line, going a way that conflicts.
+## intersection that has it, close to its stop line, going a way that
+## conflicts. A lane that has it may be shorter than how far its cars look:
+## cars still on their way onto it count too.
 func _priority_coming(lane: TrafficLanes.Lane, via: TrafficLanes.Connector) -> bool:
 	for other: TrafficLanes.Lane in lanes.arriving(lane.to_node):
 		if not other.priority or other == lane:
@@ -562,15 +575,71 @@ func _priority_coming(lane: TrafficLanes.Lane, via: TrafficLanes.Connector) -> b
 			var to_line := other.length - _s[j]
 			if to_line > LOOK_AHEAD:
 				break  # (the rest are further back)
-			# How far it gets in YIELD_TIME speeding up as it may (a slow car
-			# that was behind one crossing just now is about to).
-			var v := _v[j]
-			var top := maxf(other.speed * _desire[j], v)
-			var t := minf((top - v) / _pull[j], YIELD_TIME)
-			if to_line >= v * t + 0.5 * _pull[j] * t * t + top * (YIELD_TIME - t) + YIELD_DISTANCE:
+			if not _arrives_soon(j, other, to_line):
 				continue
 			var other_via := _via[j]
 			if other_via and not other_via.removed and lanes.conflict(via, other_via):
+				return true
+		if other.length < LOOK_AHEAD and _coming_onto(other, other.length, other, via):
+			return true
+	return false
+
+
+## Whether car j, `to_line` from the stop line of `lane` (which has the right
+## of way), is there within YIELD_TIME (or YIELD_DISTANCE), speeding up as it
+## may (a slow car that was behind one crossing just now is about to).
+func _arrives_soon(j: int, lane: TrafficLanes.Lane, to_line: float) -> bool:
+	var v := _v[j]
+	var top := maxf(lane.speed * _desire[j], v)
+	var t := minf((top - v) / _pull[j], YIELD_TIME)
+	return to_line < v * t + 0.5 * _pull[j] * t * t + top * (YIELD_TIME - t) + YIELD_DISTANCE
+
+
+## Whether a car on its way onto `path` (whose start is `behind` short of the
+## stop line of `lane`, which has the right of way) is there soon and could
+## cross `via`: it picks its way across only once it's on `lane`, so any way
+## it may take counts.
+func _coming_onto(path: TrafficLanes.Path, behind: float, lane: TrafficLanes.Lane,
+		via: TrafficLanes.Connector) -> bool:
+	var feeders: Array[TrafficLanes.Path] = []
+	var into := path as TrafficLanes.Lane
+	if into:
+		for up: TrafficLanes.Lane in lanes.arriving(into.from_node):
+			var connector: TrafficLanes.Connector = up.connectors.get(into)
+			if connector:
+				feeders.append(connector)
+	else:
+		feeders.append((path as TrafficLanes.Connector).in_lane)
+	for feeder in feeders:
+		for j in feeder.cars:
+			var to_line := feeder.length - _s[j] + behind
+			if to_line > LOOK_AHEAD:
+				break
+			if feeder is TrafficLanes.Lane and _via[j] != path:
+				continue  # going another way
+			if _arrives_soon(j, lane, to_line) and _may_cross(lane, via):
+				return true
+		var start := behind + feeder.length
+		if start < LOOK_AHEAD and _coming_onto(feeder, start, lane, via):
+			return true
+	return false
+
+
+## Whether a car on `lane` could cross `via`, whichever way it picks on
+## (TrafficLanes.pick_next: back the way it came only at a dead end).
+func _may_cross(lane: TrafficLanes.Lane, via: TrafficLanes.Connector) -> bool:
+	var backs: Array[TrafficLanes.Lane] = []
+	var any := false
+	for out: TrafficLanes.Lane in lanes.leaving(lane.to_node):
+		if lanes.turn_between(lane, out) == TrafficLanes.Turn.U_TURN:
+			backs.append(out)
+			continue
+		any = true
+		if lanes.conflict(via, lanes.connector(lane, out)):
+			return true
+	if not any:
+		for out in backs:
+			if lanes.conflict(via, lanes.connector(lane, out)):
 				return true
 	return false
 
@@ -950,6 +1019,8 @@ func _spawn(tries: int) -> void:
 		var room := _room_at(lane, s, length)
 		if room < 0.0:
 			continue
+		if _giving_way_ahead(lane, lane.length - s, lane.speed * DESIRE.y * YIELD_TIME + YIELD_DISTANCE):
+			continue
 		_add_car(lane, s, model, point, k, room, grow)
 
 
@@ -966,6 +1037,26 @@ func _room_at(lane: TrafficLanes.Lane, s: float, length: float) -> float:
 		elif front > s - length - SPAWN_ROOM - _v[j] * HEADWAY * 2.0:
 			return -1.0  # too close in front of a car coming up behind
 	return room
+
+
+## Whether a car appearing `to_end` short of the end of `lane` could have the
+## right of way, less than `reach` on, at an intersection that a car giving way
+## is crossing (that one looked out for cars coming before this one was
+## there). Looks on along the lanes after it, as lanes that have it may be short.
+func _giving_way_ahead(lane: TrafficLanes.Lane, to_end: float, reach: float) -> bool:
+	if to_end >= reach:
+		return false
+	if lane.priority and lane.signal_offset < 0.0:
+		var box := lanes.box_at(lane.to_node)
+		if box:
+			for via in box.busy:
+				if not via.in_lane.priority:
+					return true
+	for out: TrafficLanes.Lane in lanes.leaving(lane.to_node):
+		if lanes.turn_between(lane, out) != TrafficLanes.Turn.U_TURN \
+				and _giving_way_ahead(out, to_end + out.length, reach):
+			return true
+	return false
 
 
 func _add_car(lane: TrafficLanes.Lane, s: float, model: int, middle: Vector3, k: int, room: float, grow: bool) -> void:

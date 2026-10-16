@@ -593,14 +593,18 @@ In order:
   crossing paths are never used at once. Mostly straight on, right turns
   from the right lane and left from the left, blinkers before turns,
   U-turns only at dead ends. Without a signal the wider street has the
-  right of way. Signals along a street are timed as a green wave for
-  10 m/s. Cars stop for heroes, thugs (down or up) and pedestrians 25 m
-  ahead. They appear out of sight (or grow in far away) and leave beyond
-  360 m; 120 cars on high (medium 60, low 25), a third of them yellow cabs
-  in Manhattan below 110th Street, 2.5% buses. One MultiMesh for all of
-  them, plus headlight and taillight glows at night (one more draw call).
-  Script time about 0.25 ms a frame (driving steps at 30 Hz, far and
-  behind-the-camera cars redrawn less often).
+  right of way: the others wait while one of its cars is less than 4 s
+  from the line (counting cars still on their way onto a short stretch of
+  it), and give their way back to one that turns up while they can still
+  stop; no car appears just short of a line it would have the right of way
+  at while a car giving way crosses. Signals along a street are timed as a
+  green wave for 10 m/s. Cars stop for heroes, thugs (down or up) and
+  pedestrians 25 m ahead. They appear out of sight (or grow in far away)
+  and leave beyond 360 m; 120 cars on high (medium 60, low 25), a third of
+  them yellow cabs in Manhattan below 110th Street, 2.5% buses. One
+  MultiMesh for all of them, plus headlight and taillight glows at night
+  (one more draw call). Script time about 0.25 ms a frame (driving steps at
+  30 Hz, far and behind-the-camera cars redrawn less often).
 
 **Trees, parks and sky after the reference check (done):**
 - Street tree crowns clear a truck (at least 3.4 m up, 40% of the height
