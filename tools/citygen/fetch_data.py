@@ -3,12 +3,15 @@ Open Data vector datasets, cached as GeoJSON in data/raw/; tables (the tax
 lot database PLUTO, and which tax lot each building is on) as JSON in
 data/raw/; the USGS ground elevation model, cached as GeoTIFFs in
 data/raw/elevation/; the city's 3-D Building Model (CityGML, 0.9 GB zip)
-in data/raw/buildings3d/; and the 2017 land cover map (ERDAS Imagine, 1.3 GB
-zip) in data/raw/landcover/, unpacked except for its full-resolution layer. Delete a file to re-download it.
+in data/raw/buildings3d/; the 2017 land cover map (ERDAS Imagine, 1.3 GB
+zip) in data/raw/landcover/, unpacked except for its full-resolution layer;
+and the bike share's stations (its public GBFS feed) in data/raw/. Delete a
+file to re-download it.
 
 Usage: python fetch_data.py
 """
 
+import datetime
 import json
 import shutil
 import time
@@ -117,6 +120,14 @@ LAND_COVER_URL = ("https://data.cityofnewyork.us/api/views/he6d-2qns/files/"
                   "64c49dc7-c17f-43db-a4e3-669a28f73234?download=true&filename=Land_Cover.zip")
 LAND_COVER_PATH = RAW_DIR / "landcover" / "Land_Cover.zip"
 
+# The bike share's docking stations (position, capacity), from its public
+# GBFS feed (as listed at https://gbfs.citibikenyc.com/gbfs/2.3/gbfs.json),
+# under Lyft Bikes and Scooters' data license agreement
+# (https://citibikenyc.com/data-sharing-policy): fine inside a product, not
+# as a dataset of its own, and none of the system's names or marks.
+BIKE_STATIONS_URL = "https://gbfs.lyft.com/gbfs/2.3/bkn/en/station_information.json"
+BIKE_STATIONS_PATH = RAW_DIR / "bike_stations.json"
+
 
 # Tables without geometry, as JSON rows.
 TABLES = {
@@ -149,6 +160,12 @@ TABLES = {
     "station_entrances": ("i9wp-a4ja", {"$select": "station_id,entrance_type,entrance_latitude,entrance_longitude"},
                           STATE_API),
     "subway_stations": ("39hk-dx4f", {"$select": "station_id,stop_name,structure"}, STATE_API),
+    # Sidewalk sheds up on the day of the download: the Department of
+    # Buildings' permits for them (DOB NOW: Build, Approved Permits), issued
+    # and not yet expired or signed off (props.prepare_sheds()).
+    "sidewalk_sheds": ("rbx6-tga4", {"$select": "job_filing_number,bin,latitude,longitude,issued_date,expired_date",
+                                     "$where": "work_type='Sidewalk Shed' AND permit_status='Permit Issued' AND "
+                                               f"expired_date>'{datetime.date.today().isoformat()}'"}),
 }
 TABLE_PAGE_SIZE = 50000
 
@@ -251,6 +268,7 @@ def main() -> None:
     fetch_file("3-D building model", BUILDING_MODEL_URL, BUILDING_MODEL_PATH)
     fetch_file("land cover", LAND_COVER_URL, LAND_COVER_PATH)
     unpack_land_cover()
+    fetch_file("bike share stations", BIKE_STATIONS_URL, BIKE_STATIONS_PATH)
 
 
 def unpack_land_cover() -> None:
