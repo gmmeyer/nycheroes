@@ -698,8 +698,8 @@ In order:
   (0.20); the clear day's means of 13 unchanged in value (0.40) and
   masonry saturation (0.24 to 0.23).
 - Cost: values only (keyframes, uniform defaults, environment settings, and
-  three material uniforms set once at the start); shader sources the same
-  length, compile time unchanged.
+  three material uniforms set once at the start): the compiled shaders are
+  byte for byte the same (hashed), so compile time is unchanged.
 
 **Facade materials and rowhouse fronts (done):**
 - Each masonry building has a wall material from the tax lot data
