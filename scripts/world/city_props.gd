@@ -8,8 +8,11 @@ extends RefCounted
 ## two for street furniture: small pieces (hydrants, benches, litter baskets,
 ## bike racks, parking meters) and large ones (bus shelters, LinkNYC kiosks,
 ## subway entrances, traffic signals, newsstands), each mesh holding all its
-## pieces' shapes, and one for parked cars (every model on one mesh, which
-## traffic's cars share). Draw calls are what props cost most on the web
+## pieces' shapes, one for parked cars (every model on one mesh, which
+## traffic's cars share), one for shop fronts' signs and awnings (their own
+## shader, shaders/shop_sign.gdshader, with the names texture) and one more
+## with the street furniture's shader for sidewalk sheds, the bike share's
+## docks and plaza furniture. Draw calls are what props cost most on the web
 ## (measured), hence so few.
 ##
 ## At night street lights add a MultiMesh of glows around their heads (shown
@@ -41,7 +44,7 @@ extends RefCounted
 ## The MultiMeshes: their node names, and the prop types
 ## (CityTileDecoder.PROP_*) each holds, as ranges (first, last).
 const GROUP_NAMES: Array[String] = ["Trees", "WaterTowers", "StreetLights", "SmallFurniture", "LargeFurniture",
-	"ParkedCars"]
+	"ParkedCars", "ShopFronts", "StreetExtras"]
 const GROUP_TYPES: Array[Array] = [
 	[Vector2i(0, 2)], [Vector2i(3, 3)], [Vector2i(4, 4)],
 	# Hydrants; benches; litter baskets, bike racks and parking meters.
@@ -49,12 +52,16 @@ const GROUP_TYPES: Array[Array] = [
 	# Bus shelters and LinkNYC; subway entrances and traffic signals; newsstands.
 	[Vector2i(6, 7), Vector2i(9, 10), Vector2i(14, 14)],
 	[Vector2i(15, 15)],
+	# Shop signs and awnings; sidewalk sheds, bike docks, plaza tables, planters and kiosks.
+	[Vector2i(17, 18)], [Vector2i(19, 23)],
 ]
 const WATER_TOWERS := 1
 const STREET_LIGHTS := 2
 const SMALL_FURNITURE := 3
 const LARGE_FURNITURE := 4
 const PARKED_CARS := 5
+const SHOP_FRONTS := 6
+const STREET_EXTRAS := 7
 ## Street lights' glows: their node name, and the group they're all in.
 const GLOW_NAME := "StreetLightGlow"
 const GLOW_GROUP := &"street_light_glow"
@@ -88,8 +95,9 @@ const LIT_FURNITURE_POOL_COPIES: Array[Vector3i] = [
 	Vector3i(1, 2, 8), Vector3i(1, 0, 10), Vector3i(3, 0, 11),
 ]
 ## Furniture lit at night that lights the sidewalk around it (prop types):
-## bus shelters and newsstands.
-const LIT_FURNITURE: Array[int] = [CityTileDecoder.PROP_BUS_SHELTER, CityTileDecoder.PROP_NEWSSTAND]
+## bus shelters, newsstands and the lamps under sidewalk sheds.
+const LIT_FURNITURE: Array[int] = [CityTileDecoder.PROP_BUS_SHELTER, CityTileDecoder.PROP_NEWSSTAND,
+	CityTileDecoder.PROP_SIDEWALK_SHED]
 ## Wind sway, seed variety and the distance shrink move vertices a little
 ## outside the unit mesh's box (meters).
 const CULL_MARGIN := 1.5
@@ -101,6 +109,8 @@ const GLOW_CULL_MARGIN := 8.0
 ## Furniture's boxes don't know its yaw or its meshes' real sizes either: a
 ## signal's arm reaches 4.6 m from its pole.
 const FURNITURE_CULL_MARGIN := 5.0
+## Shop signs' boxes don't know their yaw either, and the widest are 12 m.
+const SHOP_CULL_MARGIN := 6.5
 ## Cars' boxes are their length wide either way (PropMeshes.CAR_BOUNDS), so
 ## they hold them however they're turned; a little more for good measure.
 const CAR_CULL_MARGIN := 0.5
@@ -139,6 +149,8 @@ var car_fade := Vector2(320.0, 460.0)
 var lights_on := false
 ## Where street lights' pools go (null: nowhere).
 var light_map: StreetLightMap
+## Shop signs' and awnings' material (shaders/shop_sign.gdshader).
+var shop_material: ShaderMaterial
 
 var _meshes: Array[Mesh] = []
 var _shadow_meshes: Array[Mesh] = []
@@ -150,15 +162,20 @@ var _glow_material: Material
 func _init(tree_material: Material, water_tower_material: Material, street_light_material: Material,
 		street_light_glow_material: Material, street_furniture_material: Material, car_material: Material) -> void:
 	_meshes = [PropMeshes.tree(), PropMeshes.water_tower(), PropMeshes.street_light(),
-		PropMeshes.street_furniture_small(), PropMeshes.street_furniture_large(), PropMeshes.car()]
+		PropMeshes.street_furniture_small(), PropMeshes.street_furniture_large(), PropMeshes.car(),
+		PropMeshes.shop_fronts(), PropMeshes.street_furniture_extra()]
 	# Water towers cast their own shadows; street lights, furniture and cars
 	# cast none (thin, or small next to the buildings' shadows, and each would
 	# cost a draw call per shadow split: large furniture's shadows measured
 	# 3-11% of the frame rate in midtown for little to see; cars draw a
 	# contact shadow of their own).
-	_shadow_meshes = [PropMeshes.tree_shadow(), null, null, null, null, null]
+	_shadow_meshes = [PropMeshes.tree_shadow(), null, null, null, null, null, null, null]
+	# Shop fronts' material is the props' own (it needs only the names texture).
+	shop_material = ShaderMaterial.new()
+	shop_material.shader = preload("res://shaders/shop_sign.gdshader")
+	shop_material.set_shader_parameter("sign_names", preload("res://assets/signs/sign_names.png"))
 	_materials = [tree_material, water_tower_material, street_light_material, street_furniture_material,
-		street_furniture_material, car_material]
+		street_furniture_material, car_material, shop_material, street_furniture_material]
 	_glow_mesh = PropMeshes.street_light_glow()
 	_glow_material = street_light_glow_material
 	# Fade distances already set on the material (?sh_small_fade_distance=...,
@@ -186,6 +203,8 @@ func set_furniture_fade(small: Vector2, large: Vector2) -> void:
 	if material:
 		material.set_shader_parameter("small_fade_distance", small)
 		material.set_shader_parameter("large_fade_distance", large)
+	# Shop fronts go with the large pieces.
+	shop_material.set_shader_parameter("fade_distance", large)
 
 
 ## Sets where cars shrink away (see car_fade), in their shader too, parked
@@ -308,8 +327,11 @@ func _instance(group: int, buffer: PackedFloat32Array, mesh: Mesh) -> MultiMeshI
 		SMALL_FURNITURE:
 			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
 			instance.visibility_range_end = small_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
-		LARGE_FURNITURE:
+		LARGE_FURNITURE, STREET_EXTRAS:
 			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
+			instance.visibility_range_end = large_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
+		SHOP_FRONTS:
+			instance.extra_cull_margin = SHOP_CULL_MARGIN
 			instance.visibility_range_end = large_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
 		PARKED_CARS:
 			instance.extra_cull_margin = CAR_CULL_MARGIN

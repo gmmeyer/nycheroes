@@ -27,6 +27,18 @@ extends RefCounted
 ## car's footprint on the road, normal (height m, length m, yaw radians: its
 ## front faces (sin yaw, 0, cos yaw)), uv (model CAR_*, paint 0..11, see
 ## shaders/car.gdshader).
+## So are shop fronts' signs and awnings on the walls (their front facing out
+## of the wall along the yaw): a sign's position is the middle of its bottom
+## edge, normal (height m, width m, yaw), uv (SIGN_*, its name: a row of
+## assets/signs/sign_names.png); an awning's position is on the wall under
+## its top edge's middle, as low as its front edge hangs, normal (drop m,
+## width m, yaw), uv (AWNING_*, its shop's name + half its reach out from
+## the wall, m). Sidewalk sheds' sections: position the middle of their foot
+## on the wall, normal (deck height m, length along the wall m, yaw: out
+## over the sidewalk), uv (color 0..3, reach out from the wall m). The bike
+## share's docks: position the middle of a section's row of docks, normal
+## (height m, length m, yaw: the bikes stand out that way), uv (DOCKS or
+## DOCK_KIOSK, 0). Plaza furniture: like street furniture.
 
 const MAGIC := "NYCT"
 const VERSION := 7
@@ -112,7 +124,14 @@ const PROP_BIKE_RACK := 12         ## variant BIKE_RACK_*
 const PROP_PARKING_METER := 13     ## Muni-Meter pay station [1.6 x 0.35]
 const PROP_NEWSSTAND := 14         ## [2.7 x 3.0]
 const PROP_PARKED_CAR := 15        ## at the curb, model CAR_*
-const PROP_TYPE_COUNT := 16
+const PROP_SHOP_SIGN := 17         ## on a shop's wall, variant SIGN_*
+const PROP_AWNING := 18            ## over a shop's windows, variant AWNING_*
+const PROP_SIDEWALK_SHED := 19     ## a section of a sidewalk shed
+const PROP_BIKE_DOCK := 20         ## bike share docks (DOCKS_PER_SECTION) or its kiosk
+const PROP_PLAZA_TABLE := 21       ## cafe table and chairs, variant 1 with an umbrella [0.75 x 0.8]
+const PROP_PLANTER := 22           ## variant 0 a long box [0.75 x 1.8], 1 a round tub
+const PROP_KIOSK := 23             ## a plaza's food kiosk [2.9 x 2.6]
+const PROP_TYPE_COUNT := 24
 ## Trees' foliage tones (uv.x of the props surface).
 const TONE_GREEN := 0
 const TONE_LIGHT := 1  ## yellow-green: honeylocust, ginkgo, birch, willow
@@ -133,6 +152,18 @@ const BIKE_RACK_HOOP := 0     ## round CityRack hoop [0.9 x 0.9]
 const BIKE_RACK_U := 1        ## U or wave rack [0.9 x 1.2]
 const SIGNAL_ON_POLE := 0     ## a traffic signal on its pole, with a mast arm over the road
 const SIGNAL_ON_COLUMN := 1   ## its heads alone, on an el's column (no pole or arm)
+const SIGN_BOARD := 0         ## a painted board over the shop window
+const SIGN_LIGHT_BOX := 1     ## a deeper box whose face is lit from inside
+const SIGN_LETTERS := 2       ## channel letters on the wall, no board
+const SIGN_BLADE := 3         ## a sign standing out from the wall on a bracket
+const SIGN_BANNER := 4        ## a vinyl banner tied to the wall
+const AWNING_FABRIC := 0      ## a sloped cloth awning with a valance
+const AWNING_ALUMINUM := 1    ## a flatter ribbed metal one
+const AWNING_DOME := 2        ## a quarter-round cloth dome
+const DOCKS := 0              ## a section of docks, with bikes in most
+const DOCK_KIOSK := 1         ## the station's kiosk (pay, map)
+const DOCKS_PER_SECTION := 4
+const DOCK_SPACING := 0.8     ## m between docks
 ## Car models (uv.x of a parked car; traffic's cars use the same numbers),
 ## length x width x height (m) in brackets (PropMeshes.CAR_SIZES). Buses only
 ## drive, they never park.
