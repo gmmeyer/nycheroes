@@ -86,6 +86,10 @@ DATASETS = {
         "anc7-97cy",  # Planimetric Database: Railroad Line (track centerlines: elevated, embankment, ...)
         {"$select": "the_geom,feat_code,name"},
     ),
+    "sidewalks": (
+        "52n9-sdep",  # Planimetric Database: Sidewalk (outlines; those on decks get walking lanes)
+        {"$select": "the_geom,sub_code"},
+    ),
     "railroad_structures": (
         "dwer-xbgx",  # Planimetric Database: Railroad Structure (elevated and other stations)
         {"$select": "the_geom,feat_code", "$where": "feat_code in ('2140','2160')"},

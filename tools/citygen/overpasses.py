@@ -106,6 +106,15 @@ COLUMN_STREET_GAP = 4.0    # columns keep this far from streets crossing underne
 # roadbed isn't road (roads_under_decks).
 GHOST_GAP = 3.0
 STREET_MARGIN = 1.0
+# Walking lanes on decks with sidewalks (bridges over water, raised streets):
+# the city's sidewalk outlines on them, those running along the deck (at
+# least this cosine), at least WALK_MIN_AREA, a loop around each one's middle.
+WALK_ALONG = 0.8
+WALK_MIN_AREA = 10.0
+WALK_STEP = 10.0
+# Sidewalk outlines kept for that (prepare_sidewalks): this close to a bridge
+# outline or a raised road.
+WALK_REACH = 20.0
 # How finely decks follow their heights, per level (meters between points),
 # and the smallest decks the far tiles keep (m^2).
 DECK_SPACING = {"lod0": 10.0, "lod1": 20.0, "lod2": 40.0}
@@ -419,6 +428,8 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
     keep_out = shapely.union_all(shapely.buffer(over_water, 1.0)) if over_water else shapely.Polygon()
     shapely.prepare(keep_out)
     network.keep_out = keep_out  # the bridges' outlines (els.py leaves them alone too)
+    # Decks that may carry sidewalks (deck_walks): bridges, along their axis...
+    network.walk_areas = [(part, bridges._axis(part)[0]) for part in over_water]
     wet_outlines = shapely.union_all(wet_outlines) if wet_outlines else shapely.Polygon()
 
     roads = np.flatnonzero(network.raised)
@@ -464,6 +475,10 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
             if top is not None:
                 overhead.append(_overhead(top, network))
                 decks += 1
+                # ... and raised streets, along them.
+                streets = segs[np.isin(data["rw"][segs], (STREET, BRIDGE))]
+                if len(streets):
+                    network.walk_areas.append((poly, streets))
                 _add_road_columns(poly, segs, deck_y, network, builders)
                 lamps.append(_deck_lamps(poly, deck_y, network))
 
@@ -524,6 +539,68 @@ def _bridge_overhead(found: dict, network: Network, land) -> list:
         top = top[shapely.contains_xy(land, middle[:, 0], -middle[:, 2])]
         if len(top):
             out.append(_overhead(top, network))
+    return out
+
+
+def prepare_sidewalks() -> dict:
+    """The planimetric sidewalk outlines near bridges and raised roads (see
+    WALK_REACH), for deck_walks."""
+    near = [shape(f["geometry"]) for f in load_features("transport_structures")
+            if str(f["properties"].get("feat_code")) == BRIDGE_CODE]
+    near = list(shapely.buffer(shapely.make_valid(project(np.array(near, dtype=object))), WALK_REACH))
+    raised = [shape(f["geometry"]) for f in load_features("centerline")
+              if max(int(f["properties"].get("from_level_code") or AT_GRADE),
+                     int(f["properties"].get("to_level_code") or AT_GRADE)) > int(AT_GRADE)]
+    near += list(shapely.buffer(project(np.array(raised, dtype=object)), WALK_REACH))
+    tree = shapely.STRtree(np.array(near, dtype=object))
+    sidewalks = shapely.make_valid(project(np.array([shape(f["geometry"]) for f in load_features("sidewalks")],
+                                                    dtype=object)))
+    keep = np.zeros(len(sidewalks), dtype=bool)
+    keep[tree.query(sidewalks, predicate="intersects")[0]] = True
+    return {"geoms": sidewalks[keep]}
+
+
+def deck_walks(network: Network, sidewalks: np.ndarray) -> np.ndarray:
+    """Walking lanes (east/north lines) on the sidewalks of decks that carry
+    them (network.walk_areas, from build()): around the middle of each
+    sidewalk outline on such a deck that runs along it."""
+    tree = shapely.STRtree(sidewalks)
+    out = []
+    for area, along in getattr(network, "walk_areas", []):
+        for k in tree.query(area, predicate="intersects"):
+            for piece in polygons_of(shapely.intersection(sidewalks[k], area), WALK_MIN_AREA):
+                u, _, center, _ = bridges._axis(piece)
+                if along.dtype.kind == "f":
+                    direction = along
+                else:
+                    line = network.lines[along[np.argmin(shapely.distance(network.lines[along], shapely.Point(center)))]]
+                    _, normal = markings._frame(line, np.array([line.project(shapely.Point(center))]))
+                    direction = np.array([normal[0][1], -normal[0][0]])
+                if abs(float(u @ direction)) < WALK_ALONG:
+                    continue  # a sidewalk under the deck, crossing it
+                width = 2.0 * piece.area / max(piece.length, 1e-6)
+                for middle in polygons_of(shapely.buffer(piece, -max(width / 2 - 0.3, 0.1)), 0.0):
+                    out.append(shapely.LineString(middle.exterior.coords))
+    return np.array(out, dtype=object)
+
+
+def walks_on_decks(walks, tree, buckets: dict, bounds) -> list:
+    """deck_walks' lanes in a near tile (bounds, a box), on the decks under
+    them (from the lod0 bridge buckets: the highest roadway or hand-made
+    walkway): [(N, 3) east, north, height]."""
+    if tree is None:
+        return []
+    hits = tree.query(bounds, predicate="intersects")
+    if not len(hits):
+        return []
+    surface = surface_for(buckets, bounds, (GROUND_ROAD, STRUCTURE_WALKWAY))
+    out = []
+    for line in walks[hits]:
+        for piece in lines_of(shapely.intersection(line, bounds)):
+            coords = np.asarray(shapely.segmentize(piece, WALK_STEP).coords)[:, :2]
+            y, found = surface.height(coords, np.full(len(coords), 1e4))
+            for start, stop in _runs(found[:-1] & found[1:]):
+                out.append(np.column_stack([coords[start:stop + 1], y[start:stop + 1]]))
     return out
 
 

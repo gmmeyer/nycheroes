@@ -156,7 +156,8 @@ def prepare_ground_details() -> dict:
 PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": prepare_water,
              "facades": prepare_facades, "trees": props.prepare_trees, "centerline": markings.prepare,
              "furniture": props.prepare_furniture, "overpasses": overpasses.prepare,
-             "ground_details": prepare_ground_details, "els": els.prepare}
+             "ground_details": prepare_ground_details, "els": els.prepare,
+             "deck_sidewalks": overpasses.prepare_sidewalks}
 
 
 def load(name: str) -> dict:

@@ -332,6 +332,9 @@ def _build_bridges(ground) -> dict:
     # No roadbed drawn on the ground under them where no street is.
     buckets["roads_under_decks"] = overpasses.roads_under_decks(network, buckets.pop("overhead", []), ground["roads"])
     print(f"  {len(buckets['roads_under_decks'])} roadbed outlines cut back from under decks", flush=True)
+    # Walking lanes on bridges' and raised streets' sidewalks.
+    buckets["deck_walks"] = overpasses.deck_walks(network, prepare.load("deck_sidewalks")["geoms"])
+    print(f"  {len(buckets['deck_walks'])} walking lanes on decks", flush=True)
     BRIDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(BRIDGE_PATH, "wb") as f:
         pickle.dump(buckets, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -383,6 +386,8 @@ def _init_worker() -> None:
     # Roadbed under raised roads and bridges, away from streets, isn't road (overpasses.py).
     for index, left in _W["bridges"].get("roads_under_decks", {}).items():
         ground["roads"][index] = left
+    walks = _W["bridges"].get("deck_walks", np.zeros(0, dtype=object))
+    _W["deck_walk_tree"] = shapely.STRtree(walks) if len(walks) else None
     _W["b"] = buildings
     _W["groups"] = {}
     for level, settings in LEVELS.items():
@@ -1373,26 +1378,23 @@ def _build_lanes(bounds, origin):
     # Look a little past the tile so sidewalks along its edges still find their street.
     area = shapely.buffer(bounds, 4 * LANE_OFFSET, join_style="mitre")
     nearby_roads = g["roads"][_W["road_tree"].query(area)]
-    if not len(nearby_roads):
-        return None
-    roads_near = shapely.intersection(shapely.union_all(nearby_roads), g["land"])
-    nearby_buildings = _W["b"]["geoms"][_W["building_tree"].query(area)]
-    sidewalks = shapely.difference(shapely.intersection(g["land"], bounds), roads_near)
-    if len(nearby_buildings):
-        sidewalks = shapely.difference(sidewalks, shapely.buffer(shapely.union_all(nearby_buildings), LANE_WALL_GAP))
-    sidewalks = _W["details"].without_narrow_medians(sidewalks, area)  # nobody walks along medians
-    # Times Square's plazas: around their benches, and lanes across them too.
-    sidewalks = shapely.difference(sidewalks, times_square.bench_obstacles(_W, bounds))
-    lanes = shapely.intersection(shapely.buffer(roads_near, LANE_OFFSET).boundary, sidewalks)
-    plaza_lanes = times_square.plaza_lanes(_W, bounds, sidewalks, roads_near)
-    if not plaza_lanes.is_empty:  # (GEOS can't overlay an empty line with a mixed collection)
-        lanes = shapely.union(shapely.MultiLineString(lines_of(lanes)), plaza_lanes)
-
-    lines = [line for line in lines_of(lanes) if line.length >= 1.0]
-    if not lines:
-        return None
+    lines = []
+    if len(nearby_roads):
+        roads_near = shapely.intersection(shapely.union_all(nearby_roads), g["land"])
+        nearby_buildings = _W["b"]["geoms"][_W["building_tree"].query(area)]
+        sidewalks = shapely.difference(shapely.intersection(g["land"], bounds), roads_near)
+        if len(nearby_buildings):
+            sidewalks = shapely.difference(sidewalks, shapely.buffer(shapely.union_all(nearby_buildings), LANE_WALL_GAP))
+        sidewalks = _W["details"].without_narrow_medians(sidewalks, area)  # nobody walks along medians
+        # Times Square's plazas: around their benches, and lanes across them too.
+        sidewalks = shapely.difference(sidewalks, times_square.bench_obstacles(_W, bounds))
+        lanes = shapely.intersection(shapely.buffer(roads_near, LANE_OFFSET).boundary, sidewalks)
+        plaza_lanes = times_square.plaza_lanes(_W, bounds, sidewalks, roads_near)
+        if not plaza_lanes.is_empty:  # (GEOS can't overlay an empty line with a mixed collection)
+            lanes = shapely.union(shapely.MultiLineString(lines_of(lanes)), plaza_lanes)
+        lines = [line for line in lines_of(lanes) if line.length >= 1.0]
     points, indices = [], []
-    for line in lines_of(shapely.line_merge(shapely.MultiLineString(lines))):
+    for line in lines_of(shapely.line_merge(shapely.MultiLineString(lines))) if lines else []:
         if line.length < MIN_LANE_LENGTH:
             continue
         coords = np.asarray(shapely.segmentize(shapely.simplify(line, 0.5), LANE_STEP).coords)[:, :2]
@@ -1400,7 +1402,10 @@ def _build_lanes(bounds, origin):
         points.extend(to_godot(coords, _W["ground"]["lod0"].height(coords)) - np.asarray(origin))
         indices.extend(range(start, start + len(coords)))
         indices.append(LANE_BREAK)
-    for lane in times_square.step_lanes(_W, bounds, _footprint_ground):
+    # Times Square's TKTS steps, and bridges' and raised streets' sidewalks (overpasses.py).
+    on_decks = overpasses.walks_on_decks(_W["bridges"].get("deck_walks"), _W["deck_walk_tree"], _W["bridges"]["lod0"],
+                                         bounds)
+    for lane in times_square.step_lanes(_W, bounds, _footprint_ground) + on_decks:
         start = len(points)
         points.extend(to_godot(lane[:, :2], lane[:, 2]) - np.asarray(origin))
         indices.extend(range(start, start + len(lane)))
