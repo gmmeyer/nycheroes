@@ -168,8 +168,8 @@ CANOPY_CLEARANCE = 4.5
 CANOPY_REACH = 6.0
 
 # Each worker holds the whole city (about 3.5 GB in October 2026), so the
-# default worker count also leaves this much memory per worker, plus
-# MEMORY_SPARE for everything else.
+# default worker count also needs this much free memory per worker, leaving
+# MEMORY_SPARE for everything else (other builds may be running).
 WORKER_MEMORY_GB = 4.0
 MEMORY_SPARE_GB = 12.0
 
@@ -177,7 +177,7 @@ _W = {}  # per-worker data, filled by _init_worker
 
 
 def _default_workers() -> int:
-    """All cores but two, as many as fit in memory."""
+    """All cores but two, as many as fit in the free memory."""
     cores = max(1, (os.cpu_count() or 4) - 2)
     try:
         if os.name == "nt":
@@ -191,12 +191,12 @@ def _default_workers() -> int:
                             ("available_extended", ctypes.c_ulonglong)]
             status = MemoryStatus(length=ctypes.sizeof(MemoryStatus))
             ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
-            total = status.total
+            free = status.available
         else:
-            total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+            free = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_AVPHYS_PAGES")
     except (AttributeError, OSError, ValueError):
         return cores
-    return max(1, min(cores, int((total / 2**30 - MEMORY_SPARE_GB) / WORKER_MEMORY_GB)))
+    return max(1, min(cores, int((free / 2**30 - MEMORY_SPARE_GB) / WORKER_MEMORY_GB)))
 
 
 def main() -> None:

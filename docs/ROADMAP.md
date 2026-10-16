@@ -64,7 +64,7 @@ peer can drive one later. Nearby tiles get collision.
 - **Scale:** `prepare.py` turns the raw data into cached geometry once;
   `build_tiles.py` builds tiles on all cores (about 4 minutes then; now
   about 12 with 20 workers: each holds the whole city, about 3.5 GB, so the
-  default count is what memory allows). Three levels
+  default count is what free memory allows). Three levels
   of detail, each drawn until all of its children have loaded:
   - near: 500 m tiles, full detail, collision and walking lanes, 420 MB
     total;
