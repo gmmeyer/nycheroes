@@ -9,14 +9,13 @@ footprint's, or for buildings drawn from the 3-D model, the model's own
 outline at the ground): on the part of the front set furthest back (beside a
 bay window, if there is one), at the lot line (walk-ups: in the middle),
 narrower where that part is narrow. The steps go straight out toward the
-street; there have to be CURB_CLEAR (4) meters left to the curb (the
-walking lanes run 2.5 m from it) and no other building (or the neighbor's stoop) in
-the way, so where the sidewalk and front yard are shallow the stoop has fewer
-steps, or none. Its
-walls are then marked STOOP, so the shader draws the front door up on the
+street; there have to be CURB_CLEAR meters left to the curb (the walking
+lanes run 2.5 m from it) and no other building or stoop in the way, so where
+the sidewalk and front yard are shallow the stoop has fewer steps, or none.
+Its walls are then marked STOOP, so the shader draws the front door up on the
 landing instead of at the sidewalk.
 
-A rowhouse with a stoop and a front yard gets an areaway wall (or iron
+A rowhouse with a stoop and a front yard also gets an areaway wall (or iron
 fence) along the yard's edge, CURB_CLEAR from the curb (so neighbors' line up
 and the stoops end at or inside it), from the far lot line to a gate GATE
 wide beside the stoop: every yard has a way out, so heroes and thugs never get
@@ -25,11 +24,12 @@ boxed in between stoops, walls and fences.
 A stoop is a few faces of the building's own surface (so it has collision,
 and it's a ramp the hero walks up): the landing and the steps' slope (drawn
 as steps by the shader), each cheek wall's outside reaching down to the
-ground and its inside above the steps (THIN apart, without a top: thin walls
-need little more, but faces exactly back to back shadow each other), and the
-doorway, a panel standing just off the wall: 20 triangles, 34 vertices; the
-areaway wall is two faces THIN apart, 4 triangles. The parts are told apart by facades.FRONT_PART in uv2.x; the
-shader (shaders/building.gdshader, stoop()) paints them.
+ground and its inside above the steps (THIN apart and open on top, so the
+two never sit exactly on each other in the depth or shadow map), and the
+doorway, a panel standing just off the wall: 20 triangles, 34 vertices. An areaway wall is two
+faces THIN apart: 4 triangles, 8 vertices. The parts are told apart by
+facades.FRONT_PART in uv2.x; the shader (shaders/building.gdshader, stoop())
+paints them.
 
 Uv per part (meters; the shader relies on them and on the measures below):
   STEPS       (across from the left side, out from the wall)

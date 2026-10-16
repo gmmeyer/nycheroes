@@ -15,7 +15,7 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
-| 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, first landmarks, sound done) |
+| 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, facade materials and stoops, first landmarks, sound done) |
 | 7 | Phones and tablets | Done in emulation; real phones to check |
 | 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions) |
 | 9 | Mac and Windows versions | Planned (last) |
@@ -351,7 +351,6 @@ In order:
   towers 74, paint 76), plus the 1.8 MB canopy map; 3.4 million trees and
   9,637 water towers citywide. About +0.3-0.8 ms per frame (draw calls in
   midtown 190 to 290); every view still at the 145 FPS cap.
-- Still to do: parked cars and traffic.
 
 **Roofs: parapets and pitched roofs (done):**
 - Up close, flat roofs get 1 m parapets: the walls rise above the roof
@@ -453,7 +452,7 @@ In order:
   so every stair opens the same way along its curb); wave bike racks are
   drawn as U racks.
 
-**Parked cars and traffic (in progress):**
+**Parked cars and traffic (done):**
 - Data (`tools/citygen/traffic.py`, from the street centerlines): driving
   lanes for every street and at-grade highway, following the paint (the
   same lane count and width as the dashed lines, keeping right of the
@@ -514,6 +513,23 @@ In order:
   0.00013, low 0.00016) with a warm tint toward the sun.
 - `?weather=overcast`: a grey deck, soft light, faint shadows, grey water
   and fog; dusk and night follow. Same draw calls and triangles.
+
+**Facade materials and rowhouse fronts (done):**
+- Each masonry building has a wall material from the tax lot data
+  (`facades.py`): brownstone, red, brown or buff brick, limestone, paint or
+  siding, by borough, era and historic district. Brooklyn and Harlem rows
+  are brownstone and limestone, Ridgewood's buff brick, DUMBO's warehouses
+  deep red, prewar Manhattan limestone and cream; houses in a row share
+  theirs, far blocks take their buildings' majority. Palettes were retuned
+  against the reference photos: muted, weathered masonry and dark glass.
+- Rowhouses and walk-ups have stoops (`tools/citygen/fronts.py`, near tiles
+  only): steps up to the parlor floor between stone cheek walls, the front
+  door on the landing, real geometry with collision, kept 4 m from the curb
+  (so narrow sidewalks drop some); areaway walls and fences with a gate.
+  Rows' and tenements' cornices are deep and bracketed.
+- Cost: full-detail tiles +117 MB (+5.3 M triangles; stoops alone +78 MB),
+  about 0.25 M more triangles per frame in brownstone blocks, same draw
+  calls.
 
 **Landmarks, first batch (done):**
 - `tools/citygen/landmarks.py` builds eight landmarks by hand, at their real

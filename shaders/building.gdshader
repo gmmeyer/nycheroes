@@ -326,10 +326,11 @@ uniform float torch_glow = 4.0;
 // Moments of the wall height at the vertices (see wall_top_distance).
 varying vec4 wall_moments;
 // UV2 decoded into whole numbers in the vertex shader: (archetype + 64 *
-// flags, floor height in dm, seed in 1024ths). Interpolation can nudge a
-// value by a millionth, which a hash would blow up into per-pixel noise, so
-// fragments round them back.
-varying vec3 building_data;
+// flags, floor height in dm, seed in 1024ths). Every face has one value, so
+// it isn't interpolated (flat): interpolating codes in the millions (stoop
+// parts' flags) put some pixels off by one, into another building type's
+// palette; fragments still round them, to be safe.
+varying flat vec3 building_data;
 
 struct Facade {
 	vec3 wall;          // main wall color (linear)
@@ -514,7 +515,7 @@ Facade facade_for(int archetype, float seed, bool landmark, int material) {
 		if (m == MAT_LIMESTONE) {
 			f.base = f.wall;
 			f.base_floors = 1.0;
-		} else if ((m == MAT_RED_BRICK || m == MAT_BROWN_BRICK) && r3 < 0.3) {
+		} else if ((m == MAT_RED_BRICK || m == MAT_BROWN_BRICK) && r3 < 0.45) {
 			f.base = f.wall * 0.9;  // a plain brick base
 			f.base_floors = 1.0;
 		} else {
