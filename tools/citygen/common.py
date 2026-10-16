@@ -80,6 +80,10 @@ SURFACE_MARKINGS = 6
 # is the widest, so it has the right of way where there's no signal).
 SURFACE_TRAFFIC = 7
 LANE_BREAK = 0xFFFFFFFF
+# Hand-made landmarks' faces in the materials shaders/landmark.gdshader paints
+# (landmarks.py, 41 and up), laid out like the buildings surface; the rest of
+# a landmark is in the buildings surface. With collision up close.
+SURFACE_LANDMARKS = 8
 
 # Props (uv2.x of the props surface).
 PROP_TREE = 0         # broadleaf tree, round crown

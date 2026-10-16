@@ -401,7 +401,8 @@ func _set_overcast() -> void:
 	var materials: Array[ShaderMaterial] = []
 	if city:
 		for material in [city.building_material, city.ground_material, city.markings_material, city.tree_material,
-				city.water_tower_material, city.street_light_material, city.street_furniture_material, city.car_material]:
+				city.water_tower_material, city.street_light_material, city.street_furniture_material, city.car_material,
+				city.landmark_material]:
 			if material is ShaderMaterial:
 				materials.append(material)
 	if ocean and ocean.material_override is ShaderMaterial:

@@ -39,6 +39,9 @@ lines below wherever a license asks for one (the aerial photos do).
   Service's Statue of Liberty, Ellis Island and Governors Island national
   monuments and Gateway National Recreation Area, and New York State's
   parks); street names from the street centerline (inkn-q76z).
+- **The Unisphere's continents:** Natural Earth 1:110m land (public
+  domain, naturalearthdata.com), reduced to 7.5-degree cells in
+  `tools/citygen/landmarks.py`.
 
 `tools/citygen/fetch_data.py` and `tools/citygen/aerial.py` list exactly
 what is downloaded from where.

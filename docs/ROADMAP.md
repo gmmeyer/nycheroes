@@ -173,9 +173,9 @@ In order:
    towers.
 4. **Street life:** trees, street paint, street lights and street
    furniture (done, below); parked cars and traffic.
-5. **Landmarks:** about 25 hand-made iconic buildings and bridges (first
-   batch of 8 done, and four bridges, below; self-made and free, decided
-   2026-10-15).
+5. **Landmarks:** about 25 hand-made iconic buildings and bridges (two
+   batches, 22 buildings done, and four bridges, below; self-made and free,
+   decided 2026-10-15).
 6. **Light and atmosphere:** sun position for NYC, clouds, haze, glass
    reflections, night mode with lit windows and street lights.
 7. **Check against reality:** about 10 reference viewpoints compared side by
@@ -657,11 +657,8 @@ In order:
 - Cost: 9,160 / 5,141 / 3,022 triangles (near / mid / far); tiles 70 kB
   smaller in total.
 - Next: Liberty Island's lawns (federal land, missing from the parks data),
-  more detail (the statue's face and drape, gargoyles, crown fins), and
-  more landmarks: the Guggenheim, the Unisphere, the Public Library, St.
-  Patrick's, Citigroup Center, the Met, the UN Secretariat, the Hearst
-  Tower, 432 Park, the Vessel and Edge, the Oculus, the Wonder Wheel and
-  Parachute Jump, Yankee Stadium.
+  more detail (the statue's face and drape, gargoyles, crown fins); more
+  landmarks in the second batch (below).
 
 **Landmark bridges (done, 2026-10-16):**
 - `tools/citygen/bridge_landmarks.py` builds four bridges by hand at their
@@ -710,6 +707,75 @@ In order:
   vaults, the Williamsburg and Queensboro by hand, the Hell Gate viaduct's
   real heights over Wards and Randalls Islands (it stays at the arch's
   44 m there).
+
+**Landmarks, second batch (done):**
+- Fourteen more in `landmarks.py`, the same way (in place of their data
+  buildings by BIN, all three detail levels, own materials, collision up
+  close), from published dimensions and the city's 3-D model and aerial
+  photos (sources with each):
+  - the Guggenheim: the rotunda's white bands spiraling up as one strip
+    (24 samples a turn), each leaning out over a glass strip, 30 m across at
+    the foot to 38 m at the roof (29.7 m), the skylight's twelve-sided dome,
+    the Monitor, the bridge with the museum's name, the annex's limestone
+    grid;
+  - the Public Library: the 3-D model's massing in Vermont marble (arched
+    windows, pilasters, cornice), the portico's six columns and three
+    arches, the terrace, the steps and the lions on their pedestals;
+  - St. Patrick's: aisles, clerestory and transepts with pointed windows
+    and buttresses, steep slate roofs, the apse, the west front with its
+    portal and rose window, two towers with octagonal lanterns and spires to
+    100.4 m, pinnacles;
+  - the UN: the Secretariat (blue-green glass, marble ends, the mechanical
+    floors' grilles) and the General Assembly (curving walls, the roof
+    sweeping down and up again, glass between marble piers at the ends, the
+    dome), the Conference Building from the 3-D model;
+  - Citigroup Center on its four stilts and core, aluminum bands, the crown
+    sloping 45 degrees to the south (white at night), St. Peter's;
+  - the Hearst Tower: the 1928 base with pylons and urns, the clerestory,
+    the diagrid (painted, nodes on the corners every other tier) and the
+    "bird's mouth" corners in the geometry;
+  - the Met: the 3-D model's galleries with skylit roofs, the wings'
+    pilasters and windows, Hunt's three great arches, four pairs of columns
+    each crowned by its uncarved block, the grand steps;
+  - the Vessel (a copper honeycomb of stairs, inside and out), the Oculus
+    (a glass hall between white ribs that cross over the skylight into
+    wings to 51 m, lit from inside at night), Yankee Stadium (the 3-D
+    model's stands in blue seats, the limestone wall with its arches and
+    YANKEE STADIUM in gold, the frieze, the field with its diamond, the video
+    board);
+  - the Unisphere: a steel lattice of meridians and parallels with the
+    continents as plates (Natural Earth's 1:110m land in 7.5-degree cells),
+    tilted 23.5 degrees, three orbit rings, the tripod, the fountain pool;
+    painted on a solid globe further away;
+  - Coney Island: the Wonder Wheel (blue A-frames, 16 spokes, the curved
+    tracks, 8 fixed and 16 swinging cars, the sign; chasing bulbs at night)
+    and the Parachute Jump (the red lattice tower, twelve arms and their
+    ring; its LEDs in waves of color at night);
+  - Radio City Music Hall's marquee round the corner of Sixth Avenue and
+    50th Street (the name in lights, chasing bulbs) and the vertical RADIO
+    CITY sign, on its building's 3-D model shape.
+- Their own materials (41-58) are painted by a shader of their own,
+  `shaders/landmark.gdshader`, on a new tile surface (kind 8, landmarks;
+  the game gives it that material and collision); their faces in the first
+  batch's materials (paving, stone, copper) stay in the buildings surface.
+  Folded into `building.gdshader` instead, they pushed the time Chrome on
+  Windows (ANGLE's D3D compiler) takes to compile it past 6 minutes.
+  Measured on this machine, idle: the city's first load takes 200-265 s
+  of GPU-process compiling already at HEAD, nearly all of it the buildings'
+  shader (the game freezes meanwhile; Chrome caches it afterwards), and
+  about the same (190 s) with the landmark shader added. Worth fixing on
+  its own: a cold first load of nycheroes.party in Chrome on Windows likely
+  freezes for minutes.
+- Landmarks can now stand without a data building (`at=`, the Unisphere)
+  and see the terrain around them (steps, the field, the pool).
+- 432 Park Avenue and the Edge (30 Hudson Yards) were already in
+  `towers.py`; bridges and supertalls are other work.
+- Landmark institutions no longer get storefronts where PLUTO lists retail
+  area (the Racquet Club on Park Avenue; 147 buildings).
+- Cost: 18,900 / 7,800 / 2,300 triangles (near / mid / far), in place of
+  their data buildings'; tiles +178 kB over the 34 that hold them (near
+  +74 kB, mid +80 kB, far +25 kB); one more draw call in each of those
+  tiles.
 
 **Sound (done; added 2026-10-15 at the user's request):**
 - The hero: footsteps on the run animation's foot contacts (grass, boards,
