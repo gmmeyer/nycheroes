@@ -6,8 +6,9 @@ extends RefCounted
 ## surface_count x (u32 kind, u32 vertex_count, u32 index_count), then per surface:
 ## positions f32x3, normals f32x3, uv f32x2, uv2 f32x2 (all per vertex), indices u32.
 ## Mesh surfaces are triangle lists; the lanes surface holds polylines along the
-## sidewalks, separated by index 0xFFFFFFFF. The props surface (near tiles) is
-## one vertex per prop, sorted by type, and no indices:
+## sidewalks, separated by index 0xFFFFFFFF. The props surface (near tiles;
+## mid and far tiles have one with clumps of crowns only) is one vertex per
+## prop, sorted by type, and no indices:
 ##   position  where it stands (a tree's trunk on the ground, a water tower's
 ##             legs on the roof, a street light's pole or a piece of street
 ##             furniture's base on the sidewalk), tile-local
@@ -38,7 +39,7 @@ const SURFACE_STRUCTURES := 3
 ## Lakes, reservoirs and creeks above sea level (sea-level water is the ocean plane).
 const SURFACE_WATER := 4
 ## Trees, rooftop water towers, street lights and street furniture, one point
-## each (near tiles only).
+## each (near tiles), and woods' clumps of crowns (tiles of every level).
 const SURFACE_PROPS := 5
 ## Paint on the streets (near tiles only): strips a few centimeters above the
 ## road, without collision. UV is local to each strip in meters (x along the
@@ -112,7 +113,11 @@ const PROP_BIKE_RACK := 12         ## variant BIKE_RACK_*
 const PROP_PARKING_METER := 13     ## Muni-Meter pay station [1.6 x 0.35]
 const PROP_NEWSSTAND := 14         ## [2.7 x 3.0]
 const PROP_PARKED_CAR := 15        ## at the curb, model CAR_*
-const PROP_TYPE_COUNT := 16
+## A clump of crowns: woods seen from afar, in tiles of every level (mid and
+## far tiles' props surfaces hold only these); uv (foliage tone TONE_*, 1 for
+## conifers else 0).
+const PROP_CANOPY := 16
+const PROP_TYPE_COUNT := 17
 ## Trees' foliage tones (uv.x of the props surface).
 const TONE_GREEN := 0
 const TONE_LIGHT := 1  ## yellow-green: honeylocust, ginkgo, birch, willow

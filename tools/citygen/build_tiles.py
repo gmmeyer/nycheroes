@@ -168,8 +168,8 @@ CANOPY_CLEARANCE = 4.5
 CANOPY_REACH = 6.0
 
 # Each worker holds the whole city (about 3.5 GB in October 2026), so the
-# default worker count also leaves this much memory per worker, plus
-# MEMORY_SPARE for everything else.
+# default worker count also needs this much free memory per worker, leaving
+# MEMORY_SPARE for everything else (other builds may be running).
 WORKER_MEMORY_GB = 4.0
 MEMORY_SPARE_GB = 12.0
 
@@ -177,7 +177,7 @@ _W = {}  # per-worker data, filled by _init_worker
 
 
 def _default_workers() -> int:
-    """All cores but two, as many as fit in memory."""
+    """All cores but two, as many as fit in the free memory."""
     cores = max(1, (os.cpu_count() or 4) - 2)
     try:
         if os.name == "nt":
@@ -191,12 +191,12 @@ def _default_workers() -> int:
                             ("available_extended", ctypes.c_ulonglong)]
             status = MemoryStatus(length=ctypes.sizeof(MemoryStatus))
             ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
-            total = status.total
+            free = status.available
         else:
-            total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+            free = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_AVPHYS_PAGES")
     except (AttributeError, OSError, ValueError):
         return cores
-    return max(1, min(cores, int((total / 2**30 - MEMORY_SPARE_GB) / WORKER_MEMORY_GB)))
+    return max(1, min(cores, int((free / 2**30 - MEMORY_SPARE_GB) / WORKER_MEMORY_GB)))
 
 
 def main() -> None:
@@ -268,7 +268,7 @@ def main() -> None:
                 for key in ("bytes", "vertices", "triangles"):
                     totals[f"{level}_{key}"] += entry.pop(key)
                 for key in ("lane_points", "props", "trees", "water_towers", "street_lights", "furniture",
-                            "parked_cars", "traffic_lanes", "train_tracks"):
+                            "parked_cars", "canopy_clumps", "traffic_lanes", "train_tracks"):
                     totals[key] += entry.pop(key, 0)
             if n % 250 == 0 or n == len(tasks):
                 print(f"  {n:,}/{len(tasks):,} tiles ({time.time() - started:.0f} s)", flush=True)
@@ -302,7 +302,7 @@ def main() -> None:
     print(f"  walking lanes: {totals['lane_points']:,} points")
     print(f"  props: {totals['trees']:,} trees, {totals['water_towers']:,} water towers, "
           f"{totals['street_lights']:,} street lights, {totals['furniture']:,} pieces of street furniture, "
-          f"{totals['parked_cars']:,} parked cars")
+          f"{totals['parked_cars']:,} parked cars; {totals['canopy_clumps']:,} clumps of crowns (woods from afar)")
     print(f"  driving lanes: {totals['traffic_lanes']:,}, pieces of el track: {totals['train_tracks']:,}")
     if failed:
         print(f"  {len(failed)} tiles FAILED and are missing: {failed}")
@@ -519,9 +519,11 @@ def _build_tile(task):
             surfaces.append((SURFACE_TRAINS, trains.surface(tracks, origin)))
             stats["train_tracks"] = len(tracks)
         prop_surface, counts = _build_props(i, j, bounds, indices, origin)
-        if prop_surface is not None:
-            surfaces.append((SURFACE_PROPS, prop_surface))
-            stats.update(counts)
+    else:
+        prop_surface, counts = _build_clumps(level, bounds, origin)
+    if prop_surface is not None:
+        surfaces.append((SURFACE_PROPS, prop_surface))
+        stats.update(counts)
 
     raw = encode_tile(surfaces)
     packed = zstd.compress(raw, level=12)
@@ -1044,14 +1046,15 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     lamps = _street_lights(i, j, bounds)
     furniture = _furniture(i, j, bounds)
     cars = _parked_cars(bounds)
-    parts = [street, canopy, towers, lamps, furniture, cars]
+    clumps = _canopy_clumps("lod0", bounds)
+    parts = [street, canopy, towers, lamps, furniture, cars, clumps]
     en = np.concatenate([p["en"] for p in parts])
     if len(en) == 0:
         return None, {}
     trees = len(street["en"]) + len(canopy["en"])
     ground = _W["ground"]["lod0"]
     y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]), towers["y"], lamps["y"],
-                        furniture["y"], cars["y"]])
+                        furniture["y"], cars["y"], clumps["y"]])
     seed = np.concatenate([p["seed"] for p in parts])
     # Trees and towers face any way; lamps reach over the street.
     yaw = np.concatenate([p["yaw"] if "yaw" in p else props.location_seed(p["en"] * 3.7) * (2 * np.pi)
@@ -1074,17 +1077,48 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
         uv[moved, 0] = SIGNAL_ON_COLUMN
         keep[moved] = overpasses.clear_of_decks(_W["bridges"]["lod0"], bounds, en[moved], y[moved],
                                                 np.full(len(moved), els.SIGNAL_HEADROOM))
+    surface = _props_surface(en, y, normals, uv, kinds, seed, origin, keep)
+    return surface, {"props": len(en), "trees": trees, "water_towers": len(towers["en"]),
+                     "street_lights": len(lamps["en"]), "furniture": len(furniture["en"]),
+                     "parked_cars": len(cars["en"]), "canopy_clumps": len(clumps["en"])}
+
+
+def _build_clumps(level: str, bounds, origin):
+    """A mid or far tile's props surface: just its clumps of crowns (woods
+    seen from afar), or (None, {})."""
+    c = _canopy_clumps(level, bounds)
+    keep = overpasses.clear_of_decks(_W["bridges"][level], bounds, c["en"], c["y"], c["height"])
+    if not keep.any():
+        return None, {}
+    normals = np.column_stack([c["height"], c["width"], c["yaw"]])
+    uv = np.column_stack([c["tone"], c["trunk"]])
+    return _props_surface(c["en"], c["y"], normals, uv, c["type"], c["seed"], origin, keep), {
+        "canopy_clumps": int(keep.sum())}
+
+
+def _props_surface(en, y, normals, uv, kinds, seed, origin, keep) -> tuple:
+    """The props surface (see common.py) of the props standing at (N, 2)
+    east/north points `en` at heights y, those where `keep`, sorted by type."""
     positions = np.round(to_godot(en, y) - np.asarray(origin), 2).astype(np.float32)
     # Centimeters, except signals' phases (exact 1024ths, see markings.prepare).
     uv = np.where((kinds == PROP_TRAFFIC_SIGNAL)[:, None], uv, np.round(uv, 2))
     uv2 = np.column_stack([kinds, np.minimum(np.round(seed, 3), 0.999)])
     order = np.flatnonzero(keep)[np.argsort(kinds[keep], kind="stable")]  # grouped by type, for the game
-    surface = (positions[order], np.round(normals, 2).astype(np.float32)[order],
-               uv.astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
-    return surface, {"props": len(en), "trees": trees, "water_towers": len(towers["en"]),
-                     "street_lights": len(lamps["en"]), "furniture": len(furniture["en"]),
-                     "parked_cars": len(cars["en"])}
+    return (positions[order], np.round(normals, 2).astype(np.float32)[order],
+            uv.astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
 
+
+def _canopy_clumps(level: str, bounds) -> dict:
+    """Clumps of crowns (props.canopy_clumps) where the land cover shows
+    canopy in the tile, on the level's ground, none out over the water."""
+    cell = props.CLUMP_CELL_FAR if level == "lod2" else props.CLUMP_CELL
+    min_e, min_n, max_e, max_n = bounds.bounds
+    en, share, cells = _W["landcover"].canopy_cells(bounds.bounds, cell)
+    inside = (en[:, 0] >= min_e) & (en[:, 0] < max_e) & (en[:, 1] >= min_n) & (en[:, 1] < max_n)
+    inside[inside] = shapely.contains_xy(_W["g"]["land"], en[inside, 0], en[inside, 1])
+    found = props.canopy_clumps(en[inside], share[inside], cells[inside], cell)
+    found["y"] = overpasses.bare(_W["ground"][level]).height(found["en"])
+    return found
 
 def _furniture(i: int, j: int, bounds) -> dict:
     """The city's street furniture in the tile (props.prepare_furniture), on
