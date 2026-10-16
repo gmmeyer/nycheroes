@@ -16,6 +16,7 @@ import shapely
 from shapely.geometry import shape
 
 import cantilever
+import churches
 import els
 import facades
 import ground_details
@@ -150,6 +151,10 @@ def prepare_facades() -> dict:
     return facades.prepare(load("buildings"))
 
 
+def prepare_churches() -> dict:
+    return churches.prepare(load("buildings"))
+
+
 def prepare_deck_heights() -> dict:
     load_terrain()
     return lidar.prepare(load("overpasses"), terrain.Terrain())
@@ -161,7 +166,7 @@ def prepare_ground_details() -> dict:
 
 
 PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": prepare_water,
-             "facades": prepare_facades, "trees": props.prepare_trees, "centerline": markings.prepare,
+             "facades": prepare_facades, "churches": prepare_churches, "trees": props.prepare_trees, "centerline": markings.prepare,
              "furniture": props.prepare_furniture, "overpasses": overpasses.prepare,
              "ground_details": prepare_ground_details, "els": els.prepare,
              "deck_sidewalks": overpasses.prepare_sidewalks, "cantilever": cantilever.prepare,

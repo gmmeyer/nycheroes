@@ -1,6 +1,7 @@
-"""Stoops on rowhouse and walk-up fronts, up close (lod0 tiles): steps up to
-the parlor floor between cheek walls, the front door on the landing, and the
-low wall or iron fence along the front yard (the areaway).
+"""Rowhouse and walk-up fronts, up close (lod0 tiles): stoops (steps up to
+the parlor floor between cheek walls or iron railings, the front door on the
+landing, an awning over some), the low wall or iron fence along the front
+yard (the areaway) with shrubs behind it, deep cornices, and bow fronts.
 
 build_tiles.py calls add() for every building it draws in full detail. A
 building with stoop steps (facades.py: brownstones 8-10, later rows 3-7,
@@ -31,13 +32,42 @@ faces THIN apart: 4 triangles, 8 vertices. The parts are told apart by
 facades.FRONT_PART in uv2.x; the shader (shaders/building.gdshader, stoop())
 paints them.
 
+Most stoops (RAILING_SHARE) have iron railings instead of solid cheek walls:
+the cheeks are a CURB, with a see-through railing on top, posts at its ends.
+A yard's edge is a stone wall, or (FENCE_SHARE) an iron fence on a
+low curb between posts: in Queens brick ones with pyramid caps every
+POST_SPACING or so, elsewhere iron; behind it a box hedge or a shrub.
+Queens rows (AWNING_SHARE) and some others have a striped metal awning over
+the door. These small parts are in the tile's fronts surface
+(common.SURFACE_FRONTS), without collision, which shaders/fronts.gdshader
+paints (the railings' and fences' bars see-through): a railing is 4
+triangles a side, a fence 2 a span and a brick post 10, a hedge 8, a shrub
+20, an awning 6.
+
+Up close, prewar rowhouses' and walk-ups' cornices (facades.CORNICE) stand
+CORNICE_DEPTH out from the front, over a sloping underside: faces of the
+building's own surface marked FRONT, so building.gdshader paints its
+cornice on them, crown, brackets and all; about 10 triangles a wall. Queens'
+prewar buff brick rows (Ridgewood's) and BOW_SHARE of other bayed rows have
+their bays rounded into bow fronts (bow(); BOW_SEGMENTS facets).
+
 Uv per part (meters; the shader relies on them and on the measures below):
   STEPS       (across from the left side, out from the wall)
   STOOP_SIDE  (out from the wall, above the landing)
   CHEEK       (out from the wall, above the landing)
   DOORWAY     (across from its left edge, above the landing)
   AREAWAY     (along it, above the ground)
+In the fronts surface, uv2 = (part + FRONT_PARTS * variant, seed) and uv:
+  IRON_PANEL  (m along it, m above its foot); variant: its height in dm +
+              PANEL_POSTS if it has posts at its ends + PANEL_LENGTH * its
+              length in cm
+  POST        (m around, m above the ground; its cap above POST_HEIGHT)
+  SHRUB       (m around, m above the ground)
+  AWNING      (m across, m up the slope from its front edge; the valance
+              below 0, the sides below -0.3); variant: the color
 """
+
+import math
 
 import numpy as np
 import shapely
@@ -52,10 +82,21 @@ CHEEK = 3
 DOORWAY = 4
 AREAWAY = 5
 
+# Parts in the fronts surface (common.SURFACE_FRONTS); same as shaders/fronts.gdshader.
+IRON_PANEL = 0  # a see-through railing or fence
+POST = 1        # a brick fence post and its stone cap
+SHRUB = 2
+AWNING = 3
+FRONT_PARTS = 16
+PANEL_POSTS = 16
+PANEL_LENGTH = 32
+
 # Measures (m); the shader has the same.
 LANDING = 1.2          # the landing's depth, from the wall
 RISE, RUN = 0.19, 0.28  # each step
 CHEEK_HEIGHT = 0.85    # the cheek walls stand this high above the steps
+CURB = 0.22            # ... or, under an iron railing, this high
+RAIL_HEIGHT = 0.95     # the railing's top above the steps
 DOORWAY_WIDTH = 1.5
 DOORWAY_HEIGHT = 3.0
 DOORWAY_OUT = 0.08     # the doorway panel stands this far off the wall
@@ -91,6 +132,43 @@ STOOP_WALL = 0.96
 GATE = 1.0
 MIN_YARD = 1.5
 MIN_AREAWAY = 0.8
+# Iron railings and fences: the share of stoops and yards with them, by the
+# house's material (brownstone and limestone, others).
+RAILING_SHARE = (0.7, 0.6)
+FENCE_SHARE = (0.35, 0.75)
+# Fences: the curb they stand on, their top, brick posts (width, height,
+# cap) about POST_SPACING apart.
+FENCE_CURB = 0.3
+FENCE_HEIGHT = 1.05
+POST_WIDTH, POST_HEIGHT, POST_CAP = 0.42, 1.15, 0.3
+POST_SPACING = 3.2
+# Yards: the share with nothing planted and with a box hedge HEDGE_DEPTH
+# deep along the areaway; the rest have a shrub. Heights and radii (low, high).
+BARE_YARDS = 0.15
+HEDGE_SHARE = 0.45
+HEDGE_DEPTH = 0.6
+HEDGE_HEIGHT = (0.85, 1.25)
+SHRUB_RADIUS = (0.35, 0.7)
+SHRUB_HEIGHT = (0.6, 1.3)
+# Door awnings: the share of stoops with one (Queens', others'; none on
+# brownstone or limestone), their width past the doorway, depth, drop and
+# valance, and their top above the doorway.
+AWNING_SHARE = (0.6, 0.12)
+AWNING_MARGIN, AWNING_DEPTH, AWNING_DROP, AWNING_VALANCE = 0.25, 0.9, 0.45, 0.18
+AWNING_ABOVE = 0.15
+AWNING_COLORS = 4
+# Cornices: how far they stand out, and how much their underside rises from
+# the wall to their front. Their height is the shader's (cornice_height()).
+CORNICE_DEPTH = 0.6
+CORNICE_COVE = 0.35
+# Bow fronts: bays at least MIN_BAY deep and BAY_WIDTH wide (m) rounded into
+# BOW_SEGMENTS facets, on Queens' prewar buff brick rows and this share of
+# other rows.
+BOW_SHARE = 0.2
+MIN_BAY = 0.3
+BAY_WIDTH = (1.5, 8.0)
+BOW_SEGMENTS = 6
+QUEENS = 4  # the borough's code (the BBL's first digit)
 # The 3-D model's outline at the ground must cover at least this share of
 # the footprint's area (else its walls are too odd to stand a stoop on).
 MODEL_OUTLINE_SHARE = 0.6
@@ -142,11 +220,25 @@ def add(builder, index: int, facade: tuple, shape, w: dict, settings: dict, face
         return facades.encode(archetype, flags | part * facades.FRONT_PART, floor_dm, seed)
 
     ground = w["ground"]["lod0"]
-    _build(builder, door, out, along, width, stoop, ground, uv2_of)
+    small = w["front_mesh"]  # the fronts surface
+    bin_number = int(w["b"]["bin"][index])
+    material = (flags // facades.MATERIAL) % 8
+    stone = material in (facades.BROWNSTONE, facades.LIMESTONE)
+    railing = facades.unit_hash(bin_number, 71) < RAILING_SHARE[0 if stone else 1]
+    _build(builder, door, out, along, width, stoop, ground, uv2_of, CURB if railing else CHEEK_HEIGHT)
+    if railing:
+        _build_railings(small, door, out, along, width, stoop, seed)
+    queens = int(w["b"]["bbl"][index]) // 1_000_000_000 == QUEENS
+    if not stone and facades.unit_hash(bin_number, 77) < AWNING_SHARE[0 if queens else 1]:
+        _build_awning(small, door, out, along, stoop[2], seed, bin_number)
     if archetype == facades.ROWHOUSE:
         areaway = _areaway(w, index, poly, shift, door, out, along, width)
         if areaway is not None:
-            _build_areaway(builder, door, out, along, areaway, ground, uv2_of)
+            fence = facades.unit_hash(bin_number, 73) < FENCE_SHARE[0 if stone else 1]
+            _build_areaway(builder, door, out, along, areaway, ground, uv2_of, FENCE_CURB if fence else AREAWAY_HEIGHT)
+            if fence:
+                _build_fence(small, door, out, along, areaway, ground, seed, brick=queens and not stone)
+            _build_shrubs(small, door, out, along, areaway, ground, seed, bin_number)
     return archetype, flags, floor_dm, seed
 
 
@@ -315,15 +407,15 @@ def _areaway(w: dict, index: int, own, shift, door, out, along, width: float):
     return yard, start, end
 
 
-def _build_areaway(builder, door, out, along, areaway: tuple, ground, uv2_of) -> None:
-    """The areaway wall's two faces (see _areaway)."""
+def _build_areaway(builder, door, out, along, areaway: tuple, ground, uv2_of, height: float) -> None:
+    """The areaway wall's two faces (see _areaway), `height` tall (a fence's curb is lower)."""
     yard, start, end = areaway
     ends = np.array([door + out * yard + along * start, door + out * yard + along * end])
     feet = ground.height(ends)
     pos = np.array([[e[0], y - SINK, -e[1]] for e, y in zip(ends, feet)]
-                   + [[e[0], y + AREAWAY_HEIGHT, -e[1]] for e, y in zip(ends, feet)])
+                   + [[e[0], y + height, -e[1]] for e, y in zip(ends, feet)])
     length = end - start
-    uv = np.array([[0.0, -SINK], [length, -SINK], [0.0, AREAWAY_HEIGHT], [length, AREAWAY_HEIGHT]])
+    uv = np.array([[0.0, -SINK], [length, -SINK], [0.0, height], [length, height]])
     quad = [(0, 1, 3), (0, 3, 2)]
     normal = np.array([out[0], 0.0, -out[1]])
     builder.add(pos[quad], uv[quad], uv2_of(AREAWAY), normal)
@@ -331,8 +423,8 @@ def _build_areaway(builder, door, out, along, areaway: tuple, ground, uv2_of) ->
     builder.add(inside[quad], uv[quad], uv2_of(AREAWAY), -normal)
 
 
-def _build(builder, door, out, along, width: float, stoop: tuple, ground, uv2_of) -> None:
-    """The stoop's faces (see the module's docstring)."""
+def _build(builder, door, out, along, width: float, stoop: tuple, ground, uv2_of, cheek: float) -> None:
+    """The stoop's faces (see the module's docstring), its cheek walls `cheek` above the steps."""
     count, foot, top = stoop
     depth = LANDING + count * RUN
     half = width / 2
@@ -363,17 +455,358 @@ def _build(builder, door, out, along, width: float, stoop: tuple, ground, uv2_of
     for side in (-1.0, 1.0):
         s = side * half
         normal = godot(along * side)
-        outside = [(-BACK, s, base), (depth, s, base), (depth, s, foot + CHEEK_HEIGHT),
-                   (LANDING, s, top + CHEEK_HEIGHT), (-BACK, s, top + CHEEK_HEIGHT)]
+        outside = [(-BACK, s, base), (depth, s, base), (depth, s, foot + cheek),
+                   (LANDING, s, top + cheek), (-BACK, s, top + cheek)]
         face(outside, [(p[0], p[2] - top) for p in outside], normal, STOOP_SIDE)
         s -= side * THIN
-        for quad in ([(-BACK, s, top), (LANDING, s, top), (LANDING, s, top + CHEEK_HEIGHT),
-                      (-BACK, s, top + CHEEK_HEIGHT)],
-                     [(LANDING, s, top), (depth, s, foot), (depth, s, foot + CHEEK_HEIGHT),
-                      (LANDING, s, top + CHEEK_HEIGHT)]):
+        for quad in ([(-BACK, s, top), (LANDING, s, top), (LANDING, s, top + cheek), (-BACK, s, top + cheek)],
+                     [(LANDING, s, top), (depth, s, foot), (depth, s, foot + cheek), (LANDING, s, top + cheek)]):
             face(quad, [(p[0], p[2] - top) for p in quad], -normal, CHEEK)
     # The doorway, just off the wall.
     door_half = DOORWAY_WIDTH / 2
     doorway = [(DOORWAY_OUT, -door_half, top), (DOORWAY_OUT, door_half, top),
                (DOORWAY_OUT, door_half, top + DOORWAY_HEIGHT), (DOORWAY_OUT, -door_half, top + DOORWAY_HEIGHT)]
     face(doorway, [(p[1] + door_half, p[2] - top) for p in doorway], godot(out), DOORWAY)
+
+
+# --- The fronts surface's small parts ---
+
+def _small_uv2(part: int, variant: int, seed: float) -> tuple[float, float]:
+    return float(part + FRONT_PARTS * variant), min(float(seed), 0.999)
+
+
+def _quad(builder, corners, uv, uv2, normal) -> None:
+    """A quad of four (N, 3) Godot points, fanned from the first."""
+    corners, uv = np.asarray(corners, np.float64), np.asarray(uv, np.float64)
+    tri = [(0, 1, 2), (0, 2, 3)]
+    builder.add(corners[tri], uv[tri], uv2, np.asarray(normal, np.float64) / np.linalg.norm(normal))
+
+
+def _post(builder, center, out, along, foot: float, uv2) -> None:
+    """A brick fence post on the yard's edge (east/north center, square to
+    the fence) under a pyramid cap: its front and sides from below the ground
+    to POST_HEIGHT (none at the back, which faces the yard), uv (m around, m
+    above `foot`)."""
+    half = POST_WIDTH / 2
+    low, high = foot - SINK, foot + POST_HEIGHT
+    corners = [center + (out * a + along * b) * half for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    faces = ((0, 1, -along), (1, 2, out), (2, 3, along), (3, 0, -out))
+    apex = [center[0], high + POST_CAP, -center[1]]
+    slant = math.hypot(POST_CAP, half)
+    for k, (i, j, normal) in enumerate(faces):
+        (e0, n0), (e1, n1) = corners[i], corners[j]
+        u0, u1 = k * POST_WIDTH, (k + 1) * POST_WIDTH
+        if k < 3:
+            _quad(builder, [[e0, low, -n0], [e1, low, -n1], [e1, high, -n1], [e0, high, -n0]],
+                  [[u0, -SINK], [u1, -SINK], [u1, POST_HEIGHT], [u0, POST_HEIGHT]], uv2, (normal[0], 0.0, -normal[1]))
+        builder.add(np.array([[[e0, high, -n0], [e1, high, -n1], apex]]),
+                    np.array([[[u0, POST_HEIGHT], [u1, POST_HEIGHT], [(u0 + u1) / 2, POST_HEIGHT + slant]]]),
+                    uv2, np.array([normal[0] * POST_CAP, half, -normal[1] * POST_CAP]) / slant)
+
+
+def _panel(builder, a, b, y0: float, y1: float, low: float, high: float, posts: bool, seed: float, normal) -> None:
+    """An iron panel from a to b (east/north) standing from `low` to `high`
+    above the ground (or steps) there, y0 and y1: see-through pickets between
+    rails, with (`posts`) a post at either end."""
+    length = float(np.hypot(*(b - a)))
+    variant = int(round((high - low) * 10)) + PANEL_POSTS * int(posts) + PANEL_LENGTH * int(round(length * 100))
+    _quad(builder, [[a[0], y0 + low, -a[1]], [b[0], y1 + low, -b[1]], [b[0], y1 + high, -b[1]],
+                    [a[0], y0 + high, -a[1]]],
+          [[0.0, 0.0], [length, 0.0], [length, high - low], [0.0, high - low]],
+          _small_uv2(IRON_PANEL, variant, seed), normal)
+
+
+def _build_railings(builder, door, out, along, width: float, stoop: tuple, seed: float) -> None:
+    """Iron railings along both sides of a stoop, on its curbs: a see-through
+    panel along the landing and one down the steps, with posts at their
+    ends (the newel at the foot)."""
+    count, foot, top = stoop
+    depth = LANDING + count * RUN
+    line = [(0.15, top), (LANDING, top), (depth - 0.05, foot + 0.05 * RISE / RUN)]
+    for side in (-1.0, 1.0):
+        s = side * (width / 2 - THIN / 2)
+        normal = (along[0] * side, 0.0, -along[1] * side)
+        for (t0, y0), (t1, y1) in zip(line[:-1], line[1:]):
+            _panel(builder, door + out * t0 + along * s, door + out * t1 + along * s, y0, y1, CURB, RAIL_HEIGHT, True,
+                   seed, normal)
+
+
+def _build_fence(builder, door, out, along, areaway: tuple, ground, seed: float, brick: bool) -> None:
+    """An iron fence along the yard's edge, on the areaway's curb, between
+    brick posts with pyramid caps (or iron posts, painted on its panels)."""
+    yard, start, end = areaway
+    half = POST_WIDTH / 2 if brick else 0.0
+    t = yard - THIN / 2
+    spans = max(1, math.ceil((end - start - 2 * half) / POST_SPACING))
+    stations = np.linspace(start + half, end - half, spans + 1)
+    spots = door + out * t + along * stations[:, None]
+    feet = ground.height(spots)
+    if brick:
+        for spot, foot in zip(spots, feet):
+            _post(builder, spot, out, along, foot, _small_uv2(POST, 0, seed))
+    normal = (out[0], 0.0, -out[1])
+    for k in range(spans):
+        s0, s1 = stations[k] + half, stations[k + 1] - half
+        if s1 - s0 > 0.1:
+            _panel(builder, door + out * t + along * s0, door + out * t + along * s1, feet[k], feet[k + 1], FENCE_CURB,
+                   FENCE_HEIGHT, not brick, seed, normal)
+
+
+def _build_shrubs(builder, door, out, along, areaway: tuple, ground, seed: float, bin_number: int) -> None:
+    """A clipped hedge along the inside of the areaway (HEDGE_SHARE of the
+    yards), or a shrub in the yard (none in some)."""
+    yard, start, end = areaway
+    r = facades.unit_hash(bin_number, 81)
+    if r < BARE_YARDS:
+        return
+    length = end - start
+    if r < BARE_YARDS + HEDGE_SHARE:
+        if length > 1.0 and yard - THIN - HEDGE_DEPTH > 0.6:
+            height = HEDGE_HEIGHT[0] + (HEDGE_HEIGHT[1] - HEDGE_HEIGHT[0]) * facades.unit_hash(bin_number, 82)
+            _hedge(builder, door, out, along, (yard - THIN - 0.03 - HEDGE_DEPTH, yard - THIN - 0.03),
+                   (start + 0.15, end - 0.15), height, ground, _small_uv2(SHRUB, 1, seed))
+        return
+    r = [facades.unit_hash(bin_number, 83 + j) for j in range(4)]
+    radius = SHRUB_RADIUS[0] + (SHRUB_RADIUS[1] - SHRUB_RADIUS[0]) * r[0]
+    radius = min(radius, 0.5 * (yard - THIN - 0.2), 0.5 * length)
+    if radius < 0.25:
+        return
+    height = SHRUB_HEIGHT[0] + (SHRUB_HEIGHT[1] - SHRUB_HEIGHT[0]) * r[1]
+    s = start + length * (0.3 + 0.4 * r[2])
+    t = min(max(yard * (0.4 + 0.25 * r[3]), radius + 0.15), yard - THIN - radius - 0.05)
+    center = door + out * t + along * s
+    _shrub(builder, center, float(ground.height(center[None])[0]), radius, height,
+           _small_uv2(SHRUB, int(r[0] * 4), seed), bin_number)
+
+
+def _hedge(builder, door, out, along, across: tuple, span: tuple, height: float, ground, uv2) -> None:
+    """A box hedge (m out from the wall, m along it), `height` tall."""
+    (t0, t1), (s0, s1) = across, span
+    corners = np.array([door + out * t + along * s for t, s in ((t0, s0), (t1, s0), (t1, s1), (t0, s1))])
+    feet = ground.height(corners)
+    tops = feet + height
+    low = feet - SINK
+
+    def at(k, y):
+        return [corners[k][0], y, -corners[k][1]]
+
+    # The sides (outward, by the corners' order; none facing the house), then the top.
+    sides = ((0, 1, -along), (1, 2, out), (2, 3, along))
+    for a, b, normal in sides:
+        width = float(np.hypot(*(corners[b] - corners[a])))
+        _quad(builder, [at(a, low[a]), at(b, low[b]), at(b, tops[b]), at(a, tops[a])],
+              [[0.0, -SINK], [width, -SINK], [width, height], [0.0, height]], uv2, (normal[0], 0.0, -normal[1]))
+    _quad(builder, [at(k, tops[k]) for k in range(4)],
+          [[0.0, height], [t1 - t0, height], [t1 - t0, height + s1 - s0], [0.0, height + s1 - s0]], uv2,
+          (0.0, 1.0, 0.0))
+
+
+def _shrub(builder, center, foot: float, radius: float, height: float, uv2, salt: int) -> None:
+    """A low-poly shrub: four bulging sides and a rounded top, a little uneven."""
+    sides = 4
+    rings = [(0.75, -0.1), (1.0, 0.45), (0.6, 0.85)]  # (share of the radius, share of the height)
+    points = []
+    for share, up in rings:
+        ring = []
+        for k in range(sides):
+            angle = 2 * math.pi * (k + 0.5 * (len(points) % 2)) / sides
+            wobble = 0.85 + 0.3 * facades.unit_hash(salt, 91 + 10 * len(points) + k)
+            e = center[0] + math.cos(angle) * radius * share * wobble
+            n = center[1] + math.sin(angle) * radius * share * wobble
+            ring.append((e, foot + height * up, n, angle * radius))
+        points.append(ring)
+    top = (center[0], foot + height, center[1])
+    tris, uvs = [], []
+    for low, high in zip(points[:-1], points[1:]):
+        for k in range(sides):
+            a, b = low[k], low[(k + 1) % sides]
+            c, d = high[(k + 1) % sides], high[k]
+            for tri in ((a, b, c), (a, c, d)):
+                tris.append([[p[0], p[1], -p[2]] for p in tri])
+                uvs.append([[p[3], p[1] - foot] for p in tri])
+    for k in range(sides):
+        a, b = points[-1][k], points[-1][(k + 1) % sides]
+        tris.append([[a[0], a[1], -a[2]], [b[0], b[1], -b[2]], [top[0], top[1], -top[2]]])
+        uvs.append([[a[3], a[1] - foot], [b[3], b[1] - foot], [0.0, height]])
+    tris, uvs = np.array(tris), np.array(uvs)
+    # Normals: away from the shrub's middle, for a rounded look.
+    middle = np.array([center[0], foot + 0.4 * height, -center[1]])
+    normals = tris - middle
+    normals[..., 1] *= 0.7
+    normals /= np.linalg.norm(normals, axis=-1, keepdims=True)
+    builder.add(tris, uvs, uv2, normals.mean(axis=1), normals)
+
+
+def _build_awning(builder, door, out, along, top: float, seed: float, bin_number: int) -> None:
+    """A striped metal awning over the front door, on the landing."""
+    half = DOORWAY_WIDTH / 2 + AWNING_MARGIN
+    high = top + DOORWAY_HEIGHT + AWNING_ABOVE
+    low = high - AWNING_DROP
+    bottom = low - AWNING_VALANCE
+    uv2 = _small_uv2(AWNING, int(facades.unit_hash(bin_number, 79) * AWNING_COLORS), seed)
+
+    def at(t, s, y):
+        en = door + out * t + along * s
+        return [en[0], y, -en[1]]
+
+    slant = math.hypot(AWNING_DEPTH, AWNING_DROP)
+    up = np.array([out[0] * AWNING_DROP, AWNING_DEPTH, -out[1] * AWNING_DROP])
+    _quad(builder, [at(AWNING_DEPTH, -half, low), at(AWNING_DEPTH, half, low), at(0.02, half, high),
+                    at(0.02, -half, high)],
+          [[-half, 0.0], [half, 0.0], [half, slant], [-half, slant]], uv2, up)
+    _quad(builder, [at(AWNING_DEPTH, -half, bottom), at(AWNING_DEPTH, half, bottom), at(AWNING_DEPTH, half, low),
+                    at(AWNING_DEPTH, -half, low)],
+          [[-half, -AWNING_VALANCE], [half, -AWNING_VALANCE], [half, 0.0], [-half, 0.0]], uv2, (out[0], 0.0, -out[1]))
+    for side in (-1.0, 1.0):
+        corners = np.array([at(0.02, side * half, high), at(AWNING_DEPTH, side * half, low),
+                            at(AWNING_DEPTH, side * half, bottom)])
+        uv = np.array([[0.02, -0.3], [AWNING_DEPTH, -0.3 - AWNING_DROP],
+                       [AWNING_DEPTH, -0.3 - AWNING_DROP - AWNING_VALANCE]])
+        builder.add(corners[None], uv[None], uv2, (along[0] * side, 0.0, -along[1] * side))
+
+
+# --- Cornices and bow fronts (the building's own surface) ---
+
+def cornice_height(floor_dm: int) -> float:
+    """A row's cornice's height (m); the shader's facade() paints it so."""
+    return float(np.clip(0.36 * max(floor_dm / 10.0, 2.4), 1.0, 1.6))
+
+
+def add_cornice(builder, poly, ground: float, top: float, facade: tuple, faces_street) -> None:
+    """A deep cornice along the street fronts of a prewar row's or walk-up's
+    wall (CORNICE flag) whose top is at `top`: a front and ends (FRONT walls,
+    so the shader paints the cornice on them), a sloping underside and a top."""
+    archetype, flags, floor_dm, seed = facade
+    if archetype not in (facades.ROWHOUSE, facades.WALKUP) or not flags & facades.CORNICE:
+        return
+    ring = np.asarray(shapely.orient_polygons(poly).exterior.coords)[:, :2]
+    seg = ring[1:] - ring[:-1]
+    length = np.hypot(seg[:, 0], seg[:, 1])
+    outward = np.column_stack([seg[:, 1], -seg[:, 0]]) / np.maximum(length, 1e-9)[:, None]
+    front = faces_street((ring[1:] + ring[:-1]) * 0.5, outward) & (length > 0.05)
+    if not front.any():
+        return
+    count = len(seg)
+    # Runs of consecutive front walls (wrapping around the ring).
+    first = int(np.flatnonzero(~front)[0]) + 1 if not front.all() else 0
+    order = [(first + k) % count for k in range(count)]
+    runs, run = [], []
+    for k in order:
+        if front[k]:
+            run.append(k)
+        elif run:
+            runs.append(run)
+            run = []
+    if run:
+        runs.append(run)
+    height = cornice_height(floor_dm)
+    low = top - height
+    uv2 = facades.encode(archetype, flags | facades.FRONT, floor_dm, seed)
+    roof_uv2 = facades.encode(archetype, flags | facades.ROOF, floor_dm, seed)
+    for run in runs:
+        wall = np.array([ring[k] for k in run] + [ring[run[-1] + 1]])
+        normals = outward[run]
+        # The front's corners, mitred (capped where the wall turns sharply).
+        offsets = [normals[0]]
+        for n0, n1 in zip(normals[:-1], normals[1:]):
+            miter = (n0 + n1) / max(1.0 + float(n0 @ n1), 0.3)
+            offsets.append(miter)
+        offsets.append(normals[-1])
+        outer = wall + np.array(offsets) * CORNICE_DEPTH
+        u = np.concatenate([[0.0], np.cumsum(np.hypot(*(wall[1:] - wall[:-1]).T))])
+        for k in range(len(run)):
+            w0, w1, o0, o1 = wall[k], wall[k + 1], outer[k], outer[k + 1]
+            n = normals[k]
+            # The front, from the top of the underside up.
+            _quad(builder, [[o0[0], low + CORNICE_COVE, -o0[1]], [o1[0], low + CORNICE_COVE, -o1[1]],
+                            [o1[0], top, -o1[1]], [o0[0], top, -o0[1]]],
+                  [[u[k], low + CORNICE_COVE - ground], [u[k + 1], low + CORNICE_COVE - ground],
+                   [u[k + 1], top - ground], [u[k], top - ground]], uv2, (n[0], 0.0, -n[1]))
+            # The underside, sloping up and out from the wall.
+            cove = np.array([n[0] * CORNICE_COVE, -CORNICE_DEPTH, -n[1] * CORNICE_COVE])
+            _quad(builder, [[w0[0], low, -w0[1]], [o0[0], low + CORNICE_COVE, -o0[1]],
+                            [o1[0], low + CORNICE_COVE, -o1[1]], [w1[0], low, -w1[1]]],
+                  [[u[k], low - ground], [u[k], low + CORNICE_COVE - ground],
+                   [u[k + 1], low + CORNICE_COVE - ground], [u[k + 1], low - ground]], uv2, cove)
+            # The top (a roof).
+            top_pts = np.array([[w0[0], top, -w0[1]], [w1[0], top, -w1[1]], [o1[0], top, -o1[1]], [o0[0], top, -o0[1]]])
+            _quad(builder, top_pts, top_pts[:, [0, 2]], roof_uv2, (0.0, 1.0, 0.0))
+        # The ends: a rectangle above the underside's top, a triangle below it.
+        for w, o, side in ((wall[0], outer[0], -1.0), (wall[-1], outer[-1], 1.0)):
+            d = o - w
+            depth = float(np.hypot(*d))
+            away = np.array([-d[1], d[0]]) * side / max(depth, 1e-9)  # away from the run
+            normal = (away[0], 0.0, -away[1])
+            _quad(builder, [[w[0], low + CORNICE_COVE, -w[1]], [o[0], low + CORNICE_COVE, -o[1]], [o[0], top, -o[1]],
+                            [w[0], top, -w[1]]],
+                  [[0.0, low + CORNICE_COVE - ground], [depth, low + CORNICE_COVE - ground], [depth, top - ground],
+                   [0.0, top - ground]], uv2, normal)
+            builder.add(np.array([[[w[0], low, -w[1]], [o[0], low + CORNICE_COVE, -o[1]],
+                                   [w[0], low + CORNICE_COVE, -w[1]]]]),
+                        np.array([[[0.0, low - ground], [depth, low + CORNICE_COVE - ground],
+                                   [0.0, low + CORNICE_COVE - ground]]]), uv2, normal)
+
+
+def bow(poly, facade: tuple, bin_number: int, borough: int, faces_street):
+    """The footprint with its street front's bays rounded into bow fronts, on
+    Queens' prewar buff brick rows and BOW_SHARE of other rows (see the
+    module's docstring); else `poly` itself."""
+    archetype, flags, floor_dm, seed = facade
+    if archetype != facades.ROWHOUSE or len(poly.interiors):
+        return poly
+    ridgewood = borough == QUEENS and (flags // facades.MATERIAL) % 8 == facades.BUFF_BRICK and flags & facades.CORNICE
+    if not ridgewood and facades.unit_hash(bin_number, 87) >= BOW_SHARE:
+        return poly
+    ring = np.asarray(shapely.orient_polygons(poly).exterior.coords)[:-1, :2]
+    count = len(ring)
+    nxt = np.roll(ring, -1, axis=0)
+    seg = nxt - ring
+    length = np.hypot(seg[:, 0], seg[:, 1])
+    outward = np.column_stack([seg[:, 1], -seg[:, 0]]) / np.maximum(length, 1e-9)[:, None]
+    front = faces_street((ring + nxt) * 0.5, outward) & (length > 0.05)
+    if not front.any():
+        return poly
+    main = outward[int(np.argmax(np.where(front, length, 0.0)))]
+    on_front = front | np.roll(front, 1)  # vertices at either end of a front wall
+    depth = ring @ main
+    base = float(depth[on_front].min())
+    bay = on_front & (depth > base + MIN_BAY)
+    if not bay.any() or bay.all():
+        return poly
+    # Start the walk at a vertex that's not in a bay, so no bay wraps around.
+    start = int(np.flatnonzero(~bay)[0])
+    order = [(start + k) % count for k in range(count)]
+    out_ring, k = [], 0
+    while k < count:
+        i = order[k]
+        if not bay[i]:
+            out_ring.append(ring[i])
+            k += 1
+            continue
+        run = []
+        while k < count and bay[order[k]]:
+            run.append(order[k])
+            k += 1
+        a, b = ring[(run[0] - 1) % count], ring[(run[-1] + 1) % count]
+        chord = float(np.hypot(*(b - a)))
+        sagitta = float(depth[run].max()) - base
+        if (abs(a @ main - base) > MIN_BAY or abs(b @ main - base) > MIN_BAY
+                or not BAY_WIDTH[0] <= chord <= BAY_WIDTH[1] or sagitta > 0.5 * chord):
+            out_ring.extend(ring[j] for j in run)
+            continue
+        # The arc from a to b bulging `sagitta` out toward the street.
+        normal = np.array([(b - a)[1], -(b - a)[0]]) / chord
+        if normal @ main < 0.0:
+            normal = -normal
+        radius = (chord * chord / 4.0 + sagitta * sagitta) / (2.0 * sagitta)
+        center = (a + b) * 0.5 - normal * (radius - sagitta)
+        a0 = math.atan2(*(a - center)[::-1])
+        a1 = math.atan2(*(b - center)[::-1])
+        sweep = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+        for step in range(1, BOW_SEGMENTS):
+            angle = a0 + sweep * step / BOW_SEGMENTS
+            out_ring.append(center + radius * np.array([math.cos(angle), math.sin(angle)]))
+    rounded = shapely.Polygon(out_ring)
+    if not rounded.is_valid or abs(rounded.area - poly.area) > 0.3 * poly.area:
+        return poly
+    return rounded

@@ -39,6 +39,7 @@ from shapely.geometry import Polygon
 import bridges
 import buildings3d
 import cantilever
+import churches
 import els
 import facades
 import fronts
@@ -57,7 +58,7 @@ from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND
                     GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_SHRUBS, GROUND_YARD, LANE_BREAK, MARKING_LIFT,
                     ORIGIN_LAT, ORIGIN_LON, PROJECTION, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR, PROP_PARKING_METER,
                     PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y, SIGNAL_ON_COLUMN,
-                    STRUCTURE_CONCRETE, SURFACE_LANDMARKS,
+                    STRUCTURE_CONCRETE, SURFACE_CHURCHES, SURFACE_FRONTS, SURFACE_LANDMARKS,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
                     SURFACE_STRUCTURES, SURFACE_TRAFFIC, SURFACE_TRAINS, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
                     polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangles_of,
@@ -220,6 +221,7 @@ def main() -> None:
     ground = prepare.load("ground")
     prepare.load("water")
     prepare.load("facades")
+    prepare.load("churches")
     prepare.load("trees")
     prepare.load("centerline")
     prepare.load("furniture")
@@ -427,6 +429,7 @@ def _init_worker() -> None:
     _W["water"] = prepare.load("water")
     _W["shapes"] = buildings3d.load()
     _W["facades"] = prepare.load("facades")
+    _W["churches"] = prepare.load("churches")
     _W["building_index_tree"] = shapely.STRtree(buildings["geoms"])
     _W["water_tree"] = shapely.STRtree(_W["water"]["geoms"])
     _W["centerline"] = prepare.load("centerline")
@@ -462,6 +465,10 @@ def _build_tile(task):
 
     building_mesh, ground_mesh, structure_mesh, water_mesh = MeshBuilder(), MeshBuilder(), MeshBuilder(), MeshBuilder()
     landmark_mesh = MeshBuilder()
+    # Churches' faces, which their own shader paints (churches.py), and the
+    # small parts of rowhouse fronts (fronts.py: railings, fences, shrubs).
+    _W["church_mesh"] = church_mesh = MeshBuilder()
+    _W["front_mesh"] = front_mesh = MeshBuilder()
     _W["level"] = level
     _W["streets"] = _streets_near(bounds)
     indices = _W["groups"][level].get((i, j), np.array([], dtype=np.int64))
@@ -486,8 +493,9 @@ def _build_tile(task):
     stats = {"vertices": 0, "triangles": 0}
     for kind, mesh in ((SURFACE_BUILDINGS, building_mesh), (SURFACE_GROUND, ground_mesh),
                        (SURFACE_STRUCTURES, structure_mesh), (SURFACE_WATER, water_mesh),
-                       (SURFACE_LANDMARKS, landmark_mesh)):
-        built = mesh.build(origin)
+                       (SURFACE_LANDMARKS, landmark_mesh), (SURFACE_CHURCHES, church_mesh),
+                       (SURFACE_FRONTS, front_mesh)):
+        built = mesh.build(origin, decimals=2 if kind == SURFACE_FRONTS else 3)  # small parts: to the cm
         if built is not None:
             surfaces.append((kind, built))
             stats["vertices"] += len(built[0])
@@ -725,6 +733,15 @@ def _add_building(builder: MeshBuilder, index: int, settings: dict) -> None:
         towers.add(builder, index, _W, settings, _footprint_ground, _faces_street, _add_shape)
         return
     height = float(b["height"][index])
+    if _W["churches"]["kind"][index]:
+        # Churches (churches.py) take the 3-D model's towers at every distance,
+        # however much taller the footprint is (its height may be a spire's).
+        shape = _W["shapes"].get(int(b["bin"][index]))
+        if shape is not None and not _shape_matches(shape, b["geoms"][index], 0.0):
+            shape = None
+        if churches.add(_W["church_mesh"], index, shape, _footprint_ground(b["geoms"][index]), _W, settings,
+                        _faces_street):
+            return
     shape = _W["shapes"].get(int(b["bin"][index])) if height >= settings["shapes_from"] else None
     # Houses get pitched roofs instead (the 3-D model's roofs are flat levels).
     if settings.get("roofs") and _W["facades"]["archetype"][index] == facades.HOUSE:
@@ -745,8 +762,15 @@ def _add_building(builder: MeshBuilder, index: int, settings: dict) -> None:
         if roofs and facade[0] == facades.HOUSE:
             if not _add_pitched(builder, poly, height, facade):
                 _add_prism(builder, poly, height, facade)
+        elif roofs:
+            # Up close, rows' bays may be bow fronts, and prewar rows have deep cornices (fronts.py).
+            poly = fronts.bow(poly, facade, int(b["bin"][index]), int(b["bbl"][index]) // 1_000_000_000,
+                              _faces_street)
+            _add_prism(builder, poly, height, facade, parapet=True)
+            ground = _footprint_ground(poly)
+            fronts.add_cornice(builder, poly, ground, ground + height + facades.PARAPET_HEIGHT, facade, _faces_street)
         else:
-            _add_prism(builder, poly, height, facade, parapet=roofs)
+            _add_prism(builder, poly, height, facade)
 
 
 def _shape_matches(shape, footprint, height: float) -> bool:
@@ -1402,7 +1426,8 @@ def _water_towers(indices: np.ndarray) -> dict:
     borough = b["bbl"][indices] // 1_000_000_000
     found = defaultdict(list)
     found_mask = props.tower_mask(f["archetype"][indices], floors, height, borough, b["seed"][indices])
-    for k in np.flatnonzero(found_mask & ~towers.mask(b["bin"][indices])):
+    found_mask &= ~towers.mask(b["bin"][indices]) & (_W["churches"]["kind"][indices] == 0)  # none on churches
+    for k in np.flatnonzero(found_mask):
         index = int(indices[k])
         parts = polygons_of(b["geoms"][index], 20.0)
         if not parts:
