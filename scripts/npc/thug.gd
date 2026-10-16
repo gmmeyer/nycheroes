@@ -98,7 +98,7 @@ func setup(target: Hero, gang_index: int, angle: float) -> void:
 	hero = target
 	gang = gang_index
 	surround_angle = angle
-	NpcLook.paint_thug($Model, gang)
+	NpcLook.paint_thug($Model, gang, net_id)
 
 
 ## Sets up a thug as another game described it: a copy from what the host
@@ -108,7 +108,7 @@ func setup_described(gang_index: int, facing: float, health_left: float, down: b
 	_facing = facing
 	_model.rotation.y = facing
 	health = health_left
-	NpcLook.paint_thug($Model, gang)
+	NpcLook.paint_thug($Model, gang, net_id)
 	if down:
 		go_down(Vector3.ZERO, false)
 

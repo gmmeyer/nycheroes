@@ -9,9 +9,10 @@ side-by-side images, photo | game, cropped to the same field of view.
         [--label NAME]       # output folder name (default: <host>-<date>)
         [--only a,b]         # just these views
         [--skip-shots]       # reuse the screenshots already under --label
-        [--also LABEL]       # add an earlier run's screenshots as a middle column
+        [--also LABEL[,LABEL]]  # add earlier runs' screenshots as middle columns
         [--chrome PATH] [--width 2560] [--height 1440] [--port 9384]
         [--profile DIR]      # keep Chrome's cache here between runs
+        [--query weather=overcast]  # launch options added to every view
 
     compare.py --pose LAT,LON,HEADING[,PITCH[,EYE]]
         prints the ?cam= pose for a photo taken at LAT,LON looking toward
@@ -20,7 +21,10 @@ side-by-side images, photo | game, cropped to the same field of view.
 
 Writes build/reference/photos/<view>.jpg (never committed),
 build/reference/shots/<label>/<view>.png and
-build/reference/compare/<label>/<view>.jpg plus _all.jpg (every view).
+build/reference/compare/<label>/<view>.jpg plus _all.jpg (every view), and
+measures.md / measures.json there: brightness, contrast, saturation, masonry
+and foliage share, edge density and sky color of the photo and each game
+crop (see MEASURES).
 Needs Pillow (the citygen venv has it; --pose also uses its pyproj and numpy)
 and Node 22+ (shoot.mjs uses its built-in WebSocket).
 """
@@ -119,11 +123,83 @@ def crop(image: Image.Image, f: float, center: tuple[float, float], rect: list[f
                        round(cx + rect[2] * f), round(cy + rect[3] * f)))
 
 
-def compose(view: dict, photo_path: Path, shots: list[tuple[str, Path]], game: dict, out_path: Path) -> Path:
+MEASURES = {
+    # name: (what it is, number format)
+    "lower_v": ("mean value (HSV) of the lower half: buildings and street", "{:.2f}"),
+    "lower_v_sd": ("spread (std dev) of value in the lower half: contrast, shade", "{:.2f}"),
+    "lower_s": ("mean saturation of the lower half", "{:.2f}"),
+    "warm_s": ("median saturation of warm pixels (hue under 50 deg: brick, brownstone, tan) in the lower half", "{:.2f}"),
+    "warm": ("share of the lower half that is warm (masonry)", "{:.2f}"),
+    "green": ("share of the frame that is green (foliage, lawn)", "{:.2f}"),
+    "edges": ("share of the lower half on a strong edge (detail and clutter; 480 px high)", "{:.3f}"),
+    "top": ("median color of the top 5% of the frame (sky where there is sky)", "{}"),
+}
+
+
+def measure(image: Image.Image) -> dict:
+    """A few numbers that say how a panel looks, comparable between the photo
+    and the game crops (same field of view): brightness and contrast of the
+    lower half, saturation, how much is masonry or foliage, how busy it is,
+    and the sky color at the top."""
+    import numpy as np
+
+    small = image.resize((max(1, round(image.width * 480 / image.height)), 480), Image.BILINEAR)
+    hsv = np.asarray(small.convert("HSV"), dtype=np.float32) / 255.0
+    rgb = np.asarray(small, dtype=np.float32)
+    hue, sat, val = hsv[..., 0] * 360.0, hsv[..., 1], hsv[..., 2]
+    lower = slice(small.height // 2, small.height)
+    warm = ((hue < 50) | (hue > 340)) & (sat > 0.08) & (val > 0.12) & (val < 0.92)
+    green = (hue > 60) & (hue < 170) & (sat > 0.18) & (val > 0.08)
+    gray = np.asarray(small.convert("L"), dtype=np.float32)[lower] / 255.0
+    grad = np.zeros_like(gray)
+    grad[:-1, :-1] = np.abs(np.diff(gray, axis=1))[:-1] + np.abs(np.diff(gray, axis=0))[:, :-1]
+    top = np.median(rgb[: max(2, small.height // 20)].reshape(-1, 3), axis=0)
+    warm_lower = warm[lower]
+    return {
+        "lower_v": float(val[lower].mean()),
+        "lower_v_sd": float(val[lower].std()),
+        "lower_s": float(sat[lower].mean()),
+        "warm_s": float(np.median(sat[lower][warm_lower])) if warm_lower.any() else 0.0,
+        "warm": float(warm_lower.mean()),
+        "green": float(green.mean()),
+        "edges": float((grad > 0.12).mean()),
+        "top": "#%02X%02X%02X" % tuple(int(round(c)) for c in top),
+    }
+
+
+def write_measures(results: dict, columns: list[str], out_dir: Path) -> None:
+    """measures.json plus measures.md (one table per measure: a row per view,
+    a column for the photo and each game run, and the mean over views). Views
+    measured earlier into the same folder (an --only run) keep their rows."""
+    path = out_dir / "measures.json"
+    if path.exists():
+        earlier = json.loads(path.read_text(encoding="utf-8"))
+        results = {view: results.get(view, values) for view, values in earlier.items()} | results
+    path.write_text(json.dumps(results, indent=1), encoding="utf-8")
+    lines = ["# Measured values", "",
+             "Photo and game crops over the same field of view (`compare.py`).", ""]
+    # Means only over the views every column has, so the columns compare.
+    common = [view for view, values in results.items() if all(c in values for c in columns)]
+    for key, (about, fmt) in MEASURES.items():
+        lines += [f"## {key}: {about}", "", "| View | " + " | ".join(columns) + " |",
+                  "|---|" + "---|" * len(columns)]
+        for view, values in results.items():
+            cells = [fmt.format(values[c][key]) if c in values else "" for c in columns]
+            lines.append(f"| {view} | " + " | ".join(cells) + " |")
+        if key != "top" and common:
+            lines.append(f"| **mean of {len(common)}** | " + " | ".join(
+                fmt.format(sum(results[v][c][key] for v in common) / len(common)) for c in columns) + " |")
+        lines.append("")
+    (out_dir / "measures.md").write_text("\n".join(lines), encoding="utf-8")
+    print("wrote", out_dir / "measures.md")
+
+
+def compose(view: dict, photo_path: Path, shots: list[tuple[str, Path]], game: dict, out_path: Path,
+            measures: dict | None = None) -> Path:
     """Photo | game side by side over the field of view both cover. The photo's
     optical axis crosses it at view.photo.principal (fractions, default the
     center; perspective-corrected photos have it at the horizon), the game's
-    at the screen center."""
+    at the screen center. Fills `measures` (photo and each shot) if given."""
     photo = Image.open(photo_path).convert("RGB")
     frames = [Image.open(p).convert("RGB") for _, p in shots]
     vfov = game["vfov"]
@@ -143,6 +219,9 @@ def compose(view: dict, photo_path: Path, shots: list[tuple[str, Path]], game: d
         panels.append(crop(f, ff, (f.width / 2, f.height / 2), rect))
     pw = round(PANEL_HEIGHT * (rect[2] - rect[0]) / (rect[3] - rect[1]))
     panels = [p.resize((pw, PANEL_HEIGHT), Image.LANCZOS) for p in panels]
+    if measures is not None:
+        for name, panel in zip(["photo"] + [n.split(" (")[0] for n, _ in shots], panels):
+            measures[name] = measure(panel)
 
     gap, head, foot = 8, 64, 58
     sheet = Image.new("RGB", (len(panels) * pw + (len(panels) - 1) * gap, head + PANEL_HEIGHT + foot), (24, 24, 28))
@@ -214,13 +293,14 @@ def main() -> None:
     parser.add_argument("--label")
     parser.add_argument("--only")
     parser.add_argument("--skip-shots", action="store_true")
-    parser.add_argument("--also", help="an earlier label whose screenshots go in a middle column")
+    parser.add_argument("--also", help="earlier labels (comma-separated) whose screenshots go in middle columns")
     parser.add_argument("--chrome", default=DEFAULT_CHROME)
     parser.add_argument("--width", type=int, default=2560)
     parser.add_argument("--height", type=int, default=1440)
     parser.add_argument("--port", type=int, default=9384)
     parser.add_argument("--settle", type=int, default=6000)
     parser.add_argument("--profile", help="Chrome profile folder to reuse (keeps its cache)")
+    parser.add_argument("--query", help="launch options added to every view, e.g. weather=overcast or time=19:00")
     parser.add_argument("--pose", help="LAT,LON,HEADING[,PITCH[,EYE]]: print a ?cam= pose and exit")
     args = parser.parse_args()
     if args.pose:
@@ -248,23 +328,30 @@ def main() -> None:
             command += ["--only", args.only]
         if args.profile:
             command += ["--profile", args.profile]
+        if args.query:
+            command += ["--query", args.query]
         subprocess.run(command, check=True)
 
     written = []
+    results = {}
+    earlier = args.also.split(",") if args.also else []
     for view in views:
         shots = []
-        if args.also:
-            older = OUT / "shots" / args.also / f"{view['name']}.png"
+        for older_label in earlier:
+            older = OUT / "shots" / older_label / f"{view['name']}.png"
             if older.exists():
-                shots.append((args.also, older))
+                shots.append((older_label, older))
         current = shot_dir / f"{view['name']}.png"
         if not current.exists():
             print(f"{view['name']}: no screenshot in {shot_dir}", file=sys.stderr)
             continue
         shots.append((f"{label} ({args.site})", current))
+        results[view["name"]] = {}
         written.append(compose(view, OUT / "photos" / f"{view['name']}.jpg", shots, config["game"],
-                               OUT / "compare" / label / f"{view['name']}.jpg"))
+                               OUT / "compare" / label / f"{view['name']}.jpg", results[view["name"]]))
         print("wrote", written[-1])
+    if written:
+        write_measures(results, ["photo"] + earlier + [label], OUT / "compare" / label)
     if written and not args.only:
         contact_sheet(written, OUT / "compare" / label / "_all.jpg")
 

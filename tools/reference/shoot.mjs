@@ -4,15 +4,18 @@
 // Usage: node tools/reference/shoot.mjs --chrome <chrome.exe> --url <index.html URL>
 //          --out <dir> --views <views.json> [--only a,b] [--width 2560] [--height 1440]
 //          [--port 9384] [--settle 6000] [--timeout 300000] [--profile <dir>]
+//          [--query weather=overcast]
 //
-// Each view loads <url>?cam=...&spawn=...&quality=high&gangs=0[&extra], waits
-// for the game's "[city] ... ready" log (no tile left to load), lets props and
-// trees settle, and saves <out>/<name>.png plus <out>/report.json. compare.py
+// Each view loads <url>?cam=...&spawn=...&quality=high&gangs=0[&extra][&query],
+// waits for the game's "[city] ... ready" log (no tile left to load), lets props
+// and trees settle, and saves <out>/<name>.png plus <out>/report.json (views
+// shot earlier into the same folder keep their entries). --query adds launch
+// options to every view (a view's extra_query adds them to one). compare.py
 // runs this; it can also be run on its own. --profile keeps Chrome's cache
 // between runs (faster reruns; by default every run starts from a clean
 // temporary profile and downloads the game again, about 100 MB).
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -42,6 +45,7 @@ function viewQuery(view) {
   if (view.spawn) parts.push(`spawn=${view.spawn}`);
   parts.push('quality=high', 'gangs=0');
   if (view.extra_query) parts.push(view.extra_query);
+  if (args.query) parts.push(args.query);
   return parts.join('&');
 }
 
@@ -91,7 +95,14 @@ try {
     report.push({ view: view.name, url, readyMs: readyAt, logs: logs.filter((l) => !l.includes('[stats]')).slice(-25) });
     console.log(`${view.name}: ${readyAt === null ? 'NOT READY (timeout)' : `ready in ${(readyAt / 1000).toFixed(1)} s`}`);
   }
-  writeFileSync(join(args.out, 'report.json'), JSON.stringify({ width, height, url: args.url, taken: new Date().toISOString(), report }, null, 2));
+  const reportPath = join(args.out, 'report.json');
+  if (existsSync(reportPath)) {  // keep the views shot earlier into this folder
+    const shot = new Set(report.map((r) => r.view));
+    report.unshift(...JSON.parse(readFileSync(reportPath, 'utf8')).report.filter((r) => !shot.has(r.view)));
+  }
+  writeFileSync(reportPath, JSON.stringify({
+    width, height, url: args.url, query: args.query ?? '', taken: new Date().toISOString(), report,
+  }, null, 2));
   ws.close();
 } finally {
   browser.kill();

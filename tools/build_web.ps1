@@ -17,6 +17,11 @@ if (-not (Test-Path (Join-Path $tiles "nyc\manifest.json"))) {
 }
 
 New-Item -ItemType Directory -Force $out | Out-Null
+# Godot must not import what's in build/ (reference shots, videos, sheets),
+# or the export packs it into index.pck. build/ isn't in git, so new checkouts
+# (worktrees) need the marker too.
+$marker = Join-Path $root "build\.gdignore"
+if (-not (Test-Path $marker)) { New-Item -ItemType File $marker | Out-Null }
 & $godot --headless --path $root --export-release "Web" "build/web/index.html"
 if ($LASTEXITCODE -ne 0) { throw "Godot export failed (exit code $LASTEXITCODE)" }
 
