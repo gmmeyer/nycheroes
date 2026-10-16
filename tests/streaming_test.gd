@@ -56,7 +56,7 @@ func _ready() -> void:
 	for node_name in ["PlayerInput", "Crowd", "Encounters", "Hero"]:
 		world.get_node(node_name).process_mode = Node.PROCESS_MODE_DISABLED
 	_city = world.get_node("City")
-	var manifest = JSON.parse_string(FileAccess.get_file_as_string("res://data/tiles/%s/manifest.json" % _city.region))
+	var manifest = JSON.parse_string(FileAccess.get_file_as_string(_city._local_dir() + "manifest.json"))
 	_expects_canopy = manifest is Dictionary and manifest.has("canopy")
 	_camera = world.get_node("FreeCamera")
 	_camera.current = true
