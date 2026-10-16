@@ -109,7 +109,7 @@ GOTHIC = 59          # St. Patrick's carved work, in CATHEDRAL's marble: 0 plain
                      # buttresses, parapets), 1 pinnacles, crockets and gables, 2 a window's
                      # glass and tracery (the rose window on the central front), 3 a portal's
                      # bronze doors under its tympanum; walls' uv on the face they're set in
-# The waterfront.
+# The waterfront (painted by shaders/waterfront.gdshader, see WATERFRONT_SHADER).
 PIERSIDE = 60        # ferry terminals and pier sheds: 0 a glass curtain wall, 1 brick (the slip
                      # houses), 2 metal panels with window bands, 3 white-painted steel; roofs
                      # metal, the canopies' undersides (down) steel
