@@ -346,7 +346,8 @@ def _build_bridges(ground) -> dict:
     overpasses.build(network, ground["land"], buckets, sizes)
     cantilever.build(network, buckets, sizes)
     # The sunken roads' cuts, walls and bridges (after the decks: they add to street_decks).
-    trenches.build(network, buckets, sizes, {level: s["ground_cell"] for level, s in LEVELS.items()})
+    trenches.build(network, buckets, {level: sizes[level] for level in trenches.LEVELS},
+                   {level: LEVELS[level]["ground_cell"] for level in trenches.LEVELS})
     # Elevated railways over (and around) both (els.py).
     els.build(prepare.load("els"), network, ground["land"], buckets, sizes, prepare.load("el_stairs"))
     # No roadbed drawn on the ground under them where no street is.
@@ -451,8 +452,10 @@ def _init_worker() -> None:
     _W["structure"] = _structure(_W["terrain"])
     _W["overpasses"] = _network(_W["terrain"], _W["structure"])
     _W["trenches"] = _W["overpasses"].trenches
-    _W["ground"] = {level: _W["trenches"].ground(_W["structure"].ground(_W["terrain"].lattice(settings["ground_cell"])))
+    _W["ground"] = {level: _W["structure"].ground(_W["terrain"].lattice(settings["ground_cell"]))
                     for level, settings in LEVELS.items()}
+    for level in trenches.LEVELS:  # (far tiles draw no streets)
+        _W["ground"][level] = _W["trenches"].ground(_W["ground"][level])
     # Things on streets that cross dips on decks stand on the deck (overpasses.py).
     _W["ground"]["lod0"] = overpasses.OnDecks(_W["ground"]["lod0"], _W["bridges"].get("street_decks", []))
     _W["creeks"] = {level: _W["terrain"].lattice(settings["ground_cell"], raw=True) for level, settings in LEVELS.items()}

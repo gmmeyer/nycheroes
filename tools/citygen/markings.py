@@ -25,7 +25,8 @@ from common import (FEET, GROUND_MARKING_CROSSWALK, GROUND_MARKING_DASHED, GROUN
                     GROUND_MARKING_YELLOW, lines_of, load_features, project)
 
 # Roadway types (CSCL rw_type) that get paint; only segments at street level
-# (level code 13) do: elevated and sunken roads aren't modeled yet.
+# (level code 13) do here: raised and sunken roads get theirs on their decks
+# and in their cuts (overpasses.add_paint).
 STREET = 1
 HIGHWAY = 2
 AT_GRADE = "13"

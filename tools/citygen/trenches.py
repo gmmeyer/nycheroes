@@ -20,27 +20,34 @@ The data:
 
 Heights (fit()): the road follows the lowest surface the survey sees along
 it, the way a road can (climbing at most GRADE): a surface that jumps up from
-the road it came from is something over it (a bridge, or a lid it runs under
-in a tunnel), and holds the road at least CLEAR below it, spreading on along
-the lid as long as what the survey sees stays up there. Ends at street level
-stay on the street. Then a smoothed least-squares fit over the whole network
-at once, like the raised roads' (overpasses.Network._fit).
+the road it came from is something over it (a bridge, a building, or the lid
+of a tunnel), and holds the road at least CLEAR below it, spreading on along
+the lid as long as what the survey sees stays up there; long covered
+stretches are tunnels. Ends at street level stay on the street. Then a
+smoothed least-squares fit over the whole network at once, like the raised
+roads' (overpasses.Network._fit); the raised ramps leaving them start from
+their heights.
 
-The ground (Trenches, Ground): along every sunken road that isn't in a tunnel,
-a strip its width (a cut, closing the medians between carriageways) is cut
-down under the road; retaining walls stand where its edge meets higher ground
-(and side walls where the road runs higher), with a parapet along their tops.
-The elevation model blurs the cuts' edges, so the ground beside them is
-brought up to the ground FILL_REACH out. Nothing is cut under buildings.
-Streets crossing over a cut bridge it on short flat decks at the street's
-height (an outline's true edges where there is one), and tunnels' portals
-open into the walls at the cuts' ends.
+The ground (Trenches, Ground): along every sunken road but its tunnels, a
+strip (out to the walls where the survey sees them, else the road's width;
+the medians between carriageways closed) is cut down under the road's
+surface, which spans it; retaining walls stand where its edge meets higher
+ground (and side walls where the road runs higher), with parapets on top and
+street lights along them. The elevation model blurs the cuts' edges, so the
+ground beside them is brought up to the ground FILL_REACH out. Nothing is cut
+under buildings, nor under streets running along a cut's edge. Streets
+crossing a cut bridge it on short flat decks at the street's height (an
+outline's true edges where there is one), and tunnels' portals open into the
+walls at the cuts' ends. Far tiles, which draw no streets, keep their ground
+whole. This wraps the triple cantilever's ground (Ground over
+cantilever.Ground) and builds with its deck, underside and wall builders: no
+road is special-cased.
 
 prepare() makes data/cache/trenches.pkl; overpasses.Network takes the roads
 in with the others (their driving lanes and paint ride on the cut's road
-surface) and makes Trenches; build() adds the roads' surfaces, the walls,
-parapets, bridges and portals to the bridge buckets (with collision up
-close).
+surface, linked to the streets at their ends) and makes Trenches; build()
+adds the roads' surfaces, the walls, parapets, lamps, bridges and portals to
+the bridge buckets (with collision up close).
 """
 
 import numpy as np
@@ -52,6 +59,7 @@ import cantilever
 import lidar
 import markings
 import overpasses
+import props
 from common import (CURB_HEIGHT, FEET, GROUND_PAVEMENT, GROUND_ROAD, STRUCTURE_CONCRETE, MeshBuilder, lines_of,
                     load_features, polygons_of, project)
 from markings import AT_GRADE, BOTH
@@ -75,6 +83,7 @@ SUPPORT_TOLERANCE = 0.5
 JUMP = 3.0
 LID_DEPTH = 3.0     # (if no further below the street around than this)
 MAX_DEPTH = 25.0    # roads at most this far below the street around
+MIN_ROAD = 0.5      # and never under the game's sea (a few by the water are, by up to 3.7 m)
 DEPTH_RING = (20.0, 30.0)  # the street around: the ground in these rings
 # Stretches of road between covered ones shorter than MIN_OPEN are under the
 # same cover (and those at the street around's level shorter than LID_GAP
@@ -93,41 +102,44 @@ SPREAD_ROUNDS = 60
 # brought up to the elevation model's ground FILL_REACH out (its 10 m pixels
 # blur the cuts' edges) where the cut is at least FILL_DEPTH deep.
 SHOULDER = 1.5
-# The survey shows where the cut's walls stand: where the lowest surface
-# across the road rises WALL_RISE over it, up to MAX_WIDEN past the road's
-# strip (smoothed over WALL_SMOOTH stations).
-WALL_RISE = 2.5
-MAX_WIDEN = 15.0
-WALL_SMOOTH = 5
-STRIP_STEP = 5.0
 MEDIAN = 4.0
 BUILDING_GAP = 1.0
 FLOOR_DROP = 0.5
 FILL_REACH = 15.0
 FILL_DEPTH = 1.5
+EDGE_STEP = 2.0
 FIELD_BLEND = 20.0  # the surface blends the heights of the roads in it this close
+# Where the survey shows the cut's walls, the strip reaches them: where the
+# lowest surface across the road rises WALL_RISE over it, up to MAX_WIDEN past
+# the strip (smoothed over WALL_SMOOTH stations).
+WALL_RISE = 2.5
+MAX_WIDEN = 15.0
+WALL_SMOOTH = 7
+STRIP_STEP = 5.0
 # Streets crossing a cut (at least CROSSING_MIN of them inside it, at an angle
 # whose sine is at least CROSSING_SINE to the road under them) bridge it on a
-# deck across it and BRIDGE_REACH past it, half their width plus SIDEWALK
-# wide (and a bridge outline's true edges); streets running along inside a cut
-# keep their ground, STREET_GAP from their edges.
+# deck across it, half their width plus SIDEWALK wide (and a bridge outline's
+# true edges), at the street's height LANDING out from the cut at either end;
+# streets running along inside a cut keep their ground, STREET_GAP from their
+# edges.
 CROSSING_MIN = 4.0
 CROSSING_SINE = 0.5
-BRIDGE_REACH = 3.0
+LANDING = 1.0
 SIDEWALK = 2.5
 STREET_GAP = 0.5
 DEFAULT_HALF = 5.0
-# Bridge outlines (2300) claimed by a cut: those without a raised road through
-# them, overlapping it by at least OUTLINE_SHARE of their area or OUTLINE_AREA.
+# Bridge outlines (2300) claimed by a cut: those no raised road runs over,
+# overlapping it by at least OUTLINE_SHARE of their area or OUTLINE_AREA.
 OUTLINE_SHARE = 0.3
 OUTLINE_AREA = 100.0
 OUTLINE_PART = 50.0  # (outline parts smaller than this are left out, as overpasses.build does)
 # Building them (build()): walls reach WALL_FOOT under the road's surface,
 # where the ground around is at least WALL_MIN higher (or lower); parapets
 # PARAPET high and PARAPET_THICK thick top retaining walls PARAPET_FROM high
-# or more (up close). Tunnels' portals open PORTAL_CLEAR over the road, the
-# tunnel built PORTAL_DEPTH in. Bridges' decks are BRIDGE_DEPTH deep, their
-# parapets BRIDGE_PARAPET high.
+# or more (up close). Tunnels' portals open PORTAL_CLEAR over the road (less
+# where the ground over them is lower), the tunnel built PORTAL_DEPTH in (up
+# close). Bridges' decks are BRIDGE_DEPTH deep, their parapets BRIDGE_PARAPET
+# high.
 WALL_FOOT = 0.5
 WALL_MIN = 0.2
 PARAPET = 1.0
@@ -135,9 +147,12 @@ PARAPET_THICK = 0.3
 PARAPET_FROM = 2.0
 PORTAL_CLEAR = 5.0
 PORTAL_DEPTH = 25.0
+LID_THICKNESS = 0.3  # (portals' ceilings stay this far under the ground over them)
 BRIDGE_DEPTH = 1.2
 BRIDGE_PARAPET = 1.1
 DETAILED = overpasses.DETAILED
+LEVELS = DETAILED   # the levels with cuts (far tiles draw no streets: their ground stays whole)
+NEAR = ("lod0",)    # parapets and portals only up close
 ROAD_TOP = (GROUND_ROAD, 0.0)
 SIDEWALK_TOP = (GROUND_PAVEMENT, 0.0)
 WALL = (STRUCTURE_CONCRETE, 0.0)
@@ -146,7 +161,7 @@ MEASURE = 1.0
 PRIOR = 0.01
 SMOOTH = 20.0
 HOLD = 1e4
-LIMIT_ROUNDS = 6
+LIMIT_ROUNDS = 10
 LIMIT_SLACK = 0.05
 
 
@@ -271,7 +286,7 @@ def fit(network, survey: dict) -> dict:
     nodes = network.attrs["nodes"].astype(np.int64)
     rw = network.data["rw"]
     members = (levels.min(axis=1) < int(AT_GRADE)) & (levels.max(axis=1) <= int(AT_GRADE)) & ~network.stacked
-    members &= rw != 6  # (paths)
+    members &= rw != overpasses.PATH
     if network.structure is not None:
         # The roads on and off the triple cantilever are its own.
         ends = np.stack([shapely.get_coordinates(shapely.get_point(lines, 0)),
@@ -283,7 +298,7 @@ def fit(network, survey: dict) -> dict:
 
     # Variables: a station along a segment, one per node.
     node_var, count = {}, 0
-    index, stations, layers_of = {}, {}, {}
+    index, stations = {}, {}
     edges, var_layers, var_points = [], {}, {}
 
     def new_vars(n):
@@ -307,7 +322,7 @@ def fit(network, survey: dict) -> dict:
         if len(s) > 2:
             idx[1:-1] = new_vars(len(s) - 2)
         edges.append(np.column_stack([idx[:-1], idx[1:], np.maximum(np.diff(s), 0.5)]))
-        index[k], stations[k], layers_of[k] = idx, s, layers
+        index[k], stations[k] = idx, s
         points = shapely.get_coordinates(shapely.line_interpolate_point(line, s))
         for v, row, p in zip(idx.tolist(), layers, points):
             var_layers.setdefault(v, row)
@@ -373,15 +388,16 @@ def fit(network, survey: dict) -> dict:
 
     # Then fit the road's heights to the surfaces: held at the street at
     # street-level ends, CLEAR under what's over it, never deeper than
-    # MAX_DEPTH, leaning a little on the level codes where the survey has
-    # nothing.
+    # MAX_DEPTH nor under MIN_ROAD, leaning a little on the level codes where
+    # the survey has nothing.
     prior = np.full(count, np.nan)
     for k in members:
         t = stations[k] / max(lines[k].length, 1e-6)
         code = levels[k, 0] + (levels[k, 1] - levels[k, 0]) * t
         prior[index[k]] = around[index[k]] - np.maximum(int(AT_GRADE) - code, 0.0) / LEVEL_STEP * LEVEL_DEPTH
     ceiling = np.minimum(np.where(over | lidded, lowest, np.inf), above) - CLEAR
-    floor = around - MAX_DEPTH
+    floor = np.maximum(around - MAX_DEPTH, MIN_ROAD)
+    ceiling = np.maximum(ceiling, floor)
     seen = road & ~lidded
     weight = np.where(seen, MEASURE, 0.0)
     target = np.where(seen, lowest, 0.0)
@@ -413,11 +429,10 @@ def fit(network, survey: dict) -> dict:
             node = int(nodes[k, end])
             if node in var_height and levels[k, end] < int(AT_GRADE):
                 network.ends[k, end] = var_height[node]
-    fit.debug = dict(reach=reach, ceil=reach, support=support, layers=layers, lowest=lowest, around=around, road=road,
-                     over=over, x=x, index=index, usable=usable, held=held, held_y=held_y, points=points, covered=covered,
-                     tunnel=tunnel)
-    network.sunken_stats = {"stations": count, "road": int(road.sum()), "over": int(over.sum()),
-                            "covered": int(covered.sum()), "tunnel": int(tunnel.sum())}
+    length = float(shapely.length(lines[members]).sum())
+    print(f"  trenches: {len(members)} roads below street level ({length / 1000:.0f} km), the survey sees the road at "
+          f"{road.mean():.0%} of {count:,} stations, something over it at {covered.mean():.0%}, "
+          f"{tunnel.sum() * STATION_STEP / 1000:.0f} km in tunnels", flush=True)
     return out
 
 
@@ -425,8 +440,11 @@ class Trenches:
     """The sunken roads' cuts: where the ground is cut away (cut, a polygon),
     the road's surface in it (road()), the ground around it (outside()), and
     the streets bridging over it (bridges: [(deck polygon, crossings)], each
-    crossing a (line, half width, height at its start, at its end)), with the
-    bridge outlines they take (claimed, which overpasses.build leaves out)."""
+    crossing a (line, half width, height at its start, at its end), the line
+    None for an outline no street crosses), with the bridge outlines they take
+    (claimed, which overpasses.build leaves out), and the tunnels' portals
+    (portals: [(segment, distance along it, +1 if the tunnel goes on along
+    it, -1 back, half width)])."""
 
     def __init__(self, data: dict, network, streets: dict):
         self.network = network
@@ -465,7 +483,7 @@ class Trenches:
         # along it keep their ground.
         level = network.levels
         at_grade = np.flatnonzero((level.min(axis=1) >= int(AT_GRADE)) & (level.max(axis=1) <= int(AT_GRADE))
-                                  & (network.data["rw"] != 6))
+                                  & (network.data["rw"] != overpasses.PATH))
         street_lines = np.concatenate([streets["lines"], lines[at_grade]])
         street_half = np.concatenate([np.where(streets["width"] > 0, streets["width"] / 2.0, DEFAULT_HALF),
                                       network.width[at_grade] / 2.0])
@@ -484,35 +502,36 @@ class Trenches:
         cut = shapely.union_all(polygons_of(cut, 5.0))
         self.cut = shapely.orient_polygons(shapely.simplify(cut, 0.1))
         shapely.prepare(self.cut)
-        self.boundary = self.cut.boundary
         self.reach = shapely.buffer(self.cut, FILL_REACH + 1.0)
         shapely.prepare(self.reach)
         self.bounds = self.reach.bounds if not self.reach.is_empty else (0.0, 0.0, 0.0, 0.0)
+        self._edge_levels()
 
-        # The bridges: each crossing street across the cut and BRIDGE_REACH
-        # past it, with the outlines over the cut.
-        reach = shapely.buffer(self.cut, BRIDGE_REACH)
+        # The bridges: each crossing street across the cut, with the outlines
+        # over the cut.
         spans = {}
         for k in sorted(set(crossings)):
-            for span in lines_of(shapely.intersection(street_lines[k], reach)):
-                if shapely.length(shapely.intersection(span, self.cut)) >= CROSSING_MIN:
+            for span in lines_of(shapely.intersection(street_lines[k], self.cut)):
+                if span.length >= CROSSING_MIN:
                     spans[_ends_key(span)] = (span, float(street_half[k]))
         spans = list(spans.values())
         self.claimed = self._claim(network)
-        areas = [shapely.buffer(span, half + SIDEWALK, cap_style="flat") for span, half in spans]
-        areas += [shapely.intersection(o, reach) for o in self.claimed]
-        decks = polygons_of(shapely.intersection(shapely.union_all(areas), reach), 1.0) if areas else []
+        areas = [shapely.buffer(span, half + SIDEWALK, cap_style="flat") for span, half in spans] + self.claimed
+        decks = polygons_of(shapely.intersection(shapely.union_all(areas), self.cut), 1.0) if areas else []
         self.bridges = []
         span_tree = shapely.STRtree([span for span, _ in spans]) if spans else None
         for deck in decks:
             mine = [spans[j] for j in span_tree.query(deck, predicate="intersects")] if span_tree is not None else []
             parts = []
             for span, half in mine:
-                h = self._landing(shapely.get_coordinates(span)[[0, -1]])
+                coords = shapely.get_coordinates(span)
+                out = np.array([coords[0] - coords[1], coords[-1] - coords[-2]])
+                out /= np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-9)
+                h = self._landing(coords[[0, -1]] + out * LANDING)
                 parts.append((span, half, float(h[0]), float(h[1])))
             if not parts:
                 # An outline with no street across it: level with the ground at its edges.
-                ring = shapely.get_coordinates(shapely.segmentize(deck.exterior, 2.0))
+                ring = shapely.get_coordinates(shapely.segmentize(shapely.buffer(deck, LANDING).exterior, 2.0))
                 ring = ring[~shapely.contains_xy(self.cut, ring[:, 0], ring[:, 1])]
                 if not len(ring):
                     continue
@@ -545,7 +564,7 @@ class Trenches:
 
     def _claim(self, network) -> list:
         """The bridge outline parts over the cut that no raised road runs
-        through (overpasses.build leaves them to the cut's bridges)."""
+        over (overpasses.build leaves them to the cut's bridges)."""
         out = []
         raised = np.flatnonzero(network.levels.max(axis=1) > int(AT_GRADE))
         tree = shapely.STRtree(network.lines[raised]) if len(raised) else None
@@ -558,7 +577,7 @@ class Trenches:
                     continue
                 if tree is not None:
                     through = network.lines[raised[tree.query(part, predicate="intersects")]]
-                    if len(through) and (shapely.length(shapely.intersection(through, part)) >= 15.0).any():
+                    if len(through) and (shapely.length(shapely.intersection(through, part)) >= 1.0).any():
                         continue
                 out.append(part)
         return out
@@ -615,27 +634,39 @@ class Trenches:
 
     def outside(self, en: np.ndarray, ground: np.ndarray) -> np.ndarray:
         """The ground around the cuts (`ground` at (N, 2) points, as the
-        lattice has it): within FILL_REACH of a cut at least FILL_DEPTH deep,
-        brought up to the elevation model's ground FILL_REACH out from the
-        cut's edge."""
+        lattice has it), within FILL_REACH of the edge of a cut at least
+        FILL_DEPTH deep (on it too) brought up to the elevation model's ground
+        FILL_REACH out from that edge (_edge_levels)."""
         en = np.asarray(en, np.float64).reshape(-1, 2)
         out = np.array(ground, np.float64, copy=True)
         near = self.near(en)
-        if not near.any():
+        if not near.any() or self.edge_tree is None:
             return out
         idx = np.flatnonzero(near)
-        points = shapely.points(en[idx])
-        edge = shapely.get_coordinates(shapely.get_point(shapely.shortest_line(self.boundary, points), 0))
-        away = en[idx] - edge
-        d = np.linalg.norm(away, axis=1)
-        outside = (d > 1e-6) & (d < FILL_REACH) & ~shapely.contains_xy(self.cut, en[idx, 0], en[idx, 1])
-        if not outside.any():
-            return out
-        idx, edge, away, d = idx[outside], edge[outside], away[outside], d[outside]
-        level = self.network.terrain.height(edge + away / d[:, None] * FILL_REACH)
-        deep = level - self.road(edge) >= FILL_DEPTH
-        out[idx[deep]] = np.maximum(out[idx[deep]], level[deep])
+        point, edge = self.edge_tree.query_nearest(shapely.points(en[idx]), max_distance=FILL_REACH, all_matches=False)
+        idx, edge = idx[point], edge
+        outside = ~shapely.contains_xy(self.cut, en[idx, 0], en[idx, 1])
+        idx, edge = idx[outside], edge[outside]
+        out[idx] = np.maximum(out[idx], self.edge_level[edge])
         return out
+
+    def _edge_levels(self):
+        """Points every EDGE_STEP along the edges of the cuts at least
+        FILL_DEPTH deep, and the elevation model's ground FILL_REACH out from
+        each (the cut's rings run with it on their left)."""
+        points, levels = [], []
+        for part in polygons_of(self.cut, 1.0):
+            for ring in (part.exterior, *part.interiors):
+                coords = np.asarray(shapely.segmentize(ring, EDGE_STEP).coords)[:-1, :2]
+                if len(coords) < 3:
+                    continue
+                level = self.network.terrain.height(_right_of(coords, FILL_REACH))
+                deep = level - self.road(coords) >= FILL_DEPTH
+                points.append(coords[deep])
+                levels.append(level[deep])
+        points = np.concatenate(points) if points else np.zeros((0, 2))
+        self.edge_level = np.concatenate(levels) if levels else np.zeros(0)
+        self.edge_tree = shapely.STRtree(shapely.points(points)) if len(points) else None
 
     def over(self, en: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """(heights, found): the bridges' decks over (N, 2) points."""
@@ -824,19 +855,25 @@ def build(network, buckets: dict, level_sizes: dict, cells: dict) -> None:
     to "street_decks" (what stands on them, overpasses.OnDecks)."""
     trenches = network.trenches
     builders = {level: MeshBuilder() for level in level_sizes}
-    cantilever._add_top(trenches.cut, trenches.road, ROAD_TOP, builders)
+    for piece in _pieces(trenches.cut):
+        cantilever._add_top(piece, trenches.road, ROAD_TOP, builders)
     portals = [_portal(trenches, *portal) for portal in trenches.portals]
-    runs = 0
+    runs, lamps = 0, []
     for level in level_sizes:
         lattice = network.terrain.lattice(cells[level])
         if network.structure is not None:
             lattice = network.structure.ground(lattice)
-        runs += _add_walls(trenches, trenches.ground(lattice), cells[level] / 2, portals, builders, level)
+        runs += _add_walls(trenches, trenches.ground(lattice), cells[level] / 2, portals, builders, level,
+                           lamps if level == "lod0" else None)
+    if lamps:
+        overpasses._merge_lamps(buckets.setdefault("lamps", {}), lamps, level_sizes["lod0"])
     for portal in portals:
-        _add_portal(portal, builders)
+        _add_portal(portal, {level: builders[level] for level in NEAR if level in builders})
     street_decks = []
+    inner = shapely.buffer(trenches.cut, -0.3)  # (the cut but for its edges)
+    shapely.prepare(inner)
     for deck, parts in trenches.bridges:
-        top = _add_bridge(trenches, deck, parts, builders)
+        top = _add_bridge(deck, parts, inner, builders)
         if top is not None:
             street_decks.append(top)
     for level, size in level_sizes.items():
@@ -846,12 +883,29 @@ def build(network, buckets: dict, level_sizes: dict, cells: dict) -> None:
           f"{runs} runs of wall", flush=True)
 
 
-def _add_walls(trenches: Trenches, ground, step: float, portals: list, builders: dict, level: str) -> int:
+def _pieces(poly, size: float = 250.0) -> list:
+    """A polygon cut along a `size`-meter grid (so the decks' grids stay
+    small)."""
+    out = []
+    for part in polygons_of(poly, 0.01):
+        min_e, min_n, max_e, max_n = part.bounds
+        for i in range(int(np.floor(min_e / size)), int(np.ceil(max_e / size))):
+            for j in range(int(np.floor(min_n / size)), int(np.ceil(max_n / size))):
+                box = shapely.box(i * size, j * size, (i + 1) * size, (j + 1) * size)
+                out += polygons_of(shapely.intersection(part, box), 0.01)
+    return out
+
+
+def _add_walls(trenches: Trenches, ground, step: float, portals: list, builders: dict, level: str,
+               lamps: list | None) -> int:
     """The walls along the cuts' edges in one level: retaining walls from
     under the road's surface up to the ground around, where that's higher
     (from a portal's opening's top up, over a portal), with a parapet along
     their tops up close; side walls down to the ground around, where that's
-    lower. Returns how many runs of retaining wall."""
+    lower. With `lamps`, adds the street lights along the retaining walls
+    PARAPET_FROM high or more ((points, heights, arms), as
+    overpasses._merge_lamps takes them). Returns how many runs of retaining
+    wall."""
     runs = 0
     keep_off = shapely.buffer(trenches.bridge_areas, 1.0) if not trenches.bridge_areas.is_empty else None
     for part in polygons_of(trenches.cut, 1.0):
@@ -860,12 +914,15 @@ def _add_walls(trenches: Trenches, ground, step: float, portals: list, builders:
             coords = np.asarray(shapely.segmentize(ring, step).coords)[:, :2]
             if len(coords) < 2:
                 continue
+            openings = [portal for portal in portals if level in NEAR and shapely.intersects(portal["mouth"], ring)]
+            ceiling = np.full(len(coords), -np.inf)
+            for portal in openings:
+                coords, ceiling, inside = _split_at(coords, ceiling, portal["mouth"])
+                ceiling[inside] = np.maximum(ceiling[inside], portal["ceiling"])
             road = trenches.road(coords)
-            around = ground.height(_right_of(coords, 0.05))
-            bottom = road - WALL_FOOT
-            for portal in portals:
-                mouth = shapely.contains_xy(portal["mouth"], coords[:, 0], coords[:, 1])
-                bottom[mouth] = np.maximum(bottom[mouth], portal["ceiling"])
+            # (The ground around as its mesh has it along the edge.)
+            around = trenches.outside(coords, ground.lattice.height(coords))
+            bottom = np.maximum(road - WALL_FOOT, ceiling)
             retaining = around > road + WALL_MIN
             for start, stop in overpasses._runs(retaining[:-1] | retaining[1:]):
                 run = slice(start, stop + 1)
@@ -873,17 +930,44 @@ def _add_walls(trenches: Trenches, ground, step: float, portals: list, builders:
                 cantilever._wall(builders, coords[run][::-1], bottom[run][::-1],
                                  np.maximum(around[run], bottom[run])[::-1], WALL, levels=(level,))
                 runs += 1
-                if level in DETAILED:
+                if level in NEAR:
                     high = around[run] - road[run] >= PARAPET_FROM
                     if keep_off is not None:
                         high &= ~shapely.contains_xy(keep_off, coords[run][:, 0], coords[run][:, 1])
                     for a, b in overpasses._runs(high[:-1] & high[1:]):
                         _parapet(builders, coords[run][a:b + 1], around[run][a:b + 1], level)
+            if lamps is not None and len(coords) > 2:
+                points, heights, arms = props.deck_lamps(coords, trenches.road)
+                deep = ground.height(points + arms * -(props.DECK_LAMP_INSET + 0.05)) - heights >= PARAPET_FROM
+                deep &= ~trenches.over(points)[1]
+                if deep.any():
+                    lamps.append((points[deep], heights[deep], arms[deep]))
             lower = around < road - WALL_MIN
             for start, stop in overpasses._runs(lower[:-1] & lower[1:]):
                 run = slice(start, stop + 1)
                 cantilever._wall(builders, coords[run], around[run] - WALL_FOOT, road[run], WALL, levels=(level,))
     return runs
+
+
+def _split_at(coords: np.ndarray, values: np.ndarray, poly) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """A line's points (with a value each) with two more where it crosses a
+    polygon's edge (so what changes there changes at once), and which points
+    are in the polygon (of the two, the one on its side)."""
+    inside = shapely.contains_xy(poly, coords[:, 0], coords[:, 1])
+    out_coords, out_values, out_inside = [coords[:1]], [values[:1]], [inside[:1]]
+    for i in range(1, len(coords)):
+        if inside[i] != inside[i - 1]:
+            crossing = shapely.intersection(shapely.LineString(coords[i - 1:i + 1]), poly.boundary)
+            hit = shapely.get_coordinates(crossing)
+            if len(hit):
+                at = hit[np.argmin(np.linalg.norm(hit - coords[i - 1], axis=1))][None]
+                out_coords += [at, at]
+                out_values += [values[i - 1:i], values[i:i + 1]]
+                out_inside += [inside[i - 1:i], inside[i:i + 1]]
+        out_coords.append(coords[i:i + 1])
+        out_values.append(values[i:i + 1])
+        out_inside.append(inside[i:i + 1])
+    return np.concatenate(out_coords), np.concatenate(out_values), np.concatenate(out_inside)
 
 
 def _right_of(coords: np.ndarray, distance: float) -> np.ndarray:
@@ -900,12 +984,22 @@ def _parapet(builders: dict, coords: np.ndarray, base: np.ndarray, level: str) -
     back = _right_of(coords, PARAPET_THICK)
     cantilever._wall(builders, coords[::-1], base[::-1], base[::-1] + PARAPET, WALL, levels=(level,))
     cantilever._wall(builders, back, base - WALL_FOOT, base + PARAPET, WALL, levels=(level,))
-    quads = np.stack([coords[:-1], coords[1:], back[1:], back[:-1]], axis=1)
-    y = np.stack([base[:-1], base[1:], base[1:], base[:-1]], axis=1) + PARAPET
-    for tri in ((0, 1, 2), (0, 2, 3)):
-        q = quads[:, tri]
-        pos = np.stack([q[..., 0], y[:, tri], -q[..., 1]], axis=-1)
-        builders[level].add(pos, np.stack([q[..., 0], -q[..., 1]], axis=-1), WALL, (0.0, 1.0, 0.0))
+    _cap(builders, coords, back, base + PARAPET, (level,))
+
+
+def _cap(builders: dict, a: np.ndarray, b: np.ndarray, y: np.ndarray, levels) -> None:
+    """The flat top between two lines of points side by side, at heights y
+    (the shader draws both sides of walls, so walls with two faces need a
+    thickness and a top)."""
+    quads = np.stack([a[:-1], a[1:], b[1:], b[:-1]], axis=1)
+    heights = np.stack([y[:-1], y[1:], y[1:], y[:-1]], axis=1)
+    for level in levels:
+        if level not in builders:
+            continue
+        for tri in ((0, 1, 2), (0, 2, 3)):
+            q = quads[:, tri]
+            pos = np.stack([q[..., 0], heights[:, tri], -q[..., 1]], axis=-1)
+            builders[level].add(pos, np.stack([q[..., 0], -q[..., 1]], axis=-1), WALL, (0.0, 1.0, 0.0))
 
 
 def _portal(trenches: Trenches, k: int, at: float, ahead: float, half: float) -> dict:
@@ -918,8 +1012,15 @@ def _portal(trenches: Trenches, k: int, at: float, ahead: float, half: float) ->
     if ahead < 0:
         piece = shapely.LineString(np.asarray(piece.coords)[::-1])
     road = float(trenches.network.along(k, np.asarray(line.interpolate(at).coords)[:, :2])[0])
-    return {"line": piece, "half": half, "road": road, "ceiling": road + PORTAL_CLEAR,
-            "mouth": shapely.buffer(line.interpolate(at), half + 2.0)}
+    # Under the ground over it, however thin the lid.
+    box = shapely.buffer(piece, half, cap_style="flat")
+    over = shapely.get_coordinates(shapely.segmentize(box.exterior, 5.0))
+    lid = float(trenches.network.grade(over).min()) + CURB_HEIGHT - LID_THICKNESS
+    # (Its opening: the tunnel's width, from a little before the cut's edge.)
+    outer = float(np.clip(at - ahead * 1.0, 0.0, line.length))
+    mouth = shapely.buffer(shapely.ops.substring(line, min(outer, inner), max(outer, inner)), half, cap_style="flat")
+    return {"line": piece, "half": half, "road": road, "ceiling": max(min(road + PORTAL_CLEAR, lid), road + 2.0),
+            "mouth": mouth}
 
 
 def _add_portal(portal: dict, builders: dict) -> None:
@@ -941,10 +1042,11 @@ def _add_portal(portal: dict, builders: dict) -> None:
     cantilever._add_underside(box, lambda en: np.full(len(en), ceiling), builders, depth=0.0)
 
 
-def _add_bridge(trenches: Trenches, deck, parts: list, builders: dict):
+def _add_bridge(deck, parts: list, inner, builders: dict):
     """A street's bridge over a cut: its top (road along the street, sidewalk
-    beside it), and over the cut its underside, fascia and parapets. Returns
-    its top's lod0 triangles (or None)."""
+    beside it), its underside, and along its edges over the cut (`inner`, the
+    cut but for its edges) a fascia and parapets. Returns its top's lod0
+    triangles (or None)."""
     def deck_y(en):
         return _deck_height(parts, np.asarray(en, np.float64).reshape(-1, 2))
     roads = [shapely.buffer(span, half, cap_style="flat") for span, half, _, _ in parts if span is not None]
@@ -952,16 +1054,18 @@ def _add_bridge(trenches: Trenches, deck, parts: list, builders: dict):
     tops = [cantilever._add_top(road, deck_y, ROAD_TOP, builders)]
     if roads:
         tops.append(cantilever._add_top(shapely.difference(deck, road), deck_y, SIDEWALK_TOP, builders))
-    cantilever._add_underside(shapely.intersection(deck, trenches.cut), deck_y, builders, depth=BRIDGE_DEPTH)
-    # Over the cut, its edges: a fascia and a parapet (counter-clockwise: the
-    # deck on their left).
+    cantilever._add_underside(deck, deck_y, builders, depth=BRIDGE_DEPTH)
+    # (Counter-clockwise: the deck on their left.)
     for part in polygons_of(deck, 1.0):
         ring = shapely.LineString(np.asarray(shapely.orient_polygons(part).exterior.coords))
-        for line in lines_of(shapely.intersection(ring, trenches.cut)):
+        local = shapely.clip_by_rect(inner, *shapely.buffer(part, 1.0).bounds)
+        for line in lines_of(shapely.intersection(ring, local)):
             coords = np.asarray(shapely.segmentize(line, 5.0).coords)[:, :2]
             y = deck_y(coords)
+            inner = _right_of(coords, -PARAPET_THICK)
             cantilever._wall(builders, coords, y - BRIDGE_DEPTH, y + BRIDGE_PARAPET, WALL)
-            cantilever._wall(builders, coords[::-1], y[::-1], y[::-1] + BRIDGE_PARAPET, WALL)
+            cantilever._wall(builders, inner[::-1], y[::-1], y[::-1] + BRIDGE_PARAPET, WALL)
+            _cap(builders, coords, inner, y + BRIDGE_PARAPET, DETAILED)
     tops = [t for t in tops if t is not None]
     return np.concatenate(tops) if tops else None
 

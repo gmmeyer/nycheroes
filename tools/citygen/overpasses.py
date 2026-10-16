@@ -5,9 +5,10 @@ highways, rail bridges over streets), as decks on columns.
 Two sources, combined:
 - The street centerlines (CSCL) give each segment's level at both ends:
   13 is street level, 17 one level up, 21 two, 25 three (9 and 5 are below,
-  in trenches and tunnels, left alone, but for the BQE's triple cantilever,
-  cantilever.py). Raised segments become decks their width wide (merged per
-  level, so carriageways and ramps at one level form one deck).
+  in cuts and tunnels: the BQE's triple cantilever's are cantilever.py's,
+  the rest trenches.py's, which the Network takes in with their heights).
+  Raised segments become decks their width wide (merged per level, so
+  carriageways and ramps at one level form one deck).
 - The city's 2017 lidar survey (lidar.py) gives their decks' heights where
   it sees them (Network._fit): the Gowanus Expressway 31 m over the Gowanus
   Canal, the Cross Bronx's ramps onto the Alexander Hamilton Bridge 33 m
@@ -274,9 +275,10 @@ class Network:
         surveyed = data["lines"]  # as the survey's stations were laid out (lidar.py)
         if structure is not None:
             data, stacked = structure.merged(data, streets)
+        self.added = np.zeros(len(data["lines"]), dtype=bool)
         if sunken is not None:
-            data, added = sunken.merged(data)
-            stacked = np.concatenate([stacked, np.zeros(added.sum(), dtype=bool)])
+            data, self.added = sunken.merged(data)
+            stacked = np.concatenate([stacked, np.zeros(self.added.sum(), dtype=bool)])
         self.data = data
         self.lines = data["lines"]
         self.count = len(self.lines)
@@ -310,6 +312,7 @@ class Network:
         starts = shapely.get_coordinates(shapely.get_point(self.lines, 0))
         finishes = shapely.get_coordinates(shapely.get_point(self.lines, -1))
         lifted = (self.ends - np.column_stack([self.grade(starts), self.grade(finishes)])).max(axis=1) > GRADE_DECK
+        lifted &= ~np.isin(np.arange(self.count), list(self.sunken))  # (in their cuts: trenches.py's)
         self.raised = (top > int(AT_GRADE)) | stacked | (lifted & (data["rw"] != PATH))
         # Decks are grouped by level, rounded up to whole levels.
         self.group = np.where(self.raised, int(AT_GRADE) + LEVEL_STEP * np.ceil((top - int(AT_GRADE)) / LEVEL_STEP), 0)
@@ -320,6 +323,9 @@ class Network:
         street_half = np.where(streets["width"] > 0, streets["width"] / 2.0,
                                np.maximum(streets["lanes"], 1) * markings.LANE_WIDTH / 2.0 + 1.0)
         self.under_lines = np.concatenate([streets["lines"], self.lines[level]])
+        # (Which are below street level: their cuts and bridges are trenches.py's.)
+        self.under_sunken = np.concatenate([np.zeros(len(streets["lines"]), dtype=bool),
+                                            np.isin(np.flatnonzero(level), list(self.sunken))])
         self.under_half = np.concatenate([street_half, self.width[level] / 2.0])
         self.under_two_way = np.concatenate([streets["trafdir"] == BOTH, data["trafdir"][level] == BOTH])
         self.under_tree = shapely.STRtree(self.under_lines)
@@ -646,12 +652,16 @@ class Network:
                 if self.structure.on_decks(en[e:e + 1])[0]:
                     pinned[node[e]] = float(self.structure.level(int(other[e]), en[e:e + 1])[0])
         free = unknown & (other != int(AT_GRADE)) & np.repeat(self.data["rw"] != PATH, 2) & ~np.isin(node, list(pinned))
+        # (The streets and highways below street level, trenches.py's, go
+        # with what the others make of such nodes.)
+        counted = ~np.repeat(self.added, 2)
+        free &= counted
         ids, index = np.unique(node, return_inverse=True)
-        incident = np.bincount(index, minlength=len(ids))
+        incident = np.bincount(index[counted], minlength=len(ids))
         qualified = np.bincount(index[free], minlength=len(ids))
         total = np.bincount(index[free], weights=ends.reshape(-1, 2)[:, ::-1].reshape(-1)[free], minlength=len(ids))
         node_free = (qualified == incident) & (incident >= 2)
-        pick = node_free[index] & free
+        pick = node_free[index] & (free | (unknown & ~counted))
         ends[pick] = total[index[pick]] / qualified[index[pick]]
         for e in np.flatnonzero(np.isin(node, list(pinned))):
             ends[e] = pinned[node[e]]
@@ -847,7 +857,7 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
                 street_decks.append(top)
 
     # Streets crossing a creek or canal where the data has no bridge at all.
-    covered = shapely.union_all([keep_out] + list(on_land))
+    covered = shapely.union_all([keep_out] + list(on_land) + (network.trenches.claimed if network.trenches else []))
     shapely.prepare(covered)
     crossings = 0
     for poly, deck_y in _missing_crossings(network, land, covered):
@@ -1084,6 +1094,7 @@ def _missing_crossings(network: Network, land, covered) -> list:
     bank to the street at the other. [(polygon, deck_y)]"""
     out = []
     candidates = network.under_tree.query(shapely.box(*land.bounds))
+    candidates = candidates[~network.under_sunken[candidates]]
     shapely.prepare(land)
     wet_lines = ~shapely.covers(land, network.under_lines[candidates])
     for k in candidates[wet_lines]:
@@ -1130,13 +1141,15 @@ def _plain_profile(poly, network: Network):
     s = (ring - center) @ u
     s_min, s_max = float(s.min()), float(s.max())
     strip = min(END_STRIP, 0.2 * (s_max - s_min))
-    ends = (float(np.median(network.street(ring[s <= s_min + strip]))),
-            float(np.median(network.street(ring[s >= s_max - strip]))))
+    ends = (float(np.median(network.grade(ring[s <= s_min + strip]))),
+            float(np.median(network.grade(ring[s >= s_max - strip]))))
 
     # Streets on it (running along it) and under it (crossing it).
     lifts = []
     carries = False
     for k in network.under_tree.query(poly, predicate="intersects"):
+        if network.under_sunken[k]:
+            continue  # (in a cut or a tunnel, trenches.py's)
         line = network.under_lines[k]
         inside = shapely.intersection(line, poly)
         if inside.is_empty or inside.length < 1.0:

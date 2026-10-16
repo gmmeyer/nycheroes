@@ -14,6 +14,11 @@ the surfaces within RADIUS of its centerline, above the ground: the deck
 heights are matched to the elevation model's (terrain.py) through the ground
 points around (they differ by a meter or so). data/cache/deck_heights.pkl;
 overpasses.Network picks each station's layer.
+
+prepare_sunken() does the same along the roads below street level (another
+300 MB of point tiles), ground points included, and also measures the lowest
+surface across each road, out to ACROSS_REACH either side (where a cut's
+walls stand); trenches.prepare keeps it in data/cache/trenches.pkl.
 """
 
 import io
