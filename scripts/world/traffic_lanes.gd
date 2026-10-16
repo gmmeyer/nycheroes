@@ -31,8 +31,18 @@ const CONNECTOR_STEP := 2.5
 ## a turn asks for (m/s).
 const TURN_GRIP := 2.2
 const MIN_TURN_SPEED := 3.0
-## How often a car goes straight on where it could also turn.
+## How often a car goes straight on where it could also turn; less often
+## where it could turn onto a wider street, more often where it's on the
+## wider one (busy avenues keep their traffic and draw the side streets').
 const STRAIGHT_SHARE := 0.7
+const STRAIGHT_SHARE_TO_WIDER := 0.45
+const STRAIGHT_SHARE_ON_WIDER := 0.85
+## Cars appear on a lane this many more times per meter for each lane its
+## way has past the first (at most WIDTH_WEIGHT_LANES of them), and on
+## highways HIGHWAY_WEIGHT times as often again: wide streets are busier.
+const WIDTH_WEIGHT := 0.5
+const WIDTH_WEIGHT_LANES := 2
+const HIGHWAY_WEIGHT := 1.5
 
 ## A stretch of road a car drives along: a lane, or a connector between two.
 class Path:
@@ -136,8 +146,9 @@ class Box:
 
 ## Lanes by tile: Vector2i -> Array[Lane].
 var tiles := {}
-## Each tile's lanes' total length (m) and, per lane, the running total, for
-## picking a random spot on its roads: Vector2i -> PackedFloat32Array.
+## Each tile's lanes' total length (m, weighted by spawn_weight()) and, per
+## lane, the running total, for picking a random spot on its roads, wide ones
+## the likelier: Vector2i -> PackedFloat32Array.
 var tile_totals := {}
 ## Each tile's lanes' bounding box on the ground (x, z): Vector2i -> Rect2.
 var tile_bounds := {}
@@ -180,7 +191,7 @@ func set_tile(key: Vector2i, polylines: Array[PackedVector3Array], info: PackedF
 		added.append(lane)
 		_leaving.get_or_add(lane.from_node, [] as Array[Lane]).append(lane)
 		_arriving.get_or_add(lane.to_node, [] as Array[Lane]).append(lane)
-		total += lane.length
+		total += lane.length * spawn_weight(lane)
 		totals.append(total)
 		for p in points:
 			bounds = bounds.expand(Vector2(p.x, p.z))
@@ -218,6 +229,12 @@ func remove_tile(key: Vector2i) -> Array[Lane]:
 	return removed
 
 
+## How likely cars are to appear on a lane, per meter (see WIDTH_WEIGHT).
+static func spawn_weight(lane: Lane) -> float:
+	var weight := 1.0 + WIDTH_WEIGHT * clampi(lane.lanes - 1, 0, WIDTH_WEIGHT_LANES)
+	return weight * HIGHWAY_WEIGHT if lane.speed >= Traffic.HIGHWAY_SPEED else weight
+
+
 ## The lanes leaving a node.
 func leaving(node: int) -> Array:
 	return _leaving.get(node, [])
@@ -245,10 +262,11 @@ func connector(from: Lane, to: Lane) -> Connector:
 
 
 ## Picks where a car on `lane` goes next: one of the lanes leaving its end.
-## Mostly straight on, keeping its lane number; right turns from the right-most
-## lane and left turns from the left-most (or from any lane, where there's no
-## way straight on). Never back the way it came unless it's a dead end. Null
-## if no lane leaves there (yet).
+## Mostly straight on (STRAIGHT_SHARE: less where it could turn onto a wider
+## street), keeping its lane number; right turns from the right-most lane and
+## left turns from the left-most (or from any lane, where there's no way
+## straight on). Never back the way it came unless it's a dead end. Null if
+## no lane leaves there (yet).
 func pick_next(lane: Lane) -> Lane:
 	var outs: Array = leaving(lane.to_node)
 	if outs.is_empty():
@@ -271,8 +289,17 @@ func pick_next(lane: Lane) -> Lane:
 		return _keep_lane(backs, lane, false)  # a dead end: turn around
 	var may_left := lane.lane == 0 or straight.is_empty()
 	var may_right := lane.lane == lane.lanes - 1 or straight.is_empty()
+	var stay := STRAIGHT_SHARE
+	if not straight.is_empty():
+		var widest_turn := 0
+		for out: Lane in lefts + rights:
+			widest_turn = maxi(widest_turn, out.lanes)
+		if widest_turn > straight[0].lanes:
+			stay = STRAIGHT_SHARE_TO_WIDER
+		elif widest_turn > 0 and widest_turn < straight[0].lanes:
+			stay = STRAIGHT_SHARE_ON_WIDER
 	var roll := randf()
-	if not straight.is_empty() and (roll < STRAIGHT_SHARE or (lefts.is_empty() or not may_left)
+	if not straight.is_empty() and (roll < stay or (lefts.is_empty() or not may_left)
 			and (rights.is_empty() or not may_right)):
 		return _keep_lane(straight, lane, false)
 	if not rights.is_empty() and may_right and (lefts.is_empty() or not may_left or randf() < 0.55):

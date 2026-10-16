@@ -15,7 +15,7 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
-| 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, facade materials and stoops, ground details, first landmarks, landmarks in stone, waterfront landmarks, sound done) |
+| 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, busy streets, facade materials and stoops, ground details, first landmarks, landmarks in stone, waterfront landmarks, sound done) |
 | 7 | Phones and tablets | Done in emulation; real phones to check |
 | 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions, elevated railways and their trains) |
 | 9 | Mac and Windows versions | Planned (last) |
@@ -818,11 +818,87 @@ reference round 3's 23, 24 and 31):**
   at while a car giving way crosses. Signals along a street are timed as a
   green wave for 10 m/s. Cars stop for heroes, thugs (down or up) and
   pedestrians 25 m ahead. They appear out of sight (or grow in far away)
-  and leave beyond 360 m; 120 cars on high (medium 60, low 25), a third of
+  and leave beyond 360 m; 180 cars on high (medium 90, low 35; until busy
+  streets, below, 120, 60 and 25), a third of
   them yellow cabs in Manhattan below 110th Street, 2.5% buses. One
   MultiMesh for all of them, plus headlight and taillight glows at night
-  (one more draw call). Script time about 0.25 ms a frame (driving steps at
-  30 Hz, far and behind-the-camera cars redrawn less often).
+  (one more draw call). Script time about 0.25 ms a frame for 120 cars
+  (driving steps at 30 Hz, far and behind-the-camera cars redrawn less
+  often).
+
+**Busy streets (done; reference round 3's 19):**
+- More moving cars, and where they're seen: 180 on high (was 120), 90 on
+  medium (60), 35 on low (25). Per meter of lane they appear 1.5 times as
+  often on streets with two lanes their way and twice as often on those
+  with three or more, on highways 1.5 times that again
+  (`TrafficLanes.spawn_weight()`); at intersections cars keep to the wider
+  street (straight on 85% of the time where the turns lead onto narrower
+  ones, else 70%) and turn onto a wider one more often (55% where they
+  could). Behind the camera (more than about 120 degrees off where it
+  looks, past 60 m) only 30% of the spots tried take a new car, and cars
+  out of sight there go past 210 m (70% of the radius) instead of 360 m,
+  so more drive where it looks. In the traffic test's midtown the average
+  speed fell from 4.9 to 3.8 m/s: the fuller avenues queue at their lights.
+- Pedestrians where the shops are: as a near tile loads, its props fill a
+  grid of 25 m squares with how busy its sidewalks are
+  (`CityStreamer.busyness_at()`): a shop's sign 1, an awning 0.5, a subway
+  stair 8, a LinkNYC kiosk, newsstand or food kiosk 2, a bus shelter 1, a
+  bench, bike dock section, plaza table or planter 0.5; from the tiles as
+  they are, no rebuild. Over 3x3 squares that's 0-5 on quiet streets, 20-60
+  on shopping streets, 66 at Roosevelt Avenue and 82nd Street. Each
+  newcomer starts at one of 10 random spots on the walking lanes nearby,
+  picked with odds of 4 plus that, twice that ahead of the camera (within
+  60 degrees of where it looks), and while the streets first fill 8 times
+  that where the camera sees it. On high, busy streets keep up to 1.5 times
+  as many pedestrians (68, like Times Square; in full where the 175 m
+  around the hero average 30), medium and low as many as before.
+  `lanes_near()` returns the lanes whose bounds come near (kept per lane as
+  tiles load) rather than all of the nearby tiles', so few spawn tries miss.
+- Cheaper pedestrians, to pay for it: past 8 m from the camera they take a
+  new pose 30 times a second instead of every frame (past 25 m 12, as
+  before; each new pose is a skinning pass, see SkinWarmup), and in the
+  camera's view but behind a building they're neither drawn nor animated
+  (a ray every 0.5 s, every 0.2 s while hidden): each one drawn is a few
+  draw calls, and the spots ahead of the camera are often on the next
+  street. ?stats logs the cars and pedestrians in sight (in the camera's
+  view, not behind a building).
+- In sight at the reference views (high, 1600x900, about 20 s after
+  loading, medians of 4 loads each), before -> after, and the photos'
+  counts by eye:
+
+  | View | Cars | Pedestrians | Photo (cars, people) |
+  |---|---|---|---|
+  | times_square | 22 -> 49 | 34 -> 51 | 4, 50+ |
+  | fifth_ave_esb | 8 -> 26 | 5 -> 15 | 8, 20 |
+  | flatiron | 29 -> 57 | 11 -> 36 | 5, 35 |
+  | park_ave | 21 -> 47 | 6 -> 18 | 10, 3 |
+  | roosevelt_ave | 19 -> 40 | 3 -> 9 | 10, 25 |
+  | dumbo | 4 -> 7 | 4 -> 18 | 4, 25 |
+
+  The game counts its whole 102-degree frame out to 300 m (cars) and 120 m
+  (pedestrians), the photos are narrower (48-68 degrees) and their cars
+  mostly within 150 m; by eye in the 2560x1440 pairs
+  (`build/reference/compare/busy-after`, middle column master) Fifth
+  Avenue's crossing now has a row of cars and a cab, the Flatiron's three
+  cabs, Park Avenue a bus, and Times Square's plaza crowd is thicker near
+  the camera. Medium: cars 3-41 in sight (was 3-18),
+  pedestrians 3-28 (1-18); low: cars 3-23 (4-13), pedestrians 2-14 (1-9).
+  Still short of the photos' crowds at Roosevelt Avenue and DUMBO (a
+  tourists' corner): dozens of people in view would want cheaper people
+  than skinned characters (say far ones as a MultiMesh of baked poses).
+- Cost (uncapped, 1600x900, A/B interleaved over 4 loads each on a busy
+  machine whose GPU other checks kept at 99%: master itself ran 85-212 FPS
+  on high there; medians of the per-load differences): high +0.1 (Times
+  Square), -0.4 (Fifth Avenue), -0.9 (the Flatiron), +0.7 (Park Avenue),
+  +0.3 (DUMBO), +0.4 ms (Roosevelt Avenue); medium -1.3, -0.6, -1.3, -0.1,
+  +0.1, -0.3 ms; low +0.04, +0.06, +0.27, +0.14, +0.14, +0.26 ms. Traffic's
+  script time (?stats) 0.29-0.45 to 0.39-0.62 ms on high, 0.16-0.22 to
+  0.20-0.24 ms on medium, 0.05-0.06 to 0.08-0.10 ms on low; in the traffic
+  test (desktop) 0.26 to 0.26-0.33 ms. Draw calls about the pedestrians in
+  view: high +3 to +49 (the Flatiron 365 to 414), medium -13 to +27, low
+  +5 to +15. Per near tile as it loads: the busy squares 0.04-0.13 ms and
+  the lanes' bounds 0.02-0.06 ms (desktop; two or three times that on the
+  web). Shaders and tiles unchanged.
 
 **Trees, parks and sky after the reference check (done):**
 - Street tree crowns clear a truck (at least 3.4 m up, 40% of the height
@@ -1463,7 +1539,8 @@ phone, in the phone's browser, at https://nycheroes.party.
   | Sun shadows | off | 2 splits, 300 m | 4 splits, 1500 m |
   | Tree shadows | off | off | on |
   | Load distances (m) | 350 / 800 / 7000 | 500 / 1100 / 12000 | 700 / 1500 / 30000 |
-  | Pedestrians, gangs | 12, 1 | 24, 2 | 45, 2 |
+  | Pedestrians, gangs | 12, 1 | 24, 2 | 45 (busy streets up to 68), 2 |
+  | Moving cars | 35 | 90 | 180 |
 
   Denser fog on low and medium hides where the city stops. Measured in
   Chrome at Times Square (the worst spot) with a 3x phone screen: about
