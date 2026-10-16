@@ -562,7 +562,12 @@ func _priority_coming(lane: TrafficLanes.Lane, via: TrafficLanes.Connector) -> b
 			var to_line := other.length - _s[j]
 			if to_line > LOOK_AHEAD:
 				break  # (the rest are further back)
-			if to_line >= _v[j] * YIELD_TIME + YIELD_DISTANCE:
+			# How far it gets in YIELD_TIME speeding up as it may (a slow car
+			# that was behind one crossing just now is about to).
+			var v := _v[j]
+			var top := maxf(other.speed * _desire[j], v)
+			var t := minf((top - v) / _pull[j], YIELD_TIME)
+			if to_line >= v * t + 0.5 * _pull[j] * t * t + top * (YIELD_TIME - t) + YIELD_DISTANCE:
 				continue
 			var other_via := _via[j]
 			if other_via and not other_via.removed and lanes.conflict(via, other_via):
