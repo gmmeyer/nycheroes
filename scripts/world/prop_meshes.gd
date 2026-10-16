@@ -80,6 +80,13 @@ extends RefCounted
 ## VERTEX is a rough sedan at unit size, for the editor only; the mesh's
 ## custom AABB holds every model at unit size (the instances scale it by
 ## their length and height).
+## Subway cars (shaders/train.gdshader): one car in meters at the B
+## Division's size (Trains.B_CAR), its front toward +z and its left toward
+## +x, the rails at y = 0 under its middle: the body (its sides, a roof
+## rounded along its edges, its ends), the equipment under its floor and two
+## trucks. The shader paints doors, windows, cabs and lights by where they
+## are on the car.
+##   UV = (part (TrainPart), 0)
 
 const PART_TRUNK := 0
 const PART_CROWN := 1
@@ -161,7 +168,23 @@ const _CAR_OUTLINE: Array[Vector2] = [Vector2(-0.474, 0.207), Vector2(-0.5, 0.29
 	Vector2(0.245, 0.662), Vector2(-0.01, 0.434)]
 const _CAR_HALF_WIDTH := 0.19
 
+## Subway cars' parts (UV.x); shaders/train.gdshader has the same numbers.
+enum TrainPart { SIDE, ROOF, END, UNDER, TRUCK }
+## A subway car's cross-section (x, y m) round from the bottom of its left
+## side over the roof to the bottom of its right side, at Trains.B_CAR's
+## size; the parts of its faces.
+const _TRAIN_PROFILE: Array[Vector2] = [Vector2(1.525, 0.95), Vector2(1.525, 3.2), Vector2(1.37, 3.52),
+	Vector2(0.95, 3.7), Vector2(-0.95, 3.7), Vector2(-1.37, 3.52), Vector2(-1.525, 3.2), Vector2(-1.525, 0.95)]
+const _TRAIN_PROFILE_PARTS: Array[int] = [TrainPart.SIDE, TrainPart.ROOF, TrainPart.ROOF, TrainPart.ROOF,
+	TrainPart.ROOF, TrainPart.ROOF, TrainPart.SIDE]
+## Its trucks' middles (share of its length from its middle), and their
+## half sizes (m); the equipment under its floor.
+const _TRAIN_TRUCKS := 0.354
+const _TRAIN_TRUCK_SIZE := Vector3(1.25, 0.85, 1.35)
+const _TRAIN_UNDER := AABB(Vector3(-1.28, 0.4, -7.6), Vector3(2.56, 0.55, 15.2))
+
 static var _car_mesh: ArrayMesh
+static var _train_mesh: ArrayMesh
 
 
 ## Every tree: a trunk up into a crown of four blobs, in three shapes (see
@@ -558,14 +581,19 @@ static func _subway_entrances(k: _Kit) -> void:
 ## pole with a mast arm over the road (to its right, -x) carrying a signal
 ## head and a street name sign, a second head on the pole, and a pedestrian
 ## signal facing across the road. Each head's lit lens is a quad of its own.
+## Under an el (variant SIGNAL_ON_COLUMN) only the heads on the pole are
+## drawn, mounted on a column of the el.
 static func _traffic_signal(k: _Kit) -> void:
-	k.shape = Vector4(CityTileDecoder.PROP_TRAFFIC_SIGNAL, ALL_VARIANTS, 6.2, 0.4)
+	var on_pole := 1 << CityTileDecoder.SIGNAL_ON_POLE
+	k.shape = Vector4(CityTileDecoder.PROP_TRAFFIC_SIGNAL, on_pole, 6.2, 0.4)
 	_turned(k, 6, [Vector2(0.0, 0.16), Vector2(0.4, 0.12), Vector2(0.5, 0.095), Vector2(6.1, 0.08), Vector2(6.2, 0.0)],
 		Furniture.SIGNAL_POLE)
 	_beam(k, Vector3(-0.05, 5.72, 0.0), Vector3(-4.6, 5.95, 0.0), 0.055, Furniture.SIGNAL_POLE)
 	var head := _faces(Furniture.SIGNAL_HEAD)
 	head["+z"] = Furniture.SIGNAL_FACE
 	for top: Vector3 in [Vector3(-4.1, 5.88, 0.0), Vector3(-0.26, 4.01, 0.0)]:
+		# The mast arm's head only on a pole.
+		k.shape.y = on_pole if top.x < -1.0 else ALL_VARIANTS
 		_box(k, top + Vector3(-0.18, -1.06, -0.13), top + Vector3(0.18, 0.0, 0.11), head)
 		var lens := top + Vector3(0.0, -0.18, 0.125)
 		k.extra = Vector4(lens.x, lens.y, lens.z, 0.125)
@@ -576,6 +604,7 @@ static func _traffic_signal(k: _Kit) -> void:
 	k.extra = Vector4(-0.39, 2.43, 0.0, 0.18)
 	_panel(k, Vector3(-0.39, 2.25, -0.18), Vector3(0.0, 0.0, 0.36), Vector3(0.0, 0.36, 0.0), Furniture.WALK_LAMP)
 	k.extra = Vector4.ZERO
+	k.shape.y = on_pole
 	_panel(k, Vector3(-2.7, 5.4, 0.0), Vector3(1.7, 0.0, 0.0), Vector3(0.0, 0.3, 0.0), Furniture.STREET_SIGN)
 
 
@@ -658,6 +687,63 @@ static func car() -> ArrayMesh:
 	_car_mesh = k.build()
 	_car_mesh.custom_aabb = CAR_BOUNDS
 	return _car_mesh
+
+
+## A subway car (see the header): 62 triangles.
+static func train_car() -> ArrayMesh:
+	if _train_mesh:
+		return _train_mesh
+	var b := _Builder.new()
+	var half := Trains.B_CAR.x * 0.5
+	# The body's sides and roof, along its length.
+	for i in _TRAIN_PROFILE.size() - 1:
+		var p := _TRAIN_PROFILE[i]
+		var q := _TRAIN_PROFILE[i + 1]
+		var out := Vector3(q.y - p.y, p.x - q.x, 0.0).normalized()
+		var uv := Vector2(_TRAIN_PROFILE_PARTS[i], 0.0)
+		b.quad(b.vertex(Vector3(p.x, p.y, -half), out, uv), b.vertex(Vector3(p.x, p.y, half), out, uv),
+			b.vertex(Vector3(q.x, q.y, half), out, uv), b.vertex(Vector3(q.x, q.y, -half), out, uv), out)
+	# Its ends: fans round the cross-section (closed along the floor).
+	for end: float in [-1.0, 1.0]:
+		var out := Vector3(0.0, 0.0, end)
+		var uv := Vector2(TrainPart.END, 0.0)
+		var middle := b.vertex(Vector3(0.0, 2.3, end * half), out, uv)
+		var ring := PackedInt32Array()
+		for p in _TRAIN_PROFILE:
+			ring.append(b.vertex(Vector3(p.x, p.y, end * half), out, uv))
+		for i in ring.size():
+			b.triangle(middle, ring[i], ring[(i + 1) % ring.size()], out)
+	# The floor's underside, the equipment under it and the trucks.
+	var under := Vector2(TrainPart.UNDER, 0.0)
+	var floor_y := _TRAIN_PROFILE[0].y
+	b.quad(b.vertex(Vector3(-1.525, floor_y, -half), Vector3.DOWN, under),
+		b.vertex(Vector3(1.525, floor_y, -half), Vector3.DOWN, under),
+		b.vertex(Vector3(1.525, floor_y, half), Vector3.DOWN, under),
+		b.vertex(Vector3(-1.525, floor_y, half), Vector3.DOWN, under), Vector3.DOWN)
+	_train_box(b, _TRAIN_UNDER.position, _TRAIN_UNDER.end, TrainPart.UNDER)
+	for end: float in [-1.0, 1.0]:
+		var middle := Vector3(0.0, 0.0, end * _TRAIN_TRUCKS * Trains.B_CAR.x)
+		var size := _TRAIN_TRUCK_SIZE
+		_train_box(b, middle + Vector3(-size.x, 0.1, -size.z), middle + Vector3(size.x, size.y, size.z), TrainPart.TRUCK)
+	_train_mesh = b.commit()
+	return _train_mesh
+
+
+## A box's sides and bottom (no top: it's under the car).
+static func _train_box(b: _Builder, lo: Vector3, hi: Vector3, part: int) -> void:
+	var uv := Vector2(part, 0.0)
+	var corners: Array[Vector3] = [Vector3(lo.x, 0.0, lo.z), Vector3(hi.x, 0.0, lo.z), Vector3(hi.x, 0.0, hi.z),
+		Vector3(lo.x, 0.0, hi.z)]
+	for i in 4:
+		var p := corners[i]
+		var q := corners[(i + 1) % 4]
+		var out := Vector3(q.z - p.z, 0.0, p.x - q.x).normalized()
+		b.quad(b.vertex(Vector3(p.x, lo.y, p.z), out, uv), b.vertex(Vector3(q.x, lo.y, q.z), out, uv),
+			b.vertex(Vector3(q.x, hi.y, q.z), out, uv), b.vertex(Vector3(p.x, hi.y, p.z), out, uv), out)
+	var bottom: Array[int] = []
+	for p in corners:
+		bottom.append(b.vertex(Vector3(p.x, lo.y, p.z), Vector3.DOWN, uv))
+	b.quad(bottom[0], bottom[1], bottom[2], bottom[3], Vector3.DOWN)
 
 
 ## A face round a car's outline (or its cabin's), from point `from` to the

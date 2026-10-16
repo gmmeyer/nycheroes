@@ -78,6 +78,10 @@ const SOUNDS := {
 	&"amb_water": {count = 1, db = -11.0, loop = true, bus = &"Ambience"},
 	&"amb_wind": {count = 1, db = -12.0, loop = true, bus = &"Ambience"},
 
+	# The trains on the els (TrainSounds).
+	&"train_rumble": {count = 1, db = -5.0, unit = 18.0, reach = 260.0, loop = true, bus = &"Ambience"},
+	&"train_squeal": {count = 1, db = -13.0, unit = 12.0, reach = 220.0, loop = true, bus = &"Ambience"},
+
 	# The interface.
 	&"ui_toggle": {count = 1, db = -8.0, bus = &"UI"},
 }

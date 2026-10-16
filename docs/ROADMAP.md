@@ -17,7 +17,7 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
 | 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, facade materials and stoops, ground details, first landmarks, sound done) |
 | 7 | Phones and tablets | Done in emulation; real phones to check |
-| 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions, elevated railways) |
+| 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions, elevated railways and their trains) |
 | 9 | Mac and Windows versions | Planned (last) |
 
 ## 1. Manhattan you can fly around (done)
@@ -410,14 +410,19 @@ In order:
 
 **Night: time of day, street lights, lit windows (done):**
 - `scripts/world/time_of_day.gd` owns the clock: the sun follows New York's
-  real arc (through azimuth 235°, elevation 42° at 15:30; sunset about
-  19:25), a full moon takes over the light at night, and the sky, fog,
+  real arc on April 6 (through azimuth 235°, elevation 42° at 15:30; sunset
+  about 19:25; `?date=MM-DD` picks another day's, below), a full moon takes
+  over the light at night, and the sky, fog,
   ambient light and exposure blend from day through dusk to night. Shader
   globals (`night`, `dusk`, `city_lights`, `clock_hours`, the street light
   map) reach every city shader through `shaders/night.gdshaderinc`; with
   them at 0, the day looks exactly as before.
 - **T** steps to the next of dawn, day, dusk and night; `?time=HH:MM` sets
-  the clock, `?daylength=MINUTES` runs it.
+  the clock, `?daylength=MINUTES` runs it. `?date=MM-DD` (or `YYYY-MM-DD`)
+  puts the sun on New York's arc that day, on the city's clock (daylight
+  saving time in summer; the Astronomical Almanac's low-precision sun, good
+  to a minute or so), and moves T's dawn and dusk with sunrise and sunset:
+  `?date=12-21` sets at 16:32, `?date=06-21` at 20:31.
 - 545,000 street lights (new prop type 4): the city publishes no lamp
   positions, so they stand along every curb about every 35 m, 0.6 m onto
   the sidewalk, arms over the street; historic post-tops in and beside
@@ -661,6 +666,42 @@ In order:
 - `?weather=overcast`: a grey deck, soft light, faint shadows, grey water
   and fog; dusk and night follow. Same draw calls and triangles.
 
+**Light at the ends of the day and in gray weather (done; reference improvement 18):**
+- Shade: the toon ambient's ground bounce (what walls get half of) is a
+  light gray instead of warm, so shade on light walls is a cool gray, not
+  beige (the Guggenheim's shaded side #9B8F7F to #959086). The sky's share
+  (streets, roofs) is unchanged. Bluer turned brownstone and marble gray in
+  shade: the palettes count on some warmth there.
+- Low sun: the dusk and dawn keyframes keep the zenith blue over a pale
+  horizon, with the warm band under the sun (`dusk_band` 0.6) and peach
+  clouds; the sun stays gold at full strength, the shade turns blue
+  (`dusk_ambient`), the haze is a cool gray, and glass and water reflect
+  blue overhead and the pale horizon instead of orange all round
+  (TimeOfDay's `DUSK_MATERIALS`); exposure 1.25, AgX contrast 1.25. The
+  warm light starts with the sun 20° up (was 30°). Before, the sky went
+  mauve to the zenith and the whole city pink-gray.
+- Overcast: a bright deck over darker, more contrasty streets: exposure 0.9,
+  AgX contrast 1.3, less fill in the shade (ambient ×1.12, was ×1.45), a
+  darker ground bounce, darker wall feet (canyon occlusion ×0.65), thinner
+  fog (×1.3, was ×1.8). The Compatibility renderer clamps the 3-D buffer at
+  1.0 before tone mapping, so no sky gets past what AgX makes of 1.0 (about
+  #C5 at the day's contrast) however bright its colors; the overcast look
+  lowers AgX white to 2.0, its minimum, which lifts the deck to #D8 and
+  leaves mid-tones alone. The night keyframes set AgX contrast and white
+  back, so the night is unchanged.
+- Sun path: the default arc is New York's on April 6; `?date=MM-DD` (or
+  `YYYY-MM-DD`) gives any day's (above, under Night).
+- Measured against the photos (REFERENCE.md round 3's 18): at
+  `time=19:00` totr_north's top of frame #948187 to #9AB1CC (the photo's
+  blue #95B7CD), lower half 0.36 to 0.40 (0.42), contrast 0.14 to 0.17
+  (0.21), warm share 0.70 to 0.41 (0.21); overcast, the deck #9B-#B4 to
+  #CC-#D8 (#D4-#E1), lower half 0.50 to 0.42 (0.41), contrast 0.13 to 0.16
+  (0.20); the clear day's means of 13 unchanged in value (0.40) and
+  masonry saturation (0.24 to 0.23).
+- Cost: values only (keyframes, uniform defaults, environment settings, and
+  three material uniforms set once at the start): the compiled shaders are
+  byte for byte the same (hashed), so compile time is unchanged.
+
 **Woods from afar, darker street trees (done; reference round 3's 20 and
 16's trees):**
 - Why Central Park still read as lawn and paths from Top of the Rock: the
@@ -701,7 +742,7 @@ In order:
   them sit on a strong edge (0.09; the photo 0.64). What's left is mostly
   haze: with `?fog=0.00003` the canopy measures (67, 86, 64), value 0.34,
   saturation 0.29, against the photo's (77, 104, 95), 0.42, 0.34 (round 3's
-  25 is about the haze).
+  25 is about the haze). Measured before the light change above (18).
 - Street trees, and the woods with them, are darker, less saturated and a
   little cooler (`tree.gdshader`'s FOLIAGE and CONIFER, the ground shader's
   woods tones in step). Foliage in six street views (Flatiron, Park Slope,
@@ -1104,11 +1145,75 @@ Comes after step 6 because it needs step 6's real ground heights.
   the four near tiles around it +247 KB (+13%; +15% triangles, a third of
   them paint), the mid ones +89 KB (+10%), the far one +23 KB (+2%); no new
   draw calls.
+- **Trains on the els** (`tools/citygen/trains.py`, `scripts/world/trains.gd`,
+  the track graph in `train_tracks.gd`): every subway el track's centerline
+  at its rails' height, cut into pieces at switches and junctions and at
+  least every 250 m, each running the way trains do on it: trains keep
+  right, so a track with tracks alongside to its left runs along its line,
+  one with tracks to its right against it; tracks with none alongside
+  (flyovers, switches) follow the tracks they join; a three-track el's
+  middle track (express, rush hours only) gets none. Along each piece the
+  curves' speed limits (0.8 m/s² sideways, 4.5 m/s at the tightest) and the
+  stops (the middle of each platform beside the track; express tracks run
+  through); bits of el too short to run on (a line on an embankment
+  crossing a street) are left out. A new near-tile surface (kind 9, one
+  vertex per point and no indices, so earlier games skip it; no format
+  change): 1,410 pieces, 225 km of track, 333 stops in 244 tiles, linked
+  across tiles by node ids like the driving lanes.
+- **The trains:** up to 4 at once (medium 3, low 2; `?trains=N`) within 1 km
+  of the camera, appearing out of sight, past 650 m or out of a tunnel, gone
+  past 1.3 km, into a tunnel or with their tiles. The numbered lines' cars
+  (the A Division's) are 15.5 m long and 2.7 m wide, 10 to a train (the 7
+  11); the lettered lines' 18.4 m and 3.05 m, 8 or 10 (the J/Z and the M 8);
+  each train shows one of its line's route bullets in the MTA's colors (the
+  2 or the 5 on White Plains Road, the N or W in Astoria...). They run at up
+  to 18 m/s, slowing for curves ahead in time, pull away at 1.1 m/s², stop
+  with their middle at the platform's middle for 20-30 s, keep 60 m behind
+  the train ahead, cross junctions where tracks merge one at a time, and
+  stop 12 m short of a hero or thug on the tracks. Where an el's tracks go
+  on into a tunnel, down to the ground or onto a bridge built elsewhere,
+  trains run in and come out (the cars past the end vanish); at bumper
+  blocks they stop.
+- **Riding:** heroes within 80 m of a train give its cars collision (a box
+  each, on a new physics layer 6, "trains", which heroes collide with and
+  webs, cameras and thugs don't), moved every physics tick with
+  `constant_linear_velocity`, so a hero landing on a roof rides along;
+  trains are drawn between physics ticks like heroes, so the rider stays
+  put on the roof.
+- **Look:** one 62-triangle car mesh (`PropMeshes.train_car()`) drawn as
+  one MultiMesh, the cars turned to their heading in
+  `shaders/train.gdshader` (the script writes each car's middle and heading,
+  no rotations): stainless sides fluted below the windows, sliding doors,
+  tinted windows, a sign near each end with the route bullet (a 5x7 pixel
+  font in a tiny texture), air conditioners on the roof, cab ends dark round
+  their windows with the bullet over them, headlights at the front and red
+  lights at the back, the underframe and trucks with their wheels; the
+  windows light up at night. 0.2 s to compile. Two nearest trains rumble
+  (wheels over the rail joints, the steel el roaring, quicker as they speed
+  up) and squeal on curves and braking into stations (synthesized,
+  `tools/audio/build_sounds.py --only`).
+- **Yellow platform edges:** a 0.6 m strip along the els' platform edges at
+  the tracks, the road paint's solid yellow in the near tiles' markings (no
+  new shader code).
+- **Signal heads on el columns:** traffic signals whose poles would reach
+  into an el (or stand in a column) hang on the nearest column within 12 m
+  instead, facing the same traffic, where the deck clears their heads: a
+  new signal variant (the heads alone, no pole, mast arm or street sign).
+  60 in the 28 near tiles around the 7, the J and the 4.
+- **Cost:** about 0.1 ms of script a frame in Chrome with 4 trains near the
+  camera (drawing 0.07-0.09 ms, running 0.06 ms a physics tick; trains out
+  of view, far off or standing are drawn less often), 1 draw call, 2,700
+  triangles; the trains' tracks, platform edges and signals add about 2.4
+  KB to a near tile with an el (+0.35%), about 0.9 MB in all.
 - **Still to do:** other sunken roads (the BQE's trench along Hicks Street,
-  the Cross Bronx's cuts: no lanes or paint below street level yet); trains
-  on the els; signal heads on el columns (signal poles under an el are left
-  out); yellow platform edges; the lidar is from 2017 (the Kosciuszko's
-  second span and the Kew Gardens interchange's rebuild came later).
+  the Cross Bronx's cuts: no lanes or paint below street level yet); the
+  lidar is from 2017 (the Kosciuszko's second span and the Kew Gardens
+  interchange's rebuild came later). Trains: none on the railroads'
+  viaducts (Metro-North, the LIRR) or on the subway's tracks on bridges,
+  embankments and in cuts, so they vanish where an el hands over to the
+  Williamsburg or Manhattan Bridge and at Queensboro Plaza's gap; none on
+  express tracks; no turning back at terminals (a train at a bumper waits
+  until it's out of sight); each co-op player's game runs its own trains.
 
 ## 9. Mac and Windows versions (planned, last)
 
@@ -1234,12 +1339,17 @@ templates for both are already installed.
   `res://tests/audio_test.tscn` and
   `res://tests/traffic_test.tscn` (75 s of
   midtown traffic: no red light run, no overlaps, cars stop for the hero,
-  and leave with their tiles).
+  and leave with their tiles) and `res://tests/trains_test.tscn` (the 7 at
+  74th Street for 2 minutes: no overlaps or speeding, stops at the
+  platforms' middles, a train stops for the hero on the tracks and carries
+  the hero on its roof, and trains leave with their tiles; it needs tiles
+  with the trains surface around the 7 and the 4 on Jerome Avenue).
 - Launch options (URL or `-- --name=value` on desktop): `?cam=x,y,z,yaw,pitch`
   free camera, `?spawn=x,y,z,yaw` hero start, `?stats` console stats,
-  `?peds=N`, `?gangs=N`, `?traffic=N` (0: none), `?demo` / `?demo=fight` / `?demo=city` / `?demo=new` scripted tours for videos,
+  `?peds=N`, `?gangs=N`, `?traffic=N`, `?trains=N` (0: none), `?demo` / `?demo=fight` / `?demo=city` / `?demo=new` scripted tours for videos,
   `?host` / `?join=CODE` co-op, `?signal=wss://...` signaling server
   (default: the page's host, port 8070), `?relay=1` co-op only through the
-  TURN relay (testing), `?weather=overcast`, `?fog_scatter=` (sun tint of
+  TURN relay (testing), `?weather=overcast`, `?date=MM-DD` (or
+  `YYYY-MM-DD`) the sun's arc on that day, `?fog_scatter=` (sun tint of
   the fog), `?tree_shadows=0` trees without shadows,
   `--tiles=DIR` (desktop and tests) read the city from a tile copy.

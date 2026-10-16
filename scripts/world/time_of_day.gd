@@ -10,18 +10,21 @@ extends Node
 ## The day is the scene as world.tscn sets it up (after LightingOverrides'
 ## launch options), captured at the start, so the default afternoon looks
 ## exactly as it always has. Dusk, dawn and night are keyframes here, blended
-## in by the sun's elevation. The sun follows a plausible arc for New York (in
-## mid-April or late August: declination 6.5 degrees, solar noon at 12:59),
-## solved to stand where the scene's sun does (azimuth 235, elevation 42) at
-## the default 15:30. A full moon follows the opposite arc, and takes over the
-## one directional light once the sun is down.
+## in by the sun's elevation. The sun follows New York's arc on April 6
+## (declination 6.5 degrees, solar noon at 12:59 daylight time), which puts it
+## where the scene's sun is (azimuth 235, elevation 42) at the default 15:30;
+## ?date picks another day's arc. A full moon follows the opposite arc, and
+## takes over the one directional light once the sun is down.
 ##
 ## Launch options: ?time=HH:MM a fixed clock (default 15:30);
+## ?date=MM-DD (or YYYY-MM-DD) the sun's arc on that day, on New York's clock
+## (daylight saving time in summer), with T's dawn and dusk moved to match;
 ## ?daylength=MINUTES a running cycle, a whole day in that many real minutes;
-## ?weather=overcast a gray day (default clear): the sky closes into a deck of
-## gray cloud (sky.gdshader's overcast), the sun dims to a soft light with
-## faint shadows, the shade fills in from the bright sky (the city materials'
-## toon ambient), glass and water turn gray, and the fog thickens and grays;
+## ?weather=overcast a gray day (default clear): the sky closes into a bright
+## deck of gray cloud (sky.gdshader's overcast) over darker, more contrasty
+## streets, the sun dims to a soft light with faint shadows, the shade fills
+## in from the sky (the city materials' toon ambient), glass and water turn
+## gray, and the fog thickens and grays;
 ## dusk and night follow with their own overcast looks (no moon or stars, the
 ## city's glow on the clouds).
 ## T (Game) steps on to the next of day, dusk, night and dawn. With
@@ -32,12 +35,16 @@ const DEFAULT_CLOCK := 15.5
 ## What T steps through, in the order they come: dawn, day, dusk, night.
 const PRESETS: Array[float] = [6.75, 15.5, 19.15, 22.5]
 
-## The sun's arc: New York's latitude, the sun's declination and solar noon
-## (hours), solved so the sun stands at the scene's azimuth and elevation at
-## DEFAULT_CLOCK.
+## The sun's arc: New York's latitude and longitude, and the sun's declination
+## and solar noon (hours) without ?date, solved so the sun stands at the
+## scene's azimuth and elevation at DEFAULT_CLOCK (April 6's, to a minute).
 const LATITUDE := 40.76
+const LONGITUDE := -73.98
 const DECLINATION := 6.546428
 const SOLAR_NOON := 12.980544
+## T's dawn and dusk stand where the sun is about this high (degrees); with
+## ?date they move with it.
+const PRESET_SUN_HEIGHT := 2.0
 ## The light turns from the sun to the moon at this sun elevation (degrees),
 ## when both are dark.
 const MOON_TAKES_OVER := -1.0
@@ -50,34 +57,39 @@ const MIN_INTERVAL := 0.1
 
 ## Dusk (evening), dawn and night. Colors are sRGB, as in the editor. The
 ## day's values come from the scene. below_color is the sky under the
-## horizon, which matches the fog.
+## horizon, which matches the fog. A low sun keeps the sky blue overhead, a
+## pale horizon with a warm band under the sun (sky.gdshader), gold light and
+## blue shade. The night's AgX contrast and white are the scene's, so the
+## night looks the same whatever dusk and an overcast set.
 const DUSK := {
-	"light_color": Color(1.0, 0.62, 0.38),
-	"fog_color": Color(0.74, 0.62, 0.60),
-	"ambient_color": Color(0.70, 0.66, 0.82),
+	"light_color": Color(1.0, 0.68, 0.36),
+	"fog_color": Color(0.78, 0.76, 0.75),
+	"ambient_color": Color(0.62, 0.68, 0.88),
 	"ambient_energy": 0.55,
-	"exposure": 1.05,
-	"zenith_color": Color(0.22, 0.31, 0.56),
-	"horizon_color": Color(0.97, 0.68, 0.50),
-	"below_color": Color(0.74, 0.62, 0.60),
-	"sun_color": Color(1.0, 0.55, 0.28),
+	"exposure": 1.25,
+	"agx_contrast": 1.25,
+	"zenith_color": Color(0.24, 0.56, 1.06),
+	"horizon_color": Color(0.86, 0.78, 0.68),
+	"below_color": Color(0.78, 0.76, 0.75),
+	"sun_color": Color(1.0, 0.60, 0.30),
 	"sun_glow": 1.0,
-	"cloud_lit": Color(1.0, 0.70, 0.50),
-	"cloud_shade": Color(0.50, 0.44, 0.58),
+	"cloud_lit": Color(1.0, 0.82, 0.62),
+	"cloud_shade": Color(0.58, 0.58, 0.68),
 }
 const DAWN := {
-	"light_color": Color(1.0, 0.70, 0.52),
-	"fog_color": Color(0.76, 0.68, 0.70),
-	"ambient_color": Color(0.72, 0.70, 0.84),
+	"light_color": Color(1.0, 0.74, 0.48),
+	"fog_color": Color(0.80, 0.77, 0.78),
+	"ambient_color": Color(0.64, 0.70, 0.90),
 	"ambient_energy": 0.55,
-	"exposure": 1.05,
-	"zenith_color": Color(0.28, 0.38, 0.64),
-	"horizon_color": Color(0.98, 0.76, 0.66),
-	"below_color": Color(0.76, 0.68, 0.70),
-	"sun_color": Color(1.0, 0.64, 0.42),
+	"exposure": 1.25,
+	"agx_contrast": 1.25,
+	"zenith_color": Color(0.26, 0.56, 1.04),
+	"horizon_color": Color(0.88, 0.80, 0.76),
+	"below_color": Color(0.80, 0.77, 0.78),
+	"sun_color": Color(1.0, 0.66, 0.42),
 	"sun_glow": 0.9,
-	"cloud_lit": Color(1.0, 0.78, 0.70),
-	"cloud_shade": Color(0.56, 0.52, 0.66),
+	"cloud_lit": Color(1.0, 0.84, 0.76),
+	"cloud_shade": Color(0.60, 0.60, 0.72),
 }
 const NIGHT := {
 	"light_color": Color(0.55, 0.66, 1.0),
@@ -85,6 +97,8 @@ const NIGHT := {
 	"ambient_color": Color(0.50, 0.58, 0.85),
 	"ambient_energy": 0.55,
 	"exposure": 1.15,
+	"agx_contrast": 1.05,
+	"agx_white": 16.29,
 	"zenith_color": Color(0.015, 0.03, 0.085),
 	"horizon_color": Color(0.10, 0.12, 0.22),
 	"below_color": Color(0.10, 0.11, 0.17),
@@ -95,20 +109,25 @@ const NIGHT := {
 }
 ## Overcast: the day, dusk, dawn and night looks under a closed gray sky,
 ## used instead of the scene's day and the keyframes above. below_color
-## matches the fog here too, and the horizon fades into it.
+## matches the fog here too, and the horizon fades into it. The 3-D buffer
+## clamps at 1 before tone mapping, so no sky gets brighter than what AgX
+## makes of 1: AgX white 2 (its minimum) lifts that for the bright deck,
+## and lower exposure and more AgX contrast darken the streets under it.
 const OVERCAST := {
 	"light_color": Color(0.96, 0.97, 1.0),
-	"fog_color": Color(0.74, 0.76, 0.79),
+	"fog_color": Color(0.92, 0.93, 0.95),
 	"ambient_color": Color(0.80, 0.82, 0.86),
-	"ambient_energy": 0.85,
-	"exposure": 1.08,
-	"zenith_color": Color(0.58, 0.62, 0.68),
-	"horizon_color": Color(0.74, 0.76, 0.79),
-	"below_color": Color(0.74, 0.76, 0.79),
+	"ambient_energy": 0.7,
+	"exposure": 0.9,
+	"agx_contrast": 1.3,
+	"agx_white": 2.0,
+	"zenith_color": Color(1.30, 1.32, 1.36),
+	"horizon_color": Color(0.92, 0.93, 0.95),
+	"below_color": Color(0.92, 0.93, 0.95),
 	"sun_color": Color(1.0, 0.97, 0.92),
 	"sun_glow": 0.0,
-	"cloud_lit": Color(0.82, 0.84, 0.87),
-	"cloud_shade": Color(0.44, 0.47, 0.53),
+	"cloud_lit": Color(1.22, 1.23, 1.25),
+	"cloud_shade": Color(0.68, 0.70, 0.75),
 }
 const OVERCAST_DUSK := {
 	"light_color": Color(1.0, 0.78, 0.62),
@@ -116,6 +135,7 @@ const OVERCAST_DUSK := {
 	"ambient_color": Color(0.68, 0.66, 0.74),
 	"ambient_energy": 0.6,
 	"exposure": 1.1,
+	"agx_contrast": 1.3,
 	"zenith_color": Color(0.30, 0.31, 0.37),
 	"horizon_color": Color(0.54, 0.50, 0.52),
 	"below_color": Color(0.54, 0.50, 0.52),
@@ -130,6 +150,7 @@ const OVERCAST_DAWN := {
 	"ambient_color": Color(0.70, 0.69, 0.78),
 	"ambient_energy": 0.6,
 	"exposure": 1.1,
+	"agx_contrast": 1.3,
 	"zenith_color": Color(0.32, 0.33, 0.40),
 	"horizon_color": Color(0.56, 0.53, 0.57),
 	"below_color": Color(0.56, 0.53, 0.57),
@@ -144,6 +165,8 @@ const OVERCAST_NIGHT := {
 	"ambient_color": Color(0.56, 0.56, 0.72),
 	"ambient_energy": 0.55,
 	"exposure": 1.15,
+	"agx_contrast": 1.05,
+	"agx_white": 16.29,
 	"zenith_color": Color(0.05, 0.05, 0.07),
 	"horizon_color": Color(0.15, 0.13, 0.15),
 	"below_color": Color(0.15, 0.13, 0.15),
@@ -156,27 +179,36 @@ const OVERCAST_NIGHT := {
 ## of a clear day's, and how much thicker the fog is.
 const OVERCAST_SUN_ENERGY := 0.3
 const OVERCAST_SHADOW_OPACITY := 0.6
-const OVERCAST_FOG := 1.8
+const OVERCAST_FOG := 1.3
 ## Overcast: uniforms of the city's materials (the toon ambient of
-## toon.gdshaderinc: the bright gray sky fills in the shade, and walls get
-## less bounce from sunlit streets; building glass's reflections) and the
-## ocean's (its sky reflection and depth), wherever a material has them.
-## Colors replace, numbers scale.
+## toon.gdshaderinc: the gray sky fills in the shade, and walls get less
+## bounce from the dull streets, less still at their feet in the canyons;
+## building glass's reflections) and the ocean's (its sky reflection and
+## depth), wherever a material has them. Colors replace, numbers scale.
 const OVERCAST_MATERIALS := {
 	"ambient_sky": Color(0.80, 0.82, 0.86),
-	"ambient_ground": Color(0.70, 0.69, 0.68),
-	"ambient_energy": 1.45,
-	"ambient_wall_bounce": 0.6,
+	"ambient_ground": Color(0.50, 0.50, 0.50),
+	"ambient_energy": 1.12,
+	"ambient_wall_bounce": 0.4,
+	"canyon_occlusion": 0.65,
 	"reflect_zenith": Color(0.60, 0.63, 0.68),
 	"reflect_horizon": Color(0.77, 0.79, 0.82),
-	"sky_tint": Color(0.62, 0.65, 0.69),
+	"sky_tint": Color(0.50, 0.53, 0.57),
 	"deep_color": Color(0.05, 0.11, 0.13),
+}
+## Dusk and dawn as the city's glass and the water reflect them (building and
+## landmark glass, the ocean's sky), set once at the start: blue overhead and
+## the pale horizon of the DUSK sky, not orange all round.
+const DUSK_MATERIALS := {
+	"dusk_reflect_zenith": Color(0.30, 0.46, 0.78),
+	"dusk_reflect_horizon": Color(0.90, 0.80, 0.70),
+	"dusk_sky_tint": Color(0.52, 0.48, 0.47),
 }
 ## The sky material's uniforms the keyframes set.
 const SKY_KEYS: Array[String] = ["zenith_color", "horizon_color", "below_color", "sun_color", "sun_glow",
 	"cloud_lit", "cloud_shade"]
 ## The low sun's energy, as a share of the day's.
-const DUSK_SUN_ENERGY := 0.8
+const DUSK_SUN_ENERGY := 1.15
 ## The moon: its light's color (sRGB) and energy.
 const MOON_COLOR := Color(0.55, 0.66, 1.0)
 const MOON_ENERGY := 0.2
@@ -202,8 +234,12 @@ var city_lights := 0.0
 ## The weather (?weather): "clear" or "overcast", and how overcast (0..1).
 var weather := "clear"
 var overcast := 0.0
+## The sun's arc (see DECLINATION; ?date changes it).
+var declination := DECLINATION
+var solar_noon := SOLAR_NOON
 
 var _day := {}
+var _presets: Array[float] = PRESETS.duplicate()
 var _sky: ShaderMaterial
 var _sun_pinned := false
 var _applied_clock := INF
@@ -225,6 +261,8 @@ func _ready() -> void:
 		"ambient_color": env.ambient_light_color,
 		"ambient_energy": env.ambient_light_energy,
 		"exposure": env.tonemap_exposure,
+		"agx_contrast": env.tonemap_agx_contrast,
+		"agx_white": env.tonemap_agx_white,
 	}
 	if _sky:
 		for key in SKY_KEYS:
@@ -234,7 +272,14 @@ func _ready() -> void:
 	var time := LaunchOptions.get_string("time")
 	if not time.is_empty():
 		clock = parse_clock(time)
+	var date := LaunchOptions.get_string("date")
+	if not date.is_empty():
+		_set_date(date)
 	day_length = maxf(LaunchOptions.get_string("daylength", "0").to_float(), 0.0)
+	for material in _city_materials():
+		for key: String in DUSK_MATERIALS:
+			if _material_value(material, key) != null:
+				material.set_shader_parameter(key, DUSK_MATERIALS[key])
 	if LaunchOptions.get_string("weather") == "overcast":
 		_set_overcast()
 	_apply()
@@ -259,10 +304,40 @@ func set_clock(hours: float) -> void:
 	_apply()
 
 
+## Puts the sun on New York's arc for "MM-DD" or "YYYY-MM-DD" (this year if
+## none), on daylight saving time from the second Sunday in March to the first
+## Sunday in November, and moves T's dawn and dusk with its sunrise and sunset.
+## The sun's position is the Astronomical Almanac's low-precision one (good to
+## about a minute, 1950-2050), at noon in New York.
+func _set_date(text: String) -> void:
+	var parts := text.split("-")
+	if parts.size() < 2:
+		push_warning("?date=%s: expected MM-DD or YYYY-MM-DD" % text)
+		return
+	var year: int = parts[0].to_int() if parts.size() > 2 else Time.get_date_dict_from_system().year
+	var month := parts[-2].to_int()
+	var day := parts[-1].to_int()
+	# Days from 2000-01-01 12:00 UTC to 17:00 UTC that day.
+	var noon := Time.get_unix_time_from_datetime_dict({"year": year, "month": month, "day": day, "hour": 17})
+	var days := noon / 86400.0 - 10957.5
+	var mean_longitude := 280.460 + 0.9856474 * days
+	var anomaly := deg_to_rad(357.528 + 0.9856003 * days)
+	var longitude := deg_to_rad(mean_longitude + 1.915 * sin(anomaly) + 0.020 * sin(2.0 * anomaly))
+	var obliquity := deg_to_rad(23.439 - 0.0000004 * days)
+	declination = rad_to_deg(asin(sin(obliquity) * sin(longitude)))
+	var right_ascension := rad_to_deg(atan2(cos(obliquity) * sin(longitude), cos(longitude)))
+	var equation_of_time := 4.0 * wrapf(mean_longitude - right_ascension, -180.0, 180.0)  # minutes
+	var utc_offset := -4.0 if _daylight_saving(year, month, day) else -5.0
+	solar_noon = 12.0 - LONGITUDE / 15.0 - equation_of_time / 60.0 + utc_offset
+	var longer := _half_day(declination) - _half_day(DECLINATION)
+	var later := solar_noon - SOLAR_NOON
+	_presets = [PRESETS[0] + later - longer, PRESETS[1], PRESETS[2] + later + longer, PRESETS[3]]
+
+
 ## Moves on to the next of dawn, day, dusk and night, over transition_seconds.
 func step_forward() -> void:
-	var next := PRESETS[0]
-	for preset in PRESETS:
+	var next := _presets[0]
+	for preset in _presets:
 		if preset > clock + 0.01:
 			next = preset
 			break
@@ -298,14 +373,33 @@ static func parse_clock(text: String) -> float:
 
 ## The sun's (azimuth, elevation) in degrees at this clock: azimuth clockwise
 ## from north. With `opposite`, the full moon's, across the sky from it.
-static func sun_position(hours: float, opposite := false) -> Vector2:
-	var hour_angle := deg_to_rad(15.0 * (hours - SOLAR_NOON + (12.0 if opposite else 0.0)))
-	var declination := deg_to_rad(-DECLINATION if opposite else DECLINATION)
+func sun_position(hours: float, opposite := false) -> Vector2:
+	var hour_angle := deg_to_rad(15.0 * (hours - solar_noon + (12.0 if opposite else 0.0)))
+	var tilt := deg_to_rad(-declination if opposite else declination)
 	var latitude := deg_to_rad(LATITUDE)
-	var elevation := asin(sin(latitude) * sin(declination) + cos(latitude) * cos(declination) * cos(hour_angle))
-	var azimuth := atan2(-sin(hour_angle) * cos(declination),
-		cos(latitude) * sin(declination) - sin(latitude) * cos(declination) * cos(hour_angle))
+	var elevation := asin(sin(latitude) * sin(tilt) + cos(latitude) * cos(tilt) * cos(hour_angle))
+	var azimuth := atan2(-sin(hour_angle) * cos(tilt),
+		cos(latitude) * sin(tilt) - sin(latitude) * cos(tilt) * cos(hour_angle))
 	return Vector2(fposmod(rad_to_deg(azimuth), 360.0), rad_to_deg(elevation))
+
+
+## Hours from solar noon until the sun is down to PRESET_SUN_HEIGHT, on the
+## arc with this declination (degrees).
+static func _half_day(tilt_degrees: float) -> float:
+	var latitude := deg_to_rad(LATITUDE)
+	var tilt := deg_to_rad(tilt_degrees)
+	var cos_angle := (sin(deg_to_rad(PRESET_SUN_HEIGHT)) - sin(latitude) * sin(tilt)) / (cos(latitude) * cos(tilt))
+	return rad_to_deg(acos(clampf(cos_angle, -1.0, 1.0))) / 15.0
+
+
+## Whether New York's clocks are on daylight saving time on that day.
+static func _daylight_saving(year: int, month: int, day: int) -> bool:
+	if month != 3 and month != 11:
+		return month > 3 and month < 11
+	var first := Time.get_datetime_dict_from_unix_time(
+		Time.get_unix_time_from_datetime_dict({"year": year, "month": month, "day": 1}))
+	var first_sunday: int = 1 + (7 - int(first.weekday)) % 7
+	return day >= first_sunday + 7 if month == 3 else day < first_sunday
 
 
 ## Unit vector toward a body at (azimuth, elevation) degrees: x east, y up, z south.
@@ -322,7 +416,7 @@ func _apply() -> void:
 	var moon_at := sun_position(clock, true)
 	var elevation := sun_at.y
 	night = _ramp(2.0, -9.0, elevation)
-	dusk = _ramp(30.0, 4.0, elevation) * _ramp(-11.0, -3.0, elevation)
+	dusk = _ramp(20.0, 4.0, elevation) * _ramp(-11.0, -3.0, elevation)
 	city_lights = _ramp(8.0, -4.0, elevation)
 	var look := _look(dusk, night, clock < 12.0)
 
@@ -346,6 +440,8 @@ func _apply() -> void:
 	env.ambient_light_color = look.ambient_color
 	env.ambient_light_energy = look.ambient_energy
 	env.tonemap_exposure = look.exposure
+	env.tonemap_agx_contrast = look.agx_contrast
+	env.tonemap_agx_white = look.agx_white
 	if _sky:
 		for key in SKY_KEYS:
 			if look.has(key):
@@ -398,16 +494,7 @@ func _set_overcast() -> void:
 	if _sky:
 		_sky.set_shader_parameter("overcast", overcast)
 	sun.shadow_opacity = lerpf(1.0, OVERCAST_SHADOW_OPACITY, overcast)
-	var materials: Array[ShaderMaterial] = []
-	if city:
-		for material in [city.building_material, city.ground_material, city.markings_material, city.tree_material,
-				city.water_tower_material, city.street_light_material, city.street_furniture_material, city.car_material,
-				city.landmark_material]:
-			if material is ShaderMaterial:
-				materials.append(material)
-	if ocean and ocean.material_override is ShaderMaterial:
-		materials.append(ocean.material_override)
-	for material in materials:
+	for material in _city_materials():
 		for key: String in OVERCAST_MATERIALS:
 			var value: Variant = _material_value(material, key)
 			if value == null:
@@ -421,6 +508,21 @@ func _set_overcast() -> void:
 func _thicken_fog() -> void:
 	var env := world_environment.environment
 	env.fog_density *= lerpf(1.0, OVERCAST_FOG, overcast)
+
+
+## The city's materials and the ocean's (the ones DUSK_MATERIALS and
+## OVERCAST_MATERIALS set).
+func _city_materials() -> Array[ShaderMaterial]:
+	var materials: Array[ShaderMaterial] = []
+	if city:
+		for material in [city.building_material, city.ground_material, city.markings_material, city.tree_material,
+				city.water_tower_material, city.street_light_material, city.street_furniture_material, city.car_material,
+				city.landmark_material]:
+			if material is ShaderMaterial:
+				materials.append(material)
+	if ocean and ocean.material_override is ShaderMaterial:
+		materials.append(ocean.material_override)
+	return materials
 
 
 ## The sky material's value of a uniform (its shader's default if never set),

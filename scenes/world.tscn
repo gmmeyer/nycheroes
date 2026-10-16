@@ -29,6 +29,7 @@
 [ext_resource type="Shader" path="res://shaders/street_furniture.gdshader" id="27_street_furniture"]
 [ext_resource type="Shader" path="res://shaders/car.gdshader" id="28_car"]
 [ext_resource type="Script" path="res://scripts/world/traffic.gd" id="40_traffic"]
+[ext_resource type="Script" path="res://scripts/world/trains.gd" id="41_trains"]
 [ext_resource type="Script" path="res://scripts/audio/game_audio.gd" id="50_audio"]
 
 [sub_resource type="ShaderMaterial" id="SkyMaterial_sky"]
@@ -162,6 +163,10 @@ hero = NodePath("../Hero")
 script = ExtResource("40_traffic")
 city = NodePath("../City")
 crowd = NodePath("../Crowd")
+
+[node name="Trains" type="Node3D" parent="." node_paths=PackedStringArray("city")]
+script = ExtResource("41_trains")
+city = NodePath("../City")
 
 [node name="Encounters" type="Node3D" parent="." node_paths=PackedStringArray("city", "hero")]
 script = ExtResource("15_encounters")

@@ -53,8 +53,9 @@ import bridge_landmarks
 import bridges
 import markings
 import overpasses
-from common import (STRUCTURE_CONCRETE, STRUCTURE_RAIL, STRUCTURE_STEEL, MeshBuilder, lines_of, load_features,
-                    polygons_of, project)
+import trains
+from common import (GROUND_MARKING_YELLOW, MARKING_LIFT, STRUCTURE_CONCRETE, STRUCTURE_RAIL, STRUCTURE_STEEL,
+                    MeshBuilder, lines_of, load_features, polygons_of, project)
 
 EL_CODES = ("2410", "2430")              # railroad lines: elevated, viaduct centerline
 GROUND_CODES = ("2400", "2420", "2440")  # at grade, on an embankment, in an open cut
@@ -148,6 +149,25 @@ CANOPY_HEIGHT = 3.4
 CANOPY_THICKNESS = 0.35
 CANOPY_INSET = 0.2
 POST_SPACING = 9.0
+# Platforms' edges at the tracks (those within EDGE_REACH of TRACK_CLEAR)
+# get a yellow strip EDGE_WIDTH wide (the warning strip), painted with the
+# road markings' solid yellow: its uv.y runs over EDGE_PAINT, clear of the
+# double line's gap (shaders/markings.gdshader).
+EDGE_WIDTH = 0.6
+EDGE_REACH = 0.4
+EDGE_PAINT = (0.1, 0.7)
+
+# Traffic signals under an el (whose poles would reach into it, or stand in
+# a column) are mounted on the nearest column within SIGNAL_REACH instead:
+# the heads on its face toward the traffic they control (common's
+# SIGNAL_ON_COLUMN: no pole, mast arm or street sign), their middle
+# SIGNAL_OUT in front of the column's middle (the pole stood SIGNAL_SIDE to
+# their left, PropMeshes._traffic_signal), where the deck is at least
+# SIGNAL_HEADROOM over the street; one per column and direction.
+SIGNAL_REACH = 12.0
+SIGNAL_OUT = 0.6
+SIGNAL_SIDE = 0.26
+SIGNAL_HEADROOM = 4.4
 
 # How the els are painted (the structures' kinds and their uv2.y: palette + 8
 # * flags, see bridge_landmarks): steel in palette 0, the els' green; tracks
@@ -235,12 +255,17 @@ class Tracks:
                 link(o + k, o + k + 1, float(step))
 
         # Track ends: joined to tracks they meet; else brought down to the
-        # ground where a track on the ground goes on from them.
+        # ground where a track on the ground goes on from them. The joins
+        # (chain, end 0 or 1, the chain it meets, meters along that one) and
+        # what became of each end that isn't joined ((chain, end) ->
+        # "excluded" near a bridge built elsewhere, "ground" or "yard" coming
+        # down, "free" in the air) are kept for the trains (train_tracks).
         others_tree = shapely.STRtree(others)
         pinned, local = {}, {}
         self.free_ends = 0
+        self.joins, self.end_kinds = [], {}
         for c in range(len(self.chains)):
-            for node in (self.starts[c], self.starts[c + 1] - 1):
+            for end, node in enumerate((self.starts[c], self.starts[c + 1] - 1)):
                 p = en[node]
                 point = shapely.Point(p)
                 joined = False
@@ -250,17 +275,24 @@ class Tracks:
                     at = self.chains[other].project(point)
                     k = self.starts[other] + int(np.argmin(np.abs(self.s[other] - at)))
                     link(node, k, max(float(np.linalg.norm(en[k] - p)), 0.1))
+                    self.joins.append((c, end, int(other), float(at)))
                     joined = True
-                if joined or shapely.dwithin(excluded, point, 3 * PIN_REACH):
+                if joined:
+                    continue
+                if shapely.dwithin(excluded, point, 3 * PIN_REACH):
+                    self.end_kinds[(c, end)] = "excluded"
                     continue
                 ground = others_tree.query(point, predicate="dwithin", distance=PIN_REACH)
                 if not len(ground):
                     self.free_ends += 1
+                    self.end_kinds[(c, end)] = "free"
                 elif any(YARD in str(n) for n in [self.names[c]] + list(other_names[ground])):
                     # A yard lead comes down on its own, not the line it leaves.
                     local[node] = (c, float(terrain.height(p[None])[0]))
+                    self.end_kinds[(c, end)] = "yard"
                 else:
                     pinned[node] = float(terrain.height(p[None])[0])
+                    self.end_kinds[(c, end)] = "ground"
         self.pinned = len(pinned) + len(local)
 
         # What the clearance is measured from: the street, roads and bridges
@@ -460,6 +492,7 @@ def build(data: dict, network, land, buckets: dict, level_sizes: dict) -> None:
     builders["parts"] = _Parts()
     columns = []
     built = platforms = bents = 0
+    platform_outlines, edges = [], MeshBuilder()
     for poly in pieces:
         poly = shapely.orient_polygons(shapely.simplify(poly, 0.2))
         chains = tracks.tree.query(poly, predicate="intersects")
@@ -476,7 +509,7 @@ def build(data: dict, network, land, buckets: dict, level_sizes: dict) -> None:
     for station in data["stations"]:
         near = tracks.tree.query(station, predicate="dwithin", distance=PLATFORM_REACH)
         if len(near):
-            platforms += _add_platforms(station, near, tracks, network, builders)
+            platforms += _add_platforms(station, near, tracks, network, builders, platform_outlines, edges)
 
     # Rail bridges over streets that no el runs through: railroads on
     # embankments; spanned like overpasses.py's outlines without a road.
@@ -503,6 +536,14 @@ def build(data: dict, network, land, buckets: dict, level_sizes: dict) -> None:
     for level, size in level_sizes.items():
         overpasses._merge(buckets.setdefault(level, {}), overpasses._bucket(builders[level], size))
     _bucket_columns(buckets.setdefault("el_columns", {}), columns, level_sizes["lod0"])
+    buckets["el_platform_edges"] = overpasses._bucket(edges, level_sizes["lod0"])
+
+    # The tracks trains run on (trains.py), per near tile.
+    pieces = trains.pieces(tracks, platform_outlines, SNAP)
+    buckets["el_trains"] = trains.bucket(pieces, level_sizes["lod0"])
+    length = sum(float(np.linalg.norm(np.diff(p["points"][:, :2], axis=0), axis=1).sum()) for p in pieces) / 1000.0
+    print(f"  el trains: {len(pieces)} pieces of track ({length:.0f} km) in {len(buckets['el_trains'])} tiles, "
+          f"{sum(int(p['stops'].sum()) for p in pieces)} stops", flush=True)
 
 
 # The deck.
@@ -900,12 +941,40 @@ def clear_of_columns(columns: dict, i: int, j: int, en: np.ndarray, cars: np.nda
     return keep
 
 
+def mount_signals(columns: dict, i: int, j: int, en: np.ndarray, yaw: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Traffic signals at (N, 2) points facing `yaw` (radians, Godot's: the
+    front faces (sin, 0, cos) of it) moved onto the el columns around near
+    tile (i, j), see SIGNAL_REACH: their new points (N, 2), and which were
+    mounted (one per column and direction)."""
+    out, mounted = np.array(en, np.float64, copy=True), np.zeros(len(en), dtype=bool)
+    found = [columns[key] for key in ((i + di, j + dj) for di in (-1, 0, 1) for dj in (-1, 0, 1)) if key in columns]
+    if not found or len(en) == 0:
+        return out, mounted
+    spots = np.vstack(found)
+    nearest, gap = shapely.STRtree(shapely.points(spots)).query_nearest(shapely.points(en), return_distance=True,
+                                                                        all_matches=False)
+    facing = np.column_stack([np.sin(yaw), -np.cos(yaw)])  # east, north
+    left = np.column_stack([np.cos(yaw), np.sin(yaw)])  # the signal's own +x
+    taken = []
+    for point, spot, distance in zip(nearest[0], nearest[1], gap):
+        if distance > SIGNAL_REACH or any(spot == s and abs(np.angle(np.exp(1j * (yaw[point] - y)))) < 0.5
+                                          for s, y in taken):
+            continue
+        taken.append((spot, yaw[point]))
+        out[point] = spots[spot] + facing[point] * SIGNAL_OUT + left[point] * SIGNAL_SIDE
+        mounted[point] = True
+    return out, mounted
+
+
 # Stations.
 
-def _add_platforms(station, chains: np.ndarray, tracks: Tracks, network, builders: dict) -> int:
+def _add_platforms(station, chains: np.ndarray, tracks: Tracks, network, builders: dict, found: list,
+                   edges: MeshBuilder) -> int:
     """An elevated station's platforms: its outline near the deck's tracks,
     clear of them, PLATFORM_HEIGHT above the deck; windscreens along the
-    outer edges and canopies on posts up close. Returns how many platforms."""
+    outer edges and canopies on posts up close, and yellow edges along the
+    tracks (in `edges`, paint for the near tiles' markings). Adds the
+    platforms' outlines to `found`; returns how many."""
     near = [c for c in chains.tolist() if shapely.dwithin(tracks.chains[c], station, PLATFORM_REACH)]
     if not near:
         return 0
@@ -918,9 +987,11 @@ def _add_platforms(station, chains: np.ndarray, tracks: Tracks, network, builder
             continue
         platform = shapely.orient_polygons(shapely.simplify(platform, 0.1))
         count += 1
+        found.append(platform)
 
         def floor(en):
             return tracks.height(en) + PLATFORM_HEIGHT
+        _add_edges(platform, lines, floor, edges)
         for level, spacing in (("lod0", DECK_SPACING["lod0"]), ("lod1", DECK_SPACING["lod1"])):
             if level not in builders:
                 continue
@@ -945,6 +1016,34 @@ def _add_platforms(station, chains: np.ndarray, tracks: Tracks, network, builder
                                    y[start:stop + 1], STEEL)
             _add_canopy(platform, floor, spacing, builder, builders["parts"], level == "lod0")
     return count
+
+
+def _add_edges(platform, lines, floor, edges: MeshBuilder) -> None:
+    """The yellow strip along a platform's edges at the tracks: EDGE_WIDTH
+    in from the edge, MARKING_LIFT over the floor, painted as the markings'
+    solid yellow (uv.y clear of the double line's gap)."""
+    dense = shapely.segmentize(platform, DECK_SPACING["lod0"])
+    for ring in (dense.exterior, *dense.interiors):
+        coords = np.asarray(ring.coords)[:, :2]
+        a, b = coords[:-1], coords[1:]
+        step = b - a
+        length = np.linalg.norm(step, axis=1)
+        at_track = (shapely.distance(lines, shapely.points((a + b) / 2)) < TRACK_CLEAR + EDGE_REACH) & (length > 0.05)
+        if not at_track.any():
+            continue
+        a, b, step, length = a[at_track], b[at_track], step[at_track], length[at_track]
+        # Rings run with the platform on their left (shapely.orient_polygons).
+        inward = np.column_stack([-step[:, 1], step[:, 0]]) / length[:, None] * EDGE_WIDTH
+        quads = np.stack([a, b, b + inward, a + inward], axis=1)
+        y = floor(quads.reshape(-1, 2)).reshape(-1, 4) + MARKING_LIFT
+        pos = np.stack([quads[..., 0], y, -quads[..., 1]], axis=-1)
+        along = np.cumsum(length) - length
+        across = (EDGE_PAINT[0], EDGE_PAINT[0], EDGE_PAINT[1], EDGE_PAINT[1])
+        uv = np.stack([np.column_stack([along + d, np.full(len(a), v)])
+                       for d, v in zip((np.zeros(len(a)), length, length, np.zeros(len(a))), across)], axis=1)
+        halves = [[0, 1, 2], [0, 2, 3]]
+        edges.add(pos[:, halves].reshape(-1, 3, 3), uv[:, halves].reshape(-1, 3, 2), (GROUND_MARKING_YELLOW, 0.0),
+                  (0.0, 1.0, 0.0))
 
 
 def _add_canopy(platform, floor, spacing: float, builder: MeshBuilder, parts: _Parts, detailed: bool) -> None:

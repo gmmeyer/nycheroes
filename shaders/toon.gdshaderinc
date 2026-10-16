@@ -1,7 +1,7 @@
 // Stylized ("toon") lighting shared by the city's shaders: a warm sun with a
-// soft edge between lit and shaded faces, crisp cast shadows, and a cool sky /
-// warm ground ambient in place of the environment's flat ambient (so shadows
-// read blue and walls catch a little warm bounce).
+// soft edge between lit and shaded faces, crisp cast shadows, and a blue sky /
+// gray ground ambient in place of the environment's flat ambient (so shadows
+// read cool and walls catch a little bounce).
 //
 // Use it in a spatial shader with render_mode ambient_light_disabled, and in
 // fragment():
@@ -9,7 +9,7 @@
 //   EMISSION += ALBEDO * toon_ambient(world_normal, occlusion);
 //   toon_glint = 1.0 where the surface is glass (sun glints), else 0.0.
 // The sun (at night, the moon: TimeOfDay turns the one light) comes through
-// light() below. At dusk and dawn the shade turns lavender against the low
+// light() below. At dusk and dawn the shade turns blue against the low
 // sun, and at night a moonlit sky's cool light from above and the city's warm
 // glow from below take over, as colors fade toward gray (night.gdshaderinc has
 // the time of day).
@@ -17,20 +17,20 @@
 #include "res://shaders/night.gdshaderinc"
 
 // Ambient light from the sky (faces pointing up) and bounced off the ground
-// (faces pointing down); walls get the mix.
+// (faces pointing down); walls get the mix, a cool gray as in photos.
 uniform vec3 ambient_sky : source_color = vec3(0.66, 0.72, 0.86);
-uniform vec3 ambient_ground : source_color = vec3(0.85, 0.75, 0.65);
+uniform vec3 ambient_ground : source_color = vec3(0.78, 0.76, 0.73);
 uniform float ambient_energy = 0.75;
 // Extra fill on walls (up to this much more at vertical), standing in for
 // the light that sunlit streets and facades bounce into the shade.
 uniform float ambient_wall_bounce = 0.5;
 // At night: the night sky's light from above, the city's sodium-and-neon
 // glow from below, and their strength. At dusk and dawn the day's ambient is
-// tinted by dusk_ambient: shade goes lavender against the low sun's orange.
+// tinted by dusk_ambient: shade goes blue against the low sun's gold.
 uniform vec3 night_ambient_sky : source_color = vec3(0.28, 0.42, 0.68);
 uniform vec3 night_ambient_ground : source_color = vec3(0.45, 0.38, 0.32);
 uniform float night_ambient_energy = 0.32;
-uniform vec3 dusk_ambient : source_color = vec3(0.74, 0.72, 0.90);
+uniform vec3 dusk_ambient : source_color = vec3(0.72, 0.78, 0.96);
 // At night surface colors fade this far toward gray, as they do to the eye,
 // so the moonlit city reads cool blue and its lights stand out.
 uniform float night_desaturation : hint_range(0.0, 1.0) = 0.45;

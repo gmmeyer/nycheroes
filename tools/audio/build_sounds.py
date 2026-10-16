@@ -1,14 +1,15 @@
 """Builds the game's sounds into assets/audio/ as mono Ogg Vorbis (the list of
 sounds and how loud each plays is scripts/audio/sound_bank.gd).
 
-Some are synthesized here with numpy (whooshes, webs, wind, booms, rubble);
+Some are synthesized here with numpy (whooshes, webs, wind, booms, rubble,
+the trains on the els);
 the rest are cut from CC0 recordings: Kenney's audio packs (kenney.nl) and
 Freesound uploads whose pages say Creative Commons 0 (CREDITS.md lists every
 one). Download them once into a folder of their own (`fetch` checks each
 Freesound page's license before downloading its preview), then build:
 
     python tools/audio/build_sounds.py fetch <downloads dir>
-    python tools/audio/build_sounds.py build <downloads dir> <ffmpeg>
+    python tools/audio/build_sounds.py build <downloads dir> <ffmpeg> [--only NAME ...]
 
 with tools/citygen's Python (numpy). Recordings are trimmed, cut into single
 sounds where a file has several takes, faded, looped where they loop (the
@@ -16,7 +17,8 @@ end crossfaded into the start), filtered and normalized; one-off sounds are
 44.1 kHz, the ambience's beds 22.05 kHz to keep the download small. Godot's
 web build decodes every sound into memory as 48 kHz stereo anyway (384 kB
 a second) and copies it for each play, so loops are kept short. Everything
-is seeded, so a rebuild makes the same files.
+is seeded, so a rebuild makes the same sounds (though Ogg files come out
+with new stream serial numbers: --only rewrites just the files named).
 """
 
 import json
@@ -33,6 +35,8 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "assets" / "audio"
 RATE = 44100
 BED_RATE = 22050
+# With --only, just these sounds' files are written.
+ONLY = set()
 
 KENNEY_PACKS = {
     "kenney_impact-sounds": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
@@ -146,6 +150,8 @@ class Sources:
 
 
 def write(name: str, x: np.ndarray, rate: int, quality: float, ffmpeg: str) -> None:
+    if ONLY and name not in ONLY:
+        return
     pcm = np.clip(x, -1.0, 1.0).astype(np.float32).tobytes()
     out = OUT / f"{name}.ogg"
     subprocess.run([ffmpeg, "-v", "error", "-y", "-f", "f32le", "-ar", str(rate), "-ac", "1", "-i", "-",
@@ -490,6 +496,40 @@ def make_synth(ffmpeg: str) -> None:
                    * (lowpass(f, 650, 2) * highpass(f, 60) * (f / 100 + 0.3) ** -0.4
                       + 0.12 * gusts(t, 6.0, [(3, 0.6, 0.3)]) * band(f, 950, 0.08)), BED_RATE, loop=True)
     write("amb_wind", normalize(wind, -20.0), BED_RATE, 2, ffmpeg)
+    make_trains(s, ffmpeg)
+
+
+def make_trains(s: Synth, ffmpeg: str) -> None:
+    """The trains on the els (TrainSounds), loops pitched up and down with
+    their speed: the rumble (the steel el roaring under a train, a swell per
+    car, and its wheels clattering over the rail joints, two axles of a
+    truck at a time: cars at 18 m/s, a second apart) and the squeal of
+    wheels on a tight curve (tones that wander, a hiss under them)."""
+    seconds = 4.0
+    def roar(t, f):
+        swell = 1.0 + 0.25 * np.sin(2 * np.pi * 4 * t / seconds)
+        return swell * (band(f, 70, 1.2) + 0.6 * band(f, 180, 0.8) + 0.35 * band(f, 420, 0.6)
+                        + 0.12 * band(f, 1100, 0.7)) * (f / 100 + 0.2) ** -0.2
+    body = s.noise(seconds, roar, BED_RATE, loop=True)
+    n = len(body)
+    clatter = np.zeros(n)
+    length = int(0.05 * BED_RATE)
+    for car in range(4):
+        for at in (0.0, 0.12, 0.71, 0.83):
+            burst = s.rng.normal(0, 1, length) * np.exp(-np.arange(length) / (0.008 * BED_RATE))
+            burst = spectral(burst, BED_RATE, lambda f: band(f, 900, 0.9) + 0.6 * band(f, 250, 0.8))
+            clatter[(int((car + at) * BED_RATE) + np.arange(length)) % n] += burst * s.rng.uniform(0.8, 1.2)
+    write("train_rumble", normalize(normalize(body) + 0.55 * normalize(clatter), -16.0), BED_RATE, 3, ffmpeg)
+
+    # Whole cycles in the loop (base tones times its length), so it loops seamlessly.
+    seconds = 3.0
+    t = np.arange(int(seconds * BED_RATE)) / BED_RATE
+    high = 2400 + 120 * np.sin(2 * np.pi * 2 * t / seconds) + 60 * np.sin(2 * np.pi * 7 * t / seconds + 1.0)
+    higher = 3700 + 90 * np.sin(2 * np.pi * 3 * t / seconds + 2.0)
+    tones = (Synth.tone(high, BED_RATE, (1.0, 0.2)) * (0.6 + 0.4 * np.sin(2 * np.pi * 5 * t / seconds) ** 2)
+             + 0.5 * Synth.tone(higher, BED_RATE) * (0.5 + 0.5 * np.sin(2 * np.pi * 3 * t / seconds + 2.0)))
+    hiss = s.noise(seconds, lambda tt, f: band(f, 3000, 0.5), BED_RATE, loop=True)
+    write("train_squeal", normalize(normalize(tones) + 0.3 * normalize(hiss), -16.0), BED_RATE, 3, ffmpeg)
 
 
 # ---------------------------------------------------------------- recordings
@@ -605,6 +645,8 @@ def main() -> None:
     if len(sys.argv) < 4 or sys.argv[1] != "build":
         sys.exit(__doc__)
     downloads, ffmpeg = Path(sys.argv[2]), sys.argv[3]
+    if "--only" in sys.argv:
+        ONLY.update(sys.argv[sys.argv.index("--only") + 1:])
     OUT.mkdir(parents=True, exist_ok=True)
     make_synth(ffmpeg)
     make_recorded(Sources(downloads, ffmpeg), ffmpeg)

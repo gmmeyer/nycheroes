@@ -18,7 +18,8 @@ signal danger(world_position: Vector3, radius: float)
 signal impact(position: Vector3, strength: float)
 signal thug_defeated(thug: Thug)
 
-## Physics layers (bit values): 1 world, 2 heroes, 3 npcs, 4 ragdolls.
+## Physics layers (bit values): 1 world, 2 heroes, 3 npcs, 4 ragdolls (and
+## 5 water, CityStreamer.WATER_LAYER; 6 trains, Trains.COLLISION_LAYER).
 const WORLD_LAYER := 1
 const HERO_LAYER := 2
 const NPC_LAYER := 4
