@@ -25,8 +25,9 @@ const FURNITURE_GROUPS := {
 		CityTileDecoder.PROP_SUBWAY_ENTRANCE, CityTileDecoder.PROP_TRAFFIC_SIGNAL, CityTileDecoder.PROP_NEWSSTAND],
 	"ParkedCars": [CityTileDecoder.PROP_PARKED_CAR],
 	"ShopFronts": [CityTileDecoder.PROP_SHOP_SIGN, CityTileDecoder.PROP_AWNING],
-	"StreetExtras": [CityTileDecoder.PROP_SIDEWALK_SHED, CityTileDecoder.PROP_BIKE_DOCK, CityTileDecoder.PROP_PLAZA_TABLE,
-		CityTileDecoder.PROP_PLANTER, CityTileDecoder.PROP_KIOSK],
+	"SidewalkSheds": [CityTileDecoder.PROP_SIDEWALK_SHED],
+	"StreetExtras": [CityTileDecoder.PROP_BIKE_DOCK, CityTileDecoder.PROP_PLAZA_TABLE, CityTileDecoder.PROP_PLANTER,
+		CityTileDecoder.PROP_KIOSK],
 }
 
 ## [name, world position of the camera]

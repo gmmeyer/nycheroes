@@ -48,6 +48,19 @@ lines below wherever a license asks for one (the aerial photos do).
   (dwer-xbgx: elevated stations) and sidewalks (52n9-sdep: the walkways on
   bridges and raised streets); the rail bridge and railroad viaduct
   outlines are in the bridge structures above (r9cu-9r7b).
+- **Shop signs, sidewalk sheds and bike docks:** which buildings have shops
+  and offices from PLUTO (above); sidewalk sheds from the Department of
+  Buildings' permits, NYC Open Data (DOB NOW: Build, Approved Permits,
+  rbx6-tga4: sidewalk shed permits issued and not expired on the day of the
+  download); the bike share's docking stations (positions and sizes) from
+  Citi Bike's public GBFS feed (https://gbfs.citibikenyc.com/gbfs/2.3/gbfs.json),
+  used under Lyft Bikes and Scooters' Bikeshare Data License Agreement
+  (https://citibikenyc.com/data-sharing-policy), which allows the data inside
+  a product, not as a dataset of its own, and not the system's names or
+  marks: the game draws generic blue bikes and names nothing. Shop names are
+  invented (`tools/citygen/sign_names.py`), drawn in Anton, Lilita One, Alfa
+  Slab One and Pacifico (Google Fonts, SIL Open Font License 1.1; the game
+  holds only a texture of the names, not the fonts).
 
 `tools/citygen/fetch_data.py` and `tools/citygen/aerial.py` list exactly
 what is downloaded from where.

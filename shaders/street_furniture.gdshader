@@ -1,16 +1,13 @@
 // Street furniture from near city tiles' props (scripts/world/city_props.gd):
 // hydrants, benches, litter baskets, bike racks and parking meters on the
 // small mesh from PropMeshes.street_furniture_small(); bus shelters, LinkNYC
-// kiosks, subway entrances, traffic signals and newsstands on the large one;
-// sidewalk sheds, the bike share's docks and plaza furniture on a third
-// (street_furniture_extra()).
+// kiosks, subway entrances, traffic signals and newsstands on the large one.
 // Per instance (the props' common layout):
 //   transform        scales by the piece's width (x, z) and height (y) and
 //                    moves it to its base on the sidewalk
 //   INSTANCE_CUSTOM  (yaw radians: its front faces (sin, 0, cos) of it, toward
-//                    the street; variant; seed 0..1; prop type 5..14, 19..23)
-//   COLOR.r          a traffic signal's phase offset (0..1 of its cycle), a
-//                    sidewalk shed's reach out from the wall (m)
+//                    the street; variant; seed 0..1; prop type 5..14)
+//   COLOR.r          a traffic signal's phase offset (0..1 of its cycle)
 // Each mesh holds all its pieces' shapes, tagged per vertex (CUSTOM0: type,
 // variant bits, the size it's built at; see PropMeshes). This shader folds
 // away every shape but the instance's own, scales that one to the piece's
@@ -27,9 +24,7 @@
 // signal that shows the walking person while the crossing traffic is green;
 // subway globes (green entrance, red exit), kiosk screens and shelter ads
 // glow a little by day and more at night, when shelters and newsstands are
-// lit inside, and so are sidewalk sheds' undersides and food kiosks'
-// windows. Bike docks hold a bike in most docks (each section its own
-// share). Signal lenses and globes stay at least light_min_pixels across
+// lit inside. Signal lenses and globes stay at least light_min_pixels across
 // far away. A subway stair's opening shows steps going down into the dark:
 // the view ray is traced through it to the steps and walls below the
 // sidewalk (no geometry there). At night pieces near a street light catch its
@@ -77,33 +72,11 @@ const int NEWSSTAND = 31;
 const int NEWSSTAND_ROOF = 32;
 const int MAGAZINES = 33;
 const int BENCH_END = 34;
-const int SHED_PLYWOOD = 35;
-const int SHED_DECK = 36;
-const int SHED_CEILING = 37;
-const int SHED_STEEL = 38;
-const int DOCK = 39;
-const int DOCK_BASE = 40;
-const int DOCK_PANEL = 41;
-const int BIKE = 42;
-const int BIKE_TIRE = 43;
-const int BIKE_SEAT = 44;
-const int TABLE = 45;
-const int CHAIR = 46;
-const int CHAIR_LEGS = 47;
-const int UMBRELLA = 48;
-const int PLANTER = 49;
-const int PLANTS = 50;
-const int FOOD_KIOSK = 51;
-const int KIOSK_WINDOW = 52;
-const int KIOSK_ROOF = 53;
 
 // Prop types (CityTileDecoder.PROP_*).
 const int TYPE_BUS_SHELTER = 6;
 const int TYPE_TRAFFIC_SIGNAL = 10;
 const int TYPE_NEWSSTAND = 14;
-const int TYPE_SHED = 19;
-const int TYPE_BIKE_DOCK = 20;
-const int TYPE_KIOSK = 23;
 
 // As PropMeshes builds them: a signal's lens spacing, a subway stair's
 // opening (m).
@@ -112,10 +85,6 @@ const vec2 STAIR_HALF = vec2(2.1, 0.9);
 // The stairs' rise per run, and a step's depth (m).
 const float STAIR_SLOPE = 0.62;
 const float TREAD = 0.29;
-// A sidewalk shed's reach out from the wall as built (PropMeshes.SHED_DEPTH),
-// and the bike docks' spacing (CityTileDecoder.DOCK_SPACING).
-const float SHED_DEPTH = 2.5;
-const float DOCK_SPACING = 0.8;
 
 // Paint, in sRGB.
 const vec3 HYDRANT_PAINT[3] = vec3[](vec3(0.74, 0.75, 0.77), vec3(0.78, 0.15, 0.11), vec3(0.95, 0.76, 0.17));
@@ -129,12 +98,6 @@ const vec3 SIGNAL_BLACK = vec3(0.10, 0.10, 0.11);
 const vec3 POLE_GRAY = vec3(0.56, 0.58, 0.57);
 const vec3 SIGN_GREEN = vec3(0.0, 0.42, 0.26);
 const vec3 NEWSSTAND_GREEN = vec3(0.13, 0.43, 0.27);
-// Sidewalk sheds' paint: hunter green, and the odd white, black or blue one.
-const vec3 SHED_PAINT[4] = vec3[](vec3(0.16, 0.30, 0.20), vec3(0.85, 0.85, 0.82), vec3(0.15, 0.15, 0.16),
-		vec3(0.18, 0.30, 0.52));
-const vec3 SHARE_BIKE_BLUE = vec3(0.14, 0.40, 0.74);
-// Plaza tables and chairs: green, silver or red.
-const vec3 BISTRO[3] = vec3[](vec3(0.20, 0.38, 0.26), vec3(0.66, 0.68, 0.70), vec3(0.72, 0.16, 0.14));
 // Ads and magazine covers pick from these.
 const vec3 BRIGHT[8] = vec3[](vec3(0.95, 0.30, 0.25), vec3(0.98, 0.72, 0.15), vec3(0.20, 0.62, 0.90),
 		vec3(0.55, 0.30, 0.80), vec3(0.15, 0.75, 0.55), vec3(0.98, 0.50, 0.65), vec3(0.12, 0.16, 0.30),
@@ -168,11 +131,6 @@ uniform vec2 poster_glow = vec2(0.25, 1.0);
 uniform vec3 shelter_light : source_color = vec3(0.86, 0.93, 1.0);
 uniform vec3 newsstand_light : source_color = vec3(1.0, 0.86, 0.62);
 uniform vec3 stair_light : source_color = vec3(1.0, 0.90, 0.72);
-// The lamps under sidewalk sheds, lit by day too (dimmer).
-uniform vec3 shed_light : source_color = vec3(0.92, 0.96, 1.0);
-uniform vec2 shed_glow = vec2(0.6, 2.4);
-// The share of a section's docks holding a bike: from this, up to all.
-uniform float dock_fill = 0.45;
 // How much street light (night) the pieces catch.
 uniform float street_light_catch = 1.0;
 
@@ -202,20 +160,12 @@ void vertex() {
 	vec3 base = MODEL_MATRIX[3].xyz;
 	vec3 camera = MAIN_CAM_INV_VIEW_MATRIX[3].xyz;
 	float distance_to_camera = distance(camera, base);
-	bool small = type == 5 || type == 8 || (type >= 11 && type <= 13) || (type >= 20 && type <= 22);
+	bool small = type == 5 || type == 8 || (type >= 11 && type <= 13);
 	vec2 fade = small ? small_fade_distance : large_fade_distance;
 	float shown = 1.0 - smoothstep(fade.x, fade.y, distance_to_camera);
 	// Only the piece's own shape (CUSTOM0: type, variant bits).
 	if (int(CUSTOM0.x + 0.5) != type || ((int(CUSTOM0.y + 0.5) >> variant) & 1) == 0) {
 		shown = 0.0;
-	}
-	if (type == TYPE_BIKE_DOCK && UV.x > float(BIKE) - 0.5 && UV.x < float(BIKE_SEAT) + 0.5) {
-		// Empty docks: each section holds its own share of bikes.
-		float section = floor(INSTANCE_CUSTOM.z * 1024.0 + 0.5);
-		float dock = floor(VERTEX.x / DOCK_SPACING + 8.0);
-		if (rnd(section + dock * 0.37, 31.0) > mix(dock_fill, 1.0, rnd(section, 30.0))) {
-			shown = 0.0;
-		}
 	}
 	if (shown <= 0.0) {
 		// Folded away (another shape's vertex, or too far): a point behind
@@ -230,9 +180,6 @@ void vertex() {
 		float seed = floor(INSTANCE_CUSTOM.z * 1024.0 + 0.5);
 		int part = int(UV.x + 0.5);
 		vec3 scale = vec3(width / CUSTOM0.w, height / CUSTOM0.z, width / CUSTOM0.w);
-		if (type == TYPE_SHED) {
-			scale.z = COLOR.r / SHED_DEPTH;
-		}
 		vec3 v = VERTEX * scale;
 		float signal_state = 0.0;
 		if (type == TYPE_TRAFFIC_SIGNAL) {
@@ -639,109 +586,6 @@ void fragment() {
 		if (city_lights > 0.0) {
 			glow += color * srgb(newsstand_light) * 0.8 * city_lights;
 		}
-	} else if (part == SHED_PLYWOOD || part == SHED_DECK || part == SHED_STEEL && type == TYPE_SHED) {
-		// Painted plywood in 4 x 8 ft sheets (the deck's top bare and
-		// weathered), and stenciled warnings along the parapet; steel
-		// posts and beams in the same paint.
-		vec3 paint = srgb(SHED_PAINT[min(variant, 3)]);
-		vec2 q = vec2(p.x / 2.44, p.y / 1.22);
-		float seams = max(centered_stripes(q.x, 0.02, footprint.x / 2.44), centered_stripes(q.y, 0.02, footprint.y / 1.22));
-		color = part == SHED_DECK ? srgb(vec3(0.50, 0.46, 0.40)) * mix(0.8, 1.1, value_noise(p * 1.7 + seed)) : paint;
-		color *= 1.0 - 0.25 * seams * float(part != SHED_STEEL);
-		if (part == SHED_PLYWOOD && local_position.y > 3.0) {
-			float words = band(fract(p.x / 6.1 + rnd(seed, 32.0)), 0.08, 0.5, footprint.x / 6.1)
-					* band(p.y, 0.42, 0.6, footprint.y) * stripes(p.x / 0.17, 0.65, footprint.x / 0.17);
-			color = mix(color, srgb(vec3(0.92)), 0.8 * words * visible(0.17, pixel));
-		}
-		glint = part == SHED_STEEL ? 0.2 : 0.0;
-		inside = 0.6;
-	} else if (part == SHED_CEILING) {
-		// The deck's underside, with a lamp every few meters.
-		color = srgb(SHED_PAINT[min(variant, 3)]) * 0.9;
-		float lamps = band(fract(local_position.x / 3.0 + 0.5), 0.42, 0.58, footprint.x / 3.0)
-				* band(local_position.z, 0.9, 1.3, footprint.y);
-		color = mix(color, srgb(shed_light), lamps);
-		glow += srgb(shed_light) * lamps * mix(shed_glow.x, shed_glow.y, city_lights);
-		inside = 1.0;
-	} else if (part == SHED_STEEL) {
-		// An umbrella's pole.
-		color = srgb(STAINLESS);
-		glint = 0.3;
-	} else if (part == DOCK || part == DOCK_BASE || part == DOCK_PANEL) {
-		color = part == DOCK_BASE ? srgb(vec3(0.30, 0.31, 0.33)) : srgb(vec3(0.56, 0.58, 0.60));
-		if (part == DOCK_PANEL) {
-			// A dock's light (green: a bike is there to take), or the
-			// kiosk's map and screen.
-			if (variant == 1) {
-				color = mix(srgb(vec3(0.86, 0.85, 0.80)), srgb(SHARE_BIKE_BLUE), band(uv.y, 0.9, 1.0, footprint.y / face_size.y));
-				color = mix(color, srgb(vec3(0.10, 0.12, 0.14)), fill(box_distance(uv, vec2(0.5, 0.42), vec2(0.3, 0.08))));
-			} else {
-				float lamp = fill(length((uv - vec2(0.5, 0.82)) * face_size) - 0.025);
-				color = mix(color, srgb(vec3(0.3, 0.95, 0.4)), lamp);
-				glow += srgb(vec3(0.3, 0.95, 0.4)) * lamp * mix(0.6, 2.0, city_lights);
-			}
-		}
-		glint = 0.2;
-	} else if (part == BIKE || part == BIKE_SEAT) {
-		color = part == BIKE_SEAT ? srgb(vec3(0.08)) : srgb(SHARE_BIKE_BLUE) * mix(0.9, 1.1, rnd(seed, 33.0));
-		glint = 0.3;
-	} else if (part == BIKE_TIRE) {
-		// A tire round a hub and spokes, cut out of the square.
-		vec2 q = uv * 2.0 - 1.0;
-		float r = length(q);
-		float w = fwidth(r);
-		float tire = band(r, 0.84, 1.0, w);
-		float spokes = centered_stripes(atan(q.y, q.x) * 1.91, 0.12, fwidth(atan(q.y, q.x) * 1.91)) * band(r, 0.0, 0.85, w)
-				* visible(0.01, pixel);
-		float hub = band(r, 0.0, 0.18, w);
-		if (max(max(tire, hub), spokes * 0.8) < 0.5) {
-			discard;
-		}
-		color = mix(srgb(vec3(0.62)), srgb(vec3(0.07)), tire);
-	} else if (part == TABLE || part == CHAIR || part == CHAIR_LEGS) {
-		if (part == CHAIR_LEGS) {
-			float keep = max(max(band(uv.x, 0.0, 0.1, footprint.x / face_size.x), band(uv.x, 0.9, 1.0, footprint.x / face_size.x)),
-					band(uv.y, 0.92, 1.0, footprint.y / face_size.y));
-			if (keep < 0.5) {
-				discard;
-			}
-		}
-		float r = rnd(seed, 34.0);
-		color = srgb(BISTRO[r < 0.55 ? 0 : (r < 0.8 ? 1 : 2)]);
-		glint = 0.2;
-		occlusion = mix(0.75, 1.0, smoothstep(0.0, 0.5, local_position.y));
-	} else if (part == UMBRELLA) {
-		// Canvas in panels, every other one a little darker.
-		vec3 canvas = srgb(BRIGHT[pick(rnd(seed, 35.0), 8)]) * 0.85;
-		color = canvas * (1.0 - 0.12 * stripes(uv.x * 8.0, 0.5, fwidth(uv.x) * 8.0));
-	} else if (part == PLANTER) {
-		float r = rnd(seed, 36.0);
-		color = r < 0.4 ? srgb(vec3(0.62, 0.60, 0.56)) : (r < 0.75 ? srgb(vec3(0.20, 0.21, 0.22)) : srgb(vec3(0.45, 0.32, 0.22)));
-		occlusion = mix(0.7, 1.0, smoothstep(0.0, 0.5, local_position.y));
-	} else if (part == PLANTS) {
-		// Leafy clumps and flowers.
-		vec3 w = local_position * 9.0 + seed;
-		float leaves = value_noise(w.xz + w.y * 0.7);
-		color = mix(srgb(vec3(0.16, 0.30, 0.12)), srgb(vec3(0.36, 0.52, 0.20)), leaves);
-		float flowers = step(0.78, value_noise(w.xz * 1.9 - w.y)) * visible(0.05, pixel);
-		color = mix(color, srgb(BRIGHT[pick(rnd(seed, 37.0), 6)]), flowers * 0.9);
-		occlusion = mix(0.7, 1.0, leaves);
-	} else if (part == FOOD_KIOSK || part == KIOSK_ROOF) {
-		color = srgb(BRIGHT[pick(rnd(seed, part == KIOSK_ROOF ? 38.0 : 39.0), 7)]) * 0.85;
-		color = mix(color, vec3(0.9), 0.6 * band(p.y, 0.3, 0.42, footprint.y) * float(part == FOOD_KIOSK));
-		inside = 0.3;
-	} else if (part == KIOSK_WINDOW) {
-		// The serving window, a menu board on either side, a counter.
-		color = srgb(BRIGHT[pick(rnd(seed, 39.0), 7)]) * 0.85;
-		float window = fill(box_distance(p, vec2(face_size.x * 0.5, 1.55), vec2(0.6, 0.45)));
-		vec2 menu_q = vec2(abs(p.x - face_size.x * 0.5) - 0.95, p.y - 1.55);
-		float menu = fill(box_distance(menu_q, vec2(0.0), vec2(0.25, 0.4)));
-		vec3 inside_color = srgb(vec3(0.75, 0.62, 0.45));
-		color = mix(color, ad_art(vec2(0.5) + menu_q / vec2(0.5, 0.8), vec2(0.5, 0.8), seed), menu);
-		color = mix(color, inside_color, window);
-		color = mix(color, srgb(STAINLESS), fill(box_distance(p, vec2(face_size.x * 0.5, 1.07), vec2(0.7, 0.03))));
-		glow += (inside_color * window + color * menu * 0.5) * mix(0.15, 1.2, city_lights);
-		inside = 1.0;
 	}
 
 	ALBEDO = toon_night_albedo(color);
@@ -753,11 +597,6 @@ void fragment() {
 		EMISSION += ALBEDO * item_light * (street_light_catch * (1.0 - 0.6 * smoothstep(0.0, 5.0, local_position.y)));
 		if (type == TYPE_BUS_SHELTER) {
 			EMISSION += ALBEDO * srgb(shelter_light) * (0.7 * inside * city_lights);
-		} else if (type == TYPE_SHED) {
-			// Under the shed, its lamps.
-			EMISSION += ALBEDO * srgb(shed_light) * (0.6 * inside * city_lights * (1.0 - smoothstep(2.6, 3.3, local_position.y)));
-		} else if (type == TYPE_KIOSK) {
-			EMISSION += ALBEDO * srgb(newsstand_light) * (0.5 * inside * city_lights);
 		} else if (type == TYPE_NEWSSTAND) {
 			EMISSION += ALBEDO * srgb(newsstand_light) * (0.7 * inside * city_lights);
 		}

@@ -1265,6 +1265,10 @@ def _street_walls(index: int) -> list:
     middles = np.array([(a + e) / 2 for a, e, _ in walls])
     outward = np.array([o for _, _, o in walls])
     front = _faces_street(middles, outward) & ~props.in_sign_district(middles)
+    # Not party walls: nothing goes where another building stands in front.
+    for reach in (0.5, 1.5):
+        hits = _W["building_tree"].query(shapely.points(middles + outward * reach), predicate="within")
+        front[hits[0]] = False
     if not front.any():
         return []
     sidewalk = shapely.distance(_W["streets"], shapely.points(middles[front] + outward[front] * 0.05))

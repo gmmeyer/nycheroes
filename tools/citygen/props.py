@@ -18,9 +18,15 @@ Street furniture: hydrants, bus shelters, LinkNYC kiosks, benches, subway
 entrances, litter baskets, bike racks, parking meters and newsstands where
 the city's inventories put them (prepare_furniture()); traffic signals at
 intersections with a wide street (markings.signals()).
+Shop fronts, sidewalk sheds, bike share docks and plaza furniture: signs and
+awnings on shops' street walls, sheds where the Department of Buildings has
+a permit up, the bike share's stations, and tables, planters and kiosks in
+the DOT's pedestrian plazas (see the section at the end).
 
-prepare_trees() makes data/cache/trees.pkl; build_tiles.py does the rest per
-lod0 tile with the helpers here (clumps per tile of every level).
+prepare_trees() makes data/cache/trees.pkl (and prepare_shops(),
+prepare_sheds() and prepare_bike_docks() shops.pkl, sheds.pkl and
+bike_docks.pkl); build_tiles.py does the rest per lod0 tile with the helpers
+here (clumps per tile of every level).
 """
 
 import json
@@ -544,7 +550,7 @@ TABLE_ZONE = 12.0
 TABLE_ZONE_SHARE = 0.55
 TABLE_SHARE = 0.6
 TABLE_EDGE = 2.5
-UMBRELLA_SHARE = 0.4
+UMBRELLA_SHARE = 0.3  # none in Times Square's sign district
 KIOSK_AREA = 900.0
 KIOSK_SHARE = 0.6
 PLAZA_GAP = 1.6
@@ -649,11 +655,12 @@ def shop_fronts(walls: list, ground: float, floor_height: float, height: float, 
             if not shed and r[1] < sign_chance:
                 kind = 0 if r[2] < sign_odds[0] else (1 if r[2] < sign_odds[0] + sign_odds[1] else 2)
                 bottom = band_bottom - (0.1, 0.05, 0.0)[kind]
-                tall_as = ((0.75, 1.3), (0.6, 1.0), (0.4, 0.75))[kind]
-                wide_as = ((0.8, 0.97), (0.6, 0.9), (0.7, 0.9))[kind]
+                tall_as = ((0.8, 1.3), (0.7, 1.0), (0.4, 0.75))[kind]
                 size_h = min(tall_as[0] + (tall_as[1] - tall_as[0]) * r[3], ceiling - bottom)
                 if size_h >= 0.4:
-                    size_w = width * (wide_as[0] + (wide_as[1] - wide_as[0]) * r[4])
+                    # Boards and light boxes cover the painted sign band from
+                    # end to end; letters stand on it.
+                    size_w = width - 0.1 if kind < 2 else width * (0.7 + 0.2 * r[4])
                     add(PROP_SHOP_SIGN, (SIGN_BOARD, SIGN_LIGHT_BOX, SIGN_LETTERS)[kind], middle, outward, bottom,
                         (size_w, size_h), name, s)
             if not shed and r[5] < awning_chance:
@@ -872,8 +879,8 @@ def plaza_furniture(plazas: list, streets, avoid: np.ndarray) -> dict:
         zone = _cell_hash(np.floor(spots[:, 0] / TABLE_ZONE), np.floor(spots[:, 1] / TABLE_ZONE) + 7)
         keep = (zone < TABLE_ZONE_SHARE) & (_hash(seed, 91) < TABLE_SHARE) \
             & shapely.contains_xy(inner, spots[:, 0], spots[:, 1])
-        add(spots[keep], _hash(seed[keep], 92) * 2 * np.pi, PROP_PLAZA_TABLE,
-            (_hash(seed[keep], 93) < UMBRELLA_SHARE).astype(np.int8))
+        umbrella = (_hash(seed[keep], 93) < UMBRELLA_SHARE) & ~in_sign_district(spots[keep])
+        add(spots[keep], _hash(seed[keep], 92) * 2 * np.pi, PROP_PLAZA_TABLE, umbrella.astype(np.int8))
     if not found["en"]:
         return {}
     en, yaw, kinds, tone = (np.concatenate(found[key]) for key in ("en", "yaw", "type", "tone"))

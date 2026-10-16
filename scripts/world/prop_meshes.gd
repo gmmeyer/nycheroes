@@ -56,10 +56,12 @@ extends RefCounted
 ##   CUSTOM1 = (the face's width and height m, 0, 0), or for a light that
 ##             stays visible far away (signal lenses, subway globes) (its
 ##             center, radius m), about which the shader grows it
-## A third street furniture mesh holds sidewalk sheds' sections, the bike
-## share's docks and kiosks, and plaza furniture (cafe tables, planters, food
-## kiosks), the same way; a shed is stretched to its reach out from the wall
-## (z) by its own number (the instance color's red), not its width.
+## Two more meshes the same way, with a shader of their own
+## (shaders/street_extras.gdshader) and parts (Extra) of their own: sidewalk
+## sheds' sections (stretched to their reach out from the wall (z) by their
+## own number, the instance color's red, not their width), and the bike
+## share's docks and kiosks with plaza furniture (cafe tables, planters, food
+## kiosks).
 ## Shop fronts (shaders/shop_sign.gdshader), signs and awnings on one mesh, the
 ## same way again: see shop_fronts().
 ## Cars (shaders/car.gdshader), parked and moving, one mesh for every model
@@ -137,8 +139,13 @@ enum Furniture {
 	METER, METER_FACE, METER_SIGN, BENCH, STEEL, ROOF, CEILING, GLASS, AD_BOX, POSTER, LINK, LINK_FRONT,
 	SCREEN, STAIRWELL, RAILING, LAMP_POST, GLOBE, SIGNAL_POLE, SIGNAL_HEAD, SIGNAL_FACE, SIGNAL_LAMP,
 	WALK_LAMP, STREET_SIGN, NEWSSTAND, NEWSSTAND_ROOF, MAGAZINES, BENCH_END,
-	SHED_PLYWOOD, SHED_DECK, SHED_CEILING, SHED_STEEL, DOCK, DOCK_BASE, DOCK_PANEL, BIKE, BIKE_TIRE, BIKE_SEAT,
-	TABLE, CHAIR, CHAIR_LEGS, UMBRELLA, PLANTER, PLANTS, FOOD_KIOSK, KIOSK_WINDOW, KIOSK_ROOF,
+}
+## Sidewalk sheds', bike docks' and plaza furniture's parts (UV.x);
+## shaders/street_extras.gdshader has the same numbers.
+enum Extra {
+	SHED_PLYWOOD, SHED_DECK, SHED_CEILING, STEEL, DOCK, DOCK_BASE, DOCK_PANEL, BIKE, BIKE_TIRE, BIKE_SEAT,
+	SOLAR_PANEL, TABLE, CHAIR, CHAIR_LEGS, UMBRELLA, PLANTER, PLANTS, FOOD_KIOSK, KIOSK_WINDOW, KIOSK_ROOF,
+	KIOSK_CEILING,
 }
 ## The variant bits of a shape drawn for every variant.
 const ALL_VARIANTS := 255
@@ -651,14 +658,23 @@ static func _newsstand(k: _Kit) -> void:
 	_panel(k, Vector3(-1.2, 0.5, 0.81), Vector3(2.4, 0.0, 0.0), Vector3(0.0, 1.6, 0.0), Furniture.POSTER)
 
 
-## Sidewalk sheds, the bike share's docks and plaza furniture (see above;
-## the same shader as the street furniture): a shed's section, a section of
-## docks with a bike in each (the shader leaves some docks empty) and a
-## station's kiosk, a cafe table with chairs (and an umbrella), planters and
-## a food kiosk.
-static func street_furniture_extra() -> ArrayMesh:
+## A sidewalk shed's section (see above; shaders/street_extras.gdshader), a
+## mesh of its own: sheds are many (hundreds of sections in a Manhattan
+## tile), and every instance runs all its mesh's vertices. 140 vertices, 70
+## triangles.
+static func sidewalk_shed() -> ArrayMesh:
 	var k := _Kit.new()
 	_sidewalk_shed(k)
+	return k.build()
+
+
+## The bike share's docks and plaza furniture (see above;
+## shaders/street_extras.gdshader): a section of docks with a bike in each (the shader
+## leaves some docks empty) and a station's kiosk, a cafe table with chairs
+## (and an umbrella), planters and a food kiosk. 604 vertices, 430
+## triangles.
+static func street_furniture_extra() -> ArrayMesh:
+	var k := _Kit.new()
 	_bike_docks(k)
 	_plaza_table(k)
 	_planters(k)
@@ -676,20 +692,20 @@ static func _sidewalk_shed(k: _Kit) -> void:
 	k.shape = Vector4(CityTileDecoder.PROP_SIDEWALK_SHED, ALL_VARIANTS, SHED_HEIGHT, SHED_LENGTH)
 	var half := SHED_LENGTH * 0.5
 	var deck := SHED_HEIGHT - 0.25
-	var faces := _faces(Furniture.SHED_PLYWOOD, "-z")
-	faces["+y"] = Furniture.SHED_DECK
-	faces["-y"] = Furniture.SHED_CEILING
+	var faces := _faces(Extra.SHED_PLYWOOD, "-z")
+	faces["+y"] = Extra.SHED_DECK
+	faces["-y"] = Extra.SHED_CEILING
 	_box(k, Vector3(-half, deck, 0.0), Vector3(half, SHED_HEIGHT, SHED_DEPTH), faces)
 	_box(k, Vector3(-half, SHED_HEIGHT, SHED_DEPTH - 0.1), Vector3(half, SHED_HEIGHT + 1.05, SHED_DEPTH),
-		_faces(Furniture.SHED_PLYWOOD, "-y"))
+		_faces(Extra.SHED_PLYWOOD, "-y"))
 	var front := SHED_DEPTH - 0.2
 	for x: float in [-half + 0.1, half - 0.1]:
 		for z: float in [0.12, front]:
-			_box(k, Vector3(x - 0.05, 0.0, z - 0.05), Vector3(x + 0.05, deck, z + 0.05), _faces(Furniture.SHED_STEEL, "+y -y"))
-	_box(k, Vector3(-half, deck - 0.24, front - 0.07), Vector3(half, deck, front + 0.07), _faces(Furniture.SHED_STEEL, "+y"))
+			_box(k, Vector3(x - 0.05, 0.0, z - 0.05), Vector3(x + 0.05, deck, z + 0.05), _faces(Extra.STEEL, "+y -y"))
+	_box(k, Vector3(-half, deck - 0.24, front - 0.07), Vector3(half, deck, front + 0.07), _faces(Extra.STEEL, "+y"))
 	for side: float in [-1.0, 1.0]:
 		_tube(k, [Vector3(side * (half - 0.1), deck - 1.0, front), Vector3(side * (half - 1.0), deck - 0.2, front)], 0.03,
-			Vector3.BACK, Furniture.SHED_STEEL)
+			Vector3.BACK, Extra.STEEL)
 
 
 ## A section of the bike share's docks (variant DOCKS): DOCKS_PER_SECTION
@@ -700,33 +716,33 @@ static func _sidewalk_shed(k: _Kit) -> void:
 static func _bike_docks(k: _Kit) -> void:
 	var section := CityTileDecoder.DOCKS_PER_SECTION * CityTileDecoder.DOCK_SPACING
 	k.shape = Vector4(CityTileDecoder.PROP_BIKE_DOCK, 1 << CityTileDecoder.DOCKS, DOCK_HEIGHT, section)
-	_box(k, Vector3(-section * 0.5, 0.0, -0.18), Vector3(section * 0.5, 0.04, 0.22), _faces(Furniture.DOCK_BASE, "-y"))
+	_box(k, Vector3(-section * 0.5, 0.0, -0.18), Vector3(section * 0.5, 0.04, 0.22), _faces(Extra.DOCK_BASE, "-y"))
 	for i in CityTileDecoder.DOCKS_PER_SECTION:
 		var x := (i + 0.5 - CityTileDecoder.DOCKS_PER_SECTION * 0.5) * CityTileDecoder.DOCK_SPACING
-		var post := _faces(Furniture.DOCK, "-y")
-		post["+z"] = Furniture.DOCK_PANEL
+		var post := _faces(Extra.DOCK, "-y")
+		post["+z"] = Extra.DOCK_PANEL
 		_box(k, Vector3(x - 0.08, 0.0, -0.12), Vector3(x + 0.08, 0.92, 0.04), post)
-		# The bike: wheels (cut round by the shader), frame, fork and handlebar,
-		# the front rack in the dock, the seat.
+		# The bike: wheels (cut round by the shader), fork and stem, frame,
+		# handlebar, the front rack in the dock, the seat (few vertices: every
+		# piece of plaza furniture runs them too).
 		var front_axle := Vector3(x, 0.33, 0.32)
 		var rear_axle := Vector3(x, 0.33, 1.38)
 		var head := Vector3(x, 0.86, 0.46)
 		var crank := Vector3(x, 0.3, 0.9)
 		var seat := Vector3(x, 0.86, 1.08)
 		for axle: Vector3 in [front_axle, rear_axle]:
-			_panel(k, axle + Vector3(0.0, -0.33, 0.33), Vector3(0.0, 0.0, -0.66), Vector3(0.0, 0.66, 0.0), Furniture.BIKE_TIRE)
-		_tube(k, [front_axle, head, head + Vector3(0.0, 0.18, -0.04)], 0.025, Vector3.RIGHT, Furniture.BIKE)
-		_tube(k, [head + Vector3(0.0, -0.08, 0.02), crank, rear_axle], 0.035, Vector3.RIGHT, Furniture.BIKE)
-		_tube(k, [crank, seat, rear_axle], 0.025, Vector3.RIGHT, Furniture.BIKE)
-		_tube(k, [head + Vector3(-0.28, 0.2, -0.02), head + Vector3(0.28, 0.2, -0.02)], 0.018, Vector3.BACK, Furniture.BIKE)
-		_box(k, Vector3(x - 0.2, 0.72, 0.16), Vector3(x + 0.2, 0.8, 0.5), _faces(Furniture.BIKE))
-		_box(k, Vector3(x - 0.08, 0.86, 1.0), Vector3(x + 0.08, 0.93, 1.24), _faces(Furniture.BIKE_SEAT, "-y"))
+			_panel(k, axle + Vector3(0.0, -0.33, 0.33), Vector3(0.0, 0.0, -0.66), Vector3(0.0, 0.66, 0.0), Extra.BIKE_TIRE)
+		_tube(k, [front_axle, head + Vector3(0.0, 0.18, 0.04)], 0.025, Vector3.RIGHT, Extra.BIKE)
+		_tube(k, [head + Vector3(0.0, -0.06, 0.02), crank, rear_axle, seat, crank], 0.03, Vector3.RIGHT, Extra.BIKE)
+		_tube(k, [head + Vector3(-0.28, 0.2, 0.02), head + Vector3(0.28, 0.2, 0.02)], 0.018, Vector3.BACK, Extra.BIKE)
+		_panel(k, Vector3(x - 0.2, 0.78, 0.16), Vector3(0.4, 0.0, 0.0), Vector3(0.0, 0.0, 0.34), Extra.BIKE)
+		_panel(k, Vector3(x - 0.08, 0.9, 1.24), Vector3(0.16, 0.0, 0.0), Vector3(0.0, 0.0, -0.24), Extra.BIKE_SEAT)
 	k.shape = Vector4(CityTileDecoder.PROP_BIKE_DOCK, 1 << CityTileDecoder.DOCK_KIOSK, 2.3, 0.6)
-	var pillar := _faces(Furniture.DOCK, "-y")
-	pillar["+z"] = Furniture.DOCK_PANEL
+	var pillar := _faces(Extra.DOCK, "-y")
+	pillar["+z"] = Extra.DOCK_PANEL
 	_box(k, Vector3(-0.28, 0.0, -0.16), Vector3(0.28, 2.0, 0.16), pillar)
-	var panel := _faces(Furniture.DOCK, "-y")
-	panel["+y"] = Furniture.SOLAR_PANEL
+	var panel := _faces(Extra.DOCK, "-y")
+	panel["+y"] = Extra.SOLAR_PANEL
 	_box(k, Vector3(-0.3, 2.0, -0.3), Vector3(0.3, 2.06, 0.3), panel)
 
 
@@ -734,8 +750,8 @@ static func _bike_docks(k: _Kit) -> void:
 ## variants), and an umbrella over it (variant 1).
 static func _plaza_table(k: _Kit) -> void:
 	k.shape = Vector4(CityTileDecoder.PROP_PLAZA_TABLE, ALL_VARIANTS, 0.75, 0.8)
-	_turned(k, 6, [Vector2(0.0, 0.24), Vector2(0.05, 0.05), Vector2(0.72, 0.035)], Furniture.TABLE)
-	_turned(k, 8, [Vector2(0.71, 0.38), Vector2(0.75, 0.38), Vector2(0.75, 0.0)], Furniture.TABLE)
+	_turned(k, 6, [Vector2(0.0, 0.24), Vector2(0.05, 0.05), Vector2(0.72, 0.035)], Extra.TABLE)
+	_turned(k, 8, [Vector2(0.71, 0.38), Vector2(0.75, 0.38), Vector2(0.75, 0.0)], Extra.TABLE)
 	for i in 3:
 		var turn := Basis(Vector3.UP, TAU * (i + 0.15) / 3.0)
 		var at := turn * Vector3(0.0, 0.0, 0.68)
@@ -743,37 +759,37 @@ static func _plaza_table(k: _Kit) -> void:
 		var across := turn * Vector3(0.42, 0.0, 0.0)
 		var deep := turn * Vector3(0.0, 0.0, -0.42)
 		var corner := at - across * 0.5 - deep * 0.5
-		_panel(k, corner + Vector3(0.0, 0.46, 0.0), across, deep, Furniture.CHAIR)
-		_panel(k, at - across * 0.5 + back + Vector3(0.0, 0.46, 0.0), across, Vector3(0.0, 0.42, 0.0), Furniture.CHAIR)
+		_panel(k, corner + Vector3(0.0, 0.46, 0.0), across, deep, Extra.CHAIR)
+		_panel(k, at - across * 0.5 + back + Vector3(0.0, 0.46, 0.0), across, Vector3(0.0, 0.42, 0.0), Extra.CHAIR)
 		for side: float in [-0.5, 0.5]:
-			_panel(k, at + across * side * 0.92 - deep * 0.5, deep, Vector3(0.0, 0.46, 0.0), Furniture.CHAIR_LEGS)
+			_panel(k, at + across * side * 0.92 - deep * 0.5, deep, Vector3(0.0, 0.46, 0.0), Extra.CHAIR_LEGS)
 	k.shape.y = 1 << 1
-	_turned(k, 4, [Vector2(0.75, 0.025), Vector2(2.35, 0.02)], Furniture.SHED_STEEL)
-	_turned(k, 8, [Vector2(1.95, 1.25), Vector2(2.2, 0.75), Vector2(2.42, 0.0)], Furniture.UMBRELLA, Vector3.ZERO, true)
+	_turned(k, 4, [Vector2(0.75, 0.025), Vector2(2.35, 0.02)], Extra.STEEL)
+	_turned(k, 8, [Vector2(1.95, 1.25), Vector2(2.2, 0.75), Vector2(2.42, 0.0)], Extra.UMBRELLA, Vector3.ZERO, true)
 
 
 ## Planters: a long box (variant 0) and a round tub (1), full of shrubs and
 ## flowers (a mound the shader paints).
 static func _planters(k: _Kit) -> void:
 	k.shape = Vector4(CityTileDecoder.PROP_PLANTER, 1 << 0, 0.75, 1.8)
-	_box(k, Vector3(-0.9, 0.0, -0.4), Vector3(0.9, 0.6, 0.4), _faces(Furniture.PLANTER, "-y +y"))
-	var rim := _faces(Furniture.PLANTER, "-y")
+	_box(k, Vector3(-0.9, 0.0, -0.4), Vector3(0.9, 0.6, 0.4), _faces(Extra.PLANTER, "-y +y"))
+	var rim := _faces(Extra.PLANTER, "-y")
 	_box(k, Vector3(-0.92, 0.6, -0.42), Vector3(0.92, 0.64, 0.42), rim)
-	_box(k, Vector3(-0.84, 0.64, -0.34), Vector3(0.84, 0.86, 0.34), _faces(Furniture.PLANTS, "-y"))
+	_box(k, Vector3(-0.84, 0.64, -0.34), Vector3(0.84, 0.86, 0.34), _faces(Extra.PLANTS, "-y"))
 	k.shape = Vector4(CityTileDecoder.PROP_PLANTER, 1 << 1, 0.75, 1.8)
-	_turned(k, 8, [Vector2(0.0, 0.5), Vector2(0.58, 0.62), Vector2(0.62, 0.64), Vector2(0.62, 0.0)], Furniture.PLANTER)
-	_turned(k, 8, [Vector2(0.6, 0.6), Vector2(0.82, 0.48), Vector2(0.98, 0.22), Vector2(1.02, 0.0)], Furniture.PLANTS)
+	_turned(k, 8, [Vector2(0.0, 0.5), Vector2(0.58, 0.62), Vector2(0.62, 0.64), Vector2(0.62, 0.0)], Extra.PLANTER)
+	_turned(k, 8, [Vector2(0.6, 0.6), Vector2(0.82, 0.48), Vector2(0.98, 0.22), Vector2(1.02, 0.0)], Extra.PLANTS)
 
 
 ## A plaza's food kiosk: a painted booth with a serving window and menu
 ## toward +z, under a roof that overhangs the window and lights it at night.
 static func _food_kiosk(k: _Kit) -> void:
 	k.shape = Vector4(CityTileDecoder.PROP_KIOSK, ALL_VARIANTS, 2.9, 2.6)
-	var booth := _faces(Furniture.FOOD_KIOSK, "-y +y")
-	booth["+z"] = Furniture.KIOSK_WINDOW
+	var booth := _faces(Extra.FOOD_KIOSK, "-y +y")
+	booth["+z"] = Extra.KIOSK_WINDOW
 	_box(k, Vector3(-1.3, 0.0, -0.9), Vector3(1.3, 2.6, 0.9), booth)
-	var roof := _faces(Furniture.KIOSK_ROOF)
-	roof["-y"] = Furniture.CEILING
+	var roof := _faces(Extra.KIOSK_ROOF)
+	roof["-y"] = Extra.KIOSK_CEILING
 	_box(k, Vector3(-1.42, 2.6, -1.0), Vector3(1.42, 2.9, 1.45), roof)
 
 
@@ -800,12 +816,15 @@ static func _end(k: _Kit, x: float, outline: Array[Vector2], part: int) -> void:
 ## angle), a vinyl banner, and a blade sign standing out from the wall on a
 ## bracket, its faces both ways along the wall. Awnings, BY_REACH deep: a
 ## sloped cloth one with a valance and closed ends, a flatter ribbed
-## aluminum one with a fascia, and a quarter-round dome. 132 triangles.
+## aluminum one with a fascia, and a quarter-round dome. 158 vertices, 86
+## triangles (every instance runs all the vertices).
 static func shop_fronts() -> ArrayMesh:
 	var k := _Kit.new()
 	var sign := CityTileDecoder.PROP_SHOP_SIGN
 	k.shape = Vector4(sign, 1 << CityTileDecoder.SIGN_BOARD, SHOP_BY_WIDTH, SHOP_METERS)
-	var board := _faces(ShopPart.EDGE, "-z")
+	# A plain back too, for the odd sign whose wall isn't quite where the
+	# footprint says (never mirrored letters).
+	var board := _faces(ShopPart.EDGE)
 	board["+z"] = ShopPart.FACE
 	_box(k, Vector3(-0.5, 0.0, 0.0), Vector3(0.5, 1.0, 0.08), board)
 	k.shape.y = 1 << CityTileDecoder.SIGN_LIGHT_BOX
