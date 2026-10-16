@@ -1649,8 +1649,10 @@ Comes after step 6 because it needs step 6's real ground heights.
   network (same node ids at street-level ends, so traffic drives through the
   cuts and up their ramps), their driving lanes and paint on the cut's road
   surface; collision everywhere (a hero lands in a cut, runs along it and up
-  against its walls). Walking lanes, props, trees and utility poles stay out
-  of the cuts but for the bridges. Cost: near tiles with a cut +4.5% bytes
+  against its walls). The cuts' road surface and bridges carry the sky-view
+  shade like the streets (`shade.py`: darker down a deep cut and under its
+  bridges). Walking lanes, props, trees and utility poles stay out of the
+  cuts but for the bridges. Cost: near tiles with a cut +4.5% bytes
   (+6% triangles; up to +16% in Washington Heights), mid +7%, far none;
   0-3% more draw calls in those views; no new shader code.
 - **Trains on the els** (`tools/citygen/trains.py`, `scripts/world/trains.gd`,

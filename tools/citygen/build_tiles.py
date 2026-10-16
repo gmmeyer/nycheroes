@@ -580,6 +580,8 @@ def _build_tile(task):
     bridge = _W["bridges"][level].get((i, j))
     if bridge:
         structure_mesh.add(*bridge)
+        if level in trenches.LEVELS:  # the sunken roads' (trenches.py), like the streets
+            shade.shade_ground(sky, structure_mesh, _W["trenches"].shaded)
 
     surfaces = []
     stats = {"vertices": 0, "triangles": 0}

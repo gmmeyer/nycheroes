@@ -685,6 +685,22 @@ class Trenches:
     def ground(self, lattice) -> "Ground":
         return Ground(lattice, self)
 
+    def shaded(self, pos: np.ndarray, uv2: np.ndarray) -> np.ndarray:
+        """Which of a structures mesh's vertices (Godot space, with their uv2)
+        are on the cuts' road surface or their bridges' tops (the street level
+        ground the sky's shade is baked into, shade.py), not on decks passing
+        over them."""
+        en = np.column_stack([pos[:, 0], -pos[:, 2]])
+        out = np.isin(np.floor(uv2[:, 0] + 0.5), (GROUND_ROAD, GROUND_PAVEMENT)) & (uv2[:, 1] == 0.0)
+        out[out] = shapely.contains_xy(self.reach, en[out, 0], en[out, 1])
+        if out.any():
+            k = np.flatnonzero(out)
+            expected = self.road(en[k])
+            y, found = self.over(en[k])
+            expected[found] = y[found]
+            out[k] = np.abs(pos[k, 1] - expected) < 0.3
+        return out
+
 
 def _deck_height(parts: list, en: np.ndarray) -> np.ndarray:
     """A bridge deck's height at (N, 2) points: its nearest crossing street's,
