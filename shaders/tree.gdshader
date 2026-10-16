@@ -5,7 +5,7 @@
 //                    (x, z) and moves it to the foot of its trunk
 //   COLOR            (trunk diameter m, 0, 0, 0)
 //   INSTANCE_CUSTOM  (yaw radians, foliage tone 0..3, seed 0..1, prop type:
-//                    0 round, 1 narrow, 2 conifer)
+//                    0 round, 1 narrow, 2 conifer, 16 a clump of crowns)
 // Per vertex: UV = (0 trunk or 1 crown, 0..1 up the crown), UV2 = (a shade
 // offset per crown blob, the blob's number: 1..4, 0 on trunks and the shadow
 // stand-ins); CUSTOM0 = (position, UV.y) and CUSTOM1 = (normal, UV2.x) of the
@@ -21,8 +21,10 @@
 // per-tree variety, a soft gradient (only a little darker underneath, where
 // light comes through the leaves), and leaf clumps up close. Trees shrink
 // away one by one between fade_distance from the camera, before their tile's
-// trees stop drawing; their shadows sooner. Beyond that the ground shader's
-// woods carry on in the same greens.
+// trees stop drawing; their shadows sooner. Beyond that woods carry on as
+// clumps of crowns (PropMeshes.canopy(), in tiles of every level; COLOR.r 1
+// for conifers), which grow in as the trees go, in the same greens, over the
+// ground shader's woods.
 // Lighting is the shared toon model (toon.gdshaderinc); at night crowns near
 // a street light catch its warm light underneath.
 shader_type spatial;
@@ -34,11 +36,13 @@ render_mode ambient_light_disabled;
 // Foliage tones (tools/citygen PROP_TONE_*), in sRGB: mid green (London
 // plane, maples), light yellow-green (honeylocust, ginkgo), dark green (oaks,
 // lindens), red-purple (purple-leaf plum, 'Crimson King' maple). Conifers
-// (always the dark tone in the data) are a cooler blue-green. Keep the
-// ground shader's woods colors in step.
-const vec3 FOLIAGE[4] = vec3[](vec3(0.43, 0.60, 0.25), vec3(0.62, 0.72, 0.31), vec3(0.31, 0.50, 0.22),
-		vec3(0.45, 0.25, 0.29));
-const vec3 CONIFER = vec3(0.24, 0.42, 0.30);
+// (always the dark tone in the data) are a cooler blue-green. Toon light and
+// tone mapping saturate them further, so they're muted here, toward the
+// reference photos' dark olive greens (docs/REFERENCE.md). Keep the ground
+// shader's woods colors in step.
+const vec3 FOLIAGE[4] = vec3[](vec3(0.40, 0.47, 0.32), vec3(0.49, 0.56, 0.34), vec3(0.31, 0.40, 0.26),
+		vec3(0.38, 0.24, 0.26));
+const vec3 CONIFER = vec3(0.24, 0.34, 0.29);
 const vec3 BARK = vec3(0.47, 0.42, 0.36);
 // Where each shape's crown starts in the mesh (PropMeshes ROUND_BOTTOM,
 // NARROW_BOTTOM, CONIFER_BOTTOM).
@@ -48,6 +52,13 @@ const float CROWN_BOTTOM[3] = float[](0.38, 0.22, 0.12);
 // shadows (cast by plain stand-ins, see CityProps) between these.
 uniform vec2 fade_distance = vec2(650.0, 850.0);
 uniform vec2 shadow_distance = vec2(450.0, 600.0);
+// Woods' clumps of crowns grow in between these distances (as the trees
+// shrink away). Their trees shade each other: a clump is its tone times
+// canopy_tint, and its lower part, in its neighbors' shade, canopy_shading
+// darker, with that much less light from the sky too.
+uniform vec2 canopy_distance = vec2(600.0, 800.0);
+uniform vec3 canopy_tint = vec3(0.8, 0.92, 0.72);
+uniform float canopy_shading : hint_range(0.0, 1.0) = 0.55;
 // Crowns start this share of a tree's height up (y; narrow trees three
 // quarters of it), at least x meters (clear of a box truck in the street),
 // at most z of the height (so young trees keep a crown). Conifers keep their
@@ -80,7 +91,8 @@ uniform float leaf_glow : hint_range(0.0, 1.0) = 0.08;
 // Night: how much street light the undersides of crowns (and trunks) catch.
 uniform float street_light_catch = 1.0;
 
-// (tone, seed in 1024ths, shape): the same for the whole tree.
+// (tone, 4 for a conifers' clump; seed in 1024ths; shape, 3 for a clump):
+// the same for the whole tree.
 varying flat vec3 tree_data;
 // Unit-mesh position (for leaf clumps and gaps), the tree's size in meters,
 // and the shape's UV.y and UV2.x.
@@ -115,10 +127,13 @@ float value_noise3(vec3 p) {
 void vertex() {
 	float width = length(MODEL_MATRIX[0].xyz);
 	float height = length(MODEL_MATRIX[1].xyz);
-	int shape = clamp(int(INSTANCE_CUSTOM.w + 0.5), 0, 2);
+	// A clump of crowns has the round shape's layout.
+	bool clump = INSTANCE_CUSTOM.w > 15.5;
+	int shape = clump ? 0 : clamp(int(INSTANCE_CUSTOM.w + 0.5), 0, 2);
 	// Custom data arrives as half floats; whole 1024ths survive that exactly.
 	float seed = floor(INSTANCE_CUSTOM.z * 1024.0 + 0.5);
-	tree_data = vec3(floor(INSTANCE_CUSTOM.y + 0.5), seed, float(shape));
+	float tone = clump && COLOR.r > 0.5 ? 4.0 : floor(INSTANCE_CUSTOM.y + 0.5);
+	tree_data = vec3(tone, seed, clump ? 3.0 : float(shape));
 	tree_size = vec2(width, height);
 	vec3 v = VERTEX;
 	vec3 n = NORMAL;
@@ -134,7 +149,8 @@ void vertex() {
 	}
 	bool crown = UV.x > 0.5;
 	float blob = crown ? UV2.y : 0.0;
-	crown_blob = step(0.5, blob);
+	// Clumps are seen from too far to thin out.
+	crown_blob = clump ? 0.0 : step(0.5, blob);
 	if (blob > 0.5) {
 		// Each blob a little off its place, and further out or in from the
 		// trunk (which widens or narrows it too), differently in every tree.
@@ -155,7 +171,7 @@ void vertex() {
 	// crown bottom the trunk stretches, above it the crown squashes.
 	float bottom = CROWN_BOTTOM[shape];
 	float base = bottom;
-	if (shape < 2) {
+	if (shape < 2 && !clump) {
 		float share = crown_base.y * (shape == 1 ? 0.75 : 1.0);
 		base = clamp(max(crown_base.x / height, share), bottom, max(crown_base.z, bottom));
 	}
@@ -184,7 +200,7 @@ void vertex() {
 	v.xz = vec2(c * v.x + s * v.z, c * v.z - s * v.x);
 	n.xz = vec2(c * n.x + s * n.z, c * n.z - s * n.x);
 
-	if (crown) {
+	if (crown && !clump) {
 		// Wind: the whole crown sways, its top most, with a quicker flutter.
 		float phase = TIME * wind_speed + rnd(seed, 4.0) * 6.2832;
 		float gust = sin(phase) * 0.7 + sin(phase * 2.3 + mesh_position.y * 5.0) * 0.3;
@@ -192,8 +208,9 @@ void vertex() {
 	}
 
 	// Far trees, and sooner their shadows, shrink to their base, measured from
-	// the main camera (in the shadow pass too).
-	v *= 1.0 - smoothstep(fade_distance.x, fade_distance.y, distance_to_camera);
+	// the main camera (in the shadow pass too); clumps grow in as they go.
+	v *= clump ? smoothstep(canopy_distance.x, canopy_distance.y, distance_to_camera)
+			: 1.0 - smoothstep(fade_distance.x, fade_distance.y, distance_to_camera);
 	if (IN_SHADOW_PASS) {
 		v *= 1.0 - smoothstep(shadow_distance.x, shadow_distance.y, distance_to_camera);
 	}
@@ -232,8 +249,13 @@ void fragment() {
 				}
 			}
 		}
-		int tone = clamp(int(tree_data.x), 0, 3);
-		color = srgb(tree_data.z > 1.5 && tone != 3 ? CONIFER : FOLIAGE[tone]);
+		int tone = clamp(int(tree_data.x), 0, 4);
+		int shape = int(tree_data.z + 0.5);
+		bool clump = shape == 3;
+		color = srgb(tone == 4 || (shape == 2 && tone != 3) ? CONIFER : FOLIAGE[min(tone, 3)]);
+		if (clump) {
+			color *= canopy_tint;
+		}
 		// Each tree a little lighter or darker, warmer or cooler.
 		color *= mix(0.88, 1.12, rnd(seed, 6.0));
 		color *= mix(vec3(1.06, 1.0, 0.84), vec3(0.94, 1.0, 1.1), rnd(seed, 7.0));
@@ -241,8 +263,9 @@ void fragment() {
 		color *= 1.0 + 0.07 * crown_shading_data.y;
 		// Soft gradient: the underside a little darker, the top catching more sky.
 		float up = smoothstep(0.0, 0.95, crown_shading_data.x);
-		color *= mix(1.0 - crown_shading, 1.05, up);
-		occlusion = mix(0.9, 1.05, up);
+		float shading = clump ? canopy_shading : crown_shading;
+		color *= mix(1.0 - shading, 1.05, up);
+		occlusion = mix(clump ? 1.0 - shading : 0.9, 1.05, up);
 		// Leaf clumps up close, gone once they're a few pixels.
 		vec2 q = vec2(p.x + 0.6 * p.y, p.z - 0.8 * p.y) / 1.1;
 		float clumps = value_noise(q + seed);
