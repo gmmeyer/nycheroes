@@ -15,10 +15,12 @@ import numpy as np
 import shapely
 from shapely.geometry import shape
 
+import cantilever
 import els
 import facades
 import ground_details
 import landcover
+import lidar
 import markings
 import overpasses
 import props
@@ -148,6 +150,11 @@ def prepare_facades() -> dict:
     return facades.prepare(load("buildings"))
 
 
+def prepare_deck_heights() -> dict:
+    load_terrain()
+    return lidar.prepare(load("overpasses"), terrain.Terrain())
+
+
 def prepare_ground_details() -> dict:
     load_landcover()
     return ground_details.prepare(load("ground")["land"])
@@ -157,7 +164,8 @@ PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": 
              "facades": prepare_facades, "trees": props.prepare_trees, "centerline": markings.prepare,
              "furniture": props.prepare_furniture, "overpasses": overpasses.prepare,
              "ground_details": prepare_ground_details, "els": els.prepare,
-             "deck_sidewalks": overpasses.prepare_sidewalks}
+             "deck_sidewalks": overpasses.prepare_sidewalks, "cantilever": cantilever.prepare,
+             "deck_heights": prepare_deck_heights}
 
 
 def load(name: str) -> dict:

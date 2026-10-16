@@ -926,10 +926,10 @@ Comes after step 6 because it needs step 6's real ground heights.
 
 - **Overpasses** (`tools/citygen/overpasses.py`): raised roads from the
   street centerlines' level codes (13 street level, 17 one level up, 21
-  two, 25 three), each level 7 m above the low ground around them (5 m
-  clearance under a 2 m deck). They ramp between the levels at their ends
-  and never dip below the ground; carriageways and ramps at one level merge
-  into one deck. Bridge outlines on land give viaducts their true edges
+  two, 25 three), at the heights the lidar survey measures (below), else
+  each level 7 m above the low ground around them (5 m clearance under a
+  2 m deck). They ramp between the levels at their ends and never dip below
+  the ground; carriageways and ramps at one level merge into one deck. Bridge outlines on land give viaducts their true edges
   (the Gowanus, the Major Deegan). Outlines without a raised road (rail
   bridges over streets, streets over rail cuts and sunken highways) span
   between the ground at their ends and rise 7 m over streets passing
@@ -995,13 +995,59 @@ Comes after step 6 because it needs step 6's real ground heights.
 - **Signals where ramps meet streets:** ramps and bridges arriving at a
   signalized street intersection take the phase of the street approach in
   line with them (or the crossing one's): 434 ends.
-- **Still to do:** sunken roads (the BQE's triple cantilever: its roadways
-  are in the street centerlines at levels 5 and 9 inside a bridge outline,
-  but the bare-earth elevation model puts the Heights' bluff where the
-  stacked decks stand, so the ground needs cutting away first); trains on
-  the els; signal heads on el columns (signal poles under an el are left
-  out); yellow platform edges; tall viaducts come out lower than real (7 m
-  per level).
+- **Viaduct heights from the lidar survey** (`tools/citygen/lidar.py`): the
+  city's 2017 topobathymetric lidar (NOAA's copy as Entwine point tiles; the
+  830 MB around the raised roads download into `data/raw/lidar` on the first
+  build) gives the surfaces every 10 m along the 551 km of raised roads,
+  matched to the elevation model through the ground around. The raised
+  roads' heights are fitted to them over the whole network at once (a
+  smoothed least-squares fit: each station follows the surface that runs on
+  with its neighbors' and the roads it meets, so bridges, roofs and roads
+  over or under it drop out), held 5.5 m over the streets and roads passing
+  under and 4.5 m under those passing over (by the level codes), and falling
+  back on 7 m a level where the survey sees no deck (about half the stations
+  follow a surface). The Gowanus Expressway now stands 31 m over the Gowanus
+  Canal and 12-14 m over Third Avenue, the Cross Bronx's ramps onto the
+  Alexander Hamilton Bridge 33 m over the Major Deegan, the BQE 20-38 m on
+  the Kosciuszko approaches, the Bruckner 10-16 m, the Kew Gardens
+  interchange up to 15 m, the big bridges' land approaches at their real
+  heights (the Manhattan Bridge's 20-30 m). Roads at street level in the
+  data between two raised ones (level codes that dip for no street) stay up,
+  and viaducts crossing a creek or canal on a bridge outline hold their
+  height over it. Decks bend between the heights of the roads on them
+  (within 20 m). Over the network: stacked crossings less than 1 m apart
+  went from 33 to 1, raised road ends less than 4.5 m over a street from 534
+  to 1, ramps steeper than 20% from 4.3 to 2.0 km. Cost: the viaducts' near
+  tiles about +1%, mid +3%; no new draw calls.
+- **The BQE's triple cantilever** (`tools/citygen/cantilever.py`), Remsen to
+  Orange Street under the Brooklyn Heights Promenade: the Staten
+  Island-bound roadway on the lower deck, the Queens-bound one on the middle
+  deck and the Promenade on top, each set back about 5 m from the one below
+  and cantilevered off the retaining wall cut into the bluff, at the lidar's
+  heights over Furman Street (5.1, 10.6 and 16 m: Furman Street 3.7 m above
+  sea level, the Promenade 19.7), stacked on north to the Columbia Heights
+  overpass and rising over Joralemon Street at the south end (NYC DOT's BQE
+  Central scope and 2018 section, the expert panel's report, the bridge
+  inventory's 4.2 m clearances, photos from Brooklyn Bridge Park). The
+  roadways' centerlines (levels 5 and 9, along the decks' west edges) are
+  moved onto their decks, so traffic drives both; their ramps north of it
+  climb out of a trench to the Sands Street interchange. The bluff the
+  bare-earth model puts there is cut away under the structure (a floor a
+  meter under Furman Street, walls where the cut meets higher ground) and
+  filled up behind it to the gardens 2.2 m below the Promenade, sloping back
+  down to the model's ground; Columbia Heights bridges the cut. Curved
+  soffits, square-paneled walls, rust fascias, green-gray pipe railings on
+  posts, the Promenade's pavers, planted strip, brown fence over a rounded
+  edge and post-top lamps, its walking lanes; collision everywhere. Shading
+  reuses the landmark bridges' kinds and palettes: no new shader code. Cost:
+  the four near tiles around it +247 KB (+13%; +15% triangles, a third of
+  them paint), the mid ones +89 KB (+10%), the far one +23 KB (+2%); no new
+  draw calls.
+- **Still to do:** other sunken roads (the BQE's trench along Hicks Street,
+  the Cross Bronx's cuts: no lanes or paint below street level yet); trains
+  on the els; signal heads on el columns (signal poles under an el are left
+  out); yellow platform edges; the lidar is from 2017 (the Kosciuszko's
+  second span and the Kew Gardens interchange's rebuild came later).
 
 ## 9. Mac and Windows versions (planned, last)
 
@@ -1053,7 +1099,9 @@ templates for both are already installed.
 
 - Rebuild city data: `tools/citygen/fetch_data.py` (NYC Open Data, the
   USGS elevation tiles, the 3-D building model and the land cover map, about
-  4 GB with 33 GB unpacked), then `build_tiles.py`,
+  4 GB with 33 GB unpacked), then `build_tiles.py` (its first run also
+  fetches the lidar survey's point tiles around raised roads, 830 MB,
+  `lidar.py`),
   then, only for the photo comparison, `aerial.py` (downloads and lays out
   the aerial photos once; after later `build_tiles.py` runs, `aerial.py
   mark` re-adds them to the manifest). Python venv in `tools/citygen/.venv`,

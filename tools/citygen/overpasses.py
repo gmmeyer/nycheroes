@@ -5,12 +5,17 @@ highways, rail bridges over streets), as decks on columns.
 Two sources, combined:
 - The street centerlines (CSCL) give each segment's level at both ends:
   13 is street level, 17 one level up, 21 two, 25 three (9 and 5 are below,
-  in trenches and tunnels, left alone). A raised road climbs from street level
-  to LEVEL_RISE per level (a typical 5 m clearance under a 2 m deck) above
-  the low ground around it, ramping along each segment between the levels at
-  its ends, and never dips below the ground. Raised segments become decks
-  their width wide (merged per level, so carriageways and ramps at one level
-  form one deck).
+  in trenches and tunnels, left alone, but for the BQE's triple cantilever,
+  cantilever.py). Raised segments become decks their width wide (merged per
+  level, so carriageways and ramps at one level form one deck).
+- The city's 2017 lidar survey (lidar.py) gives their decks' heights where
+  it sees them (Network._fit): the Gowanus Expressway 31 m over the Gowanus
+  Canal, the Cross Bronx's ramps onto the Alexander Hamilton Bridge 33 m
+  over the Major Deegan. Where it doesn't, a raised road climbs from street
+  level to LEVEL_RISE per level (a typical 5 m clearance under a 2 m deck)
+  above the low ground around it, ramping along each segment between the
+  levels at its ends. It never dips below the ground, and the fit keeps it
+  clear of the roads and streets passing under it.
 - The planimetric bridge outlines (Transportation Structures, feature code
   2300) on land: the outline becomes the deck. Outlines that raised roads run
   through join those roads' deck; the others (streets over rail cuts and
@@ -25,7 +30,7 @@ deck stays: the streets, sidewalks and people.
 
 The city's elevation model can't give deck heights: it's bare earth, with
 bridges removed (and its 10 m pixels blur embankments). It does give the
-ground the levels count up from.
+ground the levels count up from, and the survey's heights are matched to it.
 
 Streets crossing a creek where the data has no bridge at all get a low deck
 from bank to bank; on decks that carry a street over a dip, the street's
@@ -43,11 +48,12 @@ import shapely
 from shapely.geometry import shape
 
 import bridges
+import lidar
 import markings
 import props
 import traffic
-from common import (CURB_HEIGHT, FEET, GROUND_ROAD, MARKING_LIFT, STRUCTURE_CONCRETE, STRUCTURE_RAIL, STRUCTURE_STEEL,
-                    STRUCTURE_WALKWAY, MeshBuilder, lines_of, load_features, polygons_of, project)
+from common import (CURB_HEIGHT, FEET, GROUND_PAVERS, GROUND_ROAD, MARKING_LIFT, STRUCTURE_CONCRETE, STRUCTURE_RAIL,
+                    STRUCTURE_STEEL, STRUCTURE_WALKWAY, MeshBuilder, lines_of, load_features, polygons_of, project)
 from markings import AT_GRADE, BOTH, HIGHWAY, STREET
 
 BRIDGE_CODE = "2300"
@@ -56,12 +62,40 @@ BRIDGE_CODE = "2300"
 BRIDGE, RAMP, PATH = 3, 9, 6
 ROAD_TYPES = (STREET, HIGHWAY, BRIDGE, RAMP)
 LEVEL_STEP = 4       # level codes per level
+MAX_LEVEL = 30       # higher codes are unknowns, taken as street level
 LEVEL_RISE = 7.0     # meters from the road below to the deck's top, per level
+# The lidar survey's deck heights (lidar.py), fitted over the raised roads
+# (Network._fit): a deck is at least MIN_DECK and at most MAX_DECK over the
+# street under it, climbs from the street at most MAX_GRADE (within
+# PICK_TOLERANCE); one under another road keeps COVER_GAP below it, one over a
+# road or street UNDER_CLEAR above the street (4.5 m clear under a 1 m deck).
+MIN_DECK = 2.5
+MAX_DECK = 40.0
+UNDER_CLEAR = 5.5
+COVER_GAP = 4.5
+MAX_GRADE = 0.08
+PICK_TOLERANCE = 2.5
+# Fitting heights to the survey (Network._fit): each station's pull toward
+# its surface (MEASURE, softening past FIT_SOFT off it, none past FIT_REACH),
+# toward the level codes' height (PRIOR), toward the next station's along the
+# road (SMOOTH meters over the distance between them), and nodes where other
+# roads meet held (HOLD).
+MEASURE = 1.0
+PRIOR = 0.02
+SMOOTH = 20.0
+HOLD = 1e4
+FIT_SOFT = 1.0
+FIT_REACH = 4.0
+FIT_ROUNDS = 4
+FIT_ITERATIONS = 400
+LIMIT_ROUNDS = 6
+LIMIT_SLACK = 0.05
 # The ground a raised road's levels count up from: the lowest within these
 # rings around it (so a road on an embankment isn't counted from its top).
 LOW_RINGS = (15.0, 30.0)
 # Heights along each segment at least this often (meters).
 STATION_STEP = 10.0
+FIELD_BLEND = 20.0  # decks blend the heights of the roads on them this close
 # Widths when the data has none (meters): per lane, plus shoulders.
 LANE_WIDTH, SHOULDERS = 3.6, 2.0
 PATH_WIDTH = 4.0
@@ -170,6 +204,40 @@ def prepare() -> dict:
     }
 
 
+def _solve(count: int, ea, eb, ew, diag, rhs, x) -> np.ndarray:
+    """Solves (diag + the weighted graph Laplacian of edges ea-eb) x = rhs by
+    conjugate gradients, preconditioned by the diagonal, from x."""
+    full = diag + np.bincount(ea, weights=ew, minlength=count) + np.bincount(eb, weights=ew, minlength=count)
+
+    def apply(v):
+        return full * v - np.bincount(ea, weights=ew * v[eb], minlength=count) \
+            - np.bincount(eb, weights=ew * v[ea], minlength=count)
+    inverse = 1.0 / np.maximum(full, 1e-12)
+    r = rhs - apply(x)
+    z = inverse * r
+    p = z.copy()
+    rz = r @ z
+    for _ in range(FIT_ITERATIONS):
+        ap = apply(p)
+        alpha = rz / max(p @ ap, 1e-30)
+        x = x + alpha * p
+        r = r - alpha * ap
+        if np.abs(r).max() < 1e-4:
+            break
+        z = inverse * r
+        rz, previous = r @ z, rz
+        p = z + (rz / max(previous, 1e-30)) * p
+    return x
+
+
+def _nearest(layers: np.ndarray, target: np.ndarray) -> np.ndarray:
+    """Per row of (N, L) layers (NaN: none), the one nearest target (N,), or NaN."""
+    miss = np.where(np.isnan(layers), np.inf, np.abs(layers - target[:, None]))
+    pick = np.argmin(miss, axis=1)
+    out = layers[np.arange(len(layers)), pick]
+    return np.where(np.isfinite(miss[np.arange(len(layers)), pick]), out, np.nan)
+
+
 def rise(level) -> np.ndarray:
     """Meters above the road below for CSCL level codes (0 at street level and below)."""
     return np.maximum(np.asarray(level, np.float64) - int(AT_GRADE), 0.0) / LEVEL_STEP * LEVEL_RISE
@@ -194,24 +262,48 @@ class Network:
     node ids that match the streets'.
 
     `terrain` is a terrain.Terrain; `streets` the prepared street centerlines
-    (markings.prepare)."""
+    (markings.prepare). `structure` (a cantilever.Structure) brings the
+    roadways below street level it carries, their heights, and its ground;
+    `decks` the lidar survey's deck heights (lidar.prepare)."""
 
-    def __init__(self, data: dict, streets: dict, terrain):
+    def __init__(self, data: dict, streets: dict, terrain, structure=None, decks=None):
+        self.structure = structure
+        stacked = np.zeros(len(data["lines"]), dtype=bool)
+        surveyed = data["lines"]  # as the survey's stations were laid out (lidar.py)
+        if structure is not None:
+            data, stacked = structure.merged(data, streets)
         self.data = data
         self.lines = data["lines"]
         self.count = len(self.lines)
         self.terrain = terrain
         self.ground_lattice = terrain.lattice(20.0)  # the lod0 ground (build_tiles.LEVELS)
+        if structure is not None:
+            self.ground_lattice = structure.ground(self.ground_lattice)
         self.levels = data["levels"].astype(np.int64)
+        # (Codes past the top level are unknowns: one road has 99.)
+        self.levels[self.levels > MAX_LEVEL] = int(AT_GRADE)
         top = self.levels.max(axis=1)
-        self.raised = top > int(AT_GRADE)
-        # Decks are grouped by level, rounded up to whole levels.
-        self.group = np.where(self.raised, int(AT_GRADE) + LEVEL_STEP * np.ceil((top - int(AT_GRADE)) / LEVEL_STEP), 0)
-        self.group = self.group.astype(np.int64)
+        # Roadways on the structure's decks, and streets bridging over it (its
+        # build() makes their decks).
+        self.stacked = stacked
+        self.over = np.zeros(len(self.lines), dtype=bool)
+        if structure is not None:
+            self.over = np.array([structure.bridge(line) for line in self.lines])
         self.width = self._widths()
         self.tree = shapely.STRtree(self.lines)
         self._stations = [None] * self.count
         self.attrs = self._attributes(streets)
+        self.ends = self._end_heights()
+        self.fitted = self._fit(decks or {}, surveyed, streets)
+        # Raised: above street level, or (at street level in the data) brought
+        # up to meet roads that are.
+        starts = shapely.get_coordinates(shapely.get_point(self.lines, 0))
+        finishes = shapely.get_coordinates(shapely.get_point(self.lines, -1))
+        lifted = (self.ends - np.column_stack([self.street(starts), self.street(finishes)])).max(axis=1) > GRADE_DECK
+        self.raised = (top > int(AT_GRADE)) | stacked | (lifted & (data["rw"] != PATH))
+        # Decks are grouped by level, rounded up to whole levels.
+        self.group = np.where(self.raised, int(AT_GRADE) + LEVEL_STEP * np.ceil((top - int(AT_GRADE)) / LEVEL_STEP), 0)
+        self.group = self.group.astype(np.int64)
         # Street-level roads, for what passes under (or along) a deck: the
         # streets and our street-level ramps and bridges.
         level = ~self.raised & (data["rw"] != PATH)
@@ -336,6 +428,216 @@ class Network:
         h = self.terrain.height((en[:, None, :] + offsets[None]).reshape(-1, 2)).reshape(len(en), -1)
         return h.min(axis=1) - CURB_HEIGHT
 
+    def _surveyed(self, decks: dict, surveyed: np.ndarray, streets: dict, members: np.ndarray) -> dict:
+        """What the lidar survey has along each of these raised segments
+        (lidar.py), and the limits on their heights: {segment: (distances
+        along, surfaces (S, L) NaN-padded, floors, ceilings)}. A deck is
+        MIN_DECK to MAX_DECK over the street. Where a road (or street) at
+        least half a level down by the level codes there passes under a
+        station, the deck is at least UNDER_CLEAR over the street; where one
+        at least half a level up passes over it, COVER_GAP below that one
+        (whose deck is the station's highest surface). A road can't climb
+        from where it meets the street faster than MAX_GRADE (what's higher
+        there is something over it)."""
+        out = {}
+        under_lines = np.concatenate([streets["lines"], self.lines])
+        under_half = np.concatenate([np.where(streets["width"] > 0, streets["width"] / 2.0, markings.DEFAULT_HALF_WIDTH),
+                                     self.width / 2.0])
+        under_levels = np.concatenate([np.full((len(streets["lines"]), 2), int(AT_GRADE)), self.levels])
+        under_tree = shapely.STRtree(under_lines)
+        # (Not roads that go below street level: in cuts, or the triple
+        # cantilever's ramps, what the survey sees is over them.)
+        below = self.levels.min(axis=1) < int(AT_GRADE)
+        for k in members:
+            length = self.lines[k].length
+            found = lidar.heights(decks, surveyed[k]) if k < len(surveyed) and not below[k] else None
+            if found is not None:
+                s, layers = (np.asarray(a, np.float64) for a in found)
+                s = s * length / max(float(surveyed[k].length), 1e-6)
+            else:
+                s = np.linspace(0.0, length, max(2, int(np.ceil(length / STATION_STEP)) + 1))
+                layers = np.full((len(s), lidar.MAX_LAYERS), np.nan)
+            en = shapely.get_coordinates(shapely.line_interpolate_point(self.lines[k], s))
+            points = shapely.points(en)
+            street = self.street(en)
+            layers = np.where((layers >= street[:, None] + MIN_DECK) & (layers <= street[:, None] + MAX_DECK),
+                              layers, np.nan)
+            highest = np.nanmax(np.where(np.isnan(layers), -np.inf, layers), axis=1)
+            # The level codes here, and the other roads' over and under the
+            # stations (half a level or more apart).
+            mine = self.levels[k, 0] + (self.levels[k, 1] - self.levels[k, 0]) * s / max(length, 1e-6)
+            point, other = under_tree.query(points, predicate="dwithin", distance=MAX_WIDTH)
+            near = shapely.distance(under_lines[other], points[point]) <= under_half[other] + 1.0
+            point, other = point[near], other[near]
+            along = shapely.line_locate_point(under_lines[other], points[point], normalized=True)
+            theirs = under_levels[other, 0] + (under_levels[other, 1] - under_levels[other, 0]) * along
+            covered = np.zeros(len(s), dtype=bool)
+            covered[point[theirs >= mine[point] + LEVEL_STEP / 2]] = True
+            passing = np.zeros(len(s), dtype=bool)
+            passing[point[theirs <= mine[point] - LEVEL_STEP / 2]] = True
+            floor = np.where(passing, street + UNDER_CLEAR, -np.inf)
+            layers[covered] = np.where(layers[covered] <= highest[covered, None] - COVER_GAP, layers[covered], np.nan)
+            ceiling = np.where(covered & np.isfinite(highest), highest - COVER_GAP, np.inf)
+            layers = np.where(layers >= floor[:, None], layers, np.nan)
+            for i, level in ((0, self.levels[k, 0]), (-1, self.levels[k, 1])):
+                if level <= int(AT_GRADE):
+                    reach = street[i] + MAX_GRADE * np.abs(s - s[i]) + PICK_TOLERANCE
+                    layers = np.where(layers <= reach[:, None], layers, np.nan)
+            out[int(k)] = (s, layers, floor, ceiling)
+        return out
+
+    def _fit(self, decks: dict, surveyed: np.ndarray, streets: dict) -> dict:
+        """The raised roads' heights fitted to the lidar survey, all at once:
+        {segment: (distances along, heights)}. Every station's height follows
+        the survey's surface there (_surveyed), ties to the next station's
+        along the road (SMOOTH; at nodes the roads meeting share one), and
+        leans a little on the level codes' heights (PRIOR); nodes where other
+        roads meet stay at their heights. The surface a station follows is the
+        highest at first, then the one nearest the fit; ones far from the fit
+        stop counting (other bridges, roads and roofs over and under it), as
+        an iteratively reweighted least squares fit over FIT_ROUNDS. Then
+        stations under their floors or over their ceilings are held there,
+        until none are (or LIMIT_ROUNDS)."""
+        if not decks:
+            return {}
+        top = self.levels.max(axis=1)
+        members = np.flatnonzero((top > int(AT_GRADE)) & ~self.stacked & ~self.over)
+        survey = self._surveyed(decks, surveyed, streets, members)
+        nodes = self.attrs["nodes"]
+        inside = np.zeros(self.count, dtype=bool)
+        inside[members] = True
+        held = set(nodes[~inside].reshape(-1).tolist()) | set(nodes[inside][self.levels[inside] <= int(AT_GRADE)].tolist())
+        node_var = {}
+        count = 0
+        index = {}
+        prior_w, prior_v, hold_w = [], [], []
+        edges = []
+
+        def new_vars(n):
+            nonlocal count
+            out = np.arange(count, count + n)
+            count += n
+            return out
+        for k in members:
+            s = survey[k][0]
+            idx = np.empty(len(s), dtype=np.int64)
+            for i in (0, -1):
+                node = int(nodes[k, 0 if i == 0 else 1])
+                if node not in node_var:
+                    node_var[node] = new_vars(1)[0]
+                    if node in held:
+                        hold_w.append((node_var[node], self.ends[k, 0 if i == 0 else 1]))
+                idx[i] = node_var[node]
+            if len(s) > 2:
+                idx[1:-1] = new_vars(len(s) - 2)
+            t = s / max(self.lines[k].length, 1e-6)
+            prior_w.append(idx)
+            prior_v.append(self.ends[k, 0] + (self.ends[k, 1] - self.ends[k, 0]) * (0.5 * t + 0.5 * t * t * (3.0 - 2.0 * t)))
+            ds = np.maximum(np.diff(s), 0.5)
+            edges.append(np.column_stack([idx[:-1], idx[1:], SMOOTH / ds]))
+            index[k] = idx
+        edges = np.concatenate(edges)
+        ea, eb, ew = edges[:, 0].astype(np.int64), edges[:, 1].astype(np.int64), edges[:, 2]
+        prior_idx, prior_val = np.concatenate(prior_w), np.concatenate(prior_v)
+        held_idx = np.array([i for i, _ in hold_w], dtype=np.int64)
+        held_val = np.array([v for _, v in hold_w])
+        floor = np.full(count, -np.inf)
+        ceiling = np.full(count, np.inf)
+        for k in members:
+            np.maximum.at(floor, index[k], survey[k][2])
+            np.minimum.at(ceiling, index[k], survey[k][3])
+        floor[held_idx], ceiling[held_idx] = -np.inf, np.inf  # (held as they are)
+        # The survey's stations.
+        obs_idx = np.concatenate([index[k] for k in members])
+        obs_layers = np.concatenate([survey[k][1] for k in members])
+        obs_pick = np.nanmax(np.where(np.isnan(obs_layers), -np.inf, obs_layers), axis=1)
+        obs_weight = np.where(np.isfinite(obs_pick), MEASURE, 0.0)
+        obs_pick = np.where(np.isfinite(obs_pick), obs_pick, 0.0)
+        x = np.zeros(count)
+        np.add.at(x, prior_idx, prior_val)
+        x /= np.maximum(np.bincount(prior_idx, minlength=count), 1)
+        limit_idx, limit_val = np.zeros(0, dtype=np.int64), np.zeros(0)
+        for round_ in range(FIT_ROUNDS + LIMIT_ROUNDS):
+            diag = np.bincount(prior_idx, minlength=count) * PRIOR
+            rhs = np.bincount(prior_idx, weights=prior_val * PRIOR, minlength=count)
+            diag += np.bincount(obs_idx, weights=obs_weight, minlength=count)
+            rhs += np.bincount(obs_idx, weights=obs_weight * obs_pick, minlength=count)
+            diag[held_idx] += HOLD
+            rhs[held_idx] += HOLD * held_val
+            np.add.at(diag, limit_idx, HOLD)
+            np.add.at(rhs, limit_idx, HOLD * limit_val)
+            x = _solve(count, ea, eb, ew, diag, rhs, x)
+            if round_ < FIT_ROUNDS - 1:
+                # Next: the surfaces nearest the fit, those far from it not counting.
+                fit = x[obs_idx]
+                obs_pick = _nearest(obs_layers, fit)
+                miss = np.abs(obs_pick - fit)
+                obs_weight = np.where(np.isfinite(obs_pick) & (miss <= FIT_REACH),
+                                      MEASURE / np.maximum(1.0, miss / FIT_SOFT), 0.0)
+                obs_pick = np.where(np.isfinite(obs_pick), obs_pick, 0.0)
+            else:
+                # Hold the stations past their limits there.
+                low = np.flatnonzero(x < floor - LIMIT_SLACK)
+                high = np.flatnonzero(x > ceiling + LIMIT_SLACK)
+                if not len(low) and not len(high):
+                    break
+                limit_idx = np.concatenate([limit_idx, low, high])
+                limit_val = np.concatenate([limit_val, floor[low], ceiling[high]])
+        out = {}
+        for k in members:
+            h = x[index[k]]
+            out[int(k)] = (survey[k][0], h)
+            self.ends[k] = (h[0], h[-1])
+        self.surveyed_share = float((obs_weight > 0).mean()) if len(obs_weight) else 0.0
+        return out
+
+    def _end_height(self, level: int, en: np.ndarray) -> np.ndarray:
+        """Road heights at (N, 2) segment ends at one level code: the street
+        at street level (and below, except on the structure), LEVEL_RISE per
+        level above the low ground around above it."""
+        street = self.street(en)
+        if level > int(AT_GRADE):
+            return np.maximum(street, self.low(en) + float(rise(level)))
+        if level < int(AT_GRADE) and self.structure is not None:
+            return np.where(self.structure.carries(en), self.structure.level(level, en), street)
+        return street
+
+    def _end_heights(self) -> np.ndarray:
+        """Each segment's road height at its start and end (N, 2), the same
+        for every road meeting at a node. At street level in the data, where
+        no street meets them:
+        - where roads leave the structure's decks: the deck's level
+          (cantilever.py);
+        - where only roads off street level meet (a highway between two
+          viaducts that only its level codes bring down): the mean of those
+          roads' other ends."""
+        en = np.stack([shapely.get_coordinates(shapely.get_point(self.lines, 0)),
+                       shapely.get_coordinates(shapely.get_point(self.lines, -1))], axis=1).reshape(-1, 2)
+        node = self.attrs["nodes"].astype(np.int64).reshape(-1)
+        level = self.levels.reshape(-1)
+        other = self.levels[:, ::-1].reshape(-1)
+        ends = np.zeros(len(en))
+        for value in np.unique(level):
+            ends[level == value] = self._end_height(int(value), en[level == value])
+        unknown = (node >= NODE_BASE) & (level == int(AT_GRADE))
+        pinned = {}
+        if self.structure is not None:
+            for e in np.flatnonzero(unknown & (other < int(AT_GRADE))):
+                if self.structure.on_decks(en[e:e + 1])[0]:
+                    pinned[node[e]] = float(self.structure.level(int(other[e]), en[e:e + 1])[0])
+        free = unknown & (other != int(AT_GRADE)) & np.repeat(self.data["rw"] != PATH, 2) & ~np.isin(node, list(pinned))
+        ids, index = np.unique(node, return_inverse=True)
+        incident = np.bincount(index, minlength=len(ids))
+        qualified = np.bincount(index[free], minlength=len(ids))
+        total = np.bincount(index[free], weights=ends.reshape(-1, 2)[:, ::-1].reshape(-1)[free], minlength=len(ids))
+        node_free = (qualified == incident) & (incident >= 2)
+        pick = node_free[index] & free
+        ends[pick] = total[index[pick]] / qualified[index[pick]]
+        for e in np.flatnonzero(np.isin(node, list(pinned))):
+            ends[e] = pinned[node[e]]
+        self.free_nodes = int(node_free.sum())
+        return ends.reshape(-1, 2)
+
     def stations(self, k: int) -> tuple[np.ndarray, np.ndarray]:
         """Distances along segment k and its road's height there."""
         if self._stations[k] is None:
@@ -345,18 +647,28 @@ class Network:
             en = shapely.get_coordinates(shapely.line_interpolate_point(line, s))
             street = self.street(en)
             l0, l1 = self.levels[k]
-            if max(l0, l1) <= int(AT_GRADE):
+            ends = self.ends[k]
+            t = s / max(length, 1e-6)
+            if self.stacked[k]:
+                # On the structure's decks, at its levels' heights.
+                h = self.structure.level(int(l0), en) * (1.0 - t) + self.structure.level(int(l1), en) * t
+            elif self.over[k]:
+                h = ends[0] + (ends[1] - ends[0]) * t  # straight across, over the structure
+            elif max(l0, l1) <= int(AT_GRADE) and np.allclose(ends, street[[0, -1]]):
                 h = street
             else:
-                low = self.low(en)
-                ends = [max(street[i], low[i] + float(rise(level))) if level > int(AT_GRADE) else street[i]
-                        for i, level in ((0, l0), (-1, l1))]
-                t = s / max(length, 1e-6)
                 # Half straight, half eased: ramps climb steadily but round
                 # into the level road at either end.
                 ease = 0.5 * t + 0.5 * t * t * (3.0 - 2.0 * t)
                 h = ends[0] + (ends[1] - ends[0]) * ease
-                floor = street if min(l0, l1) <= int(AT_GRADE) else np.maximum(street, low + float(rise(min(l0, l1))))
+                if k in self.fitted:
+                    # As fitted to the lidar survey.
+                    h = np.interp(s, *self.fitted[k])
+                    floor = street
+                elif min(l0, l1) <= int(AT_GRADE):
+                    floor = street
+                else:
+                    floor = np.maximum(street, self.low(en) + float(rise(min(l0, l1))))
                 h = np.maximum(h, floor)
                 h[0], h[-1] = ends[0], ends[1]
             self._stations[k] = (s, h)
@@ -369,17 +681,26 @@ class Network:
         return np.interp(at, s, h)
 
     def field(self, en: np.ndarray, segments: np.ndarray) -> np.ndarray:
-        """Heights at (N, 2) points from the nearest of these segments."""
+        """Heights at (N, 2) points from these segments: the nearest one's,
+        blended with the others' within FIELD_BLEND (by inverse square
+        distance), so a deck that carries roads at different heights (a ramp
+        leaving a highway) bends between them rather than steps."""
         en = np.asarray(en, np.float64).reshape(-1, 2)
         if len(segments) == 1:
             return self.along(int(segments[0]), en)
         tree = shapely.STRtree(self.lines[segments])
-        nearest = tree.query_nearest(shapely.points(en), return_distance=False, all_matches=False)
-        out = np.empty(len(en))
-        for j in np.unique(nearest[1]):
-            mask = nearest[0][nearest[1] == j]
-            out[mask] = self.along(int(segments[j]), en[mask])
-        return out
+        points = shapely.points(en)
+        nearest = tree.query_nearest(points, return_distance=False, all_matches=False)
+        near = tree.query(points, predicate="dwithin", distance=FIELD_BLEND)
+        pairs = np.unique(np.concatenate([nearest, near], axis=1), axis=1)
+        point, j = pairs
+        heights = np.empty(len(point))
+        for one in np.unique(j):
+            mask = j == one
+            heights[mask] = self.along(int(segments[one]), en[point[mask]])
+        weight = 1.0 / (shapely.distance(self.lines[segments][j], points[point]) + 1.0) ** 2
+        total = np.bincount(point, weights=weight, minlength=len(en))
+        return np.bincount(point, weights=weight * heights, minlength=len(en)) / total
 
     def approach(self, en: np.ndarray) -> np.ndarray:
         """Where a bridge's approach (bridges.py) meets the land: the street,
@@ -407,8 +728,12 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
     # over water are bridges, the rest overpasses.
     network.land = land
     on_land, names, over_water, wet_outlines = [], [], [], []
+    structure = network.structure
+    taken = structure.footprint if structure is not None else shapely.Polygon()  # cantilever.build's
     for outline, name in zip(data["outlines"], data["outline_names"]):
         for part in polygons_of(outline, 50.0):
+            if shapely.area(shapely.intersection(part, taken)) > 0.5 * part.area:
+                continue
             name = bridges.outline_name(part, name)
             local = bridges.local_land(land, part)
             water = shapely.area(shapely.difference(part, local))
@@ -432,7 +757,7 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
     network.walk_areas = [(part, bridges._axis(part)[0]) for part in over_water]
     wet_outlines = shapely.union_all(wet_outlines) if wet_outlines else shapely.Polygon()
 
-    roads = np.flatnonzero(network.raised)
+    roads = np.flatnonzero(network.raised & ~network.stacked)
     builders = {level: MeshBuilder() for level in level_sizes}
     lamps = []
     overhead = _bridge_overhead(buckets.get("lod0", {}), network, land)  # what's high over the ground
@@ -461,7 +786,7 @@ def build(network: Network, land, buckets: dict, level_sizes: dict) -> None:
         members = roads[network.group[roads] == group]
         strips = shapely.buffer(network.lines[members], network.width[members] / 2.0, quad_segs=2)
         area = shapely.union_all(list(strips) + groups.get(group, []))
-        area = shapely.difference(area, keep_out)
+        area = shapely.difference(area, shapely.union(keep_out, taken))
         tree = shapely.STRtree(network.lines[members])
         for poly in _over_land(polygons_of(area, 20.0), land, wet_outlines):
             poly = shapely.orient_polygons(shapely.simplify(poly, 0.2))
@@ -586,14 +911,15 @@ def deck_walks(network: Network, sidewalks: np.ndarray) -> np.ndarray:
 
 def walks_on_decks(walks, tree, buckets: dict, bounds) -> list:
     """deck_walks' lanes in a near tile (bounds, a box), on the decks under
-    them (from the lod0 bridge buckets: the highest roadway or hand-made
-    walkway): [(N, 3) east, north, height]."""
+    them (from the lod0 bridge buckets: the highest roadway, hand-made
+    walkway or paved deck, the Brooklyn Heights Promenade's): [(N, 3) east,
+    north, height]."""
     if tree is None:
         return []
     hits = tree.query(bounds, predicate="intersects")
     if not len(hits):
         return []
-    surface = surface_for(buckets, bounds, (GROUND_ROAD, STRUCTURE_WALKWAY))
+    surface = surface_for(buckets, bounds, (GROUND_ROAD, STRUCTURE_WALKWAY, GROUND_PAVERS))
     out = []
     for line in walks[hits]:
         for piece in lines_of(shapely.intersection(line, bounds)):
