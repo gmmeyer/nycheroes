@@ -38,6 +38,7 @@ from shapely.geometry import Polygon
 
 import bridges
 import buildings3d
+import cantilever
 import els
 import facades
 import fronts
@@ -324,22 +325,34 @@ def _build_bridges(ground) -> dict:
     print("building bridges...", flush=True)
     terrain = Terrain()
     sizes = {level: s["size"] for level, s in LEVELS.items()}
-    # Raised roads first: bridge approaches come down to them (overpasses.py).
-    network = overpasses.Network(prepare.load("overpasses"), prepare.load("centerline"), terrain)
+    # Raised roads first: bridge approaches come down to them (overpasses.py),
+    # at the heights the lidar survey has them (lidar.py), with the roadways
+    # the BQE's triple cantilever carries (cantilever.py).
+    network = overpasses.Network(prepare.load("overpasses"), prepare.load("centerline"), terrain, _structure(terrain),
+                                 prepare.load("deck_heights"))
     buckets = bridges.build(ground["land"], terrain, sizes, approach=network.approach)
     overpasses.build(network, ground["land"], buckets, sizes)
+    cantilever.build(network, buckets, sizes)
     # Elevated railways over (and around) both (els.py).
     els.build(prepare.load("els"), network, ground["land"], buckets, sizes)
     # No roadbed drawn on the ground under them where no street is.
     buckets["roads_under_decks"] = overpasses.roads_under_decks(network, buckets.pop("overhead", []), ground["roads"])
     print(f"  {len(buckets['roads_under_decks'])} roadbed outlines cut back from under decks", flush=True)
     # Walking lanes on bridges' and raised streets' sidewalks.
-    buckets["deck_walks"] = overpasses.deck_walks(network, prepare.load("deck_sidewalks")["geoms"])
+    buckets["deck_walks"] = np.concatenate([overpasses.deck_walks(network, prepare.load("deck_sidewalks")["geoms"]),
+                                            cantilever.walks(network.structure)])
     print(f"  {len(buckets['deck_walks'])} walking lanes on decks", flush=True)
     BRIDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(BRIDGE_PATH, "wb") as f:
         pickle.dump(buckets, f, protocol=pickle.HIGHEST_PROTOCOL)
     return buckets
+
+
+def _structure(terrain):
+    """The BQE's triple cantilever (cantilever.py): its roadways, and the
+    ground cut away under it and filled up behind it."""
+    return cantilever.Structure(prepare.load("cantilever"), terrain, prepare.load("centerline"),
+                                prepare.load("overpasses"))
 
 
 def _rebuild(only: list[str], workers: int) -> None:
@@ -404,7 +417,10 @@ def _init_worker() -> None:
     _W["road_tree"] = shapely.STRtree(ground["roads"])
     _W["park_tree"] = shapely.STRtree(ground["parks"])
     _W["terrain"] = Terrain()
-    _W["ground"] = {level: _W["terrain"].lattice(settings["ground_cell"]) for level, settings in LEVELS.items()}
+    # The ground cut away under the triple cantilever and filled up behind it (cantilever.py).
+    _W["structure"] = _structure(_W["terrain"])
+    _W["ground"] = {level: _W["structure"].ground(_W["terrain"].lattice(settings["ground_cell"]))
+                    for level, settings in LEVELS.items()}
     # Things on streets that cross dips on decks stand on the deck (overpasses.py).
     _W["ground"]["lod0"] = overpasses.OnDecks(_W["ground"]["lod0"], _W["bridges"].get("street_decks", []))
     _W["creeks"] = {level: _W["terrain"].lattice(settings["ground_cell"], raw=True) for level, settings in LEVELS.items()}
@@ -415,7 +431,8 @@ def _init_worker() -> None:
     _W["water_tree"] = shapely.STRtree(_W["water"]["geoms"])
     _W["centerline"] = prepare.load("centerline")
     _W["centerline_tree"] = shapely.STRtree(_W["centerline"]["lines"])
-    _W["overpasses"] = overpasses.Network(prepare.load("overpasses"), _W["centerline"], _W["terrain"])
+    _W["overpasses"] = overpasses.Network(prepare.load("overpasses"), _W["centerline"], _W["terrain"], _W["structure"],
+                                          prepare.load("deck_heights"))
     trees = prepare.load("trees")
     _W["trees"] = trees
     groups = defaultdict(list)
@@ -838,24 +855,31 @@ def _add_ground(builder: MeshBuilder, bounds, settings: dict) -> None:
         # GEOS overlays occasionally fail on nearly-coincident edges; snapping
         # everything to a 1 cm grid first gets them through.
         layers = _ground_layers(bounds, settings, grid=0.01)
-    terrain = overpasses.bare(_W["ground"][_W["level"]])
+    ground = overpasses.bare(_W["ground"][_W["level"]])
     cell = settings["ground_cell"]
     for kind, geom in layers:
         geom = shapely.simplify(geom, settings["ground_tolerance"], preserve_topology=True)
         polys = polygons_of(geom, min_area=settings["min_ground_area"])
-        if kind == GROUND_SHRUBS:  # planted medians (ground_details.py)
-            _W["details"].add_beds(builder, polys, cell, terrain)
-            continue
-        height = terrain.height
         if kind == GROUND_ROAD and settings.get("curbs"):
-            def height(en):
-                return terrain.height(en) - CURB_HEIGHT
-            _add_curbs(builder, polys, bounds, cell, terrain)
             _W["tile_roads"] = [shapely.orient_polygons(p) for p in polys]  # for street lights
-        # Belgian block and plaza pavers where streets are drawn (ground_details.py).
-        parts = _W["details"].paving(kind, polys) if settings["roads"] else [((kind, 0.0), polys)]
-        for uv2, part in parts:
-            builder.add_draped(part, cell, height, uv2, terrain.normal)
+        # Cut away under the triple cantilever, and the rest (cantilever.Ground).
+        for terrain, part_polys in ground.regions(polys):
+            if kind == GROUND_SHRUBS:  # planted medians (ground_details.py)
+                _W["details"].add_beds(builder, part_polys, cell, terrain)
+                continue
+            height = terrain.height
+            if kind == GROUND_ROAD and settings.get("curbs"):
+                def height(en, terrain=terrain):
+                    return terrain.height(en) - CURB_HEIGHT
+                _add_curbs(builder, part_polys, bounds, cell, terrain)
+            # Belgian block and plaza pavers where streets are drawn (ground_details.py).
+            parts = _W["details"].paving(kind, part_polys) if settings["roads"] else [((kind, 0.0), part_polys)]
+            for uv2, part in parts:
+                builder.add_draped(part, cell, height, uv2, terrain.normal)
+
+    # Walls where the ground is cut away under the triple cantilever (cantilever.Ground).
+    for coords, bottom, top in ground.walls(bounds):
+        builder.add_walls(coords, bottom, top, (STRUCTURE_CONCRETE, 0.0))
 
     # Walls where the land meets water: down into the sea, or into a raised
     # lake's bed.
@@ -865,7 +889,7 @@ def _add_ground(builder: MeshBuilder, bounds, settings: dict) -> None:
     coast_t = shapely.simplify(coast_t, settings["ground_tolerance"])
     for line in lines_of(coast_t):
         coords = np.asarray(shapely.segmentize(line, cell).coords)[:, :2]
-        builder.add_walls(coords, _shore_wall_bottom(coords), terrain.height(coords), (GROUND_SEAWALL, 0.0))
+        builder.add_walls(coords, _shore_wall_bottom(coords), ground.height(coords), (GROUND_SEAWALL, 0.0))
 
 
 def _add_curbs(builder: MeshBuilder, roads: list, bounds, cell: float, terrain) -> None:
@@ -1273,10 +1297,12 @@ def _no_props() -> dict:
 
 
 def _on_open_ground(en: np.ndarray) -> np.ndarray:
-    """Which (N, 2) points are on land and not inside a building."""
+    """Which (N, 2) points are on land and not inside a building (or the
+    triple cantilever, but for its Promenade)."""
     ok = shapely.contains_xy(_W["g"]["land"], en[:, 0], en[:, 1])
     hits = _W["building_tree"].query(shapely.points(en), predicate="within")
     ok[hits[0]] = False
+    ok &= ~_W["structure"].inside(en)
     return ok
 
 
@@ -1406,6 +1432,7 @@ def _build_lanes(bounds, origin):
         if len(nearby_buildings):
             sidewalks = shapely.difference(sidewalks, shapely.buffer(shapely.union_all(nearby_buildings), LANE_WALL_GAP))
         sidewalks = _W["details"].without_narrow_medians(sidewalks, area)  # nobody walks along medians
+        sidewalks = shapely.difference(sidewalks, _W["structure"].closed)  # nor in the triple cantilever
         # Times Square's plazas: around their benches, and lanes across them too.
         sidewalks = shapely.difference(sidewalks, times_square.bench_obstacles(_W, bounds))
         lanes = shapely.intersection(shapely.buffer(roads_near, LANE_OFFSET).boundary, sidewalks)
