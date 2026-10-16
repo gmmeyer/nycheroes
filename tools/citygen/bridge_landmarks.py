@@ -32,7 +32,8 @@ paints; their uv2.y is palette + 8 * flags (the palette picks the bridge's
 colors: Brooklyn's tan steel and buff granite, Manhattan's blue, Hell Gate's
 red): LATTICE paints steel as an open truss (uv = (m along, 0..1 up the
 band)), FLOODLIT lights it at night, BALLAST draws track beds without ties
-(their uv is then world x/z).
+(their uv is then world x/z), RIVETS rivets steel (and stiffens plates; the
+els', els.py).
 """
 
 import math
@@ -51,7 +52,7 @@ BROOKLYN, MANHATTAN, HELL_GATE, HIGH_BRIDGE = 1, 2, 3, 4
 PALETTES = {"Brooklyn Bridge": BROOKLYN, "Manhatten Bridge": MANHATTAN, "Hellgate Bridge": HELL_GATE,
             "High Bridge/Aqueduct Bridge": HIGH_BRIDGE}
 # Flags (uv2.y // 8).
-LATTICE, FLOODLIT, BALLAST = 1, 2, 4
+LATTICE, FLOODLIT, BALLAST, RIVETS = 1, 2, 4, 8
 
 # Outlines that aren't vehicular bridges (feature code 2300) in the data:
 # the Hell Gate's is a railroad bridge (2320), the High Bridge's a
