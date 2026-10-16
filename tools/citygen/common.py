@@ -138,6 +138,35 @@ PROP_PARKED_CAR = 15
 # every level; uv = (foliage tone, 1 for conifers else 0).
 PROP_CANOPY = 16
 CAR_SEDAN, CAR_HATCHBACK, CAR_SUV, CAR_MINIVAN, CAR_PICKUP, CAR_VAN, CAR_TAXI, CAR_BOX_TRUCK = range(8)
+# Shop fronts (props.shop_fronts()): on a building's street wall, the front
+# facing out of it along (sin yaw, 0, cos yaw). A sign's position is the
+# middle of its bottom edge on the wall; normal = (height, width, yaw); uv =
+# (SIGN_* variant, its name: a row of the names texture, sign_names.NAMES).
+# An awning's position is on the wall under the middle of its top edge, as
+# low as its front edge hangs; normal = (drop m, width, yaw); uv = (AWNING_*
+# variant, its shop's name (as signs') + half how far it reaches out, m).
+PROP_SHOP_SIGN = 17
+SIGN_BOARD, SIGN_LIGHT_BOX, SIGN_LETTERS, SIGN_BLADE, SIGN_BANNER = range(5)
+PROP_AWNING = 18
+AWNING_FABRIC, AWNING_ALUMINUM, AWNING_DOME = range(3)
+# A sidewalk shed's section, standing on the sidewalk against a building's
+# wall (props.shed_sections()): position the middle of its foot on the wall;
+# normal = (deck height m, length along the wall m, yaw: facing out over the
+# sidewalk); uv = (color variant, how far it reaches out from the wall m).
+PROP_SIDEWALK_SHED = 19
+# The bike share's docks (props.prepare_bike_docks()), DOCKS_PER_SECTION in
+# a row per section along the station: position the middle of the docks'
+# row; normal = (1, the section's length m, yaw: the bikes stand out from
+# the docks that way); uv.x 0 docks, 1 the station's kiosk.
+PROP_BIKE_DOCK = 20
+DOCKS_PER_SECTION = 4
+DOCK_SPACING = 0.8
+# Pedestrian plazas' furniture (props.plaza_furniture()): uv.x 0 a cafe table
+# with chairs, 1 with an umbrella; planters (0 a long box, 1 a round tub); a
+# food kiosk.
+PROP_PLAZA_TABLE = 21
+PROP_PLANTER = 22
+PROP_KIOSK = 23
 # Trees' foliage tones (uv.x of the props surface).
 PROP_TONE_GREEN = 0
 PROP_TONE_LIGHT = 1   # yellow-green: honeylocust, ginkgo, birch, willow

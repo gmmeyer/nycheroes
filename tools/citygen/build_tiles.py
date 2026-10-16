@@ -6,7 +6,9 @@ and writes data/tiles/nyc/:
   lod0/<i>_<j>.nyct    500 m tiles, full detail: buildings, streets, sidewalks,
                        parks, raised lakes, walking lanes, bridges (with
                        collision in game), paint on the streets (markings.py),
-                       trees and water towers (props.py)
+                       trees, water towers, street lights and furniture, shop
+                       signs and awnings, sidewalk sheds, bike share docks and
+                       plaza furniture (props.py)
   lod1/<i>_<j>.nyct    1 km tiles: buildings under 20 m merged into blocks,
                        taller ones simplified; simplified ground
   lod2/<i>_<j>.nyct    4 km tiles: everything under 60 m merged into blocks by
@@ -56,8 +58,8 @@ import traffic
 import trains
 from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT,
                     GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_SHRUBS, GROUND_YARD, LANE_BREAK, MARKING_LIFT,
-                    ORIGIN_LAT, ORIGIN_LON, PROJECTION, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR, PROP_PARKING_METER,
-                    PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y, SIGNAL_ON_COLUMN,
+                    ORIGIN_LAT, ORIGIN_LON, PROJECTION, PROP_BIKE_DOCK, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR,
+                    PROP_PARKING_METER, PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y, SIGNAL_ON_COLUMN,
                     STRUCTURE_CONCRETE, SURFACE_CHURCHES, SURFACE_FRONTS, SURFACE_LANDMARKS, SURFACE_WATERFRONT,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
                     SURFACE_STRUCTURES, SURFACE_TRAFFIC, SURFACE_TRAINS, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
@@ -226,6 +228,8 @@ def main() -> None:
     prepare.load("centerline")
     prepare.load("furniture")
     prepare.load("ground_details")
+    for name in ("shops", "sheds", "bike_docks"):
+        prepare.load(name)
     prepare.load_terrain()
     prepare.load_landcover()
     buildings3d.load()
@@ -270,7 +274,8 @@ def main() -> None:
                 for key in ("bytes", "vertices", "triangles"):
                     totals[f"{level}_{key}"] += entry.pop(key)
                 for key in ("lane_points", "props", "trees", "water_towers", "street_lights", "furniture",
-                            "parked_cars", "canopy_clumps", "traffic_lanes", "train_tracks"):
+                            "parked_cars", "canopy_clumps", "shop_fronts", "shed_sections", "bike_docks",
+                            "plaza_furniture", "traffic_lanes", "train_tracks"):
                     totals[key] += entry.pop(key, 0)
             if n % 250 == 0 or n == len(tasks):
                 print(f"  {n:,}/{len(tasks):,} tiles ({time.time() - started:.0f} s)", flush=True)
@@ -305,6 +310,9 @@ def main() -> None:
     print(f"  props: {totals['trees']:,} trees, {totals['water_towers']:,} water towers, "
           f"{totals['street_lights']:,} street lights, {totals['furniture']:,} pieces of street furniture, "
           f"{totals['parked_cars']:,} parked cars; {totals['canopy_clumps']:,} clumps of crowns (woods from afar)")
+    print(f"  shop fronts: {totals['shop_fronts']:,} signs and awnings, {totals['shed_sections']:,} sidewalk shed "
+          f"sections, {totals['bike_docks']:,} bike dock sections and kiosks, "
+          f"{totals['plaza_furniture']:,} pieces of plaza furniture")
     print(f"  driving lanes: {totals['traffic_lanes']:,}, pieces of el track: {totals['train_tracks']:,}")
     if failed:
         print(f"  {len(failed)} tiles FAILED and are missing: {failed}")
@@ -365,7 +373,8 @@ def _rebuild(only: list[str], workers: int) -> None:
     if OUT_DIR == TILES_DIR / REGION or not manifest_path.exists():
         raise SystemExit("--only needs --out pointing at a copy of a full build (with its manifest.json)")
     _build_bridges(prepare.load("ground"))
-    prepare.load("ground_details")
+    for name in ("ground_details", "shops", "sheds", "bike_docks"):
+        prepare.load(name)
     tasks = []
     for item in only:
         level, ij = item.split(":")
@@ -453,9 +462,20 @@ def _init_worker() -> None:
         groups[key].append(index)
     _W["furniture_groups"] = {key: np.array(value) for key, value in groups.items()}
     blockers = np.isin(furniture["type"], (PROP_HYDRANT, PROP_BUS_SHELTER))
-    _W["car_blockers"] = (furniture["en"][blockers],
-                          np.where(furniture["type"][blockers] == PROP_HYDRANT, traffic.HYDRANT_CLEAR,
-                                   traffic.BUS_STOP_CLEAR))
+    # Shop fronts and sidewalk sheds (props.py), and the bike share's docks,
+    # which parked cars also keep clear of where they're in the street.
+    _W["shops"] = prepare.load("shops")
+    _W["shed_buildings"] = set(prepare.load("sheds")["building"].tolist())
+    docks = prepare.load("bike_docks")
+    _W["docks"] = docks
+    groups = defaultdict(list)
+    for index, key in enumerate(_anchor_tiles(docks["en"], LEVELS["lod0"]["size"])):
+        groups[key].append(index)
+    _W["dock_groups"] = {key: np.array(value) for key, value in groups.items()}
+    dock_points, dock_clear = docks["blockers"]
+    _W["car_blockers"] = (np.concatenate([furniture["en"][blockers], dock_points]),
+                          np.concatenate([np.where(furniture["type"][blockers] == PROP_HYDRANT, traffic.HYDRANT_CLEAR,
+                                                   traffic.BUS_STOP_CLEAR), dock_clear]))
     _W["landcover"] = landcover.LandCover()
     _W["details"] = ground_details.GroundDetails(prepare.load("ground_details"))
 
@@ -1079,15 +1099,18 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     furniture = _furniture(i, j, bounds)
     cars = _parked_cars(bounds)
     clumps = _canopy_clumps("lod0", bounds)
-    parts = [street, canopy, towers, lamps, furniture, cars, clumps]
+    shops, sheds = _shop_fronts(indices)
+    docks = _bike_docks(i, j)
+    plaza = _plaza_furniture(bounds, np.concatenate([p["en"] for p in (street, canopy, lamps, furniture, docks)]))
+    parts = [street, canopy, towers, lamps, furniture, cars, clumps, shops, sheds, docks, plaza]
     en = np.concatenate([p["en"] for p in parts])
     if len(en) == 0:
         return None, {}
     trees = len(street["en"]) + len(canopy["en"])
     ground = _W["ground"]["lod0"]
     # (Trees on hand-made ground stand on it: landmarks.lift, the Pier 3 berm.)
-    y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]) + landmarks.lift(canopy["en"]),
-                        towers["y"], lamps["y"], furniture["y"], cars["y"], clumps["y"]])
+    y = np.concatenate([ground.height(street["en"]), ground.height(canopy["en"]) + landmarks.lift(canopy["en"])]
+                       + [p["y"] for p in parts[2:]])
     seed = np.concatenate([p["seed"] for p in parts])
     # Trees and towers face any way; lamps reach over the street.
     yaw = np.concatenate([p["yaw"] if "yaw" in p else props.location_seed(p["en"] * 3.7) * (2 * np.pi)
@@ -1113,7 +1136,9 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     surface = _props_surface(en, y, normals, uv, kinds, seed, origin, keep)
     return surface, {"props": len(en), "trees": trees, "water_towers": len(towers["en"]),
                      "street_lights": len(lamps["en"]), "furniture": len(furniture["en"]),
-                     "parked_cars": len(cars["en"]), "canopy_clumps": len(clumps["en"])}
+                     "parked_cars": len(cars["en"]), "canopy_clumps": len(clumps["en"]),
+                     "shop_fronts": len(shops["en"]), "shed_sections": len(sheds["en"]), "bike_docks": len(docks["en"]),
+                     "plaza_furniture": len(plaza["en"])}
 
 
 def _build_clumps(level: str, bounds, origin):
@@ -1199,6 +1224,127 @@ def _parked_cars(bounds) -> dict:
             "tone": cars["model"], "trunk": cars["paint"], "height": cars["height"], "width": cars["length"],
             "seed": cars["seed"], "yaw": cars["yaw"],
             "y": _W["ground"]["lod0"].height(cars["en"]) - CURB_HEIGHT}
+
+
+def _shop_fronts(indices: np.ndarray) -> tuple[dict, dict]:
+    """Signs and awnings on the tile's shop buildings' street walls, and
+    sidewalk sheds in front of the buildings that have one (props.py)."""
+    b, shops = _W["b"], _W["shops"]
+    signs, sheds = [], []
+    for index in indices:
+        index = int(index)
+        archetype, flags, floor_dm, seed = _facade(index)
+        retail = bool(flags & facades.RETAIL) or archetype == facades.STORE
+        shed = index in _W["shed_buildings"]
+        if not (retail or shed) or towers.has(int(b["bin"][index])):
+            continue
+        walls = _street_walls(index)
+        if not walls:
+            continue
+        if retail:
+            found = props.shop_fronts(walls, _footprint_ground(b["geoms"][index]), floor_dm / 10.0,
+                                      float(b["height"][index]), archetype, int(b["bbl"][index] // 1_000_000_000),
+                                      int(shops["density"][index]), bool(shops["upstairs"][index]), seed, shed)
+            if found:
+                signs.append(found)
+        if shed:
+            found = props.shed_sections(walls, _W["ground"]["lod0"].height, seed)
+            if found:
+                sheds.append(found)
+    return tuple({key: np.concatenate([p[key] for p in parts]) for key in parts[0]} if parts else _no_props()
+                 for parts in (signs, sheds))
+
+
+def _street_walls(index: int) -> list:
+    """A building's walls at street level that face a street, as drawn (the
+    3-D model's, where it draws the building, else its footprint's), outside
+    the sign district: (start, end, outward, sidewalk) each, east/north, the
+    unit normal out of the wall, and how far the sidewalk reaches in front of
+    its middle (to the curb, m)."""
+    b = _W["b"]
+    height = float(b["height"][index])
+    shape = _W["shapes"].get(int(b["bin"][index]))
+    if shape is not None and (_W["facades"]["archetype"][index] == facades.HOUSE
+                              or not _shape_matches(shape, b["geoms"][index], height)):
+        shape = None
+    walls = []
+    if shape is not None:
+        vertices, offsets, ring_polygon, kinds, model_ground = shape
+        starts = np.searchsorted(ring_polygon, np.arange(len(kinds)))
+        for polygon, kind in enumerate(kinds):
+            if kind == buildings3d.ROOF:
+                continue
+            ring = vertices[offsets[starts[polygon]]:offsets[starts[polygon] + 1]].astype(np.float64)
+            if len(ring) < 3 or ring[:, 2].min() > float(model_ground) + 1.5:
+                continue
+            normal = polygon_normal(ring)
+            flat = np.hypot(normal[0], normal[1])
+            if flat < 0.95:
+                continue
+            outward = normal[:2] / flat
+            along = np.array([-outward[1], outward[0]])
+            span = ring[:, :2] @ along
+            depth = float(np.mean(ring[:, :2] @ outward))
+            walls.append((along * span.min() + outward * depth, along * span.max() + outward * depth, outward))
+    else:
+        geom = shapely.simplify(b["geoms"][index], LEVELS["lod0"]["building_tolerance"], preserve_topology=True)
+        for poly in polygons_of(geom, LEVELS["lod0"]["min_area"]):
+            coords = np.asarray(shapely.orient_polygons(poly).exterior.coords)[:, :2]
+            seg = coords[1:] - coords[:-1]
+            length = np.hypot(seg[:, 0], seg[:, 1])
+            for k in np.flatnonzero(length > 1.0):
+                walls.append((coords[k], coords[k + 1], np.array([seg[k, 1], -seg[k, 0]]) / length[k]))
+    if not walls or _W["streets"].is_empty:
+        return []
+    middles = np.array([(a + e) / 2 for a, e, _ in walls])
+    outward = np.array([o for _, _, o in walls])
+    front = _faces_street(middles, outward) & ~props.in_sign_district(middles)
+    # Not party walls: nothing goes where another building stands in front.
+    for reach in (0.5, 1.5):
+        hits = _W["building_tree"].query(shapely.points(middles + outward * reach), predicate="within")
+        front[hits[0]] = False
+    if not front.any():
+        return []
+    sidewalk = shapely.distance(_W["streets"], shapely.points(middles[front] + outward[front] * 0.05))
+    return [(walls[k][0], walls[k][1], walls[k][2], float(d)) for k, d in zip(np.flatnonzero(front), sidewalk)]
+
+
+def _bike_docks(i: int, j: int) -> dict:
+    """The bike share's dock sections and kiosks in the tile
+    (props.prepare_bike_docks()), those in the street on the road."""
+    idx = _W["dock_groups"].get((i, j))
+    if idx is None:
+        return _no_props()
+    d = _W["docks"]
+    idx = idx[_on_open_ground(d["en"][idx])]
+    if len(idx) == 0:
+        return _no_props()
+    en, kiosk = d["en"][idx], d["kind"][idx] == 1
+    return {"en": en, "type": np.full(len(en), PROP_BIKE_DOCK, dtype=np.int8), "tone": d["kind"][idx],
+            "height": np.where(kiosk, 2.3, 1.15), "width": d["length"][idx], "yaw": d["yaw"][idx],
+            "trunk": np.zeros(len(en)), "seed": d["seed"][idx],
+            "y": _W["ground"]["lod0"].height(en) - CURB_HEIGHT * d["in_street"][idx]}
+
+
+def _plaza_furniture(bounds, avoid: np.ndarray) -> dict:
+    """Planters, cafe tables and kiosks in the tile's pedestrian plazas
+    (ground_details.py's, off the streets), clear of the props at `avoid`."""
+    details = _W["details"]
+    pieces = []
+    for k in details.plaza_tree.query(bounds, predicate="intersects"):
+        piece = shapely.intersection(details.plazas["geoms"][k], bounds)
+        if not _W["streets"].is_empty:
+            piece = shapely.difference(piece, _W["streets"])
+        pieces.extend(polygons_of(piece, 20.0))
+    if not pieces:
+        return _no_props()
+    found = props.plaza_furniture(pieces, _W["streets"], avoid)
+    if not found:
+        return _no_props()
+    keep = _on_open_ground(found["en"])
+    found = {key: value[keep] for key, value in found.items()}
+    found["y"] = _W["ground"]["lod0"].height(found["en"])
+    return found
 
 
 def _build_traffic(bounds, origin):
