@@ -116,7 +116,6 @@ class Tower:
     seed: float | None = None  # a look (see look()); default the data building's seed
     flags: int = 0       # facade flags for every part (LANDMARK: stone, floodlit setbacks)
     angle: float = GRID
-    model: bool = False  # draw the 3-D model's shape anyway (see Marble Collegiate)
 
 
 # --- Outline helpers (local x/y, counter-clockwise) ---
@@ -758,11 +757,6 @@ TOWERS = [
     Tower("City Point", (3329438,), 189.0, _city_point, floor=3.3, seed=glass_residential(2)),
     # Queens.
     Tower("5Pointz", (4596913,), 151.8, _five_pointz, floor=3.2, seed=glass_residential(1)),
-    # The reverse case: the footprint's height is the steeple's tip (65 m),
-    # so the church would be a 65 m box; the 3-D model has the real church
-    # (47 m to the steeple) but is shorter than the footprint, so
-    # build_tiles.py's check passes it over. docs/REFERENCE.md, fifth_ave_esb.
-    Tower("Marble Collegiate Church", (1015764,), 46.7, None, model=True),
 ]
 
 _BY_BIN = {b: t for t in TOWERS for b in t.bins}
@@ -802,12 +796,6 @@ def add(builder, index: int, w: dict, settings: dict, ground_of, faces_street, a
     ground = ground_of(footprint)
     seed = float(b["seed"][index]) if tower.seed is None else tower.seed
     flags = int(f["flags"][index]) & ~(facades.LANDMARK | facades.CORNICE)
-    if tower.model:
-        shape = w["shapes"].get(bin_number)
-        if shape is not None:
-            add_shape(builder, shape, ground, (int(f["archetype"][index]), int(f["flags"][index]),
-                                               int(f["floor_dm"][index]), seed))
-        return 0
     detail = DETAIL[w["level"]]
     frame = Frame.of(footprint, tower.angle)
     outline = shapely.simplify(footprint, settings["building_tolerance"], preserve_topology=True)

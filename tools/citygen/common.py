@@ -93,6 +93,14 @@ SURFACE_LANDMARKS = 8
 # tile, its flags: trains.OPEN_START, ...). Node ids are shared by all
 # tiles, like the driving lanes'.
 SURFACE_TRAINS = 9
+# Churches' faces (churches.py), laid out like the buildings surface (see
+# churches.py for its uv and uv2), which shaders/church.gdshader paints. With
+# collision up close.
+SURFACE_CHURCHES = 10
+# Small parts of rowhouse fronts (fronts.py: iron railings and fences, fence
+# posts, shrubs, awnings), near tiles only, which shaders/fronts.gdshader
+# paints (see fronts.py for its uv and uv2). Without collision.
+SURFACE_FRONTS = 11
 
 # Props (uv2.x of the props surface).
 PROP_TREE = 0         # broadleaf tree, round crown

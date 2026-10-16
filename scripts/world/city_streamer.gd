@@ -61,6 +61,9 @@ const PHOTO_PRIORITY := 300.0
 ## Road markings stop drawing once their tile's center is this far from the
 ## camera (m); shaders/markings.gdshader fades the paint out before that.
 const MARKINGS_RANGE := 1100.0
+## Rowhouse fronts' railings, fences, shrubs and awnings stop drawing beyond
+## this (their tile's center from the camera, m), where they're specks.
+const FRONTS_RANGE := 600.0
 
 ## Where a loaded tile's aerial photo is: NONE if it has none (or photos are
 ## off), WANTED until it's requested, then LOADING, then SHOWN or FAILED.
@@ -133,6 +136,9 @@ var _photos_enabled := false
 var _merged_building_material: ShaderMaterial
 ## The second batch of landmarks' own materials (the landmarks surface).
 var landmark_material := _new_landmark_material()
+## Churches' own material (the churches surface), and rowhouse fronts' small parts'.
+var church_material := _new_material(preload("res://shaders/church.gdshader"))
+var fronts_material := _new_material(preload("res://shaders/fronts.gdshader"))
 var _props: CityProps
 var _light_map: StreetLightMap
 var _in_flight := 0
@@ -563,12 +569,23 @@ func _build_tile_node(tile: Tile, data: PackedByteArray) -> Node3D:
 			markings.visibility_range_end = MARKINGS_RANGE
 			node.add_child(markings)
 			continue
+		if surface.kind == CityTileDecoder.SURFACE_FRONTS:
+			# Railings, fences, shrubs and awnings: no collision, and only up close.
+			var fronts := MeshInstance3D.new()
+			fronts.name = "Fronts"
+			fronts.mesh = surface.mesh
+			fronts.material_override = fronts_material
+			fronts.visibility_range_end = FRONTS_RANGE
+			node.add_child(fronts)
+			continue
 		var is_buildings: bool = surface.kind == CityTileDecoder.SURFACE_BUILDINGS
 		var instance := MeshInstance3D.new()
 		instance.mesh = surface.mesh
 		instance.material_override = _building_material(tile.level) if is_buildings else ground_material
 		if surface.kind == CityTileDecoder.SURFACE_LANDMARKS:
 			instance.material_override = landmark_material
+		elif surface.kind == CityTileDecoder.SURFACE_CHURCHES:
+			instance.material_override = church_material
 		var casts_shadow: bool = near and surface.kind != CityTileDecoder.SURFACE_GROUND
 		if not casts_shadow:
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -649,6 +666,12 @@ func _apply_photo(item: Array) -> bool:
 static func _new_landmark_material() -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = preload("res://shaders/landmark.gdshader")
+	return material
+
+
+static func _new_material(shader: Shader) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = shader
 	return material
 
 
