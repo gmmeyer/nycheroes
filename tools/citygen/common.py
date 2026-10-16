@@ -271,12 +271,13 @@ class MeshBuilder:
         normals = None if normal is None else normal(en).reshape(-1, 3, 3)
         self.add(pos, uv, uv2, (0.0, 1.0, 0.0), normals)
 
-    def add_walls(self, ring_coords, bottom_y, top_y, uv2, ground_y=0.0):
+    def add_walls(self, ring_coords, bottom_y, top_y, uv2, ground_y=0.0, restart=None):
         """Vertical walls along a line; the outward side is right of travel.
 
         bottom_y/top_y are scalars or per-point arrays; uv2 is one pair, or one
         per segment ((N - 1, 2)). uv = (meters along the line, meters above
-        ground_y).
+        ground_y); segments where `restart` (N - 1 bools) is set measure from
+        their own start instead.
         """
         pts = np.asarray(ring_coords)[:, :2]
         bottom = np.broadcast_to(np.asarray(bottom_y, np.float64), len(pts))
@@ -287,7 +288,11 @@ class MeshBuilder:
         if not keep.any():
             return
         u_end = np.cumsum(length)
-        u0, u1 = (u_end - length)[keep], u_end[keep]
+        u_start = u_end - length
+        if restart is not None:
+            u_start = np.where(restart, 0.0, u_start)
+            u_end = np.where(restart, length, u_end)
+        u0, u1 = u_start[keep], u_end[keep]
         uv2 = np.asarray(uv2, np.float64)
         if uv2.ndim == 2:
             uv2 = np.repeat(uv2[keep], 2, axis=0)[:, None, :]  # two triangles per segment

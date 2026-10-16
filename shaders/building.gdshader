@@ -23,12 +23,16 @@
 // the camera moves; small windows settle into their floor's and building's
 // average glow in the distance.
 // Street walls in Times Square's sign district (the SIGNS flag) are covered,
-// from above the shop fronts up to 40-60 m, in billboards and LED screens
-// (sign_wall()): big screens and tall banners in dark steel, some ringed in
-// neon or chasing bulbs, with a news ticker along the bottom of most walls,
-// showing cartoon ads that change every few seconds. They glow by day and
-// blaze at night, washing the facade above them in their colors; only SIGNS
-// walls pay for any of it.
+// from above the shop fronts up to 40-60 m, in big LED screens (sign_zone()):
+// fitted to each face in columns and tiers, with tall banners, set in black
+// cladding with dark gaps, a few ringed in neon or chasing bulbs, with a news
+// ticker along the bottom of most walls; One Times Square's walls are a stack
+// of screens to the top, and some towers carry more screens higher up. They
+// show ads that change every few seconds, most drawn like softly lit photos
+// (cartoon portraits, landscapes, film posters), glow by day and blaze at
+// night, washing the facade above them in their colors. Times Square's TKTS
+// steps glow red and its plazas have granite benches (plaza_piece()). Only
+// SIGNS faces pay for any of it.
 // Hand-made landmarks (tools/citygen/landmarks.py: the Empire State, Chrysler
 // and Woolworth Buildings, One World Trade Center, the Flatiron, 30 Rock,
 // Grand Central, the Statue of Liberty) carry their own materials (archetype
@@ -226,7 +230,8 @@ const vec3 AD_COLORS[8] = vec3[](vec3(1.00, 0.16, 0.56), vec3(0.08, 0.78, 1.00),
 		vec3(1.00, 0.12, 0.16));
 const vec3 NEON[5] = vec3[](vec3(1.0, 0.22, 0.70), vec3(0.20, 0.92, 1.0), vec3(1.0, 0.88, 0.25),
 		vec3(0.45, 1.0, 0.30), vec3(1.0, 0.40, 0.12));
-const vec3 SIGN_STEEL = vec3(0.10, 0.10, 0.12);
+const vec3 SIGN_CLADDING = vec3(0.045, 0.045, 0.055);
+const vec3 SIGN_BEZEL = vec3(0.18, 0.18, 0.20);
 const vec3 SCREEN_OFF = vec3(0.05, 0.05, 0.06);
 const vec3 AD_NIGHT_BLUE = vec3(0.03, 0.04, 0.12);
 const vec3 TICKER_BAND = vec3(0.02, 0.03, 0.09);
@@ -243,6 +248,35 @@ const int AD_WAVES = 3;     // wavy color bands rolling up, with a headline
 const int AD_WORD = 4;      // one huge glowing word on night blue
 const int AD_PRODUCT = 5;   // a cartoon can, bobbing (tall screens)
 const int AD_COLUMN = 6;    // letters stacked down a vertical banner
+const int AD_PORTRAIT = 7;  // a cartoon portrait, head and shoulders, lit like a photo
+const int AD_SCENE = 8;     // a landscape photo: sky, a low sun, ridges, a shore
+const int AD_POSTER = 9;    // a film poster: a rim-lit figure, light rays, a title
+// The kinds wide and tall screens pick from (repeats make a kind likelier).
+const int WIDE_ADS[10] = int[](AD_PORTRAIT, AD_PORTRAIT, AD_SCENE, AD_SCENE, AD_POSTER, AD_WORD, AD_BURST, AD_WAVES,
+		AD_GRADIENT, AD_TEXT);
+const int TALL_ADS[8] = int[](AD_PRODUCT, AD_PRODUCT, AD_COLUMN, AD_POSTER, AD_POSTER, AD_PORTRAIT, AD_WAVES, AD_GRADIENT);
+// Portraits' skin tones and hair, in sRGB.
+const vec3 SKIN[5] = vec3[](vec3(0.96, 0.80, 0.69), vec3(0.88, 0.67, 0.52), vec3(0.76, 0.55, 0.40),
+		vec3(0.55, 0.37, 0.26), vec3(0.40, 0.26, 0.19));
+const vec3 HAIR[5] = vec3[](vec3(0.10, 0.08, 0.07), vec3(0.32, 0.19, 0.10), vec3(0.86, 0.70, 0.40),
+		vec3(0.62, 0.24, 0.12), vec3(0.95, 0.45, 0.66));
+// How a sign wall's screens are laid out (sign_layout()).
+const int LAYOUT_BAND = 0;   // columns of tiers, with a banner on some faces
+const int LAYOUT_STACK = 1;  // screens piled one above the other
+const int LAYOUT_ROW = 2;    // one tier
+// Times Square's own faces: on SIGNS faces the FRONT_PART field says which
+// (tools/citygen/times_square.py; 0 is an ordinary sign wall).
+const int SIGN_TOWER = 1;   // a sign wall with screens up to its top (One Times Square)
+const int TKTS_STEPS = 2;   // the TKTS booth's red glass steps: risers, and treads (ROOF)
+const int TKTS_BOOTH = 3;   // the booth's glass sides and back
+const int PLAZA_BENCH = 4;  // a granite bench: sides, and seat (ROOF)
+const int CORNER_SCREEN = 5;  // a drum of screens around a building corner; steel top and bottom (ROOF)
+const float DRUM_HEIGHT = 14.0;  // the drum's (times_square.py's CORNER_DRUMS)
+const float TKTS_HEIGHT = 4.9;   // the top step (m)
+const float TKTS_RISERS = 27.0;
+// The steps' red glass and the benches' granite, in sRGB.
+const vec3 TKTS_RED = vec3(0.86, 0.09, 0.11);
+const vec3 BENCH_GRANITE = vec3(0.74, 0.73, 0.70);
 
 // Roofs, in sRGB: tar, silver coating, membrane, gravel, shingles.
 const vec3 ROOF_TAR = vec3(0.30, 0.29, 0.29);
@@ -293,6 +327,8 @@ uniform float neon_glow = 2.2;
 uniform vec2 sign_top_range = vec2(40.0, 60.0);
 uniform float sign_wash_reach = 16.0;
 uniform float ticker_speed = 4.5;
+// How brightly the TKTS steps glow at night (by day a little).
+uniform float tkts_glow = 1.6;
 // What glass reflects at dusk and at night, in sRGB: overhead, at the
 // horizon, and the city below.
 uniform vec3 dusk_reflect_zenith : source_color = vec3(0.30, 0.38, 0.62);
@@ -312,6 +348,8 @@ uniform float torch_glow = 4.0;
 
 // Moments of the wall height at the vertices (see wall_top_distance).
 varying vec4 wall_moments;
+// The same for uv.x: where sign walls' faces start and end (sign_zone()).
+varying vec4 wall_x_moments;
 // UV2 decoded into whole numbers in the vertex shader: (archetype + 64 *
 // flags, floor height in dm, seed in 1024ths). Interpolation can nudge a
 // value by a millionth, which a hash would blow up into per-pixel noise, so
@@ -1548,17 +1586,56 @@ float text_line(vec2 q, float height, float spaces, float salt, vec2 footprint) 
 	return line * mix(0.45 * (1.0 - spaces), letter * shape, smoothstep(1.5, 4.0, pitch / footprint.x));
 }
 
+// One word of `letters` letters, `height` m tall, centered on `middle` (m
+// from the screen's lower left corner, like uv). Returns coverage.
+float word(vec2 uv, vec2 middle, float height, float letters, float salt, vec2 footprint) {
+	float width = letters * height * 0.8 - height * 0.2;
+	vec2 at = uv - middle + vec2(0.5 * width, 0.5 * height);
+	return text_line(at, height, 0.0, salt, footprint) * band(at.x, 0.0, width, footprint.x);
+}
+
 // Rolling color bands: the n-th band's color.
 vec3 wave_color(float n, vec3 c1, vec3 c2, vec3 c3) {
 	float m = mod(n, 3.0);
 	return m < 0.5 ? c1 : (m < 1.5 ? c2 : c3);
 }
 
+// An ellipse (center c, radii r) at q: its coverage, anti-aliased over a
+// pixel px wide (all in the same units).
+float ellipse(vec2 q, vec2 c, vec2 r, float px) {
+	float edge = px / min(r.x, r.y);
+	return 1.0 - smoothstep(1.0 - edge, 1.0 + edge, length((q - c) / r));
+}
+
+// Soft studio light on a rounded shape at d (the position in its radii), lit
+// from the left (side -1) or the right (1): never darker than half.
+float studio_light(vec2 d, float side) {
+	vec3 n = vec3(d, sqrt(max(1.0 - dot(d, d), 0.0)));
+	return 0.5 + 0.6 * max(dot(n, normalize(vec3(side * 0.65, 0.45, 0.6))), 0.0);
+}
+
+// A standing figure's silhouette, `height` tall with its feet at `foot`
+// (screen heights, like q): head, shoulders, body, legs apart. Returns coverage.
+float figure(vec2 q, vec2 foot, float height, float px) {
+	vec2 f = (q - foot) / height;
+	float fpx = px / height;
+	float head = ellipse(f, vec2(0.0, 0.9), vec2(0.06, 0.075), fpx);
+	float neck = band(f.x, -0.025, 0.025, fpx) * band(f.y, 0.76, 0.86, fpx);
+	float shoulders = ellipse(f, vec2(0.0, 0.76), vec2(0.15, 0.05), fpx);
+	float half_width = mix(0.085, 0.15, smoothstep(0.42, 0.76, f.y));
+	float body = band(f.x, -half_width, half_width, fpx) * band(f.y, 0.4, 0.77, fpx);
+	float legs = band(abs(f.x) - 0.035 - 0.07 * (0.42 - f.y), -0.03, 0.03, fpx) * band(f.y, 0.0, 0.44, fpx);
+	return max(max(head, neck), max(max(shoulders, body), legs));
+}
+
 // What a screen `size` m big shows at `uv` (meters from its lower left
-// corner), as light (linear): a cartoon ad, one of a few kinds, that changes
-// every 6-12 s (blinking between slides) and now and then flashes a color
-// across the whole screen. `id` picks everything. Once its shapes are only a
-// few pixels it shows its average (also returned, as `average`).
+// corner), as light (linear): an ad that changes every 6-12 s (blinking
+// between slides) and now and then flashes a color across the whole screen.
+// Most are drawn like photos, softly lit: a cartoon portrait, a landscape, a
+// film poster; others are bold graphics: a giant glowing word, a sunburst,
+// rolling waves, typed-out text, a can, letters down a banner. `id` picks
+// everything. Once its shapes are only a few pixels it shows its average
+// (also returned, as `average`).
 vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 	float r0 = hash(vec2(id, 5.1));
 	float t = TIME + r0 * 47.0;
@@ -1583,15 +1660,98 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 	vec2 q = uv / size.y;       // in screen heights
 	float px = pixel / size.y;  // a pixel, in screen heights
 	float which = fract(k2 * 7.31 + k3);
-	int kind;
-	if (aspect < 0.7) {
-		kind = which < 0.35 ? AD_PRODUCT : (which < 0.7 ? AD_COLUMN : (which < 0.85 ? AD_WAVES : AD_GRADIENT));
-	} else {
-		kind = pick(which, 5);
-	}
+	int kind = aspect < 0.7 ? TALL_ADS[pick(which, 8)] : WIDE_ADS[pick(which, 10)];
+	float side = k2 < 0.5 ? -1.0 : 1.0;  // where the light comes from, in photos
 
 	vec3 color;
-	if (kind == AD_GRADIENT) {
+	if (kind == AD_PORTRAIT) {
+		// Head and shoulders, softly lit as in a studio, on a soft gradient,
+		// with the brand's word beside it (wide screens) or below.
+		bool wide = aspect > 1.25;
+		float fx = wide ? (k3 < 0.5 ? 0.3 : 0.7) * aspect : 0.5 * aspect;
+		float scale = wide ? 1.0 : clamp(aspect * 1.3, 0.6, 1.0);
+		vec3 back = dark ? mix(night_blue, c2 * 0.3, q.y)
+				: mix(c1 * 0.5, c2 * 0.85, smoothstep(-0.2, 1.2, q.y + 0.2 * sin(q.x * 1.7 + k1 * 6.3)));
+		vec3 skin = srgb(SKIN[pick(fract(k1 * 3.7), 5)]);
+		vec3 hair = srgb(HAIR[pick(fract(k2 * 5.3), 5)]);
+		vec3 shirt = mix(c3, white, 0.15);
+		vec2 head_c = vec2(fx + 0.008 * sin(TIME * 0.6 + k1 * 6.3), wide ? 0.6 : 0.64);
+		vec2 head_r = vec2(0.14, 0.185) * scale;
+		vec2 hd = (q - head_c) / head_r;
+		vec2 body_c = vec2(fx, head_c.y - 0.62 * scale);
+		vec2 body_r = vec2(0.42, 0.36) * scale;
+		color = back;
+		// Hair behind the head; the neck, the shoulders over it, the head; the fringe.
+		float hair_back = ellipse(q, head_c + vec2(-side * 0.01, 0.03) * scale, head_r * vec2(1.18, 1.08), px);
+		color = mix(color, hair * studio_light(hd * 0.85, side), hair_back);
+		float neck = band(q.x, fx - 0.06 * scale, fx + 0.06 * scale, px) * band(q.y, body_c.y, head_c.y - 0.1 * scale, px);
+		color = mix(color, skin * (side * (q.x - fx) > 0.0 ? 0.9 : 0.62), neck);
+		float body = ellipse(q, body_c, body_r, px);
+		color = mix(color, shirt * studio_light((q - body_c) / body_r, side), body);
+		float head = ellipse(q, head_c, head_r, px);
+		color = mix(color, skin * studio_light(hd, side), head);
+		float fringe = head * smoothstep(-0.05, 0.05, hd.y - 0.42 + 0.3 * side * hd.x);
+		color = mix(color, hair * studio_light(hd, side), fringe);
+		// Eyes, blinking now and then, and a smile.
+		float open = step(0.05, fract(TIME * 0.23 + k3 * 7.0));
+		vec2 eye = vec2(abs(q.x - head_c.x), q.y);
+		float eyes = ellipse(eye, vec2(0.055 * scale, head_c.y), vec2(0.022, 0.014 * open + 0.003) * scale, px);
+		color = mix(color, srgb(vec3(0.08, 0.06, 0.06)), eyes * head);
+		float mouth = ellipse(q, head_c - vec2(0.0, 0.095 * scale), vec2(0.04, 0.012) * scale, px);
+		color = mix(color, skin * srgb(vec3(0.72, 0.32, 0.32)), mouth * head);
+		// Rim light on the shadowed side.
+		float rim = smoothstep(0.8, 1.0, length(hd)) * max(-side * hd.x / max(length(hd), 1e-3), 0.0) * head;
+		color += c2 * (0.6 * rim);
+		// The brand.
+		float height = (wide ? 0.13 : 0.09) * size.y;
+		float letters = wide ? 3.0 + floor(k1 * 3.0) : 3.0 + floor(k1 * 2.0);
+		vec2 middle = wide ? vec2((fx < 0.5 * aspect ? 0.75 : 0.25) * aspect, 0.5) : vec2(0.5 * aspect, 0.1);
+		float brand = word(uv, middle * size.y, height, letters, k3 * 41.0, footprint);
+		color = mix(color, dark ? c1 : white, brand);
+		average = mix(mix(back, shirt, 0.25), skin, min(0.3 * scale * scale / aspect, 0.3));
+	} else if (kind == AD_SCENE) {
+		// A travel "photo", slowly panning: sky, a low sun, hazy ridges, a
+		// shore with glints, and a headline across the sky.
+		bool sunset = k3 < 0.5;
+		vec3 zenith = srgb(sunset ? vec3(0.24, 0.20, 0.50) : vec3(0.20, 0.44, 0.86));
+		vec3 horizon = srgb(sunset ? vec3(1.0, 0.56, 0.32) : vec3(0.74, 0.87, 1.0));
+		float x = q.x + TIME * 0.015 + k1 * 10.0;
+		color = mix(horizon, zenith, smoothstep(0.3, 1.0, q.y));
+		vec2 sun = vec2(mix(0.25, 0.75, k2) * aspect, 0.56);
+		float to_sun = length(q - sun);
+		color += srgb(sunset ? vec3(1.0, 0.72, 0.38) : vec3(1.0, 0.97, 0.9)) * (0.45 * exp(-to_sun * 6.0)
+				+ 0.8 * (1.0 - smoothstep(0.065 - px, 0.065 + px, to_sun)));
+		float far_ridge = 0.42 + 0.06 * sin(x * 3.1) + 0.03 * sin(x * 7.7 + 1.3);
+		float near_ridge = 0.29 + 0.05 * sin(x * 4.3 + 2.0) + 0.025 * sin(x * 11.0);
+		vec3 far_hills = mix(horizon, srgb(sunset ? vec3(0.40, 0.22, 0.42) : vec3(0.32, 0.46, 0.62)), 0.6);
+		vec3 near_hills = srgb(sunset ? vec3(0.13, 0.08, 0.17) : vec3(0.16, 0.36, 0.22));
+		color = mix(color, far_hills, smoothstep(far_ridge + px, far_ridge - px, q.y));
+		color = mix(color, near_hills, smoothstep(near_ridge + px, near_ridge - px, q.y));
+		float glints = stripes(q.y * 40.0 + sin(x * 9.0 + TIME) * 0.6, 0.15, px * 40.0) * (1.0 - smoothstep(0.0, 0.25, abs(q.x - sun.x)));
+		vec3 water = mix(zenith, horizon, 0.45) * 0.75 + horizon * (0.5 * glints);
+		color = mix(color, water, smoothstep(0.16 + px, 0.16 - px, q.y));
+		float headline = text_line(uv - size * vec2(0.08, 0.84), size.y * 0.1, 0.18, k2 * 70.0, footprint)
+				* band(uv.x, size.x * 0.08, size.x * 0.75, footprint.x);
+		color = mix(color, white, headline);
+		average = mix(mix(horizon, zenith, 0.5), near_hills, 0.3) + 0.03;
+	} else if (kind == AD_POSTER) {
+		// A film poster: a dark figure against a glow, light rays behind, a
+		// big glowing title below.
+		vec2 d = (q - vec2(0.5 * aspect, 0.6)) / vec2(max(aspect, 0.5), 1.0);
+		color = srgb(vec3(0.02, 0.02, 0.035)) + c1 * (0.75 * exp(-3.0 * length(d)));
+		vec2 from = q - vec2(0.5 * aspect, 1.1);
+		const float RAYS = 18.0 / 6.2832;
+		float rays = stripes(atan(from.y, from.x) * RAYS + TIME * 0.03, 0.4, px / max(length(from), 1e-3) * RAYS);
+		color += c1 * (0.14 * rays * smoothstep(0.2, 1.0, q.y));
+		float height = min(0.72, 1.15 * aspect);
+		vec2 foot = vec2(0.5 * aspect, 0.2);
+		color = mix(color, srgb(vec3(0.03, 0.03, 0.04)), figure(q, foot, height, px));
+		float letters = clamp(floor(0.8 * aspect / 0.08), 3.0, 7.0);
+		float title_height = min(0.1, 0.85 * aspect / (letters * 0.8)) * size.y;
+		float title = word(uv, vec2(0.5 * size.x, 0.1 * size.y), title_height, letters, k1 * 23.0, footprint);
+		color = mix(color, mix(c3, white, 0.5) * 1.2, title);
+		average = srgb(vec3(0.03)) + c1 * 0.22;
+	} else if (kind == AD_GRADIENT) {
 		float g = 0.5 + 0.5 * sin((q.x * 0.7 + q.y * 1.3) * 2.4 - TIME * 0.8 + k1 * 6.3);
 		vec3 tone_a = dark ? night_blue : c1;
 		vec3 tone_b = dark ? c2 * 0.55 : c2;
@@ -1647,8 +1807,8 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 		float width = letters * height * 0.8 - height * 0.2;
 		vec2 at = uv - vec2(0.5 * (size.x - width), 0.5 * size.y - 0.4 * height);
 		float across = band(at.x, 0.0, width, footprint.x);
-		float word = text_line(at, height, 0.0, k1 * 77.0, footprint) * across;
-		color = mix(color, c1 * (1.15 + 0.15 * sin(TIME * 4.0 + k2 * 6.3)), word);
+		float big = text_line(at, height, 0.0, k1 * 77.0, footprint) * across;
+		color = mix(color, c1 * (1.15 + 0.15 * sin(TIME * 4.0 + k2 * 6.3)), big);
 		color = mix(color, c3, across * band(at.y, -0.3 * height, -0.18 * height, footprint.y));
 		average = mix(back + c2 * 0.1, c1, 0.5 * height * width / (size.x * size.y));
 	} else if (kind == AD_PRODUCT) {
@@ -1689,71 +1849,102 @@ vec3 screen(vec2 uv, vec2 size, float id, vec2 footprint, out vec3 average) {
 	return mix(color, flash_color, flash) * blink;
 }
 
-// Which screen of a sign wall p is on: the band of screens from z0 to z1 is
-// cut into bays along the wall (their width picked per building), some with a
-// tall banner down one side, and each bay (or what the banner leaves) into
-// tiers of one, two or three screens. Returns the screen's id and rectangle
-// (lo, hi: wall meters, frame included).
-float sign_layout(vec2 p, float z0, float z1, float seed, out vec2 lo, out vec2 hi) {
-	float bay = mix(10.0, 20.0, rnd(seed, 81.0));
-	float shift = rnd(seed, 82.0) * bay;
-	float b = floor((p.x + shift) / bay);
-	lo = vec2(b * bay - shift, z0);
-	hi = vec2(lo.x + bay, z1);
-	float h1 = hash(vec2(b, seed * 977.0 + 1.0));
-	float h2 = hash(vec2(b, seed * 977.0 + 2.0));
-	if (h1 < 0.35 && z1 - z0 > 9.0) {
-		float banner = clamp(bay * 0.28, 3.0, 5.5);
-		bool left = h2 < 0.5;
-		float split = left ? lo.x + banner : hi.x - banner;
-		if (left ? p.x < split : p.x >= split) {
-			lo.x = left ? lo.x : split;
-			hi.x = left ? split : hi.x;
-			return b * 64.0 + 63.0;
+// Which screen of a sign wall p is on, within the zone from lo0 to hi0 (wall
+// meters). On a face of known `width` (whose uv.x starts at its left corner;
+// `facing` tells the building's faces apart), the zone is cut into columns
+// across it; elsewhere (width 0) into bays that run on along the building. LAYOUT_BAND: columns 13-30 m wide (per
+// building), some faces with a tall banner at one end, each column cut into
+// tiers 9-22 m high, a few tiers into two screens side by side. LAYOUT_STACK:
+// screens 5-14 m high piled one above the other, as wide as the zone (One
+// Times Square). LAYOUT_ROW: one tier. Returns the screen's id and rectangle
+// (lo, hi: wall meters, gaps included).
+float sign_layout(vec2 p, vec2 lo0, vec2 hi0, float width, float facing, float seed, int layout, out vec2 lo, out vec2 hi) {
+	float salt = seed * 977.0 + (width > 0.0 ? facing * 0.731 : 0.0);
+	float id;
+	lo = lo0;
+	hi = hi0;
+	if (width > 0.0) {
+		float banner_odds = hash(vec2(salt, 4.0));
+		if (layout == LAYOUT_BAND && hi0.y - lo0.y > 12.0 && hi0.x - lo0.x > 16.0 && banner_odds < 0.45) {
+			float banner = clamp((hi0.x - lo0.x) * 0.16, 3.5, 7.0);
+			bool left = fract(banner_odds * 7.7) < 0.5;
+			float split = left ? lo0.x + banner : hi0.x - banner;
+			if (left ? p.x < split : p.x >= split) {
+				lo.x = left ? lo0.x : split;
+				hi.x = left ? split : hi0.x;
+				return salt + 63.0;
+			}
+			lo.x = left ? split : lo0.x;
+			hi.x = left ? hi0.x : split;
 		}
-		lo.x = left ? split : lo.x;
-		hi.x = left ? hi.x : split;
+		float target = layout == LAYOUT_STACK ? 26.0 : mix(13.0, 30.0, rnd(seed, 81.0));
+		float n = max(1.0, floor((hi.x - lo.x) / target + 0.5));
+		float column_width = (hi.x - lo.x) / n;
+		float c = clamp(floor((p.x - lo.x) / column_width), 0.0, n - 1.0);
+		lo.x += c * column_width;
+		hi.x = lo.x + column_width;
+		id = salt + c * 7.0;
+	} else {
+		float bay = mix(14.0, 28.0, rnd(seed, 81.0));
+		float shift = rnd(seed, 82.0) * bay;
+		float b = floor((p.x + shift) / bay);
+		lo.x = b * bay - shift;
+		hi.x = lo.x + bay;
+		id = salt + b * 7.0;
 	}
-	// Tiers from the bottom up; a thin one left at the top joins the one below.
-	float tier = mix(7.0, 16.0, fract(h1 * 7.13 + h2));
-	float full = floor((z1 - z0) / tier);
-	float count = (z1 - z0) - full * tier < 0.5 * tier ? max(full, 1.0) : full + 1.0;
-	float t = clamp(floor((p.y - z0) / tier), 0.0, count - 1.0);
-	lo.y = z0 + t * tier;
-	hi.y = t >= count - 1.0 ? z1 : lo.y + tier;
-	float h3 = hash(vec2(b + t * 0.37, seed * 977.0 + 3.0));
-	float width = hi.x - lo.x;
-	float column = 0.0;
-	if (h3 < 0.4 && width > 7.0) {
-		float split = lo.x + width * (h3 < 0.2 ? 0.62 : 0.38);
-		column = step(split, p.x);
-		lo.x = column > 0.5 ? split : lo.x;
-		hi.x = column > 0.5 ? hi.x : split;
-	} else if (h3 < 0.6 && width > 10.0 && hi.y - lo.y > 6.0) {
-		float third = width / 3.0;
-		column = clamp(floor((p.x - lo.x) / third), 0.0, 2.0);
-		lo.x += column * third;
-		hi.x = lo.x + third;
+	if (layout == LAYOUT_STACK) {
+		// Up from the bottom; a thin one left at the top joins the one below.
+		float y = lo0.y;
+		for (int k = 0; k < 16; k++) {
+			float h = mix(5.0, 14.0, hash(vec2(id + float(k), 2.3)));
+			bool last = y + h > hi0.y - 3.0;
+			if (last || p.y < y + h) {
+				lo.y = y;
+				hi.y = last ? hi0.y : y + h;
+				id += float(k) * 13.0;
+				break;
+			}
+			y += h;
+		}
+		return id;
 	}
-	return b * 64.0 + t * 4.0 + column;
+	float count = layout == LAYOUT_ROW ? 1.0 : max(1.0, floor((hi0.y - lo0.y) / mix(9.0, 22.0, hash(vec2(id, 1.7))) + 0.5));
+	float tier = (hi0.y - lo0.y) / count;
+	float t = clamp(floor((p.y - lo0.y) / tier), 0.0, count - 1.0);
+	lo.y = lo0.y + t * tier;
+	hi.y = lo.y + tier;
+	id += t * 3.0;
+	float pair = hash(vec2(id, 3.1));
+	float w = hi.x - lo.x;
+	if (pair < 0.3 && w > 12.0) {
+		float split = lo.x + w * (pair < 0.15 ? 0.62 : 0.38);
+		bool right = p.x >= split;
+		lo.x = right ? split : lo.x;
+		hi.x = right ? hi.x : split;
+		id += right ? 1.0 : 0.0;
+	}
+	return id;
 }
 
-// A sign wall's band of screens from z0 to z1 (UV.y): screens in dark steel,
-// some outlined in neon or chasing marquee bulbs, and on most walls a news
-// ticker along the bottom. `strength` is how bright they are now.
-Surface billboards(vec2 p, vec2 footprint, float z0, float z1, float seed, float strength) {
-	const float GAP = 0.35;  // half the steel between screens (m)
+// A sign wall's screens in the zone from lo0 to hi0 (see sign_layout()), set
+// in black cladding with dark gaps between them, each in a thin bezel, a few
+// ringed in neon or chasing bulbs; bands on most walls have a news ticker
+// along the bottom. `strength` is how bright they are now.
+Surface billboards(vec2 p, vec2 footprint, vec2 lo0, vec2 hi0, float width, float facing, float seed, int layout, float strength) {
+	const float BEZEL = 0.12;
+	float gap = mix(0.45, 1.0, rnd(seed, 91.0));  // half the cladding between screens (m)
 	float pixel = max(footprint.x, footprint.y);
 	Surface s;
-	s.albedo = srgb(SIGN_STEEL);
+	s.albedo = srgb(SIGN_CLADDING);
 	s.emission = vec3(0.0);
 	s.glass = 0.0;
-	float bottom = z0;
-	if (rnd(seed, 84.0) < 0.6 && z1 - z0 > 8.0) {
-		bottom = z0 + 1.8;
+	vec2 screens_lo = lo0;
+	if (layout == LAYOUT_BAND && rnd(seed, 84.0) < 0.6 && hi0.y - lo0.y > 8.0) {
+		float bottom = lo0.y + 1.8;
+		screens_lo.y = bottom;
 		if (p.y < bottom) {
 			// The ticker: letters scrolling along a dark band between lit edges.
-			float foot = z0 + 0.2;
+			float foot = lo0.y + 0.2;
 			float head = bottom - 0.2;
 			float strip = band(p.y, foot, head, footprint.y);
 			float edges = min(band(p.y, foot, foot + 0.07, footprint.y) + band(p.y, head - 0.07, head, footprint.y), 1.0);
@@ -1769,24 +1960,26 @@ Surface billboards(vec2 p, vec2 footprint, float z0, float z1, float seed, float
 	}
 	vec2 lo;
 	vec2 hi;
-	float id = sign_layout(p, bottom, z1, seed, lo, hi) * 0.618 + seed * 1031.0;
-	vec2 size = max(hi - lo - 2.0 * GAP, vec2(0.3));
-	float inside = band(p.x, lo.x + GAP, hi.x - GAP, footprint.x) * band(p.y, lo.y + GAP, hi.y - GAP, footprint.y);
+	float id = sign_layout(p, screens_lo, hi0, width, facing, seed, layout, lo, hi) * 0.618 + seed * 1031.0;
+	vec2 size = max(hi - lo - 2.0 * gap, vec2(0.3));
+	float inside = band(p.x, lo.x + gap, hi.x - gap, footprint.x) * band(p.y, lo.y + gap, hi.y - gap, footprint.y);
+	float bezel = band(p.x, lo.x + gap - BEZEL, hi.x - gap + BEZEL, footprint.x)
+			* band(p.y, lo.y + gap - BEZEL, hi.y - gap + BEZEL, footprint.y);
 	vec3 average;
-	vec3 light = screen(p - lo - GAP, size, id, footprint, average) * mix(0.8, 1.15, hash(vec2(id, 8.3)));
+	vec3 light = screen(p - lo - gap, size, id, footprint, average) * mix(0.85, 1.1, hash(vec2(id, 8.3)));
 	if (pixel < 0.016) {
 		// Right up close, the LEDs' grid.
 		float grid = max(stripes(p.x / 0.025, 0.3, footprint.x / 0.025), stripes(p.y / 0.025, 0.3, footprint.y / 0.025));
 		light *= 1.0 - 0.5 * grid * visible(0.025, pixel);
 	}
 	s.emission = light * (inside * strength);
-	s.albedo = mix(s.albedo, srgb(SCREEN_OFF), inside);
-	// Neon tubes around some screens; chasing bulbs around a few.
+	s.albedo = mix(mix(s.albedo, srgb(SIGN_BEZEL), bezel), srgb(SCREEN_OFF), inside);
+	// Neon tubes around a few screens; chasing bulbs around fewer.
 	float tubes = hash(vec2(id, 3.3));
-	if (tubes < 0.5) {
-		bool bulbs = tubes < 0.15;
-		float a = GAP - (bulbs ? 0.27 : 0.2);
-		float c = GAP - 0.08;
+	if (tubes < 0.22) {
+		bool bulbs = tubes < 0.07;
+		float a = gap - BEZEL - (bulbs ? 0.3 : 0.2);
+		float c = gap - BEZEL - 0.06;
 		float outer = band(p.x, lo.x + a, hi.x - a, footprint.x) * band(p.y, lo.y + a, hi.y - a, footprint.y);
 		float inner = band(p.x, lo.x + c, hi.x - c, footprint.x) * band(p.y, lo.y + c, hi.y - c, footprint.y);
 		float tube = max(outer - inner, 0.0);
@@ -1801,39 +1994,184 @@ Surface billboards(vec2 p, vec2 footprint, float z0, float z1, float seed, float
 		s.albedo = mix(s.albedo, neon * 0.6, tube);
 	}
 	// Far off, once screens are a few pixels, the wall's average.
-	vec3 wall_average = 0.6 * mix(ad_color(pick(rnd(seed, 85.0), 8)), ad_color(pick(rnd(seed, 86.0), 8)), 0.5);
+	vec3 wall_average = 0.5 * mix(ad_color(pick(rnd(seed, 85.0), 8)), ad_color(pick(rnd(seed, 86.0), 8)), 0.5);
 	s.emission = mix(s.emission, wall_average * strength, 1.0 - smoothstep(2.0, 5.0, min(size.x, size.y) / pixel));
 	return s;
 }
 
+// Where a sign wall's screens are (sign_zone()), for sign_wall().
+struct SignZone {
+	vec2 lo;       // the zone of screens this pixel is in or under (wall meters)
+	vec2 hi;
+	float z0;      // the main band of screens, whose light washes the wall at night
+	float z1;
+	float width;   // the face's width, 0 where it isn't known
+	float facing;  // which way the face looks (one of 16 compass sectors)
+	float cover;   // how much of the pixel the zone covers
+	int layout;
+};
+
 // A street wall in Times Square's sign district: shops at street level, as on
-// any street; billboards and screens from just above the shop fronts up to
-// 40-60 m (or near the top of a lower wall); the facade above them and the
-// shop fronts below washed in their colored light at night.
-Surface sign_wall(vec2 p, vec2 footprint, int archetype, int flags, float floor_height, float seed, float below_top) {
-	float z0 = min(floor_height, 4.4) + 0.6;
-	float margin = ((flags & PARAPET) != 0 ? PARAPET_HEIGHT : 0.0) + ((flags & CORNICE) != 0 ? 2.2 : 0.8);
-	float z1 = min(p.y + below_top - margin, mix(sign_top_range.x, sign_top_range.y, rnd(seed, 80.0)));
-	float zone = z1 - z0 > 2.5 ? band(p.y, z0, z1, footprint.y) : 0.0;
-	Surface s;
-	s.albedo = vec3(0.0);
-	s.emission = vec3(0.0);
-	s.glass = 0.0;
-	if (zone < 1.0) {
-		s = facade(p, footprint, archetype, flags, floor_height, seed, below_top);
+// any street; above them screens up to 40-60 m (or near the top of a lower
+// wall), on One Times Square (SIGN_TOWER) a stack of screens up to its top,
+// and on some tall towers a row of screens near the top or a stack up one
+// edge of a face. `face`: the face's span in uv.x (see wall_span()); faces at
+// least 6 m wide start at 0 (build_tiles' SIGN_FACE_MIN), so their screens
+// fit them. `normal`: the wall's (world).
+SignZone sign_zone(vec2 p, vec2 footprint, int flags, float floor_height, float seed, float below_top, vec2 face, vec3 normal) {
+	SignZone zone;
+	bool tower = flags / FRONT_PART == SIGN_TOWER;
+	zone.width = abs(face.x) < 0.3 && face.y >= 6.0 && face.y < 1e3 ? face.y : 0.0;
+	zone.facing = floor(atan(normal.z, normal.x) * (16.0 / 6.2832) + 8.0);
+	float parapet = (flags & PARAPET) != 0 ? PARAPET_HEIGHT : 0.0;
+	float margin = parapet + (tower ? 0.6 : ((flags & CORNICE) != 0 ? 2.2 : 0.8));
+	float top = p.y + below_top;  // the wall's top (far up where it isn't known)
+	zone.z0 = min(floor_height, 4.4) + 0.6;
+	zone.z1 = tower ? top - margin : min(top - margin, mix(sign_top_range.x, sign_top_range.y, rnd(seed, 80.0)));
+	// The face's corners keep a strip of cladding.
+	float edge = mix(0.5, 1.3, rnd(seed, 90.0));
+	float width = zone.width;
+	zone.lo = vec2(width > 0.0 ? edge : -1e4, zone.z0);
+	zone.hi = vec2(width > 0.0 ? width - edge : 1e4, zone.z1);
+	zone.layout = tower ? LAYOUT_STACK : LAYOUT_BAND;
+	if (!tower && below_top < 1e3 && top - margin > zone.z1 + 24.0 && p.y > zone.z1 + 1.0) {
+		// Higher up on tall towers, some have a row of screens near the top,
+		// some a stack up one edge.
+		float r = rnd(seed, 95.0);
+		if (r < 0.35) {
+			zone.lo.y = top - margin - mix(8.0, 14.0, rnd(seed, 96.0));
+			zone.hi.y = top - margin;
+			zone.layout = LAYOUT_ROW;
+		} else if (r < 0.65 && width >= 16.0) {
+			float column = mix(7.0, 11.0, rnd(seed, 97.0));
+			zone.lo = vec2(rnd(seed, 98.0) < 0.5 ? edge : width - edge - column, zone.z1 + mix(2.0, 8.0, rnd(seed, 99.0)));
+			zone.hi = vec2(zone.lo.x + column, min(top - margin, zone.lo.y + mix(24.0, 60.0, rnd(seed, 100.0))));
+			zone.layout = LAYOUT_STACK;
+		} else {
+			zone.hi.y = zone.lo.y;
+		}
 	}
+	zone.cover = zone.hi.y - zone.lo.y > 2.5
+			? band(p.y, zone.lo.y, zone.hi.y, footprint.y) * band(p.x, zone.lo.x - edge, zone.hi.x + edge, footprint.x) : 0.0;
+	return zone;
+}
+
+// A sign wall's screens (see sign_zone()) over its facade `s`, and at night
+// the facade above the main band and the shop fronts below washed in their
+// colored light.
+Surface sign_wall(Surface s, vec2 p, vec2 footprint, float seed, SignZone zone) {
 	float strength = mix(sign_day_glow, sign_night_glow, max(night, city_lights));
-	if (zone > 0.0) {
-		Surface boards = billboards(p, footprint, z0, z1, seed, strength);
-		s.albedo = mix(s.albedo, boards.albedo, zone);
-		s.emission = mix(s.emission, boards.emission, zone);
-		s.glass = mix(s.glass, boards.glass, zone);
+	if (zone.cover > 0.0) {
+		Surface boards = billboards(p, footprint, zone.lo, zone.hi, zone.width, zone.facing, seed, zone.layout, strength);
+		s.albedo = mix(s.albedo, boards.albedo, zone.cover);
+		s.emission = mix(s.emission, boards.emission, zone.cover);
+		s.glass = mix(s.glass, boards.glass, zone.cover);
 	}
-	if (city_lights > 0.0 && zone < 1.0 && z1 - z0 > 2.5) {
-		float wash = p.y > z1 ? 1.0 - smoothstep(0.0, sign_wash_reach, p.y - z1) : 1.0 - smoothstep(0.0, 4.0, z0 - p.y);
+	if (city_lights > 0.0 && zone.cover < 1.0 && zone.z1 - zone.z0 > 2.5) {
+		float wash = p.y > zone.z1 ? 1.0 - smoothstep(0.0, sign_wash_reach, p.y - zone.z1) : 1.0 - smoothstep(0.0, 4.0, zone.z0 - p.y);
 		vec3 tint = mix(ad_color(pick(rnd(seed, 85.0), 8)), ad_color(pick(rnd(seed, 86.0), 8)),
 				0.5 + 0.5 * sin(TIME * 0.5 + seed * 40.0));
 		s.emission += s.albedo * tint * (1.5 * wash * wash * city_lights);
+	}
+	return s;
+}
+
+// The corner drum's screen (CORNER_SCREEN), `p` m around the drum and up from
+// the building's ground: an invented cola brand, always on, a white ribbon
+// swooping around it over red, bubbles rising, the brand's word twice around;
+// every 9 s, bubbles rising through dark red instead. Steel bands at its top
+// and bottom. `strength` as for billboards().
+Surface corner_screen(vec2 p, vec2 footprint, float below_top, float strength) {
+	float y = DRUM_HEIGHT - below_top;  // m up the drum
+	float pixel = max(footprint.x, footprint.y);
+	Surface s;
+	s.albedo = srgb(SIGN_CLADDING);
+	s.emission = vec3(0.0);
+	s.glass = 0.0;
+	float screen = band(y, 0.6, DRUM_HEIGHT - 0.6, footprint.y);
+	vec3 red = srgb(vec3(0.82, 0.04, 0.08));
+	vec3 white = vec3(1.0);
+	float wave = 5.2 + 2.2 * sin(p.x * 0.35 - TIME * 0.9) + 0.6 * sin(p.x * 0.9 + TIME * 0.4);
+	float ribbon = band(y - wave, -0.7, 0.7, footprint.y * 1.5);
+	float stripe = band(y - wave, -0.12, 0.08, footprint.y);
+	float column = floor(p.x / 1.3);
+	float r = hash(vec2(column, 4.2));
+	float rise = fract(r - TIME * mix(0.05, 0.12, r)) * (DRUM_HEIGHT + 2.0) - 1.0;
+	float size = mix(0.12, 0.35, hash(vec2(column, 9.1)));
+	float bubble = band(length(vec2(fract(p.x / 1.3) * 1.3 - 0.65, y - rise)), size - 0.06, size, pixel) * visible(size, pixel);
+	vec3 color;
+	if (mod(floor(TIME / 9.0), 2.0) < 0.5) {
+		color = mix(red * mix(0.75, 1.05, y / DRUM_HEIGHT), white, ribbon);
+		color = mix(color, red, stripe * ribbon);
+		color = mix(color, white * 0.9, bubble * 0.8);
+		float x = mod(p.x, 13.5);
+		color = mix(color, white, text_line(vec2(x - 1.5, y - 9.0), 3.2, 0.0, 17.0, footprint) * band(x, 1.5, 11.5, footprint.x));
+	} else {
+		color = srgb(vec3(0.16, 0.0, 0.02)) + red * (0.3 * (1.0 - y / DRUM_HEIGHT));
+		color = mix(mix(color, mix(red, white, 0.5), bubble), red * 1.2, ribbon * 0.5);
+	}
+	color = mix(red * 0.85, color, visible(1.5, pixel));
+	s.emission = color * (screen * strength);
+	s.albedo = mix(s.albedo, srgb(SCREEN_OFF), screen);
+	return s;
+}
+
+// Times Square's own pieces (tools/citygen/times_square.py), by part: the
+// TKTS booth's red glass steps (treads are flagged ROOF, with world x/z uv;
+// risers are walls, uv.y m above the square), lit from inside, glowing at
+// night; the booth's glass sides, with the steps' edges glowing through, and
+// its back with the ticket windows; the plazas' granite benches; the corner
+// drum (corner_screen()). `face` as in sign_zone().
+Surface plaza_piece(int part, vec2 p, vec2 footprint, int flags, float below_top, vec2 face) {
+	Surface s;
+	s.emission = vec3(0.0);
+	s.glass = 0.0;
+	bool top = (flags & ROOF) != 0;
+	float lit = max(night, city_lights);
+	float pixel = max(footprint.x, footprint.y);
+	vec3 red = srgb(TKTS_RED);
+	if (part == TKTS_STEPS) {
+		if (top) {
+			// Glass treads in panels, glossy, lit from below (less than the risers,
+			// so the steps read as steps).
+			float across = 0.875 * p.x + 0.485 * p.y;  // world x/z, meters across the avenues
+			float seams = centered_stripes(across / 1.5, 0.04, pixel / 1.5);
+			s.albedo = red * (0.8 - 0.3 * seams);
+			s.glass = 0.4;
+			s.emission = red * ((0.08 + 0.22 * tkts_glow * lit) * (1.0 - 0.6 * seams));
+		} else {
+			// Risers, the brightest part at night, under a steel nosing.
+			float rise = TKTS_HEIGHT / TKTS_RISERS;
+			float nosing = band(fract(p.y / rise), 0.8, 1.0, footprint.y / rise) * visible(rise, footprint.y);
+			s.albedo = mix(red * 1.1, srgb(vec3(0.20, 0.20, 0.22)), nosing);
+			s.emission = red * ((0.35 + tkts_glow * lit) * (1.0 - nosing));
+		}
+	} else if (part == TKTS_BOOTH) {
+		// Dark glass in steel mullions.
+		float mullions = centered_stripes(p.x / 1.5, 0.05, footprint.x / 1.5);
+		s.albedo = mix(srgb(vec3(0.15, 0.10, 0.11)), srgb(vec3(0.34, 0.34, 0.36)), mullions);
+		s.glass = 0.6 * (1.0 - mullions);
+		if (face.y - face.x > 2.0 && face.y < 1e3) {
+			// The back, under the top step: ticket windows, the steps glowing above.
+			float windows = band(p.y, 0.9, 2.4, footprint.y) * band(fract(p.x / 2.2), 0.12, 0.88, footprint.x / 2.2)
+					* band(p.x, 0.8, face.y - 0.8, footprint.x);
+			s.albedo = mix(s.albedo, srgb(vec3(0.55, 0.50, 0.40)), windows);
+			s.glass *= 1.0 - windows;
+			s.emission = srgb(LOBBY_LIGHT) * (windows * (0.25 + 1.4 * lit)) + red * (0.7 * lit * band(p.y, 2.8, TKTS_HEIGHT, footprint.y));
+		} else {
+			// A side: each step's edge glows through the glass.
+			float step_edge = 1.0 - smoothstep(0.0, 0.22, below_top);
+			s.emission = red * ((0.25 + tkts_glow * lit) * step_edge + 0.35 * lit * (1.0 - step_edge));
+		}
+	} else if (part == CORNER_SCREEN) {
+		s.albedo = srgb(SIGN_CLADDING);
+		if (!top) {
+			s = corner_screen(p, footprint, below_top, mix(sign_day_glow, sign_night_glow, lit));
+		}
+	} else {
+		// PLAZA_BENCH: speckled granite, the seat a little lighter.
+		float speckle = value_noise(p * 7.0) * visible(0.15, pixel);
+		s.albedo = srgb(BENCH_GRANITE) * (top ? 1.06 : 0.9) * (1.0 - 0.18 * speckle);
 	}
 	return s;
 }
@@ -2396,6 +2734,9 @@ void vertex() {
 	float h = (UV.y + 1.0) * 0.01;
 	float h2 = h * h;
 	wall_moments = vec4(h, h2, h2 * h, h2 * h2);
+	float x = (UV.x + 1.0) * 0.01;
+	float x2 = x * x;
+	wall_x_moments = vec4(x, x2, x2 * x, x2 * x2);
 	float floor_dm = floor(UV2.y + 0.0005);
 	building_data = vec3(floor(UV2.x + 0.5), floor_dm, floor(clamp(UV2.y - floor_dm, 0.0, 0.999) * 1024.0));
 }
@@ -2429,7 +2770,11 @@ void fragment() {
 					&& archetype != LM_GOLD;
 			occlusion = height_uv ? mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y)) : 1.0;
 		}
-	} else if (flags >= FRONT_PART) {
+	} else if ((flags & SIGNS) != 0 && flags >= 2 * FRONT_PART) {
+		// Times Square's own pieces: the TKTS steps, benches, the corner drum.
+		s = plaza_piece(flags / FRONT_PART, UV, footprint, flags, wall_top_distance(wall_moments, UV.y), wall_span(wall_x_moments));
+		occlusion = (flags & ROOF) != 0 ? 1.0 : mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y));
+	} else if (flags >= FRONT_PART && (flags & SIGNS) == 0) {
 		s = stoop(flags / FRONT_PART, UV, footprint, archetype, flags, seed);
 		occlusion = canyon_occlusion;
 	} else if ((flags & ROOF) != 0) {
@@ -2440,10 +2785,21 @@ void fragment() {
 		s = parapet_inside(UV, footprint, archetype, flags, seed, wall_top_distance(wall_moments, UV.y));
 	} else {
 		float below_top = wall_top_distance(wall_moments, UV.y);
-		if ((flags & SIGNS) != 0) {
-			s = sign_wall(UV, footprint, archetype, flags, floor_height, seed, below_top);
-		} else {
+		// Sign walls paint their facade only where the screens leave it showing.
+		bool signs = (flags & SIGNS) != 0;
+		SignZone zone;
+		zone.cover = 0.0;
+		if (signs) {
+			zone = sign_zone(UV, footprint, flags, floor_height, seed, below_top, wall_span(wall_x_moments), world_normal);
+		}
+		s.albedo = vec3(0.0);
+		s.emission = vec3(0.0);
+		s.glass = 0.0;
+		if (zone.cover < 1.0) {
 			s = facade(UV, footprint, archetype, flags, floor_height, seed, below_top);
+		}
+		if (signs) {
+			s = sign_wall(s, UV, footprint, seed, zone);
 		}
 		occlusion = mix(canyon_occlusion, 1.0, smoothstep(0.0, canyon_height, UV.y));
 	}

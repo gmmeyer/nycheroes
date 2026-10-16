@@ -9,8 +9,8 @@ tiles, building surfaces carry, per vertex:
   uv2.y = floor height in decimeters + the building's random seed (0..0.999)
 Flags are per face: ROOF, FRONT (the wall faces a street), PARAPET,
 PARAPET_INSIDE, SIGNS, STOOP and the FRONT_PART field are set by
-build_tiles.py (and fronts.py); the rest, including the MATERIAL field, are
-per building, from here.
+build_tiles.py (and fronts.py, times_square.py); the rest, including the
+MATERIAL field, are per building, from here.
 
 Wall materials follow the borough, the era and the historic district:
 brownstone rows in Brooklyn and Harlem, limestone rows from the 1900s, buff
@@ -62,7 +62,10 @@ SIGNS = 256       # a street wall in a sign district (Times Square): billboards
 MATERIAL = 512
 STOOP = 4096      # the building has a stoop (fronts.py), so its front door is there
 # A field of three bits: flags // FRONT_PART is the part of a stoop a face is
-# (fronts.py), 0 for walls and roofs.
+# (fronts.py), 0 for walls and roofs. On SIGNS faces (which never have stoops)
+# it's which of Times Square's own pieces the face is instead
+# (times_square.py: One Times Square's screens to the top, the TKTS steps,
+# plaza benches).
 FRONT_PART = 8192
 FLAG_SCALE = 64
 PARAPET_HEIGHT = 1.0  # meters; the shader has the same constant

@@ -375,6 +375,66 @@ In order:
 - Frame rate unchanged (within noise; the screens fill about 40% of the
   frame at street level).
 
+**Times Square, closer to the real one (done; reference improvement 11):**
+- Bigger screens fitted to the walls: sign walls at least 6 m wide measure
+  uv.x from their own corner (`build_tiles.py` SIGN_FACE_MIN), and the
+  shader finds each face's width from the moments of uv.x (the same trick as
+  wall tops), so it lays the screens out across each face: columns 13-30 m
+  wide (per building), tiers 9-22 m high, a tall banner at one end of some
+  faces, a few tiers split in two. They sit in black cladding with dark gaps
+  of 0.9-2 m and a thin bezel, a strip of cladding at the corners. Narrow
+  facets (rounded corners) keep the old layout that runs on along the
+  building. Neon tubes and chasing bulbs are rarer (today's walls are LED).
+- Ads drawn like photos, softly lit, on about half the wide screens:
+  cartoon portraits (head and shoulders in studio light, blinking, the
+  brand's word beside them), landscapes (sky, a low sun, hazy ridges, a
+  glinting shore, slowly panning) and film posters (a dark figure against a
+  glow, light rays, a glowing title). Still no real brands.
+- One Times Square is a stack of screens 5-14 m high from above its shops
+  to the top of both its parts (68 and 102 m): `tools/citygen/times_square.py`
+  lists it by BIN (SIGN_TOWERS), and its sign walls carry SIGN_TOWER in the
+  FRONT_PART field (SIGNS faces never have stoops, so the field is free
+  there). About two in three of the other tall sign buildings carry screens
+  higher up too: a row 8-14 m high near the top, or a stack 24-60 m tall up
+  one edge of a face.
+- The TKTS booth in Father Duffy Square: the data's 4.9 m box (BIN 1085637)
+  becomes 27 red glass steps up to 4.9 m, facing south over the square, with
+  glass sides (each step's edge glows through) and the ticket windows at the
+  back. Glossy treads, risers glowing red at night (`tkts_glow`); you can
+  climb them, and three walking lanes run up them.
+- Granite benches (8 by 0.9 m, 0.45 m high; 17 of them) in lines down the
+  middle of the plazas, clear of street furniture and trees.
+- A drum of screens 11 m across and 14 m high around the corner of 47th
+  Street and Seventh Avenue, over the TKTS steps, showing an invented cola
+  brand (a white ribbon over red, rising bubbles), like the curved cola
+  signs that have hung over the north end of the square.
+- Walls on the plazas count as street fronts in the sign district
+  (`times_square.faces_plaza()`): Broadway's roadbed from 42nd to 47th Street
+  is pavement in the data, so walls on it had neither shop fronts nor
+  billboards (One Times Square's long east face among them).
+- A thicker crowd: walking lanes across the plazas every 3 m (out to 22 m
+  from the curb) beside the curbside ones; within 60 m of the sign district,
+  `crowd_manager.gd` keeps `plaza_crowd` (1.5) times as many pedestrians (68
+  on high, 36 on medium, 18 on low), three in four newcomers on lanes in the
+  district, so the plazas fill up. Pedestrians more than 25 m from the camera
+  take a new pose 12 times a second (each at its own moment) instead of every
+  frame; each new pose is a skinning pass (see SkinWarmup).
+- All of it is in the buildings surface and the building shader's sign
+  code (`plaza_piece()` paints the steps, benches and drum); faces carry
+  SIGNS plus a part (`times_square.py`). The ground is unchanged.
+- Cost: no extra draw calls for the screens, steps, benches and drum (303
+  and 276 in the two Times Square test views without pedestrians, before and
+  after); tiles +23 kB (+0.4%) in the 8 tiles that change (the steps are 218
+  triangles, the drum 164, the benches 170). Each pedestrian costs about
+  50 µs a frame (Chrome, uncapped): with 68 in the district the test views
+  ran at 160 and 152 FPS, against 174 and 216 with 33 (twice the crowd, 90,
+  dropped below the 145 FPS cap, hence 1.5). The pose rate saves about 7%
+  at 90 pedestrians. The building shader now inlines `facade()` once
+  instead of twice (sign walls paint their facade only where the screens
+  leave it showing), so it isn't bigger to compile than before; its first
+  compile in Chrome on Windows was already slow (1-4 minutes on a busy
+  machine) before this.
+
 **Street furniture (done):**
 - From the city's inventories, where they really stand: 110k fire
   hydrants, 38k bike racks, 21k litter baskets, 13k parking meters, 5.7k

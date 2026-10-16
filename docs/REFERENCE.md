@@ -110,6 +110,11 @@ them as in this table and keep the share-alike terms.
   of pedestrians.
 - Light: the real canyon is in deep shade under a bright sky; the game is
   evenly lit and brighter (mean value of the lower half 0.36 vs 0.27).
+- Since this run (improvement 11, ROADMAP "Times Square, closer to the real
+  one"): bigger screens fitted to each face in black cladding, ads drawn like
+  photos, One Times Square stacked with screens to the top, the red TKTS
+  steps, benches, twice the crowd. Still different: the plaza's paving, the
+  canyon's light, and real photographic content.
 
 **fifth_ave_esb**
 - Marble Collegiate Church is drawn as a 65 m tall cream box with office
@@ -275,7 +280,7 @@ them as in this table and keep the share-alike terms.
 | 8 | **Distant parks and woods**: darker, bumpier canopy at distance (Central Park from above reads as pale lawn), maybe cheap tree clumps in mid tiles; also reads the wooded hills of Staten Island. | small-medium | `ground.gdshader` canopy tint, mid-tile props |
 | 9 | **Sky, haze and weather**: a deeper clear-day zenith, stronger distance haze, an overcast preset (`?weather=overcast`) to compare with gray-day photos. | small | `shaders/sky.gdshader`, `scripts/world/time_of_day.gd` |
 | 10 | **The two Brooklyn bridges as landmarks**: Brooklyn Bridge's granite Gothic towers, four cables with suspenders and stays, raised promenade; Manhattan Bridge's blue steel towers and deep truss; the towers at their real positions (with step 8). | medium-large | `tools/citygen/bridges.py`, landmark models, step 8 |
-| 11 | **Times Square**: screens up to the top of One Times Square; bigger screens with dark frames and gaps; the red TKTS steps; more pedestrians in plazas. | small | `building.gdshader` sign code, `props.py` box, crowd |
+| 11 | **Times Square** (done 2026-10-16): screens up to the top of One Times Square; bigger screens with dark frames and gaps; the red TKTS steps; more pedestrians in plazas. | small | `building.gdshader` sign code, `props.py` box, crowd |
 | 12 | **Parks missing from the parks layer**: Brooklyn Bridge Park's piers (and likely other parks not run by the Parks Department, e.g. Hudson River Park's piers) are bare paving. Add them from another source. | small-medium | `tools/citygen/fetch_data.py` / `prepare.py` |
 | 13 | **Parked cars and traffic** (in progress): every street photo is lined with parked cars; without them streets look wider and emptier than they are. | in progress | traffic work |
 | 14 | **Waterfront landmarks**: the St. George ferry slips (and the Manhattan terminal), piers with their sheds. | medium | landmarks |
