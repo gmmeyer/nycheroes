@@ -380,9 +380,18 @@ func _process(delta: float) -> void:
 		_log_cooldown -= delta
 		if _log_cooldown <= 0.0:
 			_log_cooldown = LOG_INTERVAL
-			print("[traffic] %d cars, %.2f ms a frame; a driving step: people %.2f, driving %.2f, moving on %.2f; a frame: spawning %.2f, drawing %.2f; last tile's lanes %.2f" % [
-				car_count, update_msec, _part_msec[0], _part_msec[1], _part_msec[2], _part_msec[3], _part_msec[4],
-				last_tile_msec])
+			print("[traffic] %d cars (%d in sight), %.2f ms a frame; a driving step: people %.2f, driving %.2f, moving on %.2f; a frame: spawning %.2f, drawing %.2f; last tile's lanes %.2f" % [
+				car_count, _count_in_sight(), update_msec, _part_msec[0], _part_msec[1], _part_msec[2], _part_msec[3],
+				_part_msec[4], last_tile_msec])
+
+
+## How many cars the camera sees (for ?stats).
+func _count_in_sight() -> int:
+	var seen := 0
+	for i in _highest + 1:
+		if _path[i] != null and not _hidden(_at[i]):
+			seen += 1
+	return seen
 
 
 ## Cars' places and speeds for the engine sounds.

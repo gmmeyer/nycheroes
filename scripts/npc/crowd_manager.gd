@@ -20,6 +20,8 @@ const SIGN_ALONG := Vector2(-330.0, 420.0)
 const SIGN_ACROSS := Vector2(-120.0, 110.0)
 const PLAZA_REACH := 60.0
 const PLAZA_SPAWN_SHARE := 0.75
+## With ?stats, how often the crowd is logged (s).
+const LOG_INTERVAL := 2.0
 
 @export var city: CityStreamer
 @export var hero: Hero
@@ -33,15 +35,24 @@ const PLAZA_SPAWN_SHARE := 0.75
 var pedestrians: Array[Pedestrian] = []
 var _cooldown := 0.0
 var _filled_once := false
+var _limit := 0
+var _log_stats := false
+var _log_cooldown := 0.0
 
 
 func _ready() -> void:
 	if LaunchOptions.has("peds"):
 		max_pedestrians = int(LaunchOptions.get_string("peds"))
+	_log_stats = LaunchOptions.has("stats")
 	Combat.danger.connect(_on_danger)
 
 
 func _process(delta: float) -> void:
+	if _log_stats:
+		_log_cooldown -= delta
+		if _log_cooldown <= 0.0:
+			_log_cooldown = LOG_INTERVAL
+			print("[crowd] %d pedestrians (%d in sight), up to %d here" % [pedestrians.size(), _count_in_sight(), _limit])
 	_cooldown -= delta
 	if _cooldown > 0.0:
 		return
@@ -55,6 +66,7 @@ func _process(delta: float) -> void:
 	var above_street := center.y - city.ground_height_at(center, 0.5)
 	var crowded := in_sign_district(center, PLAZA_REACH)
 	var limit := roundi(max_pedestrians * (plaza_crowd if crowded else 1.0))
+	_limit = limit
 	if hero.frozen or not above_street <= MAX_SPAWN_ALTITUDE or pedestrians.size() >= limit:
 		return
 	var lanes := city.lanes_near(center, spawn_range.y)
@@ -100,6 +112,24 @@ static func in_sign_district(world_position: Vector3, margin := 0.0) -> bool:
 	var across := 0.875 * world_position.x + 0.485 * world_position.z
 	return along >= SIGN_ALONG.x - margin and along <= SIGN_ALONG.y + margin \
 			and across >= SIGN_ACROSS.x - margin and across <= SIGN_ACROSS.y + margin
+
+
+## How many pedestrians the camera sees (for ?stats): drawn, in its view and
+## not behind a building.
+func _count_in_sight() -> int:
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return 0
+	var space := get_world_3d().direct_space_state
+	var seen := 0
+	for pedestrian in pedestrians:
+		var head := pedestrian.global_position + Vector3.UP * 1.5
+		if not pedestrian.visible or not camera.is_position_in_frustum(head):
+			continue
+		var query := PhysicsRayQueryParameters3D.create(camera.global_position, head, CityStreamer.COLLISION_LAYER)
+		if space.intersect_ray(query).is_empty():
+			seen += 1
+	return seen
 
 
 func _on_danger(world_position: Vector3, radius: float) -> void:
