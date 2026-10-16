@@ -74,21 +74,18 @@ func _ready() -> void:
 			_shot("", 0.5),
 		]
 	elif LaunchOptions.get_string("demo") == "new":
-		# What's new since the last tour (2026-10-16); heights are absolute.
+		# What's new since the last tour (2026-10-16, later); heights are absolute.
 		_shots = [
-			_flight_shot("The Brooklyn Bridge, built by hand", 7.0,
-					[-1184, 30, 6129, -70, 2], [-996, 32, 6061, -70, 4]),
-			_flight_shot("Its promenade", 6.0, [-761, 43.5, 5975, 42.2, 1.5], [-781, 43.5, 5953, 42.2, 1.5]),
-			_flight_shot("Stoops on brownstone blocks", 6.0, [834, 34.7, 9675, 48, 6], [815.4, 34.7, 9658.3, 48, 6]),
-			_flight_shot("Planted medians", 6.0, [1090, 17.4, -122, 150.3, 0], [1070.2, 17.4, -87.2, 150.3, 0]),
-			_flight_shot("Belgian block in DUMBO", 6.0, [-346, 6.2, 6100, -6.7, -3], [-342.5, 6.2, 6070.2, -6.7, -3]),
-			_flight_shot("The Guggenheim", 6.0, [2166, 80, -2811, -119, -15], [2185, 80, -2846, -125, -15]),
-			_flight_shot("The Unisphere", 6.0, [11799, 35, 1401, -28, -8], [11830, 30, 1345, -28, -6]),
-			_flight_shot("391 km of elevated subway", 6.0,
-					[8080.4, 22.3, 1212.8, 100.9, 1.8], [8041.1, 22.3, 1220.4, 100.9, 1.8]),
-			_flight_shot("Times Square's new screens", 6.0, [13, 16.1, -67, 159.5, 6], [5, 16.1, -45, 159.5, 6]),
-			_flight_shot("Under the J at night", 6.0, [3840, 14.4, 6473.1, 53.6, 0.2], [3815.9, 14.4, 6455.3, 53.6, 0.2], false,
-					[21.0, 21.0]),
+			_flight_shot("Churches with their spires", 6.0, [-127, 14.2, 1445, 3.8, 17], [-128.7, 14.2, 1420, 3.8, 14]),
+			_flight_shot("St. Patrick's Cathedral", 6.0, [690, 23.1, -112.3, -119, 20], [703, 23.1, -105, -119, 18]),
+			_flight_shot("Shop signs and awnings", 6.0, [8080.4, 22.3, 1212.8, 100.9, 1.8], [8041.1, 22.3, 1220.4, 100.9, 1.8]),
+			_flight_shot("Trains on the elevated lines", 7.0, [7981, 29.8, 1224.4, 114.4, -1.7], [7975, 29.8, 1227, 114.4, -1.7]),
+			_flight_shot("Utility poles and wires in Queens", 6.0, [7674, 26.2, 6639, 147.5, 6], [7660.6, 26.2, 6660.1, 147.5, 6]),
+			_flight_shot("Highways in their cuts", 6.0, [8203, 70, -9288, -126, -25], [8251.5, 70, -9252.7, -126, -25]),
+			_flight_shot("The BQE's trench", 6.0, [-1395, 55, 8363, -20, -25], [-1377.9, 55, 8316, -20, -25]),
+			_flight_shot("Ferries at St. George", 6.0, [-6892, 10, 12442, 112.5, 6], [-6929, 10, 12457.3, 112.5, 6]),
+			_flight_shot("Central Park's canopy", 6.0, [525, 280, -137, -25, -2.5], [525, 280, -137, -5, -4]),
+			_flight_shot("Golden hour", 7.0, [525, 280, -137, -5, -4], [525, 280, -137, -35, -3], false, [18.8, 19.2]),
 			_flight_shot("Times Square at night", 7.0, [13, 16.1, -67, 159.5, 6], [5, 16.1, -45, 159.5, 6], false,
 					[21.5, 21.5]),
 			_shot("", 0.5),
