@@ -1,30 +1,46 @@
 extends Node
 ## Headless check of the trains on the els: loads the city around the 7 over
-## Roosevelt Avenue at 74th Street, lets the trains run for a while and
-## checks every frame that trains on the same tracks never overlap, that
-## none runs faster than its track allows, that they move, and that each
-## train that stops at a platform stands with its middle at the platform's
-## middle. Then stands the hero on the tracks ahead of a moving train (it
-## must stop short), drops the hero onto a moving train's roof (the hero must
-## ride along on it), and moves the camera to the 4 on Jerome Avenue until
-## Queens unloads: no train may be left on unloaded tracks, and trains must
-## run there.
+## Roosevelt Avenue at 74th Street at 15:30 (the evening rush: the 7's
+## express track runs away from Manhattan, and only that way), puts an
+## express train on it, lets the trains run for a while and checks every
+## frame that trains on the same tracks never overlap, that none runs faster
+## than its track allows, that they move, and that each train that stops at
+## a platform stands with its middle at the platform's middle. Then stands
+## the hero on the tracks ahead of a moving train (it must stop short), drops
+## the hero onto a moving train's roof (the hero must ride along on it),
+## moves the camera to the 4 on Jerome Avenue until Queens unloads (no train
+## may be left on unloaded tracks, and trains must run there), and on to the
+## 4's terminal at Woodlawn: a train put on the track into it must stop at
+## the bumper, go back out over the switch onto the other track, and no
+## other train may be on the terminal's track meanwhile.
 ## --tiles=DIR (see CityStreamer) runs it on a copy of the tiles, which must
-## have the trains surface around both places.
+## have the trains surface around all three places. With TRAINS_TERMINAL_ONLY
+## set in the environment it goes straight from loading to Woodlawn.
 ## Run: godot --headless --path . res://tests/trains_test.tscn -- --tiles=DIR
 
-## Roosevelt Avenue at 74th Street, over the el, and Jerome Avenue at about
-## Burnside Avenue (world meters).
+## Roosevelt Avenue at 74th Street, over the el, Jerome Avenue at about
+## Burnside Avenue, and Woodlawn, the 4's terminal (world meters).
 const ROOSEVELT := Vector3(7990.0, 40.0, 1220.0)
 const JEROME := Vector3(5750.0, 40.0, -9250.0)
+const WOODLAWN := Vector3(9000.0, 80.0, -14200.0)
 const LOAD_WAIT := 120.0
 const RUN_TIME := 120.0
 const PERSON_TIME := 60.0
-const BOARD_WAIT := 60.0
+## How long to wait for a running train to stand in front of or board, and
+## after how long a train is put on the tracks for it (a loaded machine runs
+## few frames, so trains may all be standing at platforms for a while).
+const BOARD_WAIT := 150.0
+const BOARD_HELP := 30.0
 const RIDE_TIME := 8.0
 const AWAY_TIME := 45.0
+const TERMINAL_WAIT := 120.0
+const TERMINAL_TIME := 360.0
+## The train at the terminal starts this far before the bumper (m).
+const TERMINAL_START := 350.0
 ## Where the hero stands ahead of a train (m along the tracks).
 const PERSON_AHEAD := 100.0
+## How far from ROOSEVELT the trains for the hero may be (m).
+const NEAR := 900.0
 
 var _world: Game
 var _city: CityStreamer
@@ -45,11 +61,26 @@ var _person_at := 0.0
 var _closest := INF
 var _stood_near := false
 var _ride_start := Vector3.ZERO
+## Whether a train was put on the tracks for the hero in this phase.
+var _helped := false
+## The express train, how far it ran and where it stopped.
+var _express: Trains.Train
+var _express_run := 0.0
+var _express_stops := 0
+## At the terminal: its bumper's node, and what the train did (stood at the
+## bumper, turned back, came out onto the other track), and how often
+## another train was on the terminal's track while it was.
+var _bumper := 0
+var _at_bumper := false
+var _turned := false
+var _out := false
+var _shared := 0
 
 
 func _ready() -> void:
 	# After the trains have moved and been drawn this frame.
 	process_priority = 100
+	LaunchOptions.set_default("time", "15:30")
 	var world: Game = load("res://scenes/world.tscn").instantiate()
 	add_child(world)
 	_world = world
@@ -79,9 +110,15 @@ func _process(delta: float) -> void:
 					_fail("no trains on the 7")
 					_finish()
 					return
+				_place_express()
 				_next("run")
+				if OS.has_environment("TRAINS_TERMINAL_ONLY"):
+					_camera.global_position = WorldOrigin.to_local(WOODLAWN)
+					_next("terminal_load")
 		"run":
 			_check_frame(delta)
+			if _express == null and _time < RUN_TIME * 0.5 and fmod(_time, 2.0) < delta:
+				_place_express(false)
 			if OS.has_environment("TRAINS_DEBUG") and fmod(_time, 10.0) < delta:
 				for train in _trains.trains:
 					var front := train.pieces[train.pieces.size() - 1]
@@ -100,6 +137,8 @@ func _process(delta: float) -> void:
 			elif _time > BOARD_WAIT:
 				_fail("no train to stand in front of")
 				_next("person")
+			elif _time > BOARD_HELP and not _helped:
+				_put_train()
 		"person":
 			_check_frame(delta)
 			_check_person()
@@ -115,6 +154,8 @@ func _process(delta: float) -> void:
 			elif _time > BOARD_WAIT:
 				_fail("no moving train to board")
 				_next("ride")
+			elif _time > BOARD_HELP and not _helped:
+				_put_train()
 		"ride":
 			_check_frame(delta)
 			if _time > RIDE_TIME:
@@ -126,12 +167,26 @@ func _process(delta: float) -> void:
 			_check_frame(delta)
 			if _time > AWAY_TIME and _city.pending_count() == 0:
 				_report_away()
+				_camera.global_position = WorldOrigin.to_local(WOODLAWN)
+				_next("terminal_load")
+		"terminal_load":
+			if (_time > 20.0 and _city.pending_count() == 0) or _time > TERMINAL_WAIT:
+				if _place_at_terminal():
+					_next("terminal")
+				else:
+					_finish()
+		"terminal":
+			_check_frame(delta)
+			_check_terminal()
+			if _out or _time > TERMINAL_TIME:
+				_report_terminal()
 				_finish()
 
 
 func _next(phase: String) -> void:
 	_phase = phase
 	_time = 0.0
+	_helped = false
 
 
 func _fail(what: String) -> void:
@@ -163,15 +218,21 @@ func _check_frame(delta: float) -> void:
 				_stats.removed += 1
 		if train.v > Trains.TOP_SPEED + 0.3:
 			_stats.overspeed += 1
+		if train == _express:
+			_express_run += train.v * delta
 		var front := train.pieces[train.pieces.size() - 1]
 		if train.s < front.length and train.v > front.speed_at(train.s) + 1.5:
 			_stats.curve_overspeed += 1
 			if _stats.curve_overspeed < 5:
-				print("  over a curve's limit: %.1f m/s where %.1f m/s" % [train.v, front.speed_at(train.s)])
+				print("  over a curve's limit: %.1f m/s where %.1f m/s (%s, front piece's flags %d, turning %s)" % [
+					train.v, front.speed_at(train.s), "the train put at the terminal" if train == _subject else "a train",
+					front.flags, train.turning])
 		# Just stopped at a platform: its middle at the platform's middle.
 		var dwelling := train.dwell > 0.0
 		if dwelling and not _dwelling.get(train, false) and train.served:
 			_stats.stops += 1
+			if train == _express:
+				_express_stops += 1
 			var middle := _point(train, train.span + train.s - train.length * 0.5)
 			var stop := train.served.point_at(train.served_at)
 			if middle.distance_to(stop) > 2.5:
@@ -215,6 +276,41 @@ func _point(train: Trains.Train, x: float) -> Vector3:
 	return Vector3.ZERO
 
 
+## Checks the express tracks loaded run one way (the evening's, away from
+## Manhattan) and that a train runs on one: one already there, else one put
+## on the nearest where it fits (making room; tried again during the run
+## while `report` is false).
+func _place_express(report := true) -> void:
+	var out := 0
+	var into := 0
+	var near: Array[TrainTracks.Piece] = []
+	for key: Vector2i in _trains.tracks.tiles:
+		for piece: TrainTracks.Piece in _trains.tracks.tiles[key]:
+			if piece.flags & CityTileDecoder.TRACK_EXPRESS_OUT != 0:
+				out += 1
+				near.append(piece)
+			if piece.flags & CityTileDecoder.TRACK_EXPRESS_IN != 0:
+				into += 1
+	if report:
+		print("express tracks: %d pieces away from Manhattan, %d toward it" % [out, into])
+		if out == 0 or into > 0:
+			_fail("the express tracks don't run away from Manhattan alone at 15:30")
+	for train in _trains.trains:
+		if train.pieces[train.pieces.size() - 1].flags & CityTileDecoder.TRACK_EXPRESS_OUT != 0:
+			_express = train
+			print("an express train runs on the 7's express track")
+			return
+	if _trains.trains.size() >= _trains.max_trains:
+		_trains._despawn(_trains.trains[0])
+	near.sort_custom(func(a: TrainTracks.Piece, b: TrainTracks.Piece) -> bool:
+		return a.points[0].distance_to(ROOSEVELT) < b.points[0].distance_to(ROOSEVELT))
+	for piece in near:
+		_express = _trains.place(piece, piece.length)
+		if _express != null:
+			print("an express train put on the 7's express track")
+			return
+
+
 func _report_run() -> void:
 	print("ran %.0f s: up to %d trains, %.0f m run (%.1f m/s on average), %d stops at platforms (%d off their middle), %d overlaps, %d over the top speed, %d over a curve's limit, %.3f ms a frame" % [
 		RUN_TIME, _stats.max_trains, _stats.distance, _stats.distance / maxf(_stats.train_seconds, 1.0), _stats.stops,
@@ -229,14 +325,25 @@ func _report_run() -> void:
 		_fail("too few stops at platforms")
 	if _stats.misaligned > 0:
 		_fail("%d stops off the platform's middle" % _stats.misaligned)
+	if _express == null:
+		_fail("no express train ran")
+	var express_state := "gone"
+	if _express != null and _trains.trains.has(_express):
+		var front: TrainTracks.Piece = _express.pieces[_express.pieces.size() - 1]
+		express_state = "at %.1f m/s, stop in %.0f m, %.0f of %.0f m along its front piece (flags %d), at %s" % [
+			_express.v, _express.stop_in, _express.s, front.length, front.flags, _express.head.round()]
+	print("the express train ran %.0f m and stopped %d times (express stations only); now %s" % [
+		_express_run, _express_stops, express_state])
+	if _express != null and _express_run < 100.0:
+		_fail("the express train hardly moved")
 
 
 ## Stands the hero (still) on the tracks PERSON_AHEAD ahead of a train
-## running at least 5 m/s near the camera with no stop before that, if there
+## running at least 3 m/s near the camera with no stop before that, if there
 ## is one; returns whether it did.
 func _place_person() -> bool:
 	for train in _trains.trains:
-		if train.v < 5.0 or train.stop_in < PERSON_AHEAD + 30.0 or train.head.distance_to(ROOSEVELT) > 600.0:
+		if train.v < 3.0 or train.stop_in < PERSON_AHEAD + 20.0 or train.head.distance_to(ROOSEVELT) > NEAR:
 			continue
 		var piece := train.pieces[train.pieces.size() - 1]
 		var at := train.s + PERSON_AHEAD
@@ -296,12 +403,12 @@ func _report_person() -> void:
 
 
 ## Drops the hero onto the roof of a moving train's middle car near the
-## camera, if one is running at least 8 m/s with a clear way on; returns
+## camera, if one is running at least 5 m/s with a clear way on; returns
 ## whether it did.
 func _board() -> bool:
 	_subject = null
 	for train in _trains.trains:
-		if train.v < 8.0 or train.stop_in < 150.0 or train.head.distance_to(ROOSEVELT) > 700.0:
+		if train.v < 5.0 or train.stop_in < 100.0 or train.head.distance_to(ROOSEVELT) > NEAR:
 			continue
 		_subject = train
 		var middle := _point(train, train.span + train.s - train.length * 0.5)
@@ -357,3 +464,98 @@ func _report_away() -> void:
 		_fail("no trains on Jerome Avenue")
 	if _stats.overlaps > 0:
 		_fail("overlaps")
+
+
+## Puts a train on the track into the 4's terminal at Woodlawn,
+## TERMINAL_START before the terminal's track starts (the other trains go,
+## and no more appear); returns whether it did.
+func _place_at_terminal() -> bool:
+	var tracks := _trains.tracks
+	var dead: TrainTracks.Piece = null
+	for key: Vector2i in tracks.tiles:
+		for piece: TrainTracks.Piece in tracks.tiles[key]:
+			if piece.flags & CityTileDecoder.TRACK_DEAD_END != 0 and tracks.turn_back(piece) != null \
+					and (dead == null or piece.points[-1].distance_to(WOODLAWN) < dead.points[-1].distance_to(WOODLAWN)):
+				dead = piece
+	if dead == null or dead.points[-1].distance_to(WOODLAWN) > 1000.0:
+		_fail("no terminal with a way back near Woodlawn")
+		return false
+	_bumper = dead.to_node
+	# The train alone: no others appear meanwhile.
+	_trains.radius = 0.0
+	for train in _trains.trains.duplicate():
+		_trains._despawn(train)
+	var piece := dead
+	var back := TERMINAL_START
+	var to_bumper := 0.0
+	while piece != null and (piece.is_terminal() or back > piece.length):
+		if not piece.is_terminal():
+			back -= piece.length
+		to_bumper += piece.length
+		piece = tracks.previous(piece, dead.service)
+	if piece == null:
+		_fail("the terminal's track isn't loaded far enough")
+		return false
+	_subject = _trains.place(piece, piece.length - back)
+	print("a train put %.0f m before the bumper at Woodlawn, %.0f m before its track: %s" % [
+		to_bumper + back, TERMINAL_START, _subject != null])
+	if _subject == null:
+		_fail("no room for a train at the terminal")
+		return false
+	return true
+
+
+## Follows the train at the terminal, and looks for others on its track
+## while it's there.
+func _check_terminal() -> void:
+	if _subject == null or not _trains.trains.has(_subject):
+		return
+	var train := _subject
+	_at_bumper = _at_bumper or train.turn_wait > 0.0
+	_turned = _turned or train.turning
+	var inside := train.pieces.any(func(p: TrainTracks.Piece) -> bool: return p.is_terminal() or p.is_turn_back())
+	if _turned and not train.turning and not inside:
+		_out = true
+	if not inside:
+		return
+	for other in _trains.trains:
+		if other != train and other.pieces.any(
+				func(p: TrainTracks.Piece) -> bool: return p.is_terminal() and _trains.tracks.bumper(p) == _bumper):
+			_shared += 1
+
+
+func _report_terminal() -> void:
+	var gone := _subject == null or not _trains.trains.has(_subject)
+	print("terminal: the train stood at the bumper: %s, turned back: %s, came out onto the other track: %s (after %.0f s), %d frames with another train on its track, still there: %s" % [
+		_at_bumper, _turned, _out, _time, _shared, not gone])
+	if not _at_bumper:
+		_fail("the train didn't reach the terminal's bumper")
+	if not _turned or not _out:
+		_fail("the train didn't turn back out of the terminal")
+	if _shared > 0:
+		_fail("another train ran onto the terminal's track")
+	if _stats.overlaps > 0:
+		_fail("overlaps")
+
+
+## Puts a running train on the longest running track without a stop near
+## the camera (making room, the furthest train going), for when none runs
+## there yet.
+func _put_train() -> void:
+	_helped = true
+	var pieces: Array[TrainTracks.Piece] = []
+	for key: Vector2i in _trains.tracks.tiles:
+		for piece: TrainTracks.Piece in _trains.tracks.tiles[key]:
+			if piece.is_main() and piece.stops.is_empty() and piece.points[0].distance_to(ROOSEVELT) < NEAR:
+				pieces.append(piece)
+	pieces.sort_custom(func(a: TrainTracks.Piece, b: TrainTracks.Piece) -> bool: return a.length > b.length)
+	if _trains.trains.size() >= _trains.max_trains:
+		var furthest: Trains.Train = _trains.trains[0]
+		for train in _trains.trains:
+			if train.head.distance_to(ROOSEVELT) > furthest.head.distance_to(ROOSEVELT):
+				furthest = train
+		_trains._despawn(furthest)
+	for piece in pieces:
+		if _trains.place(piece, piece.length * 0.5) != null:
+			print("  (put a train on the tracks near the camera)")
+			return

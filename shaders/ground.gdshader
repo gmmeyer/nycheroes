@@ -16,7 +16,8 @@
 //        bridge's colors: 1 Brooklyn, 2 Manhattan, 3 Hell Gate, 4 High Bridge;
 //        flags 1 lattice: steel painted as an open truss, its UV.y 0..1 up
 //        the band; 2 floodlit at night; 4 ballast: a track bed without
-//        ties); pavers' and Belgian blocks' direction: the angle (radians, in
+//        ties; 8 riveted: rows of rivets on the steel, and stiffeners on
+//        plates); pavers' and Belgian blocks' direction: the angle (radians, in
 //        UV space) their rows follow; shrubs' height above the ground (m)
 //        (tools/citygen/ground_details.py); 0 everywhere else.
 // UV: world x/z on flat ground; (meters along, meters up) on walls; walkways
@@ -67,6 +68,7 @@ const int HIGH_BRIDGE = 4;
 const int LATTICE = 1;
 const int FLOODLIT = 2;
 const int BALLAST = 4;
+const int RIVETS = 8;
 
 // The hand-made bridges' palettes (sRGB), by UV2.y % 8: none (the els'
 // weathered green-gray steel, tools/citygen/els.py), Brooklyn (Brooklyn
@@ -84,8 +86,9 @@ const vec3 CABLE_COLORS[5] = vec3[](vec3(0.8, 0.82, 0.85), vec3(0.5, 0.47, 0.44)
 		vec3(0.5, 0.22, 0.2), vec3(0.44, 0.49, 0.47));
 const vec3 WALKWAY_COLORS[5] = vec3[](vec3(0.55, 0.42, 0.3), vec3(0.52, 0.49, 0.45), vec3(0.55, 0.55, 0.52),
 		vec3(0.5, 0.5, 0.48), vec3(0.6, 0.33, 0.25));
-// A truss panel's length (m) per palette, for lattice-painted steel.
-const float TRUSS_PANELS[5] = float[](5.0, 5.54, 7.5, 12.9, 7.0);
+// A truss panel's length (m) per palette, for lattice-painted steel (the
+// els': their girders' lattice, and the bracing under their tracks).
+const float TRUSS_PANELS[5] = float[](2.4, 5.54, 7.5, 12.9, 7.0);
 
 // The photo fades out between these distances from the camera (meters).
 uniform vec2 aerial_near_fade = vec2(25.0, 110.0);
@@ -551,8 +554,15 @@ vec3 structure_flat(int kind, int palette, int flags, vec2 p, vec2 footprint, ve
 
 // Painted steel on walls: plain plates with faint seams, or (lattice) an open
 // truss's chords, posts and crossed diagonals over the deep shade behind,
-// along a band whose UV.y runs 0..1 from its foot to its top.
+// along a band whose UV.y runs 0..1 from its foot to its top. Riveted steel
+// (the els') has rows of rivet heads catching the light: along the middle of
+// a lattice's chords, or on plates down stiffeners every 1.5 m (a shadow
+// beside each) and in a row over each seam.
 vec3 steel_wall(int palette, int flags, vec2 p, vec2 footprint, vec3 color) {
+	// Rivet heads every 0.15 m along a row.
+	float heads = centered_stripes(p.x / 0.15, 0.4, footprint.x / 0.15);
+	float rivets = 0.0;
+	float shade;
 	if ((flags & LATTICE) != 0) {
 		float panel = TRUSS_PANELS[clamp(palette, 0, 4)];
 		float q = p.x / panel;
@@ -567,10 +577,23 @@ vec3 steel_wall(int palette, int flags, vec2 p, vec2 footprint, vec3 color) {
 		float member = max(max(chords, posts), diagonals);
 		// Too small to see: the average of steel and shade.
 		member = mix(0.5, member, visible(panel * 0.3, footprint.x));
-		return mix(color * truss_gap_shade, color, member);
+		shade = mix(truss_gap_shade, 1.0, member);
+		rivets = heads * max(band(r, 0.05, 0.09, footprint.y), band(r, 0.91, 0.95, footprint.y));
+	} else {
+		float seams = max(centered_stripes(p.x / 3.0, 0.015, footprint.x / 3.0), centered_stripes(p.y / 1.5, 0.02, footprint.y / 1.5));
+		shade = 1.0 - 0.12 * seams;
+		if ((flags & RIVETS) != 0) {
+			float stiffener = centered_stripes(p.x / 1.5, 0.08, footprint.x / 1.5);
+			float shadow = centered_stripes(p.x / 1.5 - 0.055, 0.03, footprint.x / 1.5);
+			shade *= 1.0 + 0.1 * stiffener - 0.35 * shadow * visible(0.05, footprint.x);
+			float down = centered_stripes(p.x / 1.5, 0.025, footprint.x / 1.5) * centered_stripes(p.y / 0.15, 0.4, footprint.y / 0.15);
+			rivets = max(down, centered_stripes(p.y / 1.5 - 0.07, 0.03, footprint.y / 1.5) * heads);
+		}
 	}
-	float seams = max(centered_stripes(p.x / 3.0, 0.015, footprint.x / 3.0), centered_stripes(p.y / 1.5, 0.02, footprint.y / 1.5));
-	return color * (1.0 - 0.12 * seams);
+	if ((flags & RIVETS) != 0) {
+		shade *= 1.0 + 0.35 * rivets * visible(0.06, max(footprint.x, footprint.y));
+	}
+	return color * shade;
 }
 
 vec3 wall_surface(int kind, vec2 p, vec2 footprint, vec3 color) {
