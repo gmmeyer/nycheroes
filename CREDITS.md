@@ -42,6 +42,12 @@ lines below wherever a license asks for one (the aerial photos do).
 - **The Unisphere's continents:** Natural Earth 1:110m land (public
   domain, naturalearthdata.com), reduced to 7.5-degree cells in
   `tools/citygen/landmarks.py`.
+- **Elevated railways and walkways on decks:** NYC Open Data: Planimetric
+  Database railroad lines (anc7-97cy: elevated, embankment, open-cut and
+  at-grade track centerlines, named by line), railroad structures
+  (dwer-xbgx: elevated stations) and sidewalks (52n9-sdep: the walkways on
+  bridges and raised streets); the rail bridge and railroad viaduct
+  outlines are in the bridge structures above (r9cu-9r7b).
 
 `tools/citygen/fetch_data.py` and `tools/citygen/aerial.py` list exactly
 what is downloaded from where.

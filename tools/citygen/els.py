@@ -27,13 +27,16 @@ roads it crosses it holds its height and climbs at most GRADE: the lowest
 profile that keeps the clearance everywhere, worked out over the whole track
 network at once (so the 1 crosses the 125th Street valley high, as on the
 Manhattan Valley Viaduct). Where a track goes on into an embankment, a cut or
-a tunnel, the el comes down to the ground at END_GRADE. Tracks this close
+a tunnel, the el comes down to the ground at END_GRADE. Tracks within SHARE
 share one level. Where navigation needs more (the Culver Viaduct over the
 Gowanus Canal), MIN_TOPS says so.
 
-Outlines over water that are part of a bridge bridges.py builds (the
-Manhattan and Williamsburg Bridges' tracks, the Hell Gate Bridge and its
-approaches) are left to it; creeks and canals the els cross are crossed.
+Outlines that are part of a bridge bridges.py builds (the Manhattan and
+Williamsburg Bridges' tracks, the Hell Gate Bridge and its approaches) are
+left to it; creeks and canals the els cross are crossed.
+
+They're painted with the landmark bridges' structure kinds (STEEL, TRACK,
+CONCRETE below): no shader code of their own.
 
 build() adds the els to the bridge buckets (bridges.build's format, with
 collision up close) and the columns' spots per near tile ("el_columns", for
@@ -901,9 +904,8 @@ def clear_of_columns(columns: dict, i: int, j: int, en: np.ndarray, cars: np.nda
 
 def _add_platforms(station, chains: np.ndarray, tracks: Tracks, network, builders: dict) -> int:
     """An elevated station's platforms: its outline near the deck's tracks,
-    clear of them, PLATFORM_HEIGHT above the deck; yellow edges along the
-    tracks, windscreens along the outer edges and canopies on posts up close.
-    Returns how many platforms."""
+    clear of them, PLATFORM_HEIGHT above the deck; windscreens along the
+    outer edges and canopies on posts up close. Returns how many platforms."""
     near = [c for c in chains.tolist() if shapely.dwithin(tracks.chains[c], station, PLATFORM_REACH)]
     if not near:
         return 0

@@ -6,7 +6,7 @@
 //        6 concrete (curbs, bridge deck sides, columns, steel towers), 7 cable, 8 stone (towers),
 //        9 yard (back yards, gardens, lawns around homes),
 //        14 painted steel, 15 walkway, 16 track bed (the hand-made bridges,
-//        tools/citygen/bridge_landmarks.py),
+//        tools/citygen/bridge_landmarks.py; and the els, tools/citygen/els.py),
 //        20 shrubs (beds and hedges on planted medians, a low mound), 21 pavers
 //        (pedestrian plazas), 22 Belgian block (cobbled streets).
 //        Bridge deck tops are road.
@@ -65,12 +65,13 @@ const int LATTICE = 1;
 const int FLOODLIT = 2;
 const int BALLAST = 4;
 
-// The hand-made bridges' palettes (sRGB), by UV2.y % 8: none (steel
-// otherwise unused), Brooklyn (Brooklyn Bridge Tan steel and cables, buff
-// granite towers and limestone anchorages, wooden promenade), Manhattan
+// The hand-made bridges' palettes (sRGB), by UV2.y % 8: none (the els'
+// green steel, tools/citygen/els.py), Brooklyn (Brooklyn Bridge Tan steel
+// and cables, buff granite towers and limestone anchorages, wooden
+// promenade), Manhattan
 // (blue steel, gray granite, blue-gray cables), Hell Gate (Hell Gate Red,
 // light granite), High Bridge (gray steel, weathered granite, brick walk).
-const vec3 STEEL_COLORS[5] = vec3[](vec3(0.56, 0.57, 0.6), vec3(0.6, 0.55, 0.49), vec3(0.34, 0.54, 0.76),
+const vec3 STEEL_COLORS[5] = vec3[](vec3(0.5, 0.62, 0.54), vec3(0.6, 0.55, 0.49), vec3(0.34, 0.54, 0.76),
 		vec3(0.58, 0.23, 0.2), vec3(0.44, 0.49, 0.47));
 const vec3 STONE_COLORS[5] = vec3[](vec3(0.76, 0.68, 0.53), vec3(0.71, 0.67, 0.6), vec3(0.68, 0.65, 0.61),
 		vec3(0.72, 0.7, 0.65), vec3(0.62, 0.58, 0.52));
