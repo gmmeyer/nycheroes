@@ -27,6 +27,15 @@ lines below wherever a license asks for one (the aerial photos do).
   subway entrances and exits (data.ny.gov, i9wp-a4ja).
 - **Ground elevation:** USGS 3D Elevation Program, 1/3 arc-second DEM
   (public domain, U.S. Government work).
+- **Planted medians, other parks and special pavements:** NYC Open Data:
+  Planimetric Database medians (ees7-4ufv) and other open space
+  (b7j8-z8a7: cemeteries, recreation areas), NYC Parks Greenstreets
+  (mk9u-qu7i), NYC DOT pedestrian plazas (k5k6-6jex), and the Department
+  of City Planning's Publicly Owned Waterfront (jr73-mxkz: the city's,
+  state's and federal parks on the water, among them the National Park
+  Service's Statue of Liberty, Ellis Island and Governors Island national
+  monuments and Gateway National Recreation Area, and New York State's
+  parks); street names from the street centerline (inkn-q76z).
 
 `tools/citygen/fetch_data.py` and `tools/citygen/aerial.py` list exactly
 what is downloaded from where.
