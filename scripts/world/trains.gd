@@ -510,12 +510,19 @@ func _control(train: Train) -> void:
 			stop_in = x
 			stop_piece = piece
 			stop_at = d
-		# The train ahead: its back.
+		# The train ahead: its back. (Its front ahead but its back not: this
+		# one has run into it, and stops at once.)
 		for other in trains:
-			if other == train or not other.pieces.has(piece):
+			if other == train:
 				continue
-			var back := offset + (other.span + other.s - other.length if other.pieces[0] == piece else 0.0)
-			if back > 0.0 and back - KEEP_BACK < stop_in:
+			var k := other.pieces.find(piece)
+			if k < 0:
+				continue
+			var other_front := offset + other.span + other.s
+			for q in k:
+				other_front -= other.pieces[q].length
+			var back := offset + (other.span + other.s - other.length if k == 0 else 0.0)
+			if other_front > 0.0 and back - KEEP_BACK < stop_in:
 				stop_in = back - KEEP_BACK
 				stop_piece = null
 		# Someone on the tracks.
@@ -1062,7 +1069,9 @@ func _point(train: Train, x: float) -> Vector3:
 	return Vector3.ZERO
 
 
-## Whether another train is on a train's pieces or close ahead of it.
+## Whether another train is on a train's pieces or close ahead of it, or has
+## claimed a junction or a terminal's track there (it's crossing it, or about
+## to: it wouldn't stop for this one).
 func _occupied(train: Train) -> bool:
 	var near: Array[TrainTracks.Piece] = train.pieces.duplicate()
 	var ahead := train.pieces[train.pieces.size() - 1]
@@ -1077,6 +1086,10 @@ func _occupied(train: Train) -> bool:
 		for piece in other.pieces:
 			if near.has(piece):
 				return true
+	for piece in near:
+		if _claims.has(piece.to_node) or (piece.is_terminal() and tracks.bumper(piece) != 0
+				and _claims.has(-tracks.bumper(piece))):
+			return true
 	return false
 
 
