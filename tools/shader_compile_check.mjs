@@ -9,10 +9,11 @@
 // with the wait at the first query after it, when the compile really happens.
 // Needs Node 22+ and Chrome; serve the build first (tools/build_web.ps1 -Serve).
 // Usage: node shader_compile_check.mjs [url] [--cam=x,y,z,yaw,pitch] [--time=HH:MM]
-//            [--port=9350] [--chrome=path] [--timeout=300]
+//            [--peds=0] [--gangs=0] [--port=9350] [--chrome=path] [--timeout=300]
 //   e.g. node tools/shader_compile_check.mjs http://localhost:8060/
 // The default view is Times Square at street level (tools/reference/views.json),
-// with no pedestrians, thugs or traffic.
+// with no pedestrians, thugs or traffic (--peds=45 --gangs=2 brings in
+// npc.gdshader, the pedestrians' and thugs' clothes).
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,6 +28,8 @@ const option = (name, fallback) => {
 const url = args.find((a) => !a.startsWith('--')) ?? 'http://localhost:8060/';
 const cam = option('cam', '13,16.1,-67,159.5,10.0');
 const time = option('time', '');
+const peds = option('peds', '0');
+const gangs = option('gangs', '0');
 const port = Number(option('port', '9350'));
 const timeoutMs = Number(option('timeout', '300')) * 1000;
 const chrome = option('chrome', process.platform === 'win32'
@@ -136,7 +139,7 @@ try {
   await send('Runtime.enable');
   await send('Page.enable');
   await send('Page.addScriptToEvaluateOnNewDocument', { source: hook });
-  const query = `cam=${cam}&peds=0&gangs=0&traffic=0${time ? `&time=${time}` : ''}`;
+  const query = `cam=${cam}&peds=${peds}&gangs=${gangs}&traffic=0${time ? `&time=${time}` : ''}`;
   const started = Date.now();
   await send('Page.navigate', { url: `${url}${url.includes('?') ? '&' : '?'}${query}` });
   let ready = null;

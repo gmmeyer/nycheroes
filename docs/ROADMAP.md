@@ -39,6 +39,15 @@ peer can drive one later. Nearby tiles get collision.
 
 - Pedestrians walk real sidewalk lanes (traced from street data), run from
   danger, and can never be hurt.
+- Pedestrians wear everyday clothes (reference improvement 17): mostly dark
+  coats and jeans, some bright tops, a few suits, skirts and work clothes,
+  with varied skin and hair. `shaders/npc.gdshader` paints the mannequin in
+  bands (shoes, trousers or a skirt, a shirt or coat, skin, hair) cut on
+  the rest pose, which `NpcLook` writes into the mesh's UVs, so poses and
+  ragdolls keep their clothes. Thugs wear their gang's dark color with its
+  bright one on the joints, the same in every co-op game. One material per
+  character (instance uniforms would reserve 16 vec4s each in a uniform
+  buffer of 1024 on some GPUs); same draw calls, 0.1-0.2 s to compile.
 - Gangs of thugs surround and attack the hero, at most two swinging at once.
 - Punch combos, dive attacks, landing slams and super speed rams; defeated
   thugs ragdoll, bleed, and stay on the street while you're nearby.
@@ -1089,9 +1098,10 @@ templates for both are already installed.
   - Check after changing shaders: `node tools/shader_compile_check.mjs
     http://localhost:8060/` (headless Chrome with a fresh profile: the time
     to "ready", and the compile time per shader and per program; `--cam=`
-    and `--time=` pick the view). Keep Times Square around 20 s to ready on
-    the dev machine, building.gdshader's color variant under about 10 s and
-    every other shader under about 2 s.
+    and `--time=` pick the view, `--peds=` and `--gangs=` bring in
+    pedestrians and thugs, which it leaves out by default). Keep Times
+    Square around 20 s to ready on the dev machine, building.gdshader's
+    color variant under about 10 s and every other shader under about 2 s.
 - Public site: `tools/deploy_cloudflare.ps1 [-Build]` publishes the web
   build to https://nycheroes.party (`tools/cloudflare`): one Worker serves the game and
   tiles as static assets (only changed files upload), `index.wasm` (over
