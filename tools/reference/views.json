@@ -191,7 +191,7 @@
     {
       "name": "queens_ridgewood",
       "title": "Ridgewood, Queens: brick rowhouses on 60th Lane",
-      "cam": "7674,26.2,6639,-32.5,10.0",
+      "cam": "7672.1,26.2,6637.8,-32.5,10.0",
       "photo": {
         "file": "File:60th Lane Ridgewood.jpg",
         "page": "https://commons.wikimedia.org/wiki/File:60th_Lane_Ridgewood.jpg",
@@ -204,7 +204,7 @@
       },
       "camera_lat_lon": [40.698169, -73.894828],
       "spawn": "7653,27,6673",
-      "pose_note": "On the east sidewalk of 60th Lane at the geotag, near the areaway fences."
+      "pose_note": "On the east sidewalk of 60th Lane at the geotag, near the areaway fences; moved 2.2 m out from the houses (2026-10-16), so the fences and their posts stand to the right as in the photo instead of the camera standing at the stoops."
     },
     {
       "name": "grand_concourse",
