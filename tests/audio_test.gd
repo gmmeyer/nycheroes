@@ -3,8 +3,9 @@ extends Node
 ## heard, but everything still plays): drives the hero through its moves and
 ## a fight in the real city, visits spots whose ambience differs (Times
 ## Square, Central Park by day and at night, the Hudson, high above
-## Midtown), feeds fake traffic to GameAudio.set_traffic, switches the sound
-## off and on, and prints what played. Ends with a list of checks.
+## Midtown), feeds fake traffic to GameAudio.set_traffic (Traffic paused
+## meanwhile), switches the sound off and on, and prints what played. Ends
+## with a list of checks.
 ## Run: godot --headless --path . res://tests/audio_test.tscn
 
 const AVENUE := Vector3(0.485, 0.0, -0.875)
@@ -20,6 +21,7 @@ var _world: Game
 var _hero: Hero
 var _city: CityStreamer
 var _audio: GameAudio
+var _traffic: Node
 var _steps: Array[Dictionary] = []
 var _index := -1
 var _time := 0.0
@@ -27,6 +29,9 @@ var _checks: Array[String] = []
 var _failed := 0
 var _counts_before := {}
 var _spawned_at := -1.0
+var _gang: Array[Thug] = []
+## Ticks the passing cars weren't all given engines (once they had been).
+var _engine_gaps := 0
 var _copy: Hero
 var _copy_swung := false
 
@@ -39,6 +44,7 @@ func _ready() -> void:
 	_hero = _world.get_node("Hero")
 	_city = _world.get_node("City")
 	_audio = _world.get_node("Audio")
+	_traffic = _world.get_node("Traffic")
 	process_physics_priority = -20
 	_steps = [
 		_step("wait for the city to load", 30.0, Callable(), func() -> bool:
@@ -77,6 +83,12 @@ func _ready() -> void:
 			elif _spawned_at < 0.0 and t >= 0.5:
 				_spawned_at = t
 				_spawn_gang(OPEN_AVENUE + AVENUE * 8.0, 4)
+			elif t >= 1.0 and t < 2.5 and not _played("thug_shout", _audio.play_counts):
+				# A thug shouts, or not (at random), as it spots the hero: until
+				# one has, those still walking up look again.
+				for thug in _gang:
+					if is_instance_valid(thug) and thug.state == Thug.State.CHASE:
+						thug.state = Thug.State.IDLE
 			i.aim = AVENUE
 			i.attack_held = t > 2.5 and fmod(t, 0.3) < 0.12),
 		_step("Central Park by day, walking", 4.0, func(i: HeroInput, t: float) -> void:
@@ -103,8 +115,13 @@ func _ready() -> void:
 			if t == 0.0:
 				_hero.set_mode(&"OnFoot")
 				_teleport(OPEN_AVENUE)
+				# Only these cars: Traffic's own reports (of the real cars, ten
+				# times a second) would take the engines off them.
+				_traffic.process_mode = Node.PROCESS_MODE_DISABLED
 			_report_traffic(t)),
 		_step("another player's hero swings and slams", 2.0, func(_i: HeroInput, t: float) -> void:
+			if t == 0.0:
+				_traffic.process_mode = Node.PROCESS_MODE_INHERIT
 			_drive_copy(t)),
 		_step("sound off", 1.5, func(_i: HeroInput, t: float) -> void:
 			if t == 0.0:
@@ -189,7 +206,7 @@ func _report(step_name: String) -> void:
 			_check("the city's far-off hum up high", beds.contains("city_far"))
 			_check("no street up high", not beds.contains("traffic_day"))
 		"cars driving past":
-			_check("engines on passing cars", _audio.traffic.status_text().contains("4 engines"))
+			_check("engines on passing cars", _audio.traffic.status_text().contains("4 engines") and _engine_gaps == 0)
 		"another player's hero swings and slams":
 			_check("another player's web thwips", _played("thwip", new_counts))
 			_check("another player's slam", _played("slam", new_counts))
@@ -238,7 +255,8 @@ func _drive_copy(t: float) -> void:
 
 
 ## Five cars on the avenue around the hero, driving along it at 12 m/s (and
-## a free slot, which doesn't count).
+## a free slot, which doesn't count); the nearest four keep an engine each
+## all along (after the first half second).
 func _report_traffic(t: float) -> void:
 	var positions := PackedVector3Array([_hero.world_position()])
 	var speeds := PackedFloat32Array([-1.0])
@@ -247,6 +265,8 @@ func _report_traffic(t: float) -> void:
 		positions.append(_hero.world_position() + AVENUE * along + Vector3(AVENUE.z, 0.0, -AVENUE.x) * 4.0)
 		speeds.append(12.0)
 	GameAudio.set_traffic(positions, speeds)
+	if t > 0.5 and not _audio.traffic.status_text().contains("4 engines"):
+		_engine_gaps += 1
 
 
 func _move(input: HeroInput) -> void:
@@ -266,6 +286,7 @@ func _spawn_gang(world_center: Vector3, count: int) -> void:
 			spot.y = ground
 		thug.global_position = WorldOrigin.to_local(spot) + Vector3.UP * 0.2
 		thug.setup(_hero, k, TAU * k / count)
+		_gang.append(thug)
 
 
 ## Moves the hero to a world position, standing on the ground there if there is any.

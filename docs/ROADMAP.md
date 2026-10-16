@@ -664,6 +664,75 @@ reference round 3's 23, 24 and 31):**
   for it; it's in `facades.py` and the building shader); the painted sign
   band shows where a shop has no sign or channel letters.
 
+**Utility poles and overhead wires (done; reference round 3's 30):**
+- Where (`tools/citygen/poles.py`): the city publishes no pole positions, so
+  they're inferred. Streets (centerline segments of up to 4 lanes and 20 m
+  of roadbed) lined with houses: of the buildings within 22 m of the curb (at
+  least 4), 60% are houses and rowhouses up to 13 m tall (PLUTO's classes A
+  and B, and C walk-ups under four floors) and at most 10% are over 16 m; or
+  low-rise shopping streets among them (a quarter houses, three quarters
+  houses and low shop buildings). In the Bronx, Brooklyn, Queens and Staten
+  Island, but not within 4.5 km of Brooklyn Borough Hall (downtown and the
+  brownstone neighborhoods, whose lines run underground, like Manhattan's):
+  45,363 of 95,285 street segments.
+- Lines: segments meeting within 35 degrees of straight on join into lines
+  along their streets (16,241), each with its poles on one side all the way
+  (where the houses are, if one side has 2.5 times the other's, else either),
+  so the wires run on across the intersections.
+- Poles (prop type 24): evenly along each stretch between the streets that
+  join on the poles' side, about 40 m apart (give or take 2 m), 3 m back from
+  a crossing street's curb, 0.6 m onto the sidewalk from the curb (a ray from
+  the centerline out through the road surface finds it), stepped 1.6 m along
+  the curb out of a street tree's trunk: 161,729 creosoted poles, 10.5-12 m,
+  with a crossarm on two braces and its insulators, a pin on the top for a
+  third wire on 40% of the lines (three-phase), brackets for the secondary
+  and the phone cable, and a transformer can on 18%.
+- Street lights: a cobra-head on 90% of the poles (145,579), its arm 2.2 m
+  long, 3 m under the pole's top: a street light whose own pole folds away
+  (uv.y 1). The curb lamps of the streets the poles line go (those whose
+  nearest centerline is one), so those streets are lit from one side, as in
+  Queens: in the 29 sample tiles with poles 3,403 curb lamps gave way to
+  2,020 on poles (6,260 lamps to 4,877; Staten Island's house tiles about 40%
+  fewer), about 245,000 citywide; their streets are darker at night.
+- Wires (prop type 25, one prop a span): a span from each pole to the next
+  along its line, up to 62 m (143,190): bare primaries on the crossarm's ends
+  (and the pin), the black secondary 1.6 m under the top, phone and cable TV
+  4.1 and 4.6 m under it; a service drop from the nearest pole within 36 m to
+  each house and low shop building (at least 35 m², the wall it reaches
+  within 14 m of a street, under the eaves of a pitched roof or 1.4 m under a
+  flat one's, not through another building: 613,369), so drops cross the
+  street to the houses opposite, as in the Ridgewood photo; and a down guy
+  from each line's end poles to an anchor 3.5 m further out along the
+  sidewalk (17,337), in a yellow guard.
+- Drawing: poles on a mesh of their own (`PropMeshes.utility_pole()`, 320
+  vertices) drawn by the street lights' shader, shrinking away with the
+  lamps (450-650 m); wires on one more MultiMesh per near tile
+  (`PropMeshes.wires()`: six strips of 8 quads, 108 vertices; a drop or guy
+  folds five away), whose shader (`shaders/wires.gdshader`) hangs each wire
+  in a parabola between the span's ends (the near pole's foot and height, the
+  span's length and yaw, the latter to a tenth of a milliradian in the tiles,
+  and how far the far end's top is above) and turns it into a ribbon facing
+  the camera, at least a pixel wide, thinning out and gone at half the large
+  furniture's distances (210-290 m on high, 180-250 on medium, 110-150 on
+  low). Unshaded, no shadows, no collision: webs and flight pass through
+  them (and the poles, like every prop). The mesh's box holds a span
+  whichever way it runs.
+- Data: `prepare.py` makes `poles.pkl` (27 MB, about 70 s).
+- Cost: near tiles +1.1% where there are poles (24 tiles in Ridgewood, the
+  Bronx and Staten Island; +0.1-0.4% around the Grand Concourse, +0.8% over
+  all 36 sample tiles), about +13 MB citywide (scaled from the sample). Draw
+  calls +2 per near tile with poles (the poles everywhere the lamps draw, the
+  wires within 660 m of a tile's center): +9-10 in street views in
+  Ridgewood, the Bronx and Staten Island, +6 at the Grand Concourse, +1 at
+  St. George; triangles +0.12-0.36 M. Uncapped frame rate (1600x900, back and
+  forth with master on a busy machine): within the noise in all seven views.
+  Shader compile time at a Ridgewood pole: street_light.gdshader 0.2 s before
+  and after, wires.gdshader 0.1 s, 6 more programs (139 to 145); ready after
+  32.9 and 37.2 s before, 33.0 and 33.2 s after. Download +10 kB (index.pck).
+- Still to do: wires from house to house along the fronts (the Ridgewood
+  photo's), back-lot pole lines (common in Queens and Staten Island), and
+  trimming street trees round the wires.
+
 **Ground details (done):**
 - Planted medians and malls (`tools/citygen/ground_details.py`): of the
   city's 8,048 raised medians (Planimetric Database), 3,727 are planted:
@@ -1336,6 +1405,15 @@ and 29):**
   `tools/audio/build_sounds.py` rebuilds them. Cost: about 0.05-0.1 ms a
   frame; in the browser 25-60 MB of decoded samples (Godot's web build keeps
   them as float at the mix rate, set to 32 kHz on the web to save a third).
+- The headless test (`tests/audio_test.tscn`) no longer depends on luck.
+  While it checks the engines on the cars it drives past the hero, Traffic
+  is paused: its reports of the real cars, ten times a second, took the
+  engines off the test's cars, and they all faded out together and came
+  back, so a check landing in that moment read "0 engines" (2 runs of 4 on
+  a loaded machine). The four engines must now stay on their cars the whole
+  way. And thugs still walking up look at the hero again until one has
+  shouted: each shouts only half the time it spots the hero, so all four
+  kept quiet about 1 run in 16.
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build
@@ -1639,6 +1717,18 @@ Comes after step 6 because it needs step 6's real ground heights.
 - **Speed limits from the point before:** a point's curve limit now holds
   from the point before it, so trains brake for it in time (before, a
   train placed between two points could run over the next point's limit).
+- **Never through each other:** a train no longer appears (nor is put, by
+  a test) on or close before a junction or a terminal's track that another
+  train has claimed: that one is crossing it, or about to, and doesn't stop
+  for the new one. The trains test put its express train on the switch at
+  the end of the 7's express track, its front where the switch meets the
+  local track, and in 1 run of 3 a local train was coming up to that point
+  too close to stop. And a train that has run into another (its front past
+  the other's back) now stops at once; before, it took no notice of the
+  train it overlapped, and the two ran on through each other for good
+  (10,742 frames of overlap in that run). The test now puts its express
+  train on a running piece of the express track, not on the switch (it
+  had run on as a local).
 - **Cost:** about 0.1 ms of script a frame in Chrome with 4 trains near the
   camera (drawing 0.07-0.09 ms, running 0.06 ms a physics tick; trains out
   of view, far off or standing are drawn less often), 1 draw call, 2,700

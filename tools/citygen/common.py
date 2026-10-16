@@ -28,7 +28,8 @@ is one point per prop, no indices:
              crown's or tank's diameter; rotation about +Y
   uv       = (variant, trunk): trees' foliage tone (PROP_TONE_*) and trunk
              diameter (m); water towers' tank (0 wood, 1 steel) and 0;
-             street lights' style (see PROP_STREET_LIGHT) and 0
+             street lights' style (see PROP_STREET_LIGHT) and 1 on a wooden
+             utility pole (PROP_UTILITY_POLE), else 0
   uv2      = (PROP_* type, seed 0..1)
 Props are sorted by type. The manifest's "canopy" entry is a citywide map of
 tree canopy (landcover.write_canopy_map) for the ground shader.
@@ -169,6 +170,24 @@ DOCK_SPACING = 0.8
 PROP_PLAZA_TABLE = 21
 PROP_PLANTER = 22
 PROP_KIOSK = 23
+# Wooden utility poles on streets lined with houses (poles.py): normal =
+# (height m, 1, yaw: its crossarm runs along (sin yaw, 0, cos yaw), toward
+# the street); uv.x its POLE_* bits. A street light on one is a cobra-head
+# (PROP_STREET_LIGHT) at its foot whose uv.y ("trunk") is 1: no pole of its
+# own, its height where its arm meets the wooden pole.
+PROP_UTILITY_POLE = 24
+POLE_TRANSFORMER = 1   # a transformer can hangs on it
+POLE_THREE_PHASE = 2   # its line has three primary wires (the third on a pin on the pole's top)
+# An overhead wire's span, from a pole to the next one or to a house: position
+# its pole's foot; normal = (that pole's height m, the span's length m across
+# the ground, yaw: it runs along (sin yaw, 0, cos yaw)); uv = (WIRE_* bits, how
+# far the far end's top (the next pole's, the point on the house's wall, or
+# the guy's anchor on the ground) is above this pole's top, m). A span is all
+# of a line's wires between two poles; a drop or a guy one wire.
+PROP_WIRE = 25
+WIRE_DROP = 1          # a service drop to a house
+WIRE_THREE_PHASE = 2
+WIRE_GUY = 4           # a down guy from a line's end pole to an anchor in the sidewalk
 # Trees' foliage tones (uv.x of the props surface).
 PROP_TONE_GREEN = 0
 PROP_TONE_LIGHT = 1   # yellow-green: honeylocust, ginkgo, birch, willow
