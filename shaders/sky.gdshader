@@ -46,7 +46,7 @@ uniform vec3 cloud_shade : source_color = vec3(0.68, 0.74, 0.88);
 uniform vec3 sun_direction = vec3(-0.6088, 0.6691, 0.4263);
 uniform vec3 moon_direction = vec3(0.6088, -0.6691, -0.4263);
 // Dusk and dawn: the warm band along the horizon, brightest under the sun.
-uniform float dusk_band = 0.4;
+uniform float dusk_band = 0.6;
 // Night: the city's glow along the horizon (and under the clouds), and how
 // high it reaches (in sin(elevation)).
 uniform vec3 city_glow : source_color = vec3(0.95, 0.55, 0.28);
