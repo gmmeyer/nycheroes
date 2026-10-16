@@ -496,14 +496,15 @@ STOREFRONT_TOP = 4.4
 STOREFRONT_SIGN = (0.17, 0.45, 0.75)
 SIGN_STANDOFF = 0.04  # signs stand this far off the wall (m)
 AWNING_HEADROOM = 2.2  # an awning's lowest edge at least this high (m)
-# Per kind of building: the chance a shop has a sign, the odds of its kind
-# (board, light box, channel letters), the chances of an awning and of a
-# blade sign, and the odds of the awning's kind (fabric, aluminum, dome).
+# Per kind of building: the chance a shop has a sign (those without show the
+# building shader's painted sign band), the odds of its kind (board, light
+# box, channel letters), the chances of an awning and of a blade sign, and
+# the odds of the awning's kind (fabric, aluminum, dome).
 SHOP_STYLES = {
-    "strip": (0.92, (0.5, 0.45, 0.05), 0.45, 0.25, (0.55, 0.3, 0.15)),
-    "tall": (0.8, (0.2, 0.3, 0.5), 0.25, 0.15, (0.7, 0.2, 0.1)),
-    "loft": (0.45, (0.35, 0.2, 0.45), 0.2, 0.35, (0.85, 0.1, 0.05)),
-    "other": (0.88, (0.5, 0.3, 0.2), 0.35, 0.2, (0.6, 0.25, 0.15)),
+    "strip": (0.97, (0.5, 0.45, 0.05), 0.45, 0.25, (0.55, 0.3, 0.15)),
+    "tall": (0.85, (0.2, 0.3, 0.5), 0.25, 0.15, (0.7, 0.2, 0.1)),
+    "loft": (0.5, (0.35, 0.2, 0.45), 0.2, 0.35, (0.85, 0.1, 0.05)),
+    "other": (0.94, (0.5, 0.3, 0.2), 0.35, 0.2, (0.6, 0.25, 0.15)),
 }
 # Upstairs signs: the chance per shop on low buildings (SHOP_UPSTAIRS_FLOORS)
 # with offices, and on commercial streets without; banners' chance there.

@@ -124,6 +124,13 @@ const CAR_CULL_MARGIN := 0.5
 ## much further from the camera than where its pieces have shrunk away (half a
 ## 500 m tile's diagonal, and a little).
 const FURNITURE_RANGE_PAST_FADE := 370.0
+## Shop signs and awnings, and sidewalk sheds, shrink away at these shares of
+## the large furniture's distances: a sign is a few pixels tall by then, and
+## every instance a tile draws runs all its mesh's vertices, shrunk or not
+## (at the large furniture's distances they cost about 0.5 ms a frame on the
+## dev machine in Queens and Manhattan views).
+const SHOP_FADE_SHARE := 0.62
+const SHED_FADE_SHARE := 0.78
 
 ## Trees stop drawing once their tile's center is this far from the camera
 ## (m). The tree shader shrinks each tree away before that (its
@@ -223,11 +230,12 @@ func set_furniture_fade(small: Vector2, large: Vector2) -> void:
 	if material:
 		material.set_shader_parameter("small_fade_distance", small)
 		material.set_shader_parameter("large_fade_distance", large)
-	# Shop fronts go with the large pieces; sheds too, docks and plaza
-	# furniture with the small ones.
-	shop_material.set_shader_parameter("fade_distance", large)
+	# Shop fronts and sheds go a little before the large pieces; docks and
+	# plaza furniture with the small ones, kiosks with the large.
+	shop_material.set_shader_parameter("fade_distance", large * SHOP_FADE_SHARE)
 	extras_material.set_shader_parameter("small_fade_distance", small)
 	extras_material.set_shader_parameter("large_fade_distance", large)
+	extras_material.set_shader_parameter("shed_fade_distance", large * SHED_FADE_SHARE)
 
 
 ## Sets where cars shrink away (see car_fade), in their shader too, parked
@@ -365,12 +373,15 @@ func _instance(group: int, buffer: PackedFloat32Array, mesh: Mesh) -> MultiMeshI
 		SMALL_FURNITURE:
 			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
 			instance.visibility_range_end = small_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
-		LARGE_FURNITURE, SIDEWALK_SHEDS, STREET_EXTRAS:
+		LARGE_FURNITURE, STREET_EXTRAS:
 			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
 			instance.visibility_range_end = large_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
+		SIDEWALK_SHEDS:
+			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
+			instance.visibility_range_end = large_furniture_fade.y * SHED_FADE_SHARE + FURNITURE_RANGE_PAST_FADE
 		SHOP_FRONTS:
 			instance.extra_cull_margin = SHOP_CULL_MARGIN
-			instance.visibility_range_end = large_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
+			instance.visibility_range_end = large_furniture_fade.y * SHOP_FADE_SHARE + FURNITURE_RANGE_PAST_FADE
 		PARKED_CARS:
 			instance.extra_cull_margin = CAR_CULL_MARGIN
 			instance.visibility_range_end = car_fade.y + FURNITURE_RANGE_PAST_FADE

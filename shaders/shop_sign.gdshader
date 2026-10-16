@@ -13,8 +13,8 @@
 // folds away all but the instance's own, stretches that one to the prop's
 // size, turns it to its yaw and moves it into place itself
 // (skip_vertex_transform), like the street furniture's. Signs and awnings
-// shrink away between fade_distance from the camera (CityProps sets it, as
-// the large furniture's).
+// shrink away between fade_distance from the camera (CityProps sets it, a
+// share of the large furniture's).
 //
 // The names are invented (no real brands): sign_names, a signed distance
 // field of 64 names (tools/citygen/sign_names.py), so letters stay crisp up
@@ -65,7 +65,7 @@ const float NAME_ASPECT = 8.0;
 
 uniform sampler2D sign_names : filter_linear_mipmap, repeat_disable, hint_default_black;
 // Signs and awnings shrink away between these distances from the camera (m).
-uniform vec2 fade_distance = vec2(420.0, 580.0);
+uniform vec2 fade_distance = vec2(260.0, 360.0);
 // Light boxes' and channel letters' glow by day and at night; boards are lit
 // a little at night (gooseneck lamps).
 uniform vec2 light_box_glow = vec2(0.25, 1.4);

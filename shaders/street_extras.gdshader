@@ -18,7 +18,7 @@
 // but the instance's own, scales that one to the piece's size, turns it to
 // its yaw and moves it into place itself (skip_vertex_transform). Pieces
 // shrink away between fade distances from the camera, sooner for the small
-// ones (docks, tables, planters), as CityProps sets them for the furniture.
+// ones (docks, tables, planters) and sheds (CityProps sets them).
 //
 // The look: sheds in painted plywood sheets (hunter green, a few white,
 // black or blue) on steel posts, stenciled warnings along the parapet, lamps
@@ -73,10 +73,12 @@ const vec3 STAINLESS = vec3(0.64, 0.66, 0.68);
 const vec3 SHARE_BIKE_BLUE = vec3(0.14, 0.40, 0.74);
 
 // Pieces shrink away between these distances from the camera (m): small ones
-// (docks, tables, planters) and large ones (sheds, kiosks). CityProps sets
-// them, as the street furniture's.
+// (docks, tables, planters) and large ones (kiosks), as CityProps sets the
+// street furniture's.
 uniform vec2 small_fade_distance = vec2(180.0, 260.0);
 uniform vec2 large_fade_distance = vec2(420.0, 580.0);
+// Sheds, a little sooner (CityProps.SHED_FADE_SHARE).
+uniform vec2 shed_fade_distance = vec2(330.0, 450.0);
 // The lamps under sidewalk sheds (sRGB), lit by day too (dimmer), and food
 // kiosks' light at night.
 uniform vec3 shed_light : source_color = vec3(0.92, 0.96, 1.0);
@@ -115,7 +117,7 @@ void vertex() {
 	vec3 base = MODEL_MATRIX[3].xyz;
 	vec3 camera = MAIN_CAM_INV_VIEW_MATRIX[3].xyz;
 	float distance_to_camera = distance(camera, base);
-	vec2 fade = type >= 20 && type <= 22 ? small_fade_distance : large_fade_distance;
+	vec2 fade = type >= 20 && type <= 22 ? small_fade_distance : (type == TYPE_SHED ? shed_fade_distance : large_fade_distance);
 	float shown = 1.0 - smoothstep(fade.x, fade.y, distance_to_camera);
 	// Custom data arrives as half floats; whole 1024ths survive that exactly.
 	float seed = floor(INSTANCE_CUSTOM.z * 1024.0 + 0.5);
