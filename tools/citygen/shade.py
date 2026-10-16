@@ -246,8 +246,10 @@ def shade_buildings(sky: Sky, builder) -> None:
     uv2[k, 1] = floor_dm + seed + 64.0 * baked
 
 
-def shade_ground(sky: Sky, builder) -> None:
-    """Bakes the sky into a ground or street paint mesh's flat faces."""
+def shade_ground(sky: Sky, builder, where=None) -> None:
+    """Bakes the sky into a ground or street paint mesh's flat faces (with
+    `where`, those of its vertices where(points (N, 3) Godot space, uv2
+    (N, 2)) picks: the sunken roads' in the structures, trenches.py)."""
     joined = builder.joined()
     if joined is None:
         return
@@ -255,6 +257,8 @@ def shade_ground(sky: Sky, builder) -> None:
     normals = joined[3].reshape(-1, 3)
     uv2 = joined[2].reshape(-1, 2)
     k = np.flatnonzero(normals[:, 1] > 0.7)
+    if where is not None and len(k):
+        k = k[where(pos[k], uv2[k])]
     if len(k) == 0:
         return
     points, inverse = np.unique(np.round(pos[k], 2), axis=0, return_inverse=True)

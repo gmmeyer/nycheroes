@@ -61,6 +61,7 @@ import times_square
 import towers
 import traffic
 import trains
+import trenches
 from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT,
                     GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_SHRUBS, GROUND_YARD, LANE_BREAK, MARKING_LIFT,
                     ORIGIN_LAT, ORIGIN_LON, PROJECTION, PROP_BIKE_DOCK, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR,
@@ -373,12 +374,15 @@ def _build_bridges(ground) -> dict:
     sizes = {level: s["size"] for level, s in LEVELS.items()}
     # Raised roads first: bridge approaches come down to them (overpasses.py),
     # at the heights the lidar survey has them (lidar.py), with the roadways
-    # the BQE's triple cantilever carries (cantilever.py).
-    network = overpasses.Network(prepare.load("overpasses"), prepare.load("centerline"), terrain, _structure(terrain),
-                                 prepare.load("deck_heights"))
+    # the BQE's triple cantilever carries (cantilever.py) and the roads below
+    # street level (trenches.py).
+    network = _network(terrain)
     buckets = bridges.build(ground["land"], terrain, sizes, approach=network.approach)
     overpasses.build(network, ground["land"], buckets, sizes)
     cantilever.build(network, buckets, sizes)
+    # The sunken roads' cuts, walls and bridges (after the decks: they add to street_decks).
+    trenches.build(network, buckets, {level: sizes[level] for level in trenches.LEVELS},
+                   {level: LEVELS[level]["ground_cell"] for level in trenches.LEVELS})
     # Elevated railways over (and around) both (els.py).
     els.build(prepare.load("els"), network, ground["land"], buckets, sizes, prepare.load("el_stairs"))
     # No roadbed drawn on the ground under them where no street is.
@@ -399,6 +403,14 @@ def _structure(terrain):
     ground cut away under it and filled up behind it."""
     return cantilever.Structure(prepare.load("cantilever"), terrain, prepare.load("centerline"),
                                 prepare.load("overpasses"))
+
+
+def _network(terrain, structure=None):
+    """The raised roads, the triple cantilever's and the sunken roads
+    (overpasses.Network), with the sunken roads' cuts (trenches.py)."""
+    return overpasses.Network(prepare.load("overpasses"), prepare.load("centerline"), terrain,
+                              structure if structure is not None else _structure(terrain),
+                              prepare.load("deck_heights"), trenches.Sunken(prepare.load("trenches")))
 
 
 def _rebuild(only: list[str], workers: int) -> None:
@@ -469,10 +481,17 @@ def _init_worker() -> None:
     _W["road_tree"] = shapely.STRtree(ground["roads"])
     _W["park_tree"] = shapely.STRtree(ground["parks"])
     _W["terrain"] = Terrain()
-    # The ground cut away under the triple cantilever and filled up behind it (cantilever.py).
+    _W["centerline"] = prepare.load("centerline")
+    _W["centerline_tree"] = shapely.STRtree(_W["centerline"]["lines"])
+    # The ground cut away under the triple cantilever and filled up behind it
+    # (cantilever.py), and cut down along the sunken roads (trenches.py).
     _W["structure"] = _structure(_W["terrain"])
+    _W["overpasses"] = _network(_W["terrain"], _W["structure"])
+    _W["trenches"] = _W["overpasses"].trenches
     _W["ground"] = {level: _W["structure"].ground(_W["terrain"].lattice(settings["ground_cell"]))
                     for level, settings in LEVELS.items()}
+    for level in trenches.LEVELS:  # (far tiles draw no streets)
+        _W["ground"][level] = _W["trenches"].ground(_W["ground"][level])
     # Things on streets that cross dips on decks stand on the deck (overpasses.py).
     _W["ground"]["lod0"] = overpasses.OnDecks(_W["ground"]["lod0"], _W["bridges"].get("street_decks", []))
     _W["creeks"] = {level: _W["terrain"].lattice(settings["ground_cell"], raw=True) for level, settings in LEVELS.items()}
@@ -483,10 +502,6 @@ def _init_worker() -> None:
     _W["churches"] = prepare.load("churches")
     _W["building_index_tree"] = shapely.STRtree(buildings["geoms"])
     _W["water_tree"] = shapely.STRtree(_W["water"]["geoms"])
-    _W["centerline"] = prepare.load("centerline")
-    _W["centerline_tree"] = shapely.STRtree(_W["centerline"]["lines"])
-    _W["overpasses"] = overpasses.Network(prepare.load("overpasses"), _W["centerline"], _W["terrain"], _W["structure"],
-                                          prepare.load("deck_heights"))
     trees = prepare.load("trees")
     _W["trees"] = trees
     groups = defaultdict(list)
@@ -565,6 +580,8 @@ def _build_tile(task):
     bridge = _W["bridges"][level].get((i, j))
     if bridge:
         structure_mesh.add(*bridge)
+        if level in trenches.LEVELS:  # the sunken roads' (trenches.py), like the streets
+            shade.shade_ground(sky, structure_mesh, _W["trenches"].shaded)
 
     surfaces = []
     stats = {"vertices": 0, "triangles": 0}
@@ -1654,8 +1671,8 @@ def _curb_lamps(bounds) -> dict:
 def _utility_poles(i: int, j: int) -> tuple[dict, dict, dict]:
     """The tile's utility poles, the street lights on them and the wires
     strung from them (poles.tile_props), leaving out poles that would reach
-    up into a deck overhead or stand among an el's columns or on its stairs,
-    and the wires to them."""
+    up into a deck overhead, stand among an el's columns or on its stairs or
+    in a sunken road's cut, and the wires to them."""
     data = _W["poles"]
     own = _W["pole_groups"].get((i, j))
     if own is None:
@@ -1675,6 +1692,7 @@ def _utility_poles(i: int, j: int) -> tuple[dict, dict, dict]:
         none = np.zeros(len(en), dtype=bool)
         ok &= els.clear_of_columns(_W["bridges"].get("el_columns", {}), *key, en, none)
         ok &= els.clear_of_stairs(_W["bridges"].get("el_stairs", {}), *key, en, none)
+        ok &= ~_W["trenches"].inside(en)  # nor down in a sunken road's cut (trenches.py)
         clear[members[ok]] = True
     own = own[clear[own]]
     spans = spans[clear[data["spans"][spans, 0]] & clear[data["spans"][spans, 1]]]
@@ -1743,11 +1761,12 @@ def _no_props() -> dict:
 
 def _on_open_ground(en: np.ndarray) -> np.ndarray:
     """Which (N, 2) points are on land and not inside a building (or the
-    triple cantilever, but for its Promenade)."""
+    triple cantilever, but for its Promenade, or a sunken road's cut)."""
     ok = shapely.contains_xy(_W["g"]["land"], en[:, 0], en[:, 1])
     hits = _W["building_tree"].query(shapely.points(en), predicate="within")
     ok[hits[0]] = False
     ok &= ~_W["structure"].inside(en)
+    ok &= ~_W["trenches"].inside(en)  # nor in a sunken road's cut, but for the bridges over it
     return ok
 
 
@@ -1881,6 +1900,7 @@ def _build_lanes(bounds, origin):
             sidewalks = shapely.difference(sidewalks, shapely.buffer(shapely.union_all(nearby_buildings), LANE_WALL_GAP))
         sidewalks = _W["details"].without_narrow_medians(sidewalks, area)  # nobody walks along medians
         sidewalks = shapely.difference(sidewalks, _W["structure"].closed)  # nor in the triple cantilever
+        sidewalks = shapely.difference(sidewalks, _W["trenches"].closed)  # nor in the sunken roads' cuts
         # Times Square's plazas: around their benches, and lanes across them too.
         sidewalks = shapely.difference(sidewalks, times_square.bench_obstacles(_W, bounds))
         lanes = shapely.intersection(shapely.buffer(roads_near, LANE_OFFSET).boundary, sidewalks)

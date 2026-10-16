@@ -36,6 +36,10 @@ lines below wherever a license asks for one (the aerial photos do).
   contributors (ODbL), https://www.openstreetmap.org/copyright.
 - **Ground elevation:** USGS 3D Elevation Program, 1/3 arc-second DEM
   (public domain, U.S. Government work).
+- **Heights of raised and sunken roads:** the 2017 New York City
+  topobathymetric lidar survey (public domain), via NOAA's Office for
+  Coastal Management Digital Coast (Entwine point tiles on AWS Open Data,
+  noaa-nos-coastal-lidar-pds, dataset 9306).
 - **Planted medians, other parks and special pavements:** NYC Open Data:
   Planimetric Database medians (ees7-4ufv) and other open space
   (b7j8-z8a7: cemeteries, recreation areas), NYC Parks Greenstreets

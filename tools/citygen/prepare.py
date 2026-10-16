@@ -27,6 +27,7 @@ import overpasses
 import poles
 import props
 import terrain
+import trenches
 from common import (CACHE_DIR, FEET, facade_style, load_features, polygons_of, project)
 
 DEFAULT_HEIGHT = 9.0
@@ -177,7 +178,8 @@ PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": 
              "ground_details": prepare_ground_details, "els": els.prepare,
              "deck_sidewalks": overpasses.prepare_sidewalks, "cantilever": cantilever.prepare,
              "deck_heights": prepare_deck_heights, "shops": props.prepare_shops, "sheds": props.prepare_sheds,
-             "bike_docks": props.prepare_bike_docks, "el_stairs": els.prepare_stairs, "poles": poles.prepare}
+             "bike_docks": props.prepare_bike_docks, "el_stairs": els.prepare_stairs, "poles": poles.prepare,
+             "trenches": trenches.prepare}
 
 
 def load(name: str) -> dict:
