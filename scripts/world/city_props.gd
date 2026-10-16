@@ -12,11 +12,11 @@ extends RefCounted
 ## traffic's cars share), one for shop fronts' signs and awnings (their own
 ## shader, shaders/shop_sign.gdshader, with the names texture), and two more
 ## with shaders/street_extras.gdshader: sidewalk sheds (many, so on a small
-## mesh of their own), and the bike share's docks with plaza furniture. Draw calls are what props cost most on the web
-## (measured), hence so few. Woods seen from afar are clumps of crowns, in
-## tiles of every level (mid and far tiles have nothing else): one more
-## MultiMesh, drawn by the trees' shader, which grows them in where the trees
-## shrink away.
+## mesh of their own), and the bike share's docks with plaza furniture. Draw
+## calls are what props cost most on the web (measured), hence so few. Woods
+## seen from afar are clumps of crowns, in tiles of every level (mid and far
+## tiles have nothing else): one more MultiMesh, drawn by the trees' shader,
+## which grows them in where the trees shrink away.
 ##
 ## At night street lights add a MultiMesh of glows around their heads (shown
 ## only while the city's lights are on: set lights_on), and their pools of
