@@ -1,17 +1,24 @@
 class_name Trains
 extends Node3D
-## Subway trains on the els: they run along the near tiles' el tracks
-## (TrainTracks, from CityStreamer.train_tracks_changed) around the camera,
-## both ways where an el has two or more tracks, and stand at each platform
-## for DWELL seconds. Between stations they run at up to TOP_SPEED, slower
-## on curves (each point of track has its curve's speed limit), keep well
-## back from the train ahead, take turns where tracks merge, and stop for
-## anyone on the tracks ahead (heroes and thugs). A train is its line's
-## number of cars (SERVICES): the numbered lines' (the A Division's) 15.5 m
-## long and narrower, the lettered lines' 18.4 m; it shows one of its line's
-## route bullets (picked when it appears) on its front and on every car's
-## side signs, headlights at the front and red lights at the back, and its
-## windows light up at night (shaders/train.gdshader).
+## Subway and commuter trains on the els: they run along the near tiles' el
+## tracks (TrainTracks, from CityStreamer.train_tracks_changed) around the
+## camera, both ways where an el has two or more tracks, and stand at each
+## platform for DWELL seconds. Between stations they run at up to TOP_SPEED,
+## slower on curves (each point of track has its curve's speed limit), keep
+## well back from the train ahead, take turns where tracks merge, and stop
+## for anyone on the tracks ahead (heroes and thugs). In the rush hours
+## (EXPRESS_HOURS, by the time of day at the start) express trains run on
+## the middle tracks of three-track els, toward Manhattan in the morning and
+## away from it in the evening, past the local stops. At a terminal's bumper
+## a train waits TURN_WAIT seconds and goes back the way it came to the
+## switch onto the other track (TrainTracks.turn_back); one train at a time
+## between that switch and the bumper. A train is its line's number of cars
+## (SERVICES): the numbered lines' (the A Division's) 15.5 m long and
+## narrower, the lettered lines' 18.4 m, the railroads' (Metro-North, the
+## LIRR) 25.9 m commuter cars; it shows one of its line's route bullets
+## (picked when it appears; the railroads' a plain disc) on its front and on
+## every car's side signs, headlights at the front and red lights at the
+## back, and its windows light up at night (shaders/train.gdshader).
 ##
 ## Trains appear out of sight (behind the camera or buildings, further than
 ## far_spawn, or coming out of a tunnel) within `radius` of the camera, at
@@ -52,7 +59,11 @@ const SERVICES: Array[Dictionary] = [
 	{routes = "A", cars = 10, a = false},  # Liberty Avenue
 	{routes = "L", cars = 8, a = false},   # Canarsie
 	{routes = "S", cars = 4, a = false},   # Franklin Avenue
+	{routes = "", cars = 8, a = false, rail = true},   # Metro-North (the Harlem, Hudson and New Haven Lines)
+	{routes = "", cars = 10, a = false, rail = true},  # the Long Island Rail Road
 ]
+## The railroads' cars show a disc in the MTA's blue, without a letter.
+const RAIL_COLOR := Color(0.0, 0.224, 0.651)
 ## The route bullets' letters and numbers, in the order of the shader's
 ## glyph texture (_glyph_texture()), and their colors (sRGB, the MTA's).
 const GLYPHS := "1234567ABDEFGJLMNQSWZ"
@@ -80,9 +91,12 @@ const GLYPH_PIXELS := [
 ## Division's. Cars stand this far apart.
 const A_CAR := Vector3(15.55, 2.69, 3.6)
 const B_CAR := Vector3(18.35, 3.05, 3.7)
+## The railroads' cars (like an M7: 85 feet, two doors a side).
+const RAIL_CAR := Vector3(25.9, 3.2, 3.95)
 const CAR_GAP := 0.9
 const A_DOORS := 3
 const B_DOORS := 4
+const RAIL_DOORS := 2
 const MAX_CARS := 11
 ## Instance flags (shaders/train.gdshader): a cab at the car's front (+z) or
 ## back, the front cab leading (its headlights on).
@@ -119,6 +133,11 @@ const CONTROL_STEP := 0.2
 const RUN_PAST := 25.0
 ## A train standing this long (s) out of sight, not at a platform, goes.
 const STUCK_TIME := 90.0
+## Seconds a train stands at a terminal's bumper before it goes back.
+const TURN_WAIT := 12.0
+## Express trains run toward Manhattan between these hours (x, y) and away
+## from it between these (z, w).
+const EXPRESS_HOURS := Vector4(6.0, 10.0, 15.0, 20.0)
 ## Trains appear at least this far from the camera (m), with at least
 ## SPAWN_AHEAD of track ahead of them (or a tunnel).
 const MIN_SPAWN_DISTANCE := 120.0
@@ -212,6 +231,10 @@ class Train:
 	var car := B_CAR
 	var doors := B_DOORS
 	var a_division := false
+	var rail := false
+	## Its route bullet's color, and whether its letter is black (1) or white.
+	var color := Color.BLACK
+	var dark := 0.0
 	var length := 0.0
 	## The pieces it's on, back to front, and their lengths but the last's
 	## together; its front is `s` along the last (past its end only when it
@@ -236,7 +259,14 @@ class Train:
 	var served: TrainTracks.Piece
 	var served_at := 0.0
 	var stuck := 0.0
-	## Junction nodes it has claimed.
+	## Going back from a terminal's bumper (its front still on the terminal's
+	## track the other way), and how long it has stood at the bumper; on a
+	## terminal's track (in or out).
+	var turning := false
+	var turn_wait := 0.0
+	var in_terminal := false
+	## Junction nodes it has claimed, and terminals' tracks (their bumpers'
+	## nodes, negated).
 	var claims: Array[int] = []
 	## Its cars' collision (while heroes are near), and their headings at
 	## the last tick (for turning rates).
@@ -257,6 +287,9 @@ func _ready() -> void:
 	if LaunchOptions.has("trains"):
 		max_trains = maxi(int(LaunchOptions.get_string("trains")), 0)
 	_log_stats = LaunchOptions.has("stats")
+	var hours := TimeOfDay.parse_clock(LaunchOptions.get_string("time")) if LaunchOptions.has("time") \
+			else TimeOfDay.DEFAULT_CLOCK
+	tracks.express = express_way(hours)
 	_slots.resize(max_trains)
 	_car_middle.resize(MAX_CARS)
 	_car_forward.resize(MAX_CARS)
@@ -286,7 +319,7 @@ func _ready() -> void:
 	_instance.custom_aabb = AABB(Vector3(-4000.0, -200.0, -4000.0), Vector3(8000.0, 1400.0, 8000.0))
 	_instance.visible = max_trains > 0
 	add_child(_instance)
-	for car: Vector3 in [A_CAR, B_CAR]:
+	for car: Vector3 in [A_CAR, B_CAR, RAIL_CAR]:
 		var box := BoxShape3D.new()
 		box.size = Vector3(car.y, car.z - BODY_FLOOR, car.x)
 		_car_shapes.append(box)
@@ -298,6 +331,16 @@ func _ready() -> void:
 			set_tile_tracks(key, loaded[key])
 	set_process(max_trains > 0)
 	set_physics_process(max_trains > 0)
+
+
+## Which way express trains run at `hours` (CityTileDecoder.TRACK_EXPRESS_*;
+## 0: none run).
+static func express_way(hours: float) -> int:
+	if hours >= EXPRESS_HOURS.x and hours < EXPRESS_HOURS.y:
+		return CityTileDecoder.TRACK_EXPRESS_IN
+	if hours >= EXPRESS_HOURS.z and hours < EXPRESS_HOURS.w:
+		return CityTileDecoder.TRACK_EXPRESS_OUT
+	return 0
 
 
 ## A tile's tracks arrived, or went (empty): trains on tracks that went go too.
@@ -422,6 +465,13 @@ func _control(train: Train) -> void:
 	var stop_at := 0.0
 	var hard := false
 	var curve := TOP_SPEED
+	# A train that appeared on a terminal's track (rather than ran into it)
+	# takes it now, if it's free.
+	var front := train.pieces[train.pieces.size() - 1]
+	if front.is_terminal() and tracks.bumper(front) != 0 and _claims.get(-tracks.bumper(front)) == null:
+		_claims[-tracks.bumper(front)] = train
+		train.claims.append(-tracks.bumper(front))
+		train.in_terminal = true
 	# Who's up on the el near its front, ahead of it.
 	_near_people.clear()
 	for person in _people:
@@ -442,11 +492,13 @@ func _control(train: Train) -> void:
 				continue
 			if x > LOOK_AHEAD:
 				break
+			# (A point's limit holds from the point before it.)
+			var reach := offset + piece.along[k - 1] if k > 0 else x
 			var allowed := piece.speeds[k]
 			if x <= 0.0:
 				curve = minf(curve, allowed)
-			else:
-				allowed = sqrt(allowed * allowed + 2.0 * BRAKING * x)
+			elif reach > 0.0:
+				allowed = sqrt(allowed * allowed + 2.0 * BRAKING * reach)
 			limit = minf(limit, allowed)
 		# Its stops: the train's middle at the platform's middle.
 		for d in piece.stops:
@@ -476,23 +528,33 @@ func _control(train: Train) -> void:
 		if end > LOOK_AHEAD:
 			break
 		var next: TrainTracks.Piece = train.pieces[index + 1] if index + 1 < train.pieces.size() \
-				else tracks.next(piece, train.service)
+				else tracks.next(piece, train.service, train.turning)
 		if next == null:
 			if piece.flags & CityTileDecoder.TRACK_OPEN_END == 0 and end - END_GAP < stop_in:
 				stop_in = end - END_GAP  # the end of the tracks (or of what's loaded)
 				stop_piece = null
 			break
-		# Where tracks merge, one train at a time.
+		# Where tracks merge, and into a terminal's track (trains come back
+		# out of it the same way), one train at a time.
+		var keys: Array[int] = []
 		if end > 0.0 and tracks.arriving(piece.to_node).size() > 1:
-			var holder: Train = _claims.get(piece.to_node)
+			keys.append(piece.to_node)
+		if end > 0.0 and next.is_terminal() and not piece.is_terminal() and not piece.is_turn_back() \
+				and tracks.bumper(next) != 0:
+			keys.append(-tracks.bumper(next))
+		var held := false
+		for key in keys:
+			var holder: Train = _claims.get(key)
 			if holder != null and holder != train:
-				if end - JUNCTION_GAP < stop_in:
-					stop_in = end - JUNCTION_GAP
-					stop_piece = null
-				break
-			if holder == null and end < train.v * train.v / (2.0 * BRAKING) + JUNCTION_GAP * 2.0:
-				_claims[piece.to_node] = train
-				train.claims.append(piece.to_node)
+				held = true
+			elif holder == null and end < train.v * train.v / (2.0 * BRAKING) + JUNCTION_GAP * 2.0:
+				_claims[key] = train
+				train.claims.append(key)
+		if held:
+			if end - JUNCTION_GAP < stop_in:
+				stop_in = end - JUNCTION_GAP
+				stop_piece = null
+			break
 		offset = end
 		piece = next
 		index += 1
@@ -530,6 +592,11 @@ func _run(train: Train, dt: float) -> void:
 	if train.dwell > 0.0:
 		train.dwell -= dt
 		return
+	if train.v < 0.05 and _at_bumper(train):
+		train.turn_wait += dt
+		if train.turn_wait >= TURN_WAIT:
+			_turn_back(train)
+		return
 	var target := train.target
 	var braking := HARD_BRAKING if train.hard else BRAKING
 	if train.stop_in < INF:
@@ -559,11 +626,11 @@ func _run(train: Train, dt: float) -> void:
 
 
 ## Moves a train's front on to the next piece once past its end, and lets
-## go of the pieces (and junctions) its back has left.
+## go of the pieces (and junctions, and terminals' tracks) its back has left.
 func _advance(train: Train) -> void:
 	var front := train.pieces[train.pieces.size() - 1]
 	while train.s > front.length:
-		var next := tracks.next(front, train.service)
+		var next := tracks.next(front, train.service, train.turning)
 		if next == null:
 			if front.flags & CityTileDecoder.TRACK_OPEN_END == 0:
 				# The end of the tracks (or of those loaded): no further.
@@ -574,10 +641,63 @@ func _advance(train: Train) -> void:
 		train.span += front.length
 		train.pieces.append(next)
 		front = next
+		train.turning = train.turning and next.is_turn_back()
+		train.in_terminal = train.in_terminal or next.is_terminal() or next.is_turn_back()
 	while train.pieces.size() > 1 and train.span + train.s - train.pieces[0].length > train.length:
 		var gone: TrainTracks.Piece = train.pieces.pop_front()
 		train.span -= gone.length
 		_release(train, gone.to_node)
+	if train.in_terminal \
+			and not train.pieces.any(func(p: TrainTracks.Piece) -> bool: return p.is_terminal() or p.is_turn_back()):
+		train.in_terminal = false
+		for key in train.claims.duplicate():
+			if key < 0:
+				_release(train, key)
+
+
+## Whether a train stands at the end of a terminal's track, at its bumper.
+func _at_bumper(train: Train) -> bool:
+	var front := train.pieces[train.pieces.size() - 1]
+	return front.flags & CityTileDecoder.TRACK_DEAD_END != 0 and train.s > front.length - END_GAP - 2.0 \
+			and tracks.next(front, train.service, train.turning) == null
+
+
+## Sends a train standing at a terminal's bumper back the way it came: its
+## back becomes its front, on the terminal's track the other way (its cars
+## stay where they stand, the last now the first), keeping the terminal's
+## track until it has left it.
+func _turn_back(train: Train) -> void:
+	train.turn_wait = 0.0
+	var front := train.pieces[train.pieces.size() - 1]
+	var back := tracks.turn_back(front)
+	if back == null:
+		return
+	var pieces := train.pieces.duplicate()
+	var s := train.s
+	var span := train.span
+	if not _lay_out(train, back, front.length - train.s + train.length, true):
+		train.pieces = pieces
+		train.s = s
+		train.span = span
+		return
+	for node in train.claims.duplicate():
+		if node > 0:
+			_release(train, node)
+	train.turning = train.pieces[train.pieces.size() - 1].is_turn_back()
+	train.v = 0.0
+	train.stop_in = INF
+	train.stop_piece = null
+	train.served = null
+	train.control = 0.0
+	train.at_rest = false
+	train.headings.fill(Vector3.ZERO)
+	var b := train.slot * MAX_CARS * STRIDE
+	for k in int(train.cars / 2.0):
+		var near := b + k * STRIDE + 18
+		var far := b + (train.cars - 1 - k) * STRIDE + 18
+		var kept := _buffer[near]
+		_buffer[near] = _buffer[far]
+		_buffer[far] = kept
 
 
 func _release(train: Train, node: int) -> void:
@@ -729,7 +849,7 @@ func _take_bodies(train: Train) -> void:
 			body.add_child(shape)
 			add_child(body)
 		var box: CollisionShape3D = body.get_child(0)
-		box.shape = _car_shapes[0 if train.a_division else 1]
+		box.shape = _car_shapes[2 if train.rail else (0 if train.a_division else 1)]
 		box.position = Vector3(0.0, BODY_FLOOR + (train.car.z - BODY_FLOOR) * 0.5, 0.0)
 		body.process_mode = Node.PROCESS_MODE_INHERIT
 		train.bodies.append(body)
@@ -826,18 +946,9 @@ func _spawn(tries: int) -> void:
 		var mains: Array = tracks.tile_mains[tile][0]
 		var totals: PackedFloat32Array = tracks.tile_mains[tile][1]
 		var piece: TrainTracks.Piece = mains[mini(totals.bsearch(randf() * totals[totals.size() - 1]), mains.size() - 1)]
-		var info: Dictionary = SERVICES[piece.service] if piece.service < SERVICES.size() else {}
-		if info.is_empty():
+		var train := _new_train(piece.service)
+		if train == null:
 			continue
-		var train := Train.new()
-		train.service = piece.service
-		var routes: String = info.routes
-		train.glyph = GLYPHS.find(routes[randi() % routes.length()])
-		train.a_division = info.a
-		train.cars = info.cars
-		train.car = A_CAR if train.a_division else B_CAR
-		train.doors = A_DOORS if train.a_division else B_DOORS
-		train.length = train.cars * train.car.x + (train.cars - 1) * CAR_GAP
 		# Its front somewhere on the piece; at first, maybe its middle at a
 		# platform, standing there.
 		var s := randf() * piece.length
@@ -865,12 +976,50 @@ func _spawn(tries: int) -> void:
 		_add(train, slot)
 
 
+## A train of `service` (its route's bullet picked), not yet on the tracks;
+## null if the service runs no trains.
+func _new_train(service: int) -> Train:
+	var info: Dictionary = SERVICES[service] if service < SERVICES.size() else {}
+	if info.is_empty():
+		return null
+	var train := Train.new()
+	train.service = service
+	var routes: String = info.routes
+	train.a_division = info.a
+	train.rail = info.get("rail", false)
+	train.cars = info.cars
+	if train.rail:
+		train.glyph = GLYPHS.length()  # (no letter)
+		train.color = RAIL_COLOR
+	else:
+		train.glyph = GLYPHS.find(routes[randi() % routes.length()])
+		train.color = BULLET_COLORS[train.glyph]
+		train.dark = 1.0 if DARK_GLYPHS.contains(GLYPHS[train.glyph]) else 0.0
+	train.car = RAIL_CAR if train.rail else (A_CAR if train.a_division else B_CAR)
+	train.doors = RAIL_DOORS if train.rail else (A_DOORS if train.a_division else B_DOORS)
+	train.length = train.cars * train.car.x + (train.cars - 1) * CAR_GAP
+	return train
+
+
+## Puts a train of `piece`'s line with its front `s` along it, in view or
+## not (for tests); returns it, or null where there's no room (no free slot,
+## the tracks don't reach, another train is there).
+func place(piece: TrainTracks.Piece, s: float) -> Train:
+	var slot := _slots.find(null)
+	var train := _new_train(piece.service)
+	if slot < 0 or train == null or not _lay_out(train, piece, s) or _occupied(train):
+		return null
+	_add(train, slot)
+	return train
+
+
 ## Places a train with its front `s` along `piece` (going on ahead past its
-## end, to the pieces that follow), its back on the pieces before: false if
-## the tracks don't reach that far (unless they come out of a tunnel).
-func _lay_out(train: Train, piece: TrainTracks.Piece, s: float) -> bool:
+## end, to the pieces that follow; `turning` back at a terminal, as next()),
+## its back on the pieces before: false if the tracks don't reach that far
+## (unless they come out of a tunnel).
+func _lay_out(train: Train, piece: TrainTracks.Piece, s: float, turning := false) -> bool:
 	while s > piece.length:
-		var next := tracks.next(piece, train.service)
+		var next := tracks.next(piece, train.service, turning)
 		if next == null:
 			return false
 		s -= piece.length
@@ -952,8 +1101,8 @@ func _add(train: Train, slot: int) -> void:
 	train.v = 0.0 if train.dwell > 0.0 else minf(TOP_SPEED * 0.6, front.speed_at(train.s))
 	train.control = randf() * CONTROL_STEP  # (trains look ahead at different ticks)
 	# Each car's look: cabs at the train's ends, its route's bullet.
-	var color := BULLET_COLORS[train.glyph]
-	var dark := 1.0 if DARK_GLYPHS.contains(GLYPHS[train.glyph]) else 0.0
+	var color := train.color
+	var dark := train.dark
 	var b := slot * MAX_CARS * STRIDE
 	for k in MAX_CARS:
 		for n in STRIDE:
