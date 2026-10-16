@@ -16,6 +16,7 @@ import shapely
 from shapely.geometry import shape
 
 import facades
+import ground_details
 import landcover
 import markings
 import overpasses
@@ -146,9 +147,15 @@ def prepare_facades() -> dict:
     return facades.prepare(load("buildings"))
 
 
+def prepare_ground_details() -> dict:
+    load_landcover()
+    return ground_details.prepare(load("ground")["land"])
+
+
 PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": prepare_water,
              "facades": prepare_facades, "trees": props.prepare_trees, "centerline": markings.prepare,
-             "furniture": props.prepare_furniture, "overpasses": overpasses.prepare}
+             "furniture": props.prepare_furniture, "overpasses": overpasses.prepare,
+             "ground_details": prepare_ground_details}
 
 
 def load(name: str) -> dict:

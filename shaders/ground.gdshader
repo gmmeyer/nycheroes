@@ -4,8 +4,13 @@
 // that fade to their average color in the distance.
 // UV2.x: 0 pavement, 1 road, 2 park, 3 seawall, 4 sand, 5 marsh,
 //        6 concrete (curbs, bridge deck sides, columns, steel towers), 7 cable, 8 stone (towers),
-//        9 yard (back yards, gardens, lawns around homes).
+//        9 yard (back yards, gardens, lawns around homes),
+//        20 shrubs (beds and hedges on planted medians, a low mound), 21 pavers
+//        (pedestrian plazas), 22 Belgian block (cobbled streets).
 //        Bridge deck tops are road.
+// UV2.y: pavers' and Belgian blocks' direction: the angle (radians, in UV
+//        space) their rows follow; shrubs' height above the ground (m)
+//        (tools/citygen/ground_details.py).
 // UV: world x/z on flat ground; (meters along, meters up) on walls.
 // Parks, yards and marshes under trees (the citywide canopy map, see
 // CityStreamer) read as woods seen from above past where the tree props
@@ -41,6 +46,9 @@ const int CONCRETE = 6;
 const int CABLE = 7;
 const int STONE = 8;
 const int YARD = 9;
+const int SHRUBS = 20;
+const int PAVERS = 21;
+const int COBBLES = 22;
 
 // The photo fades out between these distances from the camera (meters).
 uniform vec2 aerial_near_fade = vec2(25.0, 110.0);
@@ -112,6 +120,22 @@ uniform vec2 sign_district_along = vec2(-330.0, 420.0);
 uniform vec2 sign_district_across = vec2(-120.0, 110.0);
 uniform float sign_glow_fade = 60.0;
 uniform float sign_glow_strength = 0.85;
+// Ground details (tools/citygen/ground_details.py). Shrub beds: leafy
+// clumps about shrub_clump meters across, each bulging by shrub_bump (the
+// sun lights one side), in greens that change along the bed, with flowers
+// in some stretches.
+uniform vec3 shrubs_color : source_color = vec3(0.25, 0.42, 0.18);
+uniform float shrub_clump = 0.55;
+uniform float shrub_bump = 0.9;
+// Pavers in pedestrian plazas: dark gray concrete, paver_size meters (along
+// and across their rows), in running bond along the plaza.
+uniform vec3 pavers_color : source_color = vec3(0.43, 0.43, 0.44);
+uniform vec2 paver_size = vec2(0.6, 0.3);
+// Belgian block: granite setts cobble_size meters (across the street, along
+// it), in courses from curb to curb, with asphalt patches where the street
+// was dug up.
+uniform vec3 cobbles_color : source_color = vec3(0.45, 0.42, 0.39);
+uniform vec2 cobble_size = vec2(0.3, 0.17);
 
 // The screens' light (linear, before city_lights) on flat ground at world x/z.
 vec3 sign_glow(vec2 xz) {
@@ -160,6 +184,15 @@ vec3 base_color(int kind) {
 	}
 	if (kind == YARD) {
 		return yard_color;
+	}
+	if (kind == SHRUBS) {
+		return shrubs_color;
+	}
+	if (kind == PAVERS) {
+		return pavers_color;
+	}
+	if (kind == COBBLES) {
+		return cobbles_color;
 	}
 	return pavement_color;
 }
@@ -216,6 +249,98 @@ vec3 flat_ground(int kind, vec2 p, vec2 footprint, vec3 color) {
 		return mix(lawn, pavement_color * 0.95, paved);
 	}
 	return color;
+}
+
+// Blocks `size` meters (along a row, across rows) in rows along x of q (in
+// meters), each row shifted by half a block or, with `jitter`, more at
+// random; joints `joint` meters wide. Returns (how much joint 0..1, the
+// block's tone -1..1), both fading out as blocks get smaller than a few pixels.
+vec2 courses(vec2 q, vec2 size, float joint, float pixel, float jitter) {
+	float row = floor(q.y / size.y);
+	float x = q.x / size.x + mix(0.5 * mod(row, 2.0), hash(vec2(row, 7.1)), jitter);
+	float detail = visible(size.y, pixel);
+	float joints = max(centered_stripes(q.y / size.y, joint / size.y, pixel / size.y),
+			centered_stripes(x, joint / size.x, pixel / size.x));
+	return vec2(joints, (hash(vec2(floor(x), row)) - 0.5) * 2.0) * detail;
+}
+
+// Shrub beds on planted medians: leafy clumps bulging out of the hedge, dark
+// between them and toward the ground, with flowers in some stretches.
+// `rise` is the height above the ground; `face` the surface's own (flat)
+// world normal; `normal` (world) bulges with the clumps.
+vec3 shrubs(vec2 p, float rise, vec3 face, vec3 color, inout vec3 normal) {
+	// Up a hedge's steep side, the leaves wrap around: in as far as it rises.
+	float steep = smoothstep(0.3, 0.6, length(face.xz));
+	p -= normalize(face.xz + vec2(1e-5, 0.0)) * (rise * steep);
+	vec2 footprint = max(fwidth(p), vec2(1e-4));
+	float pixel = sqrt(footprint.x * footprint.y);
+	// Boxwood, yew and privet greens, changing along the bed; darker low down.
+	vec3 leaf = color * mix(vec3(0.85, 0.95, 0.95), vec3(1.1, 1.06, 0.85), value_noise(p * 0.11 + 5.0));
+	leaf *= mix(0.55, 1.0, smoothstep(0.0, 0.45, rise));
+	float detail = visible(shrub_clump, pixel);
+	if (detail <= 0.0) {
+		return leaf * 0.8;
+	}
+	vec2 q = p / shrub_clump;
+	vec2 home = floor(q);
+	float nearest = 9.0;
+	vec2 offset = vec2(0.0);
+	float pick = 0.0;
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			vec2 cell = home + vec2(float(i), float(j));
+			vec2 center = cell + 0.5 + (vec2(hash(cell + 3.7), hash(cell + 11.9)) - 0.5) * 0.8;
+			vec2 d = (q - center) / mix(0.6, 0.85, hash(cell + 29.3));
+			float r = length(d);
+			if (r < nearest) {
+				nearest = r;
+				offset = d;
+				pick = hash(cell + 51.7);
+			}
+		}
+	}
+	float inside = 1.0 - smoothstep(0.7, 1.0, nearest);
+	vec3 c = mix(leaf * 0.45, leaf * mix(0.85, 1.15, pick), inside);
+	// A speckle of leaves catching the light.
+	c *= 1.0 + (hash(floor(p * 9.0)) - 0.5) * 0.3 * visible(0.11, pixel);
+	// Flowers in some stretches: dots of one color on the clumps.
+	float flowering = smoothstep(0.58, 0.68, value_noise(p / 9.0 + 21.0));
+	if (flowering > 0.0) {
+		vec2 cell = floor(p * 4.0);
+		vec2 spot = fract(p * 4.0) - 0.5 - (vec2(hash(cell + 1.7), hash(cell + 5.1)) - 0.5) * 0.5;
+		float bloom = (1.0 - smoothstep(0.12, 0.3, length(spot))) * step(0.45, hash(cell + 9.3)) * inside;
+		float which = value_noise(p / 9.0 + 40.0);
+		vec3 flower = which < 0.35 ? vec3(0.95, 0.42, 0.6) : (which < 0.5 ? vec3(0.9, 0.2, 0.18)
+				: (which < 0.65 ? vec3(0.98, 0.85, 0.3) : vec3(0.95, 0.95, 0.92)));
+		c = mix(c, srgb(flower), bloom * flowering * visible(0.25, pixel));
+	}
+	normal = normalize(normal + vec3(offset.x, 0.0, offset.y) * (shrub_bump * inside * detail));
+	return mix(leaf * 0.8, c, detail);
+}
+
+// The ground details' kinds (shrubs, pavers, Belgian block); `extra`
+// (UV2.y) is shrubs' height, or the direction pavers' rows and the cobbled
+// street run. `face` is the surface's own world normal.
+vec3 ground_detail(int kind, vec2 p, float extra, vec2 footprint, vec3 face, vec3 color, inout vec3 normal) {
+	if (kind == SHRUBS) {
+		return shrubs(p, extra, face, color, normal);
+	}
+	float angle = extra;
+	float pixel = max(footprint.x, footprint.y);
+	vec2 d = vec2(cos(angle), sin(angle));
+	vec2 q = vec2(dot(p, d), dot(p, vec2(-d.y, d.x)));  // meters along and across the rows
+	if (kind == PAVERS) {
+		vec2 b = courses(q, paver_size, 0.012, pixel, 0.0);
+		return color * (1.0 + 0.07 * b.y) * (1.0 - 0.3 * b.x);
+	}
+	// Belgian block: courses across the street, one after another along it;
+	// setts a little different in gray, pink and brown.
+	vec2 b = courses(q.yx, cobble_size, 0.035, pixel, 0.8);
+	float tint = hash(floor(vec2(q.y / cobble_size.x, q.x / cobble_size.y)) + 13.1) * visible(cobble_size.y, pixel);
+	vec3 setts = color * mix(vec3(1.0), mix(vec3(1.06, 0.98, 0.94), vec3(0.94, 0.98, 1.04), tint), 0.8)
+			* (1.0 + 0.13 * b.y) * (1.0 - 0.5 * b.x);
+	float patches = smoothstep(0.64, 0.68, value_noise(p * 0.06 + 3.7));
+	return mix(setts, road_color * (1.0 + (value_noise(p * 4.0) - 0.5) * 0.1 * visible(0.25, pixel)), patches);
 }
 
 // The trees' foliage tones (shaders/tree.gdshader's FOLIAGE and CONIFER, in
@@ -345,7 +470,13 @@ void fragment() {
 	// Broad, soft variation so large areas don't look flat.
 	float variation = value_noise(UV * 0.04) * 0.6 + value_noise(UV * 0.31) * 0.4;
 	vec3 color = base_color(kind) * mix(0.92, 1.06, variation);
-	if (world_normal.y > 0.7) {
+	if (kind >= SHRUBS) {
+		// Ground details, on any slope (shrubs mound up).
+		vec3 face = normalize((INV_VIEW_MATRIX * vec4(cross(dFdx(VERTEX), dFdy(VERTEX)), 0.0)).xyz);
+		face *= sign(dot(face, world_normal) + 1e-5);  // the surface's own normal, out of it
+		color = ground_detail(kind, UV, UV2.y, footprint, face, color, shading_normal);
+		NORMAL = normalize((VIEW_MATRIX * vec4(shading_normal, 0.0)).xyz);
+	} else if (world_normal.y > 0.7) {
 		color = flat_ground(kind, UV, footprint, color);
 		if (kind == PARK || kind == YARD || kind == MARSH) {
 			vec3 ray = (INV_VIEW_MATRIX * vec4(VERTEX, 0.0)).xyz;
@@ -362,7 +493,7 @@ void fragment() {
 		float detail = clamp(dot(photo, vec3(0.2126, 0.7152, 0.0722)) / 0.08, 0.25, 1.2);
 		photo = mix(photo, park_color * detail, park_greening);
 	}
-	bool photographed = (kind <= MARSH && kind != SEAWALL) || kind == YARD;
+	bool photographed = (kind <= MARSH && kind != SEAWALL) || kind == YARD || kind >= SHRUBS;
 	float far_enough = smoothstep(aerial_near_fade.x, aerial_near_fade.y, length(VERTEX));
 	ALBEDO = toon_night_albedo(mix(color, photo, photographed ? aerial_amount(aerial_uv) * far_enough : 0.0));
 	EMISSION = ALBEDO * toon_ambient(shading_normal, 1.0);
@@ -372,13 +503,14 @@ void fragment() {
 		float distance_to_camera = length(VERTEX);
 		vec3 scene_position = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 		vec3 lamps = street_light_at(scene_position.xz, distance_to_camera);
-		if (kind == ROAD || kind == PAVEMENT) {
+		bool street = kind == ROAD || kind == PAVEMENT || kind == PAVERS || kind == COBBLES;
+		if (street) {
 			lamps += street_light_average * street_light_far(distance_to_camera);
 		}
 		// Walls (curbs, seawalls, bridges' sides) catch less of it, and no sheen.
 		bool level = world_normal.y > 0.7;
 		EMISSION += (level ? ALBEDO + street_light_sheen : ALBEDO * 0.6) * lamps * city_lights;
-		if (level && (kind == ROAD || kind == PAVEMENT)) {
+		if (level && street) {
 			// Times Square's screens (flat ground's UV is its world x/z).
 			EMISSION += (ALBEDO + street_light_sheen) * sign_glow(UV) * city_lights;
 		}

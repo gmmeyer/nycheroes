@@ -124,6 +124,11 @@ STRUCTURE_CONCRETE = 6
 STRUCTURE_CABLE = 7
 STRUCTURE_STONE = 8
 GROUND_YARD = 9  # back yards, gardens and lawns around homes
+# Ground details (ground_details.py). Paving kinds carry the direction their
+# courses follow in uv2.y (radians in uv space, from +x toward +y).
+GROUND_SHRUBS = 20   # shrub beds and hedges on planted medians (a low mound)
+GROUND_PAVERS = 21   # concrete pavers in pedestrian plazas; uv2.y their rows' direction
+GROUND_COBBLES = 22  # Belgian block streets; uv2.y the street's direction
 # Markings surface kinds; uv = (meters along, meters across).
 GROUND_MARKING_WHITE = 10      # solid white: stop lines, highway edge lines
 GROUND_MARKING_YELLOW = 11     # double yellow center line: a 0.45 m strip, uv.y -0.225..0.225,

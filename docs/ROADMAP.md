@@ -15,7 +15,7 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 3 | Street fights | Done (`ba5e606`) |
 | 4 | All five boroughs and bridges | Done (`bfa80ab`) |
 | 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
-| 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, facade materials and stoops, first landmarks, sound done) |
+| 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, facade materials and stoops, ground details, first landmarks, sound done) |
 | 7 | Phones and tablets | Done in emulation; real phones to check |
 | 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions) |
 | 9 | Mac and Windows versions | Planned (last) |
@@ -451,6 +451,44 @@ In order:
 - Still to do: which end of a subway stair is open (the data doesn't say,
   so every stair opens the same way along its curb); wave bike racks are
   drawn as U racks.
+
+**Ground details (done):**
+- Planted medians and malls (`tools/citygen/ground_details.py`): of the
+  city's 8,048 raised medians (Planimetric Database), 3,727 are planted:
+  Parks Department malls, parkways and Greenstreets, medians the land cover
+  map shows as grass, and curb-lined medians along the Grand Concourse,
+  Park Avenue (46th to 96th Street), Broadway (60th to 168th) and the
+  Ocean, Eastern and Pelham Parkways. Curb-lined ones up to 9 m wide become
+  shrub beds (new ground kind 20): a concrete edge, then clipped shrubs
+  0.7 m high, a hedge around a lawn where there's room, with leafy clumps
+  and stretches of flowers drawn by the ground shader (the shrubs' height
+  in uv2.y wraps the leaves up their sides). Grass strips and highway
+  medians are lawn; wide malls (the parkways') are lawn where the land
+  cover has grass or trees, paved on their walks. Street trees on shrub
+  beds stay under 7.5 m (Park Avenue's pears and hawthorns), narrow
+  medians get no canopy trees, and no walking lanes run along medians.
+- Parks the parks layer lacks, as lawn where the 2017 land cover map shows
+  grass or trees (outlines smoothed; woods come from the canopy map as in
+  any park): City Planning's Publicly Owned Waterfront parks not run by
+  the Parks Department (Brooklyn Bridge Park, Hudson River Park, Battery
+  Park City, the Statue of Liberty and Ellis Island, Governors Island,
+  Gateway's units, Riverbank, Roberto Clemente, Gantry Plaza, East River
+  and Shirley Chisholm State Parks, Roosevelt Island's), and the
+  Planimetric Open Space's cemeteries (Green-Wood, Calvary, Woodlawn...)
+  and recreation areas: 6,383 lawns, 3,425 ha. Paths in the waterfront
+  parks get post-top lamps.
+- Special pavements: dark concrete pavers in the DOT's 93 pedestrian
+  plazas (Times Square, Herald Square, the Flatiron...), and Belgian block,
+  with asphalt patches, on a list of streets in DUMBO and Vinegar Hill, the
+  Meatpacking District, SoHo, Tribeca, the Financial District and the
+  Seaport (ground kinds 21 and 22; the direction their rows run in uv2.y).
+- Historic post-tops instead of cobra-heads along the Grand Concourse,
+  Ocean and Eastern Parkways, Riverside Drive and Fifth Avenue along
+  Central Park (`props.HISTORIC_LAMP_STREETS`, picked by the street
+  centerline's names).
+- Cost (random samples): near tiles +3.0% (109 tiles), mid +3.8% (20),
+  far about +5% (tiles with new parks grow most: Governors Island's
+  +68%); draw calls and triangles on screen unchanged.
 
 **Parked cars and traffic (done):**
 - Data (`tools/citygen/traffic.py`, from the street centerlines): driving

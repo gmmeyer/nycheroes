@@ -72,7 +72,8 @@ CANOPY_TONES = ((PROP_TONE_GREEN, 0.55), (PROP_TONE_DARK, 0.3), (PROP_TONE_LIGHT
 # Street lights: one every LAMP_SPACING meters along every curb (the first
 # half a spacing in), LAMP_SETBACK onto the sidewalk, and none closer than
 # LAMP_MIN_GAP to another. Curbs around road islands shorter than
-# LAMP_MIN_ISLAND get none. In and beside parks they're historic post-tops.
+# LAMP_MIN_ISLAND get none. In and beside parks, and along the boulevards in
+# HISTORIC_LAMP_STREETS, they're historic post-tops.
 LAMP_SPACING = 35.0
 LAMP_SETBACK = 0.6
 LAMP_MIN_GAP = 12.0
@@ -80,6 +81,21 @@ LAMP_MIN_ISLAND = 40.0
 LAMP_PARK_REACH = 4.0
 COBRA_HEAD = (9.0, 2.6)  # pole height, arm length (m)
 POST_TOP = (4.4, 0.0)
+# Boulevards lit by historic post-tops instead of cobra-heads: (street name
+# as in the centerline data, borough code, (south, west, north, east) or
+# None for its whole length). Curb lamps up to HISTORIC_LAMP_REACH beyond the
+# street's half width, with their arm across it, are post-tops
+# (ground_details.GroundDetails.historic_lamps).
+HISTORIC_LAMP_STREETS = (
+    ("GRAND CONC", 2, None),
+    ("OCEAN PKWY", 3, None),
+    ("EASTERN PKWY", 3, None),
+    ("RIVERSIDE DR", 1, None),
+    ("RIVERSIDE DR W", 1, None),
+    ("RIVERSIDE DR E", 1, None),
+    ("5 AVE", 1, (40.7638, -73.9745, 40.7972, -73.9485)),  # along Central Park, 59th to 110th Street
+)
+HISTORIC_LAMP_REACH = 4.0
 
 # Times Square's sign district: street walls in this box get billboards
 # (facades.SIGNS). Meters along Manhattan's avenues (29 degrees east of north,

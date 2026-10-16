@@ -61,6 +61,27 @@ DATASETS = {
         {"$select": "the_geom,physicalid,rw_type,status,trafdir,from_level_code,to_level_code,"
                     "streetwidth,number_travel_lanes,number_park_lanes,bike_lane"},
     ),
+    # Ground details (greenspace.py).
+    "medians": (
+        "ees7-4ufv",  # Planimetric Database: Median (medians, traffic islands, barriers)
+        {"$select": "the_geom,sub_code"},
+    ),
+    "greenstreets": (
+        "mk9u-qu7i",  # Greenstreets: the Parks Department's planted street spaces
+        {"$select": "multipolygon,gstype,sitename,featurestatus"},
+    ),
+    "public_waterfront": (
+        "jr73-mxkz",  # Publicly Owned Waterfront (City Planning): city, state and federal parks
+        {"$select": "the_geom,name,agency"},
+    ),
+    "open_space": (
+        "b7j8-z8a7",  # Planimetric Database: Open Space (Other): cemeteries, recreation areas, vacant lots
+        {"$select": "the_geom,feature_co,name"},
+    ),
+    "plazas": (
+        "k5k6-6jex",  # NYC DOT Pedestrian Plazas
+        {"$select": "the_geom,plazaname"},
+    ),
 }
 
 
@@ -108,6 +129,9 @@ TABLES = {
     "litter_baskets": ("8znf-7b2c", {"$select": "latitude,longitude,baskettype"}),
     "parking_meters": ("693u-uax6", {"$select": "lat,long", "$where": "status='Active'"}),
     "newsstands": ("w9zq-xm8b", {"$select": "latitude,longitude"}),
+    # Street names for the centerline's segments (ground_details.py picks
+    # boulevards and cobbled streets by name).
+    "centerline_names": ("inkn-q76z", {"$select": "physicalid,full_street_name,boroughcode"}),
 }
 TABLE_PAGE_SIZE = 50000
 

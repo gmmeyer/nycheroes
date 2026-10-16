@@ -40,6 +40,7 @@ import bridges
 import buildings3d
 import facades
 import fronts
+import ground_details
 import landcover
 import landmarks
 import markings
@@ -49,8 +50,8 @@ import props
 import towers
 import traffic
 from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT,
-                    GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_YARD, LANE_BREAK, MARKING_LIFT, ORIGIN_LAT,
-                    ORIGIN_LON, PROJECTION, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR, PROP_PARKING_METER,
+                    GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_SHRUBS, GROUND_YARD, LANE_BREAK, MARKING_LIFT,
+                    ORIGIN_LAT, ORIGIN_LON, PROJECTION, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR, PROP_PARKING_METER,
                     PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y,
                     STRUCTURE_CONCRETE,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
@@ -183,6 +184,7 @@ def main() -> None:
     prepare.load("trees")
     prepare.load("centerline")
     prepare.load("furniture")
+    prepare.load("ground_details")
     prepare.load_terrain()
     prepare.load_landcover()
     buildings3d.load()
@@ -302,6 +304,7 @@ def _rebuild(only: list[str], workers: int) -> None:
     if OUT_DIR == TILES_DIR / REGION or not manifest_path.exists():
         raise SystemExit("--only needs --out pointing at a copy of a full build (with its manifest.json)")
     _build_bridges(prepare.load("ground"))
+    prepare.load("ground_details")
     tasks = []
     for item in only:
         level, ij = item.split(":")
@@ -379,6 +382,7 @@ def _init_worker() -> None:
                           np.where(furniture["type"][blockers] == PROP_HYDRANT, traffic.HYDRANT_CLEAR,
                                    traffic.BUS_STOP_CLEAR))
     _W["landcover"] = landcover.LandCover()
+    _W["details"] = ground_details.GroundDetails(prepare.load("ground_details"))
 
 
 def _build_tile(task):
@@ -756,13 +760,19 @@ def _add_ground(builder: MeshBuilder, bounds, settings: dict) -> None:
     for kind, geom in layers:
         geom = shapely.simplify(geom, settings["ground_tolerance"], preserve_topology=True)
         polys = polygons_of(geom, min_area=settings["min_ground_area"])
+        if kind == GROUND_SHRUBS:  # planted medians (ground_details.py)
+            _W["details"].add_beds(builder, polys, cell, terrain)
+            continue
         height = terrain.height
         if kind == GROUND_ROAD and settings.get("curbs"):
             def height(en):
                 return terrain.height(en) - CURB_HEIGHT
             _add_curbs(builder, polys, bounds, cell, terrain)
             _W["tile_roads"] = [shapely.orient_polygons(p) for p in polys]  # for street lights
-        builder.add_draped(polys, cell, height, (kind, 0.0), terrain.normal)
+        # Belgian block and plaza pavers where streets are drawn (ground_details.py).
+        parts = _W["details"].paving(kind, polys) if settings["roads"] else [((kind, 0.0), polys)]
+        for uv2, part in parts:
+            builder.add_draped(part, cell, height, uv2, terrain.normal)
 
     # Walls where the land meets water: down into the sea, or into a raised
     # lake's bed.
@@ -867,8 +877,10 @@ def _ground_layers(bounds, settings: dict, grid: float) -> list:
         pavement_t = shapely.difference(pavement_t, other)
     yards_t = _yards(bounds, pavement_t, roads_t) if settings["roads"] else Polygon()
     pavement_t = shapely.difference(pavement_t, yards_t)
-    return [(GROUND_PAVEMENT, pavement_t), (GROUND_ROAD, roads_t), (GROUND_PARK, parks_t),
-            (GROUND_SAND, sand_t), (GROUND_MARSH, marsh_t), (GROUND_YARD, yards_t)]
+    layers = [(GROUND_PAVEMENT, pavement_t), (GROUND_ROAD, roads_t), (GROUND_PARK, parks_t),
+              (GROUND_SAND, sand_t), (GROUND_MARSH, marsh_t), (GROUND_YARD, yards_t)]
+    # Parks the parks layer lacks, and planted medians (ground_details.py).
+    return _W["details"].layers(layers, bounds, clip, medians=settings["roads"], beds=settings.get("curbs", False))
 
 
 def _yards(bounds, pavement, roads):
@@ -1097,6 +1109,9 @@ def _curb_lamps(bounds) -> dict:
     near_park = np.zeros(len(points), dtype=bool)
     hits = _W["park_tree"].query(shapely.points(points), predicate="dwithin", distance=props.LAMP_PARK_REACH)
     near_park[hits[0]] = True
+    # Other parks', and historic boulevards' (ground_details.py).
+    near_park |= _W["details"].near_lamp_park(points, props.LAMP_PARK_REACH)
+    near_park |= _W["details"].historic_lamps(points, arms)
     found = props.lamps(points, arms, near_park)
     found["y"] = _W["ground"]["lod0"].height(points)
     return found
@@ -1115,7 +1130,7 @@ def _deck_lamps(i: int, j: int) -> dict:
 def _path_lamps(bounds) -> dict:
     """Post-tops where a try per PATH_LAMP_SPACING cell lands on paving in a
     park, away from streets (which have their own lamps) and buildings."""
-    parks = _W["g"]["parks"][_W["park_tree"].query(bounds)]
+    parks = np.concatenate([_W["g"]["parks"][_W["park_tree"].query(bounds)], _W["details"].lamp_parks_near(bounds)])
     if not len(parks):
         return _no_props()
     min_e, min_n, max_e, max_n = bounds.bounds
@@ -1181,7 +1196,8 @@ def _street_trees(i: int, j: int) -> dict:
             keep[in_road[moved > TREE_MAX_MOVE]] = False
     found["en"] = en
     keep &= _on_open_ground(en)
-    return {key: value[keep] for key, value in found.items()}
+    # Small trees on planted medians (ground_details.py).
+    return _W["details"].median_trees({key: value[keep] for key, value in found.items()})
 
 
 def _canopy_trees(i: int, j: int, bounds, street_en: np.ndarray) -> dict:
@@ -1196,6 +1212,8 @@ def _canopy_trees(i: int, j: int, bounds, street_en: np.ndarray) -> dict:
     keep = _on_open_ground(en)
     if not _W["streets"].is_empty:
         keep &= ~shapely.contains_xy(_W["streets"], en[:, 0], en[:, 1])
+    # Canopy over narrow medians is their street trees' (ground_details.py).
+    keep &= ~_W["details"].on_narrow_median(en)
     # Street trees in this tile (as placed) and the ones around it.
     near = [street_en] + [_W["trees"]["en"][idx] for di in (-1, 0, 1) for dj in (-1, 0, 1)
                           if (di or dj) and (idx := _W["tree_groups"].get((i + di, j + dj))) is not None]
@@ -1281,6 +1299,7 @@ def _build_lanes(bounds, origin):
     sidewalks = shapely.difference(shapely.intersection(g["land"], bounds), roads_near)
     if len(nearby_buildings):
         sidewalks = shapely.difference(sidewalks, shapely.buffer(shapely.union_all(nearby_buildings), LANE_WALL_GAP))
+    sidewalks = _W["details"].without_narrow_medians(sidewalks, area)  # nobody walks along medians
     lanes = shapely.intersection(shapely.buffer(roads_near, LANE_OFFSET).boundary, sidewalks)
 
     lines = [line for line in lines_of(lanes) if line.length >= 1.0]
