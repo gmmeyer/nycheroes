@@ -495,7 +495,7 @@ def _build_tile(task):
                        (SURFACE_STRUCTURES, structure_mesh), (SURFACE_WATER, water_mesh),
                        (SURFACE_LANDMARKS, landmark_mesh), (SURFACE_CHURCHES, church_mesh),
                        (SURFACE_FRONTS, front_mesh)):
-        built = mesh.build(origin)
+        built = mesh.build(origin, decimals=2 if kind == SURFACE_FRONTS else 3)  # small parts: to the cm
         if built is not None:
             surfaces.append((kind, built))
             stats["vertices"] += len(built[0])

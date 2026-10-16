@@ -1,8 +1,8 @@
 // The small parts of rowhouse fronts (tools/citygen/fronts.py): stoops'
-// iron railings and yards' iron fences (pickets and rails painted on a
-// panel, the gaps between them cut out, so the street shows through), iron
-// newel and fence posts, brick fence posts under stone pyramid caps, shrubs,
-// and striped metal door awnings. They come in each near tile's fronts
+// iron railings and yards' iron fences (pickets and rails, and posts at the
+// ends, painted on a panel, the gaps between them cut out, so the street
+// shows through), brick fence posts under stone pyramid caps, hedges and
+// shrubs, and striped metal door awnings. They come in each near tile's fronts
 // surface (CityTileDecoder.SURFACE_FRONTS), so building.gdshader, the big
 // one, doesn't grow for them (see "Shader compile time" in docs/ROADMAP.md);
 // this one is small, and the panels are drawn from both sides.
@@ -12,7 +12,8 @@
 //         shrubs: (m around, m above the ground); awnings: (m across, m up
 //         the slope from the front edge, the valance below 0, the sides
 //         below -0.3)
-//   UV2.x part + 16 * variant (a railing's height in dm, an awning's color)
+//   UV2.x part + 16 * variant (railings and fences: their height in dm,
+//         + 16 with posts, + 32 * their length in cm; an awning's color)
 //   UV2.y the house's seed (0..0.999)
 shader_type spatial;
 render_mode ambient_light_disabled, cull_disabled;
@@ -22,10 +23,9 @@ render_mode ambient_light_disabled, cull_disabled;
 
 // Parts, as fronts.py numbers them.
 const int IRON_PANEL = 0;
-const int IRON = 1;
-const int POST = 2;
-const int SHRUB = 3;
-const int AWNING = 4;
+const int POST = 1;
+const int SHRUB = 2;
+const int AWNING = 3;
 const float POST_HEIGHT = 1.15;  // fronts.py's: where a brick post's cap starts
 
 // Colors, in sRGB.
@@ -35,8 +35,8 @@ const vec3 BROWN_POST = vec3(0.49, 0.38, 0.33);
 const vec3 RED_POST = vec3(0.57, 0.42, 0.38);
 const vec3 MORTAR = vec3(0.78, 0.77, 0.73);
 const vec3 CAP_STONE = vec3(0.86, 0.85, 0.81);
-const vec3 LEAF_DARK = vec3(0.17, 0.25, 0.14);
-const vec3 LEAF_LIGHT = vec3(0.32, 0.43, 0.22);
+const vec3 LEAF_DARK = vec3(0.20, 0.29, 0.16);
+const vec3 LEAF_LIGHT = vec3(0.36, 0.47, 0.25);
 const vec3 AWNING_WHITE = vec3(0.90, 0.90, 0.86);
 const vec3 AWNING_GREEN = vec3(0.22, 0.40, 0.29);
 const vec3 AWNING_RED = vec3(0.60, 0.20, 0.17);
@@ -45,6 +45,8 @@ const vec3 AWNING_BLUE = vec3(0.22, 0.30, 0.46);
 
 // Low things by the street sit in its shade (as building.gdshader's walls' feet).
 uniform float canyon_occlusion : hint_range(0.0, 1.0) = 0.85;
+// Railings' and fences' pickets are this far apart (m).
+uniform float picket_spacing = 0.12;
 
 // UV2 decoded in the vertex shader: (part + 16 * variant, seed); one value per face.
 varying flat vec2 front_data;
@@ -63,12 +65,14 @@ void fragment() {
 	float pixel = max(fp.x, fp.y);
 	vec3 color = srgb(IRON_PAINT);
 	if (part == IRON_PANEL) {
-		// Pickets every 12 cm between a bottom rail and a top rail; the
-		// rest is cut out. Far off, the pickets thin out to nothing.
-		float height = float(variant) * 0.1;
-		float pickets = centered_stripes(p.x / 0.12, 0.22, fp.x / 0.12);
+		// Pickets between a bottom rail and a top rail, posts at the ends;
+		// the rest is cut out. Far off, the pickets thin out to nothing.
+		float height = float(variant % 16) * 0.1;
+		float length = float(variant / 32) * 0.01;
+		float pickets = centered_stripes(p.x / picket_spacing, 0.22, fp.x / picket_spacing);
 		float rails = max(band(p.y, -1.0, 0.045, fp.y), band(p.y, height - 0.055, 1e4, fp.y));
-		if (max(pickets, rails) < 0.5) {
+		float posts = max(band(p.x, -1.0, 0.07, fp.x), band(p.x, length - 0.07, 1e4, fp.x)) * float((variant / 16) % 2);
+		if (max(max(pickets, rails), posts) < 0.5) {
 			discard;
 		}
 		color *= 1.0 + 0.25 * band(p.y, height - 0.055, 1e4, fp.y);

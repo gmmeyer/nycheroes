@@ -267,9 +267,10 @@ In order:
   Leonard, 270 Park). Each gets its real place on the lot, podium,
   setbacks, taper, crown and steel spire at published heights, plus a
   chosen look (glass tone, limestone, terracotta). Older buildings beside
-  them keep the model's shape (the Dime Savings Bank). Marble Collegiate
-  Church uses the model's 47 m church instead of a 65 m box. About 3,900
-  triangles up close in all. Some model surfaces face the wrong way;
+  them keep the model's shape (the Dime Savings Bank). About 3,900
+  triangles up close in all. (Marble Collegiate Church, whose footprint
+  measures its spire's tip, 65 m, was a special case drawing the model's
+  47 m church; churches.py draws it now, below.) Some model surfaces face the wrong way;
   roofs are turned up and walls toward open air.
 - The model is massing only: roofs are flat levels, not pitched.
 - Mid-detail tiles use real shapes for buildings 40 m and taller, far tiles
@@ -778,6 +779,78 @@ In order:
 - Cost: full-detail tiles +117 MB (+5.3 M triangles; stoops alone +78 MB),
   about 0.25 M more triangles per frame in brownstone blocks, same draw
   calls.
+
+**Churches, and rowhouse fronts' second pass (done; reference round 3's 27
+and 29):**
+- Churches (`tools/citygen/churches.py`): the buildings on PLUTO class M1
+  lots (church, synagogue, chapel) at least 120 m2 and 7 m, with at most
+  three floors or tall ones (not a parish house or school on the lot):
+  2,906. Built before 1945 they're Gothic (pointed arches; always where the
+  footprint measures a spire above the 3-D model's tower) or Romanesque
+  (round arches), in brownstone, gray stone, limestone, red or buff brick
+  by era (those over 1,500 m2 and landmarks in stone); later ones modern
+  brick. The prepared kinds and materials are `data/cache/churches.pkl`.
+- Their shapes: the 3-D model's biggest level is the nave; if its outline
+  fills most of its enclosing rectangle it gets a gable roof with the ridge
+  at the level's height (the model's levels sit at about the ridge),
+  48-58 degrees on Gothic churches (38-46 Romanesque, 24-34 modern) where
+  the eaves stay at least 58% of the way up, else shallower, overhanging
+  0.25 m, its walls drawn again up to it (gable ends to the ridge).
+  Smaller parts rising 3 m above it are towers (517 churches): their tops
+  get spires (octagonal and inset on square towers, with pinnacles at a
+  square stage's corners on Gothic ones; low pyramid caps on 60% of
+  Romanesque ones), 1.8-2.8 times the tower's width, or up to the
+  footprint's height where that's above the model's (Marble Collegiate's
+  65 m). Churches the model has as one flat level get the gable over their
+  footprint. They're drawn this way at every level where they stand on
+  their own (tall ones in mid and far tiles too), never get water towers,
+  and keep the model even where the footprint is much taller (a spire's
+  tip).
+- `shaders/church.gdshader` paints them, from their own surface in each tile
+  (CityTileDecoder.SURFACE_CHURCHES = 10, with collision): no floors;
+  stained glass behind protective glazing in tall windows between
+  buttresses, in stages up walls over 13 m or so, under a corbel table; a
+  gable facing a street has wooden doors in a deep arch and a rose window
+  (a long street wall, a door in its middle bay); towers rise in stages
+  (string courses, a narrow window each) to a belfry with louvered openings,
+  half with a clock under it keeping the game's time; roofs and spires in
+  slate, some copper or red tile, some spires stone; at night some windows
+  glow for evening services. Each part only sets an opening's numbers (its
+  middle, width, sill, where its arch springs, what fills it) and one arch
+  test, one stained-glass painter and one masonry call draw them: 0.4-0.6 s
+  to compile, building.gdshader untouched.
+- Rowhouse fronts (`fronts.py`, near tiles): iron railings on 70% of
+  brownstone and limestone stoops and 60% of others, the cheek walls a 22 cm
+  curb under them; yards behind a stone wall or (75% of brick houses', 35%
+  of brownstones') an iron fence on a curb, between brick posts with white
+  pyramid caps in Queens, iron posts elsewhere; a box hedge or a shrub
+  behind (none in 15% of yards); striped metal awnings over 60% of Queens
+  rows' doors and 12% of others' (none on brownstone or limestone). Prewar
+  rows' and tenements' cornices stand 0.6 m out over a sloping underside:
+  faces of the building's own surface marked FRONT, so the shader paints
+  its cornice on them, brackets and all. Queens' prewar buff brick rows
+  (Ridgewood's) and 20% of other bayed rows have their bays rounded into bow
+  fronts (six facets).
+- The railings, fences, posts, plants and awnings are a surface of their
+  own (SURFACE_FRONTS = 11, without collision, drawn while their tile's
+  center is within 600 m), painted by `shaders/fronts.gdshader`: panels of
+  pickets and rails (and posts at the ends) with the gaps cut out, drawn
+  from both sides; 0.3-0.4 s to compile. building.gdshader lost its painted
+  iron railings and fences (fragment 262,977 to 261,465 characters).
+- Measured against the photos (`build/reference/compare/churches-fronts`,
+  against master): Marble Collegiate's lower half 0.34 to 0.30 (the photo
+  0.29); Ridgewood, from a pose 2.2 m further out (the camera stood at the
+  stoops), 0.48 to 0.43 (0.33), strong edges 0.069 to 0.079 (0.155).
+- Cost: near tiles +8.9% (+131 MB, extrapolated from 60 random tiles;
+  brownstone and Ridgewood blocks +22-43%: fronts surface 150-300 KB, the
+  cornices and bows about 100-200 KB), churches +0.3%. One more draw call
+  (and shadow caster) per near tile with fronts or churches, and per mid or
+  far tile with a tall church. Frame time unchanged within the noise in
+  Park Slope, Bed-Stuy and Ridgewood (uncapped, back and forth with master
+  on a busy machine). Shader compile time: Times Square 34-40 s to ready
+  before, 34-37 s after (interleaved on a busy machine: building.gdshader's
+  color variant 18.9-25.6 s before, 18.7-21.2 s after, plus church.gdshader
+  0.5 s; fronts.gdshader compiles where rows are in view).
 
 **Landmarks, first batch (done):**
 - `tools/citygen/landmarks.py` builds eight landmarks by hand, at their real
