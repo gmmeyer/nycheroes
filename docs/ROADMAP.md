@@ -17,7 +17,7 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
 | 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, facade materials and stoops, ground details, first landmarks, sound done) |
 | 7 | Phones and tablets | Done in emulation; real phones to check |
-| 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions) |
+| 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions, elevated railways) |
 | 9 | Mac and Windows versions | Planned (last) |
 
 ## 1. Manhattan you can fly around (done)
@@ -946,12 +946,53 @@ Comes after step 6 because it needs step 6's real ground heights.
   towers with truss chords.
 - **Cost:** near tiles about +25 MB (+2%), mid +7 MB, far +1.8 MB; 2-12%
   more draw calls in viaduct views.
-- **Still to do:** the roadbed drawn on the ground under viaducts, elevated
-  subway lines, rail and pedestrian bridges over water (the Hell Gate and
-  High Bridge are built by hand, see "Landmark bridges"), sunken roads
-  (the triple cantilever), walking lanes on decks,
-  signal phases where ramps meet streets; tall viaducts come out lower
-  than real (7 m per level).
+- **Elevated railways** (`tools/citygen/els.py`): the subway's els (the 7
+  over Queens Boulevard and Roosevelt Avenue, the J/M/Z over Broadway, the
+  4 on Jerome Avenue, the 2/5 on White Plains Road, the N/W in Astoria, the
+  Culver Viaduct, the 1 over 125th Street, the West End, Sea Beach,
+  Brighton and Culver lines, the A in the Rockaways...) and the railroads'
+  viaducts (Metro-North's Park Avenue Viaduct, the LIRR in Jamaica), from
+  the planimetric railroad lines (every track's centerline, coded elevated
+  or viaduct), the rail bridge and viaduct outlines (their true edges) and
+  the elevated stations' outlines. 391 km of track. Decks sit 7.5 m over
+  the street (5.3 m clear under the girders) and hold their height over
+  dips and roads at most 3% steep, worked out over the whole track network
+  at once, so the 1 crosses the 125th Street valley high; they come down at
+  3.5% where a track goes on into an embankment, a cut or a tunnel (yard
+  leads on their own). The Culver Viaduct clears the Gowanus Canal at 30 m.
+  Subway els are open steel painted el green: ties and rails on each
+  track, girders under them and along the edges, bents every 15 m (8,350:
+  a cap girder on columns with knee braces, standing at the curbs, out of
+  the travel lanes and the roadway of cross streets); the railroads' are
+  concrete. 1,015 station platforms clear of the tracks, with windscreens
+  and canopies on posts, lit at night. Collision everywhere (run along the
+  tracks, stand on the canopies); parked cars and other props keep out of
+  the columns and from under the decks. The Hell Gate's approaches and the
+  tracks on the big bridges stay with those bridges. Shading reuses the
+  landmark bridges' steel (palette 0 is the els' green), track bed and
+  concrete: no new shader code. Cost: about 2.6 million triangles near,
+  0.53 million mid, 54,000 far; in the tiles around the 7, the J and the 4,
+  near tiles +5.6% bytes (+8% triangles), mid +6.5%, far +3.6%.
+- **Roadbed under decks:** the city's roadbed outlines take in raised roads,
+  so road was drawn on the ground under viaducts and bridge approaches (over
+  lots and parks). Under decks at least 3 m up, away from the streets at
+  grade, the roadbed is cut back (3,571 outlines, about 2.3 km²); the
+  ground there is pavement or park again, with curbs along the streets
+  that do pass under.
+- **Walking lanes on decks:** the planimetric sidewalk outlines on bridges
+  and raised streets that run along them get a walking lane at the deck's
+  height, on the highest roadway or hand-made walkway there (967; the
+  Williamsburg's and Queensboro's walkways among them).
+- **Signals where ramps meet streets:** ramps and bridges arriving at a
+  signalized street intersection take the phase of the street approach in
+  line with them (or the crossing one's): 434 ends.
+- **Still to do:** sunken roads (the BQE's triple cantilever: its roadways
+  are in the street centerlines at levels 5 and 9 inside a bridge outline,
+  but the bare-earth elevation model puts the Heights' bluff where the
+  stacked decks stand, so the ground needs cutting away first); trains on
+  the els; signal heads on el columns (signal poles under an el are left
+  out); yellow platform edges; tall viaducts come out lower than real (7 m
+  per level).
 
 ## 9. Mac and Windows versions (planned, last)
 
