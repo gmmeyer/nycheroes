@@ -114,6 +114,10 @@ const TRACK_OPEN_START := 1  ## nothing leads in: its start goes on out of sight
 const TRACK_OPEN_END := 2    ## nothing goes on: its end goes on out of sight
 const TRACK_DEAD_END := 4    ## nothing goes on: bumper blocks, or a track trains don't use
 const TRACK_MAIN := 8        ## a running track: trains may appear on it
+const TRACK_EXPRESS_IN := 16   ## an express track's way toward Manhattan (the morning rush's)
+const TRACK_EXPRESS_OUT := 32  ## an express track's way away from Manhattan (the evening rush's)
+const TRACK_TERMINAL := 64     ## between a terminal's bumper and the switch trains turn back to
+const TRACK_TURN_BACK := 128   ## a terminal's track (or that switch) the other way, for trains turning back
 ## 0xFFFFFFFF read as a signed 32-bit index.
 const LANE_BREAK := -1
 

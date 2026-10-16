@@ -61,8 +61,8 @@ import trains
 from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT,
                     GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_SHRUBS, GROUND_YARD, LANE_BREAK, MARKING_LIFT,
                     ORIGIN_LAT, ORIGIN_LON, PROJECTION, PROP_BIKE_DOCK, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR,
-                    PROP_PARKING_METER, PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, PROP_WIRE, SEAWALL_BOTTOM_Y,
-                    SIGNAL_ON_COLUMN,
+                    PROP_PARKING_METER, PROP_SUBWAY_ENTRANCE, PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, PROP_WIRE,
+                    SEAWALL_BOTTOM_Y, SIGNAL_ON_COLUMN,
                     STRUCTURE_CONCRETE, SURFACE_CHURCHES, SURFACE_FRONTS, SURFACE_LANDMARKS, SURFACE_WATERFRONT,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
                     SURFACE_STRUCTURES, SURFACE_TRAFFIC, SURFACE_TRAINS, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
@@ -351,7 +351,7 @@ def _build_bridges(ground) -> dict:
     overpasses.build(network, ground["land"], buckets, sizes)
     cantilever.build(network, buckets, sizes)
     # Elevated railways over (and around) both (els.py).
-    els.build(prepare.load("els"), network, ground["land"], buckets, sizes)
+    els.build(prepare.load("els"), network, ground["land"], buckets, sizes, prepare.load("el_stairs"))
     # No roadbed drawn on the ground under them where no street is.
     buckets["roads_under_decks"] = overpasses.roads_under_decks(network, buckets.pop("overhead", []), ground["roads"])
     print(f"  {len(buckets['roads_under_decks'])} roadbed outlines cut back from under decks", flush=True)
@@ -1139,10 +1139,12 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
                                np.concatenate([p["width"] for p in parts]), yaw])
     uv = np.column_stack([np.concatenate([p["tone"] for p in parts]), np.concatenate([p["trunk"] for p in parts])])
     kinds = np.concatenate([p["type"] for p in parts])
-    # Nothing stands up through a deck overhead (overpasses.py), or in an el's columns (els.py).
+    # Nothing stands up through a deck overhead (overpasses.py), or in an el's
+    # columns or stairs (els.py, whose stairs stand for the subway entrances there).
     columns = _W["bridges"].get("el_columns", {})
     keep = overpasses.clear_of_decks(_W["bridges"]["lod0"], bounds, en, y, normals[:, 0])
     keep &= els.clear_of_columns(columns, i, j, en, kinds == PROP_PARKED_CAR)
+    keep &= els.clear_of_stairs(_W["bridges"].get("el_stairs", {}), i, j, en, kinds == PROP_SUBWAY_ENTRANCE)
     # Signals under an el go on its columns instead, where the deck leaves room for their heads.
     left_out = np.flatnonzero((kinds == PROP_TRAFFIC_SIGNAL) & ~keep)
     if len(left_out):
@@ -1488,8 +1490,8 @@ def _curb_lamps(bounds) -> dict:
 def _utility_poles(i: int, j: int) -> tuple[dict, dict, dict]:
     """The tile's utility poles, the street lights on them and the wires
     strung from them (poles.tile_props), leaving out poles that would reach
-    up into a deck overhead or stand among an el's columns, and the wires to
-    them."""
+    up into a deck overhead or stand among an el's columns or on its stairs,
+    and the wires to them."""
     data = _W["poles"]
     own = _W["pole_groups"].get((i, j))
     if own is None:
@@ -1506,7 +1508,9 @@ def _utility_poles(i: int, j: int) -> tuple[dict, dict, dict]:
         en = data["en"][members]
         ok = overpasses.clear_of_decks(_W["bridges"]["lod0"], tile_box(*key, LEVELS["lod0"]["size"]), en,
                                        _W["ground"]["lod0"].height(en), data["height"][members].astype(np.float64))
-        ok &= els.clear_of_columns(_W["bridges"].get("el_columns", {}), *key, en, np.zeros(len(en), dtype=bool))
+        none = np.zeros(len(en), dtype=bool)
+        ok &= els.clear_of_columns(_W["bridges"].get("el_columns", {}), *key, en, none)
+        ok &= els.clear_of_stairs(_W["bridges"].get("el_stairs", {}), *key, en, none)
         clear[members[ok]] = True
     own = own[clear[own]]
     spans = spans[clear[data["spans"][spans, 0]] & clear[data["spans"][spans, 1]]]

@@ -7,7 +7,10 @@ extends RefCounted
 ## tiles: the pieces leaving a node are the ones whose from-node it is. At a
 ## node a train goes on along a piece of its own line if there is one, else
 ## the straightest, and never turns back (a crossover to the track running
-## the other way is a dead end to it, so trains keep to their tracks).
+## the other way is a dead end to it, so trains keep to their tracks), but
+## at a terminal's bumper: there it takes the terminal's track the other way
+## (TRACK_TURN_BACK pieces) back to the switch onto the track running that
+## way. Express tracks come both ways; only `express`'s way is used.
 
 ## Trains go on onto pieces at most this far off their heading (cosine).
 const FOLLOW := 0.85
@@ -35,6 +38,9 @@ class Piece:
 	var tangents := PackedVector3Array()
 	## Gone with its tile: trains on it must go too.
 	var removed := false
+	## For a TRACK_TERMINAL piece, the node of the bumper it leads to (0: not
+	## found yet).
+	var bumper := 0
 
 	func measure() -> void:
 		along.resize(points.size())
@@ -69,6 +75,12 @@ class Piece:
 	func is_main() -> bool:
 		return flags & CityTileDecoder.TRACK_MAIN != 0
 
+	func is_terminal() -> bool:
+		return flags & CityTileDecoder.TRACK_TERMINAL != 0
+
+	func is_turn_back() -> bool:
+		return flags & CityTileDecoder.TRACK_TURN_BACK != 0
+
 
 ## Pieces by tile: Vector2i -> Array[Piece].
 var tiles := {}
@@ -77,6 +89,10 @@ var tiles := {}
 var tile_mains := {}
 ## Each tile's pieces' bounding box on the ground (x, z): Vector2i -> Rect2.
 var tile_bounds := {}
+## Which way express tracks run (CityTileDecoder.TRACK_EXPRESS_IN or _OUT;
+## 0: none run): their pieces the other way are left out. Set before tiles
+## arrive.
+var express := 0
 
 var _leaving := {}  # node id -> Array[Piece] leaving it
 var _arriving := {}  # node id -> Array[Piece] ending at it
@@ -107,6 +123,9 @@ func set_tile(key: Vector2i, tracks: Dictionary) -> Array[Piece]:
 		piece.to_node = int(info[n * stride + 1])
 		piece.service = int(info[n * stride + 2])
 		piece.flags = int(info[n * stride + 3])
+		var way := piece.flags & (CityTileDecoder.TRACK_EXPRESS_IN | CityTileDecoder.TRACK_EXPRESS_OUT)
+		if way != 0 and way != express:
+			continue
 		added.append(piece)
 		_leaving.get_or_add(piece.from_node, [] as Array[Piece]).append(piece)
 		_arriving.get_or_add(piece.to_node, [] as Array[Piece]).append(piece)
@@ -147,21 +166,48 @@ func arriving(node: int) -> Array:
 
 
 ## Where a train of `service` goes on from the end of `piece`: a piece of
-## its own line, else the straightest; null if none goes on (yet).
-func next(piece: Piece, service: int) -> Piece:
-	return _pick(_leaving.get(piece.to_node, []), piece.end_direction, service, true)
+## its own line, else the straightest; null if none goes on (yet). Only
+## trains `turning` back take the terminals' tracks the other way.
+func next(piece: Piece, service: int, turning := false) -> Piece:
+	return _pick(_leaving.get(piece.to_node, []), piece.end_direction, service, true, turning)
 
 
 ## Where a train of `service` on `piece` came from (for laying out a new
 ## train behind its front), as next() picks; null if none.
 func previous(piece: Piece, service: int) -> Piece:
-	return _pick(_arriving.get(piece.from_node, []), piece.start_direction, service, false)
+	return _pick(_arriving.get(piece.from_node, []), piece.start_direction, service, false, false)
 
 
-func _pick(choices: Array, heading: Vector3, service: int, ahead: bool) -> Piece:
+## The way back from a terminal's bumper at the end of `piece`: the
+## terminal's track the other way, or null.
+func turn_back(piece: Piece) -> Piece:
+	for other: Piece in _leaving.get(piece.to_node, []):
+		if other.is_turn_back() and other.start_direction.dot(-piece.end_direction) >= FOLLOW:
+			return other
+	return null
+
+
+## The node of the bumper a terminal's track leads to (a TRACK_TERMINAL
+## piece's), or 0 where it isn't loaded.
+func bumper(piece: Piece) -> int:
+	if piece.bumper == 0:
+		var on := piece
+		for step in 30:
+			if on.flags & CityTileDecoder.TRACK_DEAD_END != 0:
+				piece.bumper = on.to_node
+				break
+			on = next(on, piece.service)
+			if on == null:
+				break
+	return piece.bumper
+
+
+func _pick(choices: Array, heading: Vector3, service: int, ahead: bool, turning: bool) -> Piece:
 	var best: Piece = null
 	var best_score := -INF
 	for other: Piece in choices:
+		if other.is_turn_back() and not turning:
+			continue
 		var straight := heading.dot(other.start_direction if ahead else other.end_direction)
 		if straight < FOLLOW:
 			continue
