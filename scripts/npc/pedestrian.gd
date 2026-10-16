@@ -10,15 +10,23 @@ const CALM_DOWN_TIME := 9.0
 ## Step aside when a hero comes this close.
 const DODGE_DISTANCE := 2.5
 const MAX_SIDE_STEP := 2.5
-## Further from the camera than this, pose only FAR_POSE_RATE times a second
-## (each new pose costs a skinning pass, see SkinWarmup; Times Square's
-## crowd has dozens in view), at times of their own so they spread out ...
+## Further from the camera than this, pose only MID_POSE_RATE times a second,
+## and past SLOW_POSE_DISTANCE only FAR_POSE_RATE times (each new pose costs a
+## skinning pass, see SkinWarmup; busy streets have dozens in view), at times
+## of their own so they spread out ...
+const MID_POSE_DISTANCE := 8.0
+const MID_POSE_RATE := 30.0
 const SLOW_POSE_DISTANCE := 25.0
 const FAR_POSE_RATE := 12.0
 ## ... further than this, stop animating (too small to notice) ...
 const ANIMATE_DISTANCE := 60.0
-## ... and further than this, don't draw at all.
+## ... and further than this, don't draw at all; nor behind a building (in
+## the camera's view, checked again every HIDDEN_CHECK s while so: each one
+## drawn is a few draw calls, and the crowd's spots ahead of the camera are
+## often on the next street).
 const VISIBLE_DISTANCE := 120.0
+const DETAIL_CHECK := 0.5
+const HIDDEN_CHECK := 0.2
 
 var world_position := Vector3.ZERO
 var hero: Hero
@@ -35,9 +43,11 @@ var _threat := Vector3.ZERO
 var _pause := 0.0
 var _facing := 0.0
 var _player: AnimationPlayer
-var _detail_check := randf() * 0.5
+var _detail_check := randf() * DETAIL_CHECK
 var _warmup: SkinWarmup
 var _slow_pose := false
+## Poses a second while posing slowly.
+var _pose_rate := FAR_POSE_RATE
 var _pose_wait := randf() / FAR_POSE_RATE
 var _pose_time := 0.0
 
@@ -117,7 +127,7 @@ func _process(delta: float) -> void:
 		_pose_time += delta
 		_pose_wait -= delta
 		if _pose_wait <= 0.0:
-			_pose_wait += 1.0 / FAR_POSE_RATE
+			_pose_wait += 1.0 / _pose_rate
 			if _player.active and _player.can_process():
 				_player.advance(_pose_time)
 			_pose_time = 0.0
@@ -128,14 +138,23 @@ func _update_detail(delta: float) -> void:
 	_detail_check -= delta
 	if _detail_check > 0.0:
 		return
-	_detail_check = 0.5
+	_detail_check = DETAIL_CHECK
 	var camera := get_viewport().get_camera_3d()
 	if camera == null:
 		return
 	var distance := global_position.distance_to(camera.global_position)
-	visible = distance < VISIBLE_DISTANCE
-	_player.active = distance < ANIMATE_DISTANCE
-	var slow := distance > SLOW_POSE_DISTANCE
+	var shown := distance < VISIBLE_DISTANCE
+	var chest := global_position + Vector3.UP * 1.2
+	if shown and camera.is_position_in_frustum(chest):
+		var query := PhysicsRayQueryParameters3D.create(camera.global_position, chest, CityStreamer.COLLISION_LAYER)
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if not hit.is_empty() and camera.global_position.distance_to(hit.position) < distance - 1.0:
+			shown = false
+			_detail_check = HIDDEN_CHECK
+	visible = shown
+	_player.active = shown and distance < ANIMATE_DISTANCE
+	var slow := distance > MID_POSE_DISTANCE
+	_pose_rate = FAR_POSE_RATE if distance > SLOW_POSE_DISTANCE else MID_POSE_RATE
 	if slow != _slow_pose:
 		_slow_pose = slow
 		_pose_time = 0.0
