@@ -9,7 +9,8 @@ extends Node
 ## tile holds), the street lights' glows, and road markings, that each near
 ## tile's small and large furniture MultiMeshes hold exactly the pieces of
 ## their types in the tile's file (and its parked cars', shop fronts' and
-## sheds', docks' and plaza furniture's MultiMeshes exactly theirs), that each
+## sheds', docks' and plaza furniture's, utility poles' and wires'
+## MultiMeshes exactly theirs), that each
 ## near tile with street lights, bus shelters, newsstands or sidewalk sheds
 ## has its pools in the street light map (and none are left of
 ## tiles that have gone), and that the tree canopy map has reached the ground
@@ -28,6 +29,8 @@ const FURNITURE_GROUPS := {
 	"SidewalkSheds": [CityTileDecoder.PROP_SIDEWALK_SHED],
 	"StreetExtras": [CityTileDecoder.PROP_BIKE_DOCK, CityTileDecoder.PROP_PLAZA_TABLE, CityTileDecoder.PROP_PLANTER,
 		CityTileDecoder.PROP_KIOSK],
+	"UtilityPoles": [CityTileDecoder.PROP_UTILITY_POLE],
+	"Wires": [CityTileDecoder.PROP_WIRE],
 }
 
 ## [name, world position of the camera]
@@ -38,6 +41,7 @@ const SPOTS := [
 	["Flushing Meadows", Vector3(11850.0, 200.0, 1323.0)],
 	["Staten Island", Vector3(-13870.0, 200.0, 19780.0)],
 	["Bronx (Yankee Stadium)", Vector3(4998.0, 150.0, -7957.0)],
+	["Ridgewood (utility poles)", Vector3(7674.0, 120.0, 6639.0)],
 	["At the ceiling", Vector3(0.0, 1000.0, 10000.0)],
 ]
 const MAX_WAIT := 60.0

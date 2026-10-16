@@ -8,7 +8,8 @@ and writes data/tiles/nyc/:
                        collision in game), paint on the streets (markings.py),
                        trees, water towers, street lights and furniture, shop
                        signs and awnings, sidewalk sheds, bike share docks and
-                       plaza furniture (props.py)
+                       plaza furniture (props.py), utility poles and overhead
+                       wires (poles.py)
   lod1/<i>_<j>.nyct    1 km tiles: buildings under 20 m merged into blocks,
                        taller ones simplified; simplified ground
   lod2/<i>_<j>.nyct    4 km tiles: everything under 60 m merged into blocks by
@@ -50,6 +51,7 @@ import landcover
 import landmarks
 import markings
 import overpasses
+import poles
 import prepare
 import props
 import times_square
@@ -60,8 +62,8 @@ import trenches
 from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT,
                     GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_SHRUBS, GROUND_YARD, LANE_BREAK, MARKING_LIFT,
                     ORIGIN_LAT, ORIGIN_LON, PROJECTION, PROP_BIKE_DOCK, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR,
-                    PROP_PARKING_METER, PROP_SUBWAY_ENTRANCE, PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, SEAWALL_BOTTOM_Y,
-                    SIGNAL_ON_COLUMN,
+                    PROP_PARKING_METER, PROP_SUBWAY_ENTRANCE, PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, PROP_WIRE,
+                    SEAWALL_BOTTOM_Y, SIGNAL_ON_COLUMN,
                     STRUCTURE_CONCRETE, SURFACE_CHURCHES, SURFACE_FRONTS, SURFACE_LANDMARKS, SURFACE_WATERFRONT,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
                     SURFACE_STRUCTURES, SURFACE_TRAFFIC, SURFACE_TRAINS, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
@@ -171,6 +173,9 @@ CURBSIDE_REACH = 6.0
 # canopy over sidewalks) and judge how wooded it is within CANOPY_REACH.
 CANOPY_CLEARANCE = 4.5
 CANOPY_REACH = 6.0
+# Curb lamps this close to a street lined with utility poles stand on them
+# instead (poles.py).
+POLE_STREET_REACH = 15.0
 
 # Each worker holds the whole city (about 3.5 GB in October 2026), so the
 # default worker count also needs this much free memory per worker, leaving
@@ -230,7 +235,7 @@ def main() -> None:
     prepare.load("centerline")
     prepare.load("furniture")
     prepare.load("ground_details")
-    for name in ("shops", "sheds", "bike_docks"):
+    for name in ("shops", "sheds", "bike_docks", "poles"):
         prepare.load(name)
     prepare.load_terrain()
     prepare.load_landcover()
@@ -277,7 +282,7 @@ def main() -> None:
                     totals[f"{level}_{key}"] += entry.pop(key)
                 for key in ("lane_points", "props", "trees", "water_towers", "street_lights", "furniture",
                             "parked_cars", "canopy_clumps", "shop_fronts", "shed_sections", "bike_docks",
-                            "plaza_furniture", "traffic_lanes", "train_tracks"):
+                            "plaza_furniture", "utility_poles", "wires", "traffic_lanes", "train_tracks"):
                     totals[key] += entry.pop(key, 0)
             if n % 250 == 0 or n == len(tasks):
                 print(f"  {n:,}/{len(tasks):,} tiles ({time.time() - started:.0f} s)", flush=True)
@@ -315,6 +320,7 @@ def main() -> None:
     print(f"  shop fronts: {totals['shop_fronts']:,} signs and awnings, {totals['shed_sections']:,} sidewalk shed "
           f"sections, {totals['bike_docks']:,} bike dock sections and kiosks, "
           f"{totals['plaza_furniture']:,} pieces of plaza furniture")
+    print(f"  utility poles: {totals['utility_poles']:,}, overhead wires (spans and drops): {totals['wires']:,}")
     print(f"  driving lanes: {totals['traffic_lanes']:,}, pieces of el track: {totals['train_tracks']:,}")
     if failed:
         print(f"  {len(failed)} tiles FAILED and are missing: {failed}")
@@ -386,7 +392,7 @@ def _rebuild(only: list[str], workers: int) -> None:
     if OUT_DIR == TILES_DIR / REGION or not manifest_path.exists():
         raise SystemExit("--only needs --out pointing at a copy of a full build (with its manifest.json)")
     _build_bridges(prepare.load("ground"))
-    for name in ("ground_details", "shops", "sheds", "bike_docks"):
+    for name in ("ground_details", "shops", "sheds", "bike_docks", "poles"):
         prepare.load(name)
     tasks = []
     for item in only:
@@ -494,6 +500,17 @@ def _init_worker() -> None:
                                                    traffic.BUS_STOP_CLEAR), dock_clear]))
     _W["landcover"] = landcover.LandCover()
     _W["details"] = ground_details.GroundDetails(prepare.load("ground_details"))
+    # Utility poles (poles.py) by tile, with the spans and drops from them.
+    pole_data = prepare.load("poles")
+    _W["poles"] = pole_data
+    pole_tiles = np.array(_anchor_tiles(pole_data["en"], LEVELS["lod0"]["size"]), dtype=np.int64).reshape(-1, 2)
+    _W["pole_tiles"] = pole_tiles
+    for key, owners in (("pole_groups", np.arange(len(pole_tiles))), ("span_groups", pole_data["spans"][:, 0]),
+                        ("drop_groups", pole_data["drops"]["pole"]), ("guy_groups", pole_data["guys"]["pole"])):
+        groups = defaultdict(list)
+        for index, owner in enumerate(owners):
+            groups[tuple(pole_tiles[owner])].append(index)
+        _W[key] = {k: np.array(v) for k, v in groups.items()}
 
 
 def _build_tile(task):
@@ -1112,13 +1129,15 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     canopy = _canopy_trees(i, j, bounds, street["en"])
     towers = _water_towers(indices)
     lamps = _street_lights(i, j, bounds)
+    utility_poles, pole_lights, wires = _utility_poles(i, j)
+    lamps = {key: np.concatenate([lamps[key], pole_lights[key]]) for key in lamps}
     furniture = _furniture(i, j, bounds)
     cars = _parked_cars(bounds)
     clumps = _canopy_clumps("lod0", bounds)
     shops, sheds = _shop_fronts(indices)
     docks = _bike_docks(i, j)
     plaza = _plaza_furniture(bounds, np.concatenate([p["en"] for p in (street, canopy, lamps, furniture, docks)]))
-    parts = [street, canopy, towers, lamps, furniture, cars, clumps, shops, sheds, docks, plaza]
+    parts = [street, canopy, towers, lamps, furniture, cars, clumps, shops, sheds, docks, plaza, utility_poles, wires]
     en = np.concatenate([p["en"] for p in parts])
     if len(en) == 0:
         return None, {}
@@ -1156,7 +1175,8 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
                      "street_lights": len(lamps["en"]), "furniture": len(furniture["en"]),
                      "parked_cars": len(cars["en"]), "canopy_clumps": len(clumps["en"]),
                      "shop_fronts": len(shops["en"]), "shed_sections": len(sheds["en"]), "bike_docks": len(docks["en"]),
-                     "plaza_furniture": len(plaza["en"])}
+                     "plaza_furniture": len(plaza["en"]), "utility_poles": len(utility_poles["en"]),
+                     "wires": len(wires["en"])}
 
 
 def _build_clumps(level: str, bounds, origin):
@@ -1179,8 +1199,12 @@ def _props_surface(en, y, normals, uv, kinds, seed, origin, keep) -> tuple:
     # Centimeters, except signals' phases (exact 1024ths, see markings.prepare).
     uv = np.where((kinds == PROP_TRAFFIC_SIGNAL)[:, None], uv, np.round(uv, 2))
     uv2 = np.column_stack([kinds, np.minimum(np.round(seed, 3), 0.999)])
+    # Wires' yaws to a tenth of a milliradian: they meet the next pole up to 60 m on.
+    rounded = np.round(normals, 2)
+    wires = kinds == PROP_WIRE
+    rounded[wires, 2] = np.round(normals[wires, 2], 4)
     order = np.flatnonzero(keep)[np.argsort(kinds[keep], kind="stable")]  # grouped by type, for the game
-    return (positions[order], np.round(normals, 2).astype(np.float32)[order],
+    return (positions[order], rounded.astype(np.float32)[order],
             uv.astype(np.float32)[order], uv2.astype(np.float32)[order], np.zeros(0, dtype=np.uint32))
 
 
@@ -1460,6 +1484,13 @@ def _curb_lamps(bounds) -> dict:
     if not _W["streets"].is_empty:
         keep &= ~shapely.contains_xy(_W["streets"], points[:, 0], points[:, 1])
     points, arms = points[keep], arms[keep]
+    # Streets lined with utility poles are lit from the poles (poles.py).
+    if len(points):
+        at, segment = _W["centerline_tree"].query_nearest(shapely.points(points), max_distance=POLE_STREET_REACH,
+                                                          all_matches=False)
+        poled = np.zeros(len(points), dtype=bool)
+        poled[at[_W["poles"]["pole_segment"][segment]]] = True
+        points, arms = points[~poled], arms[~poled]
     near_park = np.zeros(len(points), dtype=bool)
     hits = _W["park_tree"].query(shapely.points(points), predicate="dwithin", distance=props.LAMP_PARK_REACH)
     near_park[hits[0]] = True
@@ -1469,6 +1500,40 @@ def _curb_lamps(bounds) -> dict:
     found = props.lamps(points, arms, near_park)
     found["y"] = _W["ground"]["lod0"].height(points)
     return found
+
+
+def _utility_poles(i: int, j: int) -> tuple[dict, dict, dict]:
+    """The tile's utility poles, the street lights on them and the wires
+    strung from them (poles.tile_props), leaving out poles that would reach
+    up into a deck overhead or stand among an el's columns or on its stairs,
+    and the wires to them."""
+    data = _W["poles"]
+    own = _W["pole_groups"].get((i, j))
+    if own is None:
+        return _no_props(), _no_props(), _no_props()
+    spans = _W["span_groups"].get((i, j), np.zeros(0, np.int64))
+    drops = _W["drop_groups"].get((i, j), np.zeros(0, np.int64))
+    guys = _W["guy_groups"].get((i, j), np.zeros(0, np.int64))
+    # Every pole the tile's wires reach, checked as its own tile checks it.
+    involved = np.unique(np.concatenate([own, data["spans"][spans, 1]]))
+    clear = np.zeros(len(data["en"]), dtype=bool)
+    tiles = _W["pole_tiles"][involved]
+    for key in {tuple(t) for t in tiles}:
+        members = involved[np.all(tiles == key, axis=1)]
+        en = data["en"][members]
+        ok = overpasses.clear_of_decks(_W["bridges"]["lod0"], tile_box(*key, LEVELS["lod0"]["size"]), en,
+                                       _W["ground"]["lod0"].height(en), data["height"][members].astype(np.float64))
+        none = np.zeros(len(en), dtype=bool)
+        ok &= els.clear_of_columns(_W["bridges"].get("el_columns", {}), *key, en, none)
+        ok &= els.clear_of_stairs(_W["bridges"].get("el_stairs", {}), *key, en, none)
+        clear[members[ok]] = True
+    own = own[clear[own]]
+    spans = spans[clear[data["spans"][spans, 0]] & clear[data["spans"][spans, 1]]]
+    drops = drops[clear[data["drops"]["pole"][drops]]]
+    guys = guys[clear[data["guys"]["pole"][guys]]]
+    houses = data["drops"]["building"][drops]
+    bases = np.array([_footprint_ground(_W["b"]["geoms"][k]) for k in houses])
+    return poles.tile_props(data, own, spans, drops, guys, _W["ground"]["lod0"].height, bases)
 
 
 def _deck_lamps(i: int, j: int) -> dict:

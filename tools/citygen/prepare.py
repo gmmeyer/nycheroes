@@ -24,6 +24,7 @@ import landcover
 import lidar
 import markings
 import overpasses
+import poles
 import props
 import terrain
 import trenches
@@ -172,7 +173,7 @@ PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": 
              "ground_details": prepare_ground_details, "els": els.prepare,
              "deck_sidewalks": overpasses.prepare_sidewalks, "cantilever": cantilever.prepare,
              "deck_heights": prepare_deck_heights, "shops": props.prepare_shops, "sheds": props.prepare_sheds,
-             "bike_docks": props.prepare_bike_docks, "el_stairs": els.prepare_stairs,
+             "bike_docks": props.prepare_bike_docks, "el_stairs": els.prepare_stairs, "poles": poles.prepare,
              "trenches": trenches.prepare}
 
 

@@ -245,7 +245,8 @@ func _check_frame(delta: float) -> void:
 			if _overlap(t.trains[m], t.trains[n]):
 				_stats.overlaps += 1
 				if _stats.overlaps < 5:
-					print("  trains %d and %d overlap" % [m, n])
+					print("  trains %d and %d overlap (fronts at %s and %s, %.1f and %.1f m/s)" % [m, n,
+						t.trains[m].head.round(), t.trains[n].head.round(), t.trains[m].v, t.trains[n].v])
 
 
 ## Whether two trains are on the same piece of track at once, their spans
@@ -278,8 +279,10 @@ func _point(train: Trains.Train, x: float) -> Vector3:
 
 ## Checks the express tracks loaded run one way (the evening's, away from
 ## Manhattan) and that a train runs on one: one already there, else one put
-## on the nearest where it fits (making room; tried again during the run
-## while `report` is false).
+## on the nearest running piece of one (not a switch onto the local track)
+## where it fits (making room; tried again during the run while `report` is
+## false). Trains.place() leaves out spots by a junction another train is
+## crossing.
 func _place_express(report := true) -> void:
 	var out := 0
 	var into := 0
@@ -288,7 +291,8 @@ func _place_express(report := true) -> void:
 		for piece: TrainTracks.Piece in _trains.tracks.tiles[key]:
 			if piece.flags & CityTileDecoder.TRACK_EXPRESS_OUT != 0:
 				out += 1
-				near.append(piece)
+				if piece.is_main():
+					near.append(piece)
 			if piece.flags & CityTileDecoder.TRACK_EXPRESS_IN != 0:
 				into += 1
 	if report:
