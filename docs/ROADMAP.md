@@ -852,6 +852,54 @@ and 29):**
   color variant 18.9-25.6 s before, 18.7-21.2 s after, plus church.gdshader
   0.5 s; fronts.gdshader compiles where rows are in view).
 
+**The els' steel and stairs (done; reference round 3's 26):**
+- Lattice and rivets (`tools/citygen/els.py`): the subway els' side girders
+  are riveted lattice girders, painted with the landmark bridges' lattice
+  (chords top and bottom, posts and crossed diagonals every 2.4 m over the
+  dark inside of the deck, their uv.y 0..1 up the girder), and the columns,
+  cap girders and the girders under each track riveted plates: stiffeners
+  every 1.5 m with a shadow beside each, rivets down them and in a row over
+  each plate seam. Where a deck is low its sides stay plate down to the
+  ground. The rivets are new in the shared steel code of
+  `shaders/ground.gdshader` behind a new flag (RIVETS, 8), so the landmark
+  bridges' steel is as it was; the els' palette's panel is 2.4 m (was 5,
+  unused).
+- Dark undersides: under the deck the floor beams and the bracing under
+  each track are painted as lattice too (uv across each track's strip;
+  between the tracks floor beams only) over the deep shade of the deck's
+  underside, so from the street the el reads as dark steel framework, light
+  only on its members.
+- Stairs from the street up to the stations: from each of the MTA's stair
+  entrances to a station the MTA lists as elevated or on a viaduct (the
+  entrances and stations tables, `station_entrances` and `subway_stations`;
+  449 entrances), up to the platform within 15 m: along the platform's
+  outer side, just outside it, toward its middle; from entrances further
+  out (at the corners of cross streets) a first run climbs straight in
+  toward the el to a corner landing first. Flights at 35 degrees with steps
+  about 18 cm high and a landing every 4.5 m of rise, a landing at the top
+  reaching over to the platform (a gap in its windscreen), concrete treads
+  lit at night like the platforms, steel risers and underside, riveted
+  stringers under lattice railings, posts under the landings; collision.
+  None where the platform's side toward the entrance is at the tracks
+  (island platforms, reached from below), where it wouldn't fit beside the
+  platform, or where it would meet an el column or come within 1.6 m of a
+  track: 262 stairs. Props keep off them, and the subway entrance props at
+  their feet (railings down and globes) go. The station outlines' narrow
+  strips (their stairs' roofs, under 2.2 m wide) are no longer built as
+  bits of platform.
+- Measured (`build/reference/compare/el-steel`, roosevelt_ave): the el's
+  underside at the top of the frame #161C1A on master to #060909 (the photo
+  #0D100F), the frame's green share 0.12 to 0.04 (0.04); the street
+  unchanged (lower half 0.25). The stair on 82nd Street stands where the
+  photo's does.
+- Cost: the 509 near tiles with els (or their trains) +1.1% (312 MB
+  compressed, +3.5 MB; the stairs are about 220 triangles each), mid and
+  far tiles +0.1%; no new draw calls. Shader compile time: the ground
+  shader's color variant is 1.1% longer (125,703 characters) and about 0.15
+  s slower to compile (2.3-2.4 s to 2.4-2.6 s at Times Square, three
+  interleaved pairs on a busy machine; 1.4-1.8 s to 1.9-2.0 s in two
+  quieter ones); building.gdshader unchanged.
+
 **Landmarks, first batch (done):**
 - `tools/citygen/landmarks.py` builds eight landmarks by hand, at their real
   dimensions, in place of their data buildings (by BIN):
@@ -1317,7 +1365,8 @@ Comes after step 6 because it needs step 6's real ground heights.
   right, so a track with tracks alongside to its left runs along its line,
   one with tracks to its right against it; tracks with none alongside
   (flyovers, switches) follow the tracks they join; a three-track el's
-  middle track (express, rush hours only) gets none. Along each piece the
+  middle track (express, rush hours only) gets pieces both ways (below).
+  Along each piece the
   curves' speed limits (0.8 m/s² sideways, 4.5 m/s at the tightest) and the
   stops (the middle of each platform beside the track; express tracks run
   through); bits of el too short to run on (a line on an embankment
@@ -1336,9 +1385,8 @@ Comes after step 6 because it needs step 6's real ground heights.
   with their middle at the platform's middle for 20-30 s, keep 60 m behind
   the train ahead, cross junctions where tracks merge one at a time, and
   stop 12 m short of a hero or thug on the tracks. Where an el's tracks go
-  on into a tunnel, down to the ground or onto a bridge built elsewhere,
-  trains run in and come out (the cars past the end vanish); at bumper
-  blocks they stop.
+  on into a tunnel or down to the ground, trains run in and come out (the
+  cars past the end vanish); at a terminal's bumper they turn back (below).
 - **Riding:** heroes within 80 m of a train give its cars collision (a box
   each, on a new physics layer 6, "trains", which heroes collide with and
   webs, cameras and thugs don't), moved every physics tick with
@@ -1365,6 +1413,58 @@ Comes after step 6 because it needs step 6's real ground heights.
   instead, facing the same traffic, where the deck clears their heads: a
   new signal variant (the heads alone, no pole, mast arm or street sign).
   60 in the 28 near tiles around the 7, the J and the 4.
+- **Through the gaps, over the Williamsburg Bridge:** stretches of el
+  track up to 500 m long through outlines left to the bridges, between els
+  on both sides, stay els, deck, bents and all: Queensboro Plaza (the 7's
+  and the N/W's approaches cross the Queensboro Bridge's ramp), the Culver
+  Viaduct over the Gowanus Canal beside the 9th Street Bridge, the 6 over
+  the Bronx River beside the Westchester Avenue Bridge, the 7 over the
+  Flushing River (19 stretches). And from the J's el at its end at the
+  Williamsburg Bridge, its two tracks go on over the bridge for trains
+  (`els._bridge_tracks`): the planimetric tracks through the bridge's
+  outline, the straight way on at its crossovers, at the height of the
+  bridge's deck under them (22 m where the el meets it, 41 m over the main
+  span), 2.2 km to where they go underground on the Manhattan side.
+  Before, trains vanished at all of these.
+- **Express trains:** a three-track el's middle track (the 7's, the 4's on
+  Jerome Avenue, the 2/5's, the 6's, the Culver's...) has pieces both ways
+  (60 km toward Manhattan, 45 km away), flagged which way they run; they
+  stop only at the platforms beside them (express stations), and run onto
+  the local tracks over the switches at their ends. The game runs one way,
+  by the time of day at the start (`Trains.EXPRESS_HOURS`): toward Manhattan
+  6-10, away from it 15-20 (the evening rush, so at the default 15:30), else
+  none; `TrainTracks.express` leaves out the other way's pieces.
+- **Turning back at terminals:** at a dead end with a platform within 200
+  m of it, trains wait 12 s at the bumper and go back the way they came,
+  their last car now leading (the cars stand where they were). The tiles
+  bring the way back (`trains._turn_backs`): the terminal's track reversed
+  (TURN_BACK pieces, no stops) to the first switch at least 200 m back (a
+  train's length) onto a track running the other way, else (at 13 of the
+  14: the data's crossovers there seldom lead that way) to a crossover made
+  200 m back (or further, every 20 m) onto the track alongside running
+  that way (an S over 45 m at 8 m/s, cutting that track at a new node).
+  The track between that switch and the bumper is TERMINAL: one train in it
+  at a time (`Trains._control` claims it, like a junction, before running
+  in; the train keeps it until it has come back out). 14 of the 18 dead
+  ends (all of them now with a platform by the bumper, see below): Woodlawn,
+  Wakefield, Pelham Bay Park, Van Cortlandt Park, Ditmars Boulevard,
+  Lefferts Boulevard, Far Rockaway, Coney Island's West End tracks...; not
+  single-track ones (the Franklin Avenue Shuttle), where trains still wait
+  until they're out of sight. The trains surface now has 2,104 pieces (357
+  km, express tracks counted both ways) and 372 stops in 273 near tiles.
+- **Commuter trains:** Metro-North's trains on the Park Avenue Viaduct
+  (their names start "METRO-NORTH") and the LIRR's on its viaducts (Atlantic
+  Avenue, Jamaica), 23.5 km: cars like an M7, 25.9 m long and 3.2 m wide
+  with two doors a side, 8 to a train on Metro-North, 10 on the LIRR, a
+  plain disc in the MTA's blue on their signs; they stop at the elevated
+  stations' platforms there (Harlem-125th Street...).
+- **No traps:** pieces that lead only into dead ends without a stop (stubs,
+  yard leads, and express tracks' ways into any dead end) are left out, so
+  no train runs into one and stands there (before, a train that took one
+  waited until it was out of sight).
+- **Speed limits from the point before:** a point's curve limit now holds
+  from the point before it, so trains brake for it in time (before, a
+  train placed between two points could run over the next point's limit).
 - **Cost:** about 0.1 ms of script a frame in Chrome with 4 trains near the
   camera (drawing 0.07-0.09 ms, running 0.06 ms a physics tick; trains out
   of view, far off or standing are drawn less often), 1 draw call, 2,700
@@ -1373,12 +1473,14 @@ Comes after step 6 because it needs step 6's real ground heights.
 - **Still to do:** other sunken roads (the BQE's trench along Hicks Street,
   the Cross Bronx's cuts: no lanes or paint below street level yet); the
   lidar is from 2017 (the Kosciuszko's second span and the Kew Gardens
-  interchange's rebuild came later). Trains: none on the railroads'
-  viaducts (Metro-North, the LIRR) or on the subway's tracks on bridges,
-  embankments and in cuts, so they vanish where an el hands over to the
-  Williamsburg or Manhattan Bridge and at Queensboro Plaza's gap; none on
-  express tracks; no turning back at terminals (a train at a bumper waits
-  until it's out of sight); each co-op player's game runs its own trains.
+  interchange's rebuild came later). Trains: none on the subway's tracks on
+  embankments and in cuts (they vanish where an el comes down to them), on
+  the Manhattan Bridge (its tracks are at grade in the data, between
+  tunnels), or on the Hell Gate's; the J's tracks over the Williamsburg
+  Bridge run on its road deck (a generic bridge) and end high on its
+  Manhattan approach; single-track terminals don't turn trains back; the
+  express trains' way is set at the start; each co-op player's game runs
+  its own trains.
 
 ## 9. Mac and Windows versions (planned, last)
 
@@ -1506,10 +1608,13 @@ templates for both are already installed.
   `res://tests/traffic_test.tscn` (75 s of
   midtown traffic: no red light run, no overlaps, cars stop for the hero,
   and leave with their tiles) and `res://tests/trains_test.tscn` (the 7 at
-  74th Street for 2 minutes: no overlaps or speeding, stops at the
-  platforms' middles, a train stops for the hero on the tracks and carries
-  the hero on its roof, and trains leave with their tiles; it needs tiles
-  with the trains surface around the 7 and the 4 on Jerome Avenue).
+  74th Street for 2 minutes with an express train on its middle track: no
+  overlaps or speeding, stops at the platforms' middles, a train stops for
+  the hero on the tracks and carries the hero on its roof, and trains leave
+  with their tiles; then a train turns back at Woodlawn's bumper and comes
+  out onto the other track, alone on the terminal's track; it needs tiles
+  with the trains surface around the 7, the 4 on Jerome Avenue and
+  Woodlawn; `TRAINS_TERMINAL_ONLY=1` goes straight to Woodlawn).
 - Launch options (URL or `-- --name=value` on desktop): `?cam=x,y,z,yaw,pitch`
   free camera, `?spawn=x,y,z,yaw` hero start, `?stats` console stats,
   `?peds=N`, `?gangs=N`, `?traffic=N`, `?trains=N` (0: none), `?demo` / `?demo=fight` / `?demo=city` / `?demo=new` scripted tours for videos,

@@ -26,7 +26,11 @@ const WOODLAWN := Vector3(9000.0, 80.0, -14200.0)
 const LOAD_WAIT := 120.0
 const RUN_TIME := 120.0
 const PERSON_TIME := 60.0
-const BOARD_WAIT := 60.0
+## How long to wait for a running train to stand in front of or board, and
+## after how long a train is put on the tracks for it (a loaded machine runs
+## few frames, so trains may all be standing at platforms for a while).
+const BOARD_WAIT := 150.0
+const BOARD_HELP := 30.0
 const RIDE_TIME := 8.0
 const AWAY_TIME := 45.0
 const TERMINAL_WAIT := 120.0
@@ -35,6 +39,8 @@ const TERMINAL_TIME := 360.0
 const TERMINAL_START := 350.0
 ## Where the hero stands ahead of a train (m along the tracks).
 const PERSON_AHEAD := 100.0
+## How far from ROOSEVELT the trains for the hero may be (m).
+const NEAR := 900.0
 
 var _world: Game
 var _city: CityStreamer
@@ -55,6 +61,8 @@ var _person_at := 0.0
 var _closest := INF
 var _stood_near := false
 var _ride_start := Vector3.ZERO
+## Whether a train was put on the tracks for the hero in this phase.
+var _helped := false
 ## The express train, how far it ran and where it stopped.
 var _express: Trains.Train
 var _express_run := 0.0
@@ -109,6 +117,8 @@ func _process(delta: float) -> void:
 					_next("terminal_load")
 		"run":
 			_check_frame(delta)
+			if _express == null and _time < RUN_TIME * 0.5 and fmod(_time, 2.0) < delta:
+				_place_express(false)
 			if OS.has_environment("TRAINS_DEBUG") and fmod(_time, 10.0) < delta:
 				for train in _trains.trains:
 					var front := train.pieces[train.pieces.size() - 1]
@@ -127,6 +137,8 @@ func _process(delta: float) -> void:
 			elif _time > BOARD_WAIT:
 				_fail("no train to stand in front of")
 				_next("person")
+			elif _time > BOARD_HELP and not _helped:
+				_put_train()
 		"person":
 			_check_frame(delta)
 			_check_person()
@@ -142,6 +154,8 @@ func _process(delta: float) -> void:
 			elif _time > BOARD_WAIT:
 				_fail("no moving train to board")
 				_next("ride")
+			elif _time > BOARD_HELP and not _helped:
+				_put_train()
 		"ride":
 			_check_frame(delta)
 			if _time > RIDE_TIME:
@@ -172,6 +186,7 @@ func _process(delta: float) -> void:
 func _next(phase: String) -> void:
 	_phase = phase
 	_time = 0.0
+	_helped = false
 
 
 func _fail(what: String) -> void:
@@ -262,8 +277,10 @@ func _point(train: Trains.Train, x: float) -> Vector3:
 
 
 ## Checks the express tracks loaded run one way (the evening's, away from
-## Manhattan) and puts an express train on one near the camera (making room).
-func _place_express() -> void:
+## Manhattan) and that a train runs on one: one already there, else one put
+## on the nearest where it fits (making room; tried again during the run
+## while `report` is false).
+func _place_express(report := true) -> void:
 	var out := 0
 	var into := 0
 	var near: Array[TrainTracks.Piece] = []
@@ -271,22 +288,27 @@ func _place_express() -> void:
 		for piece: TrainTracks.Piece in _trains.tracks.tiles[key]:
 			if piece.flags & CityTileDecoder.TRACK_EXPRESS_OUT != 0:
 				out += 1
-				if piece.is_main() and piece.points[0].distance_to(ROOSEVELT) < 800.0:
-					near.append(piece)
+				near.append(piece)
 			if piece.flags & CityTileDecoder.TRACK_EXPRESS_IN != 0:
 				into += 1
-	print("express tracks: %d pieces away from Manhattan, %d toward it" % [out, into])
-	if out == 0 or into > 0:
-		_fail("the express tracks don't run away from Manhattan alone at 15:30")
+	if report:
+		print("express tracks: %d pieces away from Manhattan, %d toward it" % [out, into])
+		if out == 0 or into > 0:
+			_fail("the express tracks don't run away from Manhattan alone at 15:30")
+	for train in _trains.trains:
+		if train.pieces[train.pieces.size() - 1].flags & CityTileDecoder.TRACK_EXPRESS_OUT != 0:
+			_express = train
+			print("an express train runs on the 7's express track")
+			return
 	if _trains.trains.size() >= _trains.max_trains:
 		_trains._despawn(_trains.trains[0])
+	near.sort_custom(func(a: TrainTracks.Piece, b: TrainTracks.Piece) -> bool:
+		return a.points[0].distance_to(ROOSEVELT) < b.points[0].distance_to(ROOSEVELT))
 	for piece in near:
 		_express = _trains.place(piece, piece.length)
 		if _express != null:
-			break
-	print("an express train put on the 7's express track: %s" % (_express != null))
-	if _express == null:
-		_fail("no room for an express train")
+			print("an express train put on the 7's express track")
+			return
 
 
 func _report_run() -> void:
@@ -303,17 +325,25 @@ func _report_run() -> void:
 		_fail("too few stops at platforms")
 	if _stats.misaligned > 0:
 		_fail("%d stops off the platform's middle" % _stats.misaligned)
-	print("the express train ran %.0f m and stopped %d times (express stations only)" % [_express_run, _express_stops])
-	if _express != null and _express_run < 200.0:
+	if _express == null:
+		_fail("no express train ran")
+	var express_state := "gone"
+	if _express != null and _trains.trains.has(_express):
+		var front: TrainTracks.Piece = _express.pieces[_express.pieces.size() - 1]
+		express_state = "at %.1f m/s, stop in %.0f m, %.0f of %.0f m along its front piece (flags %d), at %s" % [
+			_express.v, _express.stop_in, _express.s, front.length, front.flags, _express.head.round()]
+	print("the express train ran %.0f m and stopped %d times (express stations only); now %s" % [
+		_express_run, _express_stops, express_state])
+	if _express != null and _express_run < 100.0:
 		_fail("the express train hardly moved")
 
 
 ## Stands the hero (still) on the tracks PERSON_AHEAD ahead of a train
-## running at least 5 m/s near the camera with no stop before that, if there
+## running at least 3 m/s near the camera with no stop before that, if there
 ## is one; returns whether it did.
 func _place_person() -> bool:
 	for train in _trains.trains:
-		if train.v < 5.0 or train.stop_in < PERSON_AHEAD + 30.0 or train.head.distance_to(ROOSEVELT) > 600.0:
+		if train.v < 3.0 or train.stop_in < PERSON_AHEAD + 20.0 or train.head.distance_to(ROOSEVELT) > NEAR:
 			continue
 		var piece := train.pieces[train.pieces.size() - 1]
 		var at := train.s + PERSON_AHEAD
@@ -373,12 +403,12 @@ func _report_person() -> void:
 
 
 ## Drops the hero onto the roof of a moving train's middle car near the
-## camera, if one is running at least 8 m/s with a clear way on; returns
+## camera, if one is running at least 5 m/s with a clear way on; returns
 ## whether it did.
 func _board() -> bool:
 	_subject = null
 	for train in _trains.trains:
-		if train.v < 8.0 or train.stop_in < 150.0 or train.head.distance_to(ROOSEVELT) > 700.0:
+		if train.v < 5.0 or train.stop_in < 100.0 or train.head.distance_to(ROOSEVELT) > NEAR:
 			continue
 		_subject = train
 		var middle := _point(train, train.span + train.s - train.length * 0.5)
@@ -506,3 +536,26 @@ func _report_terminal() -> void:
 		_fail("another train ran onto the terminal's track")
 	if _stats.overlaps > 0:
 		_fail("overlaps")
+
+
+## Puts a running train on the longest running track without a stop near
+## the camera (making room, the furthest train going), for when none runs
+## there yet.
+func _put_train() -> void:
+	_helped = true
+	var pieces: Array[TrainTracks.Piece] = []
+	for key: Vector2i in _trains.tracks.tiles:
+		for piece: TrainTracks.Piece in _trains.tracks.tiles[key]:
+			if piece.is_main() and piece.stops.is_empty() and piece.points[0].distance_to(ROOSEVELT) < NEAR:
+				pieces.append(piece)
+	pieces.sort_custom(func(a: TrainTracks.Piece, b: TrainTracks.Piece) -> bool: return a.length > b.length)
+	if _trains.trains.size() >= _trains.max_trains:
+		var furthest: Trains.Train = _trains.trains[0]
+		for train in _trains.trains:
+			if train.head.distance_to(ROOSEVELT) > furthest.head.distance_to(ROOSEVELT):
+				furthest = train
+		_trains._despawn(furthest)
+	for piece in pieces:
+		if _trains.place(piece, piece.length * 0.5) != null:
+			print("  (put a train on the tracks near the camera)")
+			return

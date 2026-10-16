@@ -23,12 +23,15 @@ tracks between express stations, run through), and the line's service
 (SERVICES: the route bullets its trains show). Where no piece goes on (the
 way trains run), an end is open (into a tunnel, down to the ground, onto a
 bridge built elsewhere: trains run off it out of sight and come out of it)
-or a dead end (bumper blocks at a terminal). At a dead end trains turn back
-(_turn_backs): they run back the way they came, against the track's
-direction, to the first switch at least TURN_MIN back that leads onto a
-track running their new way; the pieces they run back on come again
-reversed (TURN_BACK), and the track between that switch and the bumper is
-TERMINAL: one train in it at a time.
+or a dead end (bumper blocks at a terminal); pieces that lead only into dead
+ends without a stop (stubs, yard leads, and express tracks' ways into any
+dead end) are left out, so no train gets stuck there. At a dead end trains
+turn back (_turn_backs): they run back the way they came, against the
+track's direction, to the first switch at least TURN_MIN back that leads
+onto a track running their new way, or else over a crossover made there
+onto the track alongside; the pieces they run back on come again reversed
+(TURN_BACK), and the track between that switch and the bumper is TERMINAL:
+one train in it at a time.
 """
 
 import numpy as np
@@ -250,6 +253,18 @@ def pieces(tracks, platforms: list, snap: float, bridges=()) -> list[dict]:
     # Tracks that don't reach far (short bits of el where a line on an
     # embankment crosses a street) carry no trains.
     out = _without_scraps(out)
+    # Pieces that lead only into dead ends go, but for those with a stop
+    # (terminals: trains turn back there): stubs, yard leads, and express
+    # tracks' ways into them. A train there would have nowhere to go.
+    while True:
+        leaving, _ = _ends(out)
+        stuck = {id(p) for p in out if p["kinds"][1] not in OPEN_KINDS
+                 and (p["flags"] & (EXPRESS_IN | EXPRESS_OUT) or not p["stops"].any())
+                 and not any(_goes_on(p, q) for q in leaving.get(p["to"], []))}
+        if not stuck:
+            break
+        out = [p for p in out if id(p) not in stuck]
+
     # Open and dead ends: where no piece goes on from (or leads into) a piece
     # the way trains run.
     leaving, arriving = _ends(out)
