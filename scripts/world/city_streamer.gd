@@ -4,7 +4,8 @@ extends Node3D
 ## tools/citygen/build_tiles.py into data/tiles/<region>/:
 ##   lod0: 500 m tiles, full detail, with collision, walking lanes, road
 ##         markings, trees, rooftop water towers, street lights, street
-##         furniture and parked cars
+##         furniture, parked cars, and the lanes and tracks traffic and
+##         trains run on
 ##   lod1: 1 km tiles, simplified
 ##   lod2: 4 km tiles, coarse, out to the horizon
 ## A level's tiles load when their parent tile is near the camera. A tile is
@@ -37,6 +38,9 @@ signal initial_load_finished(seconds: float)
 ## A near tile's driving lanes (world-space polylines, see
 ## CityTileDecoder.SURFACE_TRAFFIC) loaded, or unloaded (both empty).
 signal traffic_lanes_changed(key: Vector2i, lanes: Array[PackedVector3Array], info: PackedFloat32Array)
+## A near tile's el tracks (its decoded trains surface with world-space
+## points, see CityTileDecoder.SURFACE_TRAINS) loaded, or unloaded (empty).
+signal train_tracks_changed(key: Vector2i, tracks: Dictionary)
 
 const LEVEL_NEAR := 0
 const LEVEL_COUNT := 3
@@ -159,6 +163,9 @@ class Tile:
 	## loaded.
 	var traffic_lanes: Array[PackedVector3Array] = []
 	var traffic_info := PackedFloat32Array()
+	## El tracks (the decoded trains surface, world-space), lod0 only, while
+	## loaded.
+	var train_tracks := {}
 	## Trees, water towers, street lights, furniture and parked cars, lod0
 	## only, while loaded.
 	var prop_count := 0
@@ -289,6 +296,18 @@ func traffic_lanes() -> Dictionary:
 	for tile: Tile in _levels[LEVEL_NEAR]["tiles"]:
 		if not tile.traffic_lanes.is_empty():
 			found[Vector2i(tile.i, tile.j)] = [tile.traffic_lanes, tile.traffic_info]
+	return found
+
+
+## El tracks of every loaded near tile: {Vector2i(i, j): tracks} (see
+## train_tracks_changed).
+func train_tracks() -> Dictionary:
+	var found := {}
+	if _levels.is_empty():
+		return found
+	for tile: Tile in _levels[LEVEL_NEAR]["tiles"]:
+		if not tile.train_tracks.is_empty():
+			found[Vector2i(tile.i, tile.j)] = tile.train_tracks
 	return found
 
 
@@ -470,6 +489,8 @@ func _build_ready_tiles() -> void:
 		loaded_counts[tile.level] += 1
 		if not tile.traffic_lanes.is_empty():
 			traffic_lanes_changed.emit(Vector2i(tile.i, tile.j), tile.traffic_lanes, tile.traffic_info)
+		if not tile.train_tracks.is_empty():
+			train_tracks_changed.emit(Vector2i(tile.i, tile.j), tile.train_tracks)
 		changed = true
 		if _photos_enabled and tile.info.get("aerial"):
 			tile.photo = Photo.WANTED
@@ -518,6 +539,12 @@ func _build_tile_node(tile: Tile, data: PackedByteArray) -> Node3D:
 					lane[p] += node.position
 				tile.traffic_lanes.append(lane)
 			tile.traffic_info = surface.info
+			continue
+		if surface.kind == CityTileDecoder.SURFACE_TRAINS:
+			for track: PackedVector3Array in surface.tracks:
+				for p in track.size():
+					track[p] += node.position
+			tile.train_tracks = surface
 			continue
 		if surface.kind == CityTileDecoder.SURFACE_WATER:
 			node.add_child(_water_node(surface.mesh, near))
@@ -656,6 +683,9 @@ func _unload(tile: Tile) -> void:
 		tile.traffic_lanes.clear()
 		tile.traffic_info = PackedFloat32Array()
 		traffic_lanes_changed.emit(Vector2i(tile.i, tile.j), tile.traffic_lanes, tile.traffic_info)
+	if not tile.train_tracks.is_empty():
+		tile.train_tracks = {}
+		train_tracks_changed.emit(Vector2i(tile.i, tile.j), tile.train_tracks)
 	prop_count -= tile.prop_count
 	tile.prop_count = 0
 	loaded_counts[tile.level] -= 1

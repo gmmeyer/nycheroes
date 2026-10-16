@@ -17,7 +17,7 @@ feature has to run in a browser, on computers and on phones (step 7); see
 | 5 | Co-op multiplayer | Done (`c1e717a`); public at https://nycheroes.party |
 | 6 | Realism from open data | In progress (real shape, facades, trees, water towers, paint, roofs, night, furniture, cars and traffic, facade materials and stoops, ground details, first landmarks, sound done) |
 | 7 | Phones and tablets | Done in emulation; real phones to check |
-| 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions, elevated railways) |
+| 8 | Overpasses and missing bridges | Done (raised roads, the Kosciuszko, real tower positions, elevated railways and their trains) |
 | 9 | Mac and Windows versions | Planned (last) |
 
 ## 1. Manhattan you can fly around (done)
@@ -1043,11 +1043,75 @@ Comes after step 6 because it needs step 6's real ground heights.
   the four near tiles around it +247 KB (+13%; +15% triangles, a third of
   them paint), the mid ones +89 KB (+10%), the far one +23 KB (+2%); no new
   draw calls.
+- **Trains on the els** (`tools/citygen/trains.py`, `scripts/world/trains.gd`,
+  the track graph in `train_tracks.gd`): every subway el track's centerline
+  at its rails' height, cut into pieces at switches and junctions and at
+  least every 250 m, each running the way trains do on it: trains keep
+  right, so a track with tracks alongside to its left runs along its line,
+  one with tracks to its right against it; tracks with none alongside
+  (flyovers, switches) follow the tracks they join; a three-track el's
+  middle track (express, rush hours only) gets none. Along each piece the
+  curves' speed limits (0.8 m/s² sideways, 4.5 m/s at the tightest) and the
+  stops (the middle of each platform beside the track; express tracks run
+  through); bits of el too short to run on (a line on an embankment
+  crossing a street) are left out. A new near-tile surface (kind 9, one
+  vertex per point and no indices, so earlier games skip it; no format
+  change): 1,410 pieces, 225 km of track, 333 stops in 244 tiles, linked
+  across tiles by node ids like the driving lanes.
+- **The trains:** up to 4 at once (medium 3, low 2; `?trains=N`) within 1 km
+  of the camera, appearing out of sight, past 650 m or out of a tunnel, gone
+  past 1.3 km, into a tunnel or with their tiles. The numbered lines' cars
+  (the A Division's) are 15.5 m long and 2.7 m wide, 10 to a train (the 7
+  11); the lettered lines' 18.4 m and 3.05 m, 8 or 10 (the J/Z and the M 8);
+  each train shows one of its line's route bullets in the MTA's colors (the
+  2 or the 5 on White Plains Road, the N or W in Astoria...). They run at up
+  to 18 m/s, slowing for curves ahead in time, pull away at 1.1 m/s², stop
+  with their middle at the platform's middle for 20-30 s, keep 60 m behind
+  the train ahead, cross junctions where tracks merge one at a time, and
+  stop 12 m short of a hero or thug on the tracks. Where an el's tracks go
+  on into a tunnel, down to the ground or onto a bridge built elsewhere,
+  trains run in and come out (the cars past the end vanish); at bumper
+  blocks they stop.
+- **Riding:** heroes within 80 m of a train give its cars collision (a box
+  each, on a new physics layer 6, "trains", which heroes collide with and
+  webs, cameras and thugs don't), moved every physics tick with
+  `constant_linear_velocity`, so a hero landing on a roof rides along;
+  trains are drawn between physics ticks like heroes, so the rider stays
+  put on the roof.
+- **Look:** one 62-triangle car mesh (`PropMeshes.train_car()`) drawn as
+  one MultiMesh, the cars turned to their heading in
+  `shaders/train.gdshader` (the script writes each car's middle and heading,
+  no rotations): stainless sides fluted below the windows, sliding doors,
+  tinted windows, a sign near each end with the route bullet (a 5x7 pixel
+  font in a tiny texture), air conditioners on the roof, cab ends dark round
+  their windows with the bullet over them, headlights at the front and red
+  lights at the back, the underframe and trucks with their wheels; the
+  windows light up at night. 0.2 s to compile. Two nearest trains rumble
+  (wheels over the rail joints, the steel el roaring, quicker as they speed
+  up) and squeal on curves and braking into stations (synthesized,
+  `tools/audio/build_sounds.py --only`).
+- **Yellow platform edges:** a 0.6 m strip along the els' platform edges at
+  the tracks, the road paint's solid yellow in the near tiles' markings (no
+  new shader code).
+- **Signal heads on el columns:** traffic signals whose poles would reach
+  into an el (or stand in a column) hang on the nearest column within 12 m
+  instead, facing the same traffic, where the deck clears their heads: a
+  new signal variant (the heads alone, no pole, mast arm or street sign).
+  60 in the 28 near tiles around the 7, the J and the 4.
+- **Cost:** about 0.1 ms of script a frame in Chrome with 4 trains near the
+  camera (drawing 0.07-0.09 ms, running 0.06 ms a physics tick; trains out
+  of view, far off or standing are drawn less often), 1 draw call, 2,700
+  triangles; the trains' tracks, platform edges and signals add about 2.4
+  KB to a near tile with an el (+0.35%), about 0.9 MB in all.
 - **Still to do:** other sunken roads (the BQE's trench along Hicks Street,
-  the Cross Bronx's cuts: no lanes or paint below street level yet); trains
-  on the els; signal heads on el columns (signal poles under an el are left
-  out); yellow platform edges; the lidar is from 2017 (the Kosciuszko's
-  second span and the Kew Gardens interchange's rebuild came later).
+  the Cross Bronx's cuts: no lanes or paint below street level yet); the
+  lidar is from 2017 (the Kosciuszko's second span and the Kew Gardens
+  interchange's rebuild came later). Trains: none on the railroads'
+  viaducts (Metro-North, the LIRR) or on the subway's tracks on bridges,
+  embankments and in cuts, so they vanish where an el hands over to the
+  Williamsburg or Manhattan Bridge and at Queensboro Plaza's gap; none on
+  express tracks; no turning back at terminals (a train at a bumper waits
+  until it's out of sight); each co-op player's game runs its own trains.
 
 ## 9. Mac and Windows versions (planned, last)
 
@@ -1173,10 +1237,14 @@ templates for both are already installed.
   `res://tests/audio_test.tscn` and
   `res://tests/traffic_test.tscn` (75 s of
   midtown traffic: no red light run, no overlaps, cars stop for the hero,
-  and leave with their tiles).
+  and leave with their tiles) and `res://tests/trains_test.tscn` (the 7 at
+  74th Street for 2 minutes: no overlaps or speeding, stops at the
+  platforms' middles, a train stops for the hero on the tracks and carries
+  the hero on its roof, and trains leave with their tiles; it needs tiles
+  with the trains surface around the 7 and the 4 on Jerome Avenue).
 - Launch options (URL or `-- --name=value` on desktop): `?cam=x,y,z,yaw,pitch`
   free camera, `?spawn=x,y,z,yaw` hero start, `?stats` console stats,
-  `?peds=N`, `?gangs=N`, `?traffic=N` (0: none), `?demo` / `?demo=fight` / `?demo=city` / `?demo=new` scripted tours for videos,
+  `?peds=N`, `?gangs=N`, `?traffic=N`, `?trains=N` (0: none), `?demo` / `?demo=fight` / `?demo=city` / `?demo=new` scripted tours for videos,
   `?host` / `?join=CODE` co-op, `?signal=wss://...` signaling server
   (default: the page's host, port 8070), `?relay=1` co-op only through the
   TURN relay (testing), `?weather=overcast`, `?fog_scatter=` (sun tint of

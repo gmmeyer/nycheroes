@@ -2,7 +2,8 @@ class_name GameAudio
 extends Node
 ## The game's sound (the "Audio" node in world.tscn): plays one-off sounds in
 ## the 3-D world from a pool of players, runs the city's ambience
-## (CityAmbience) and the engines of passing cars (TrafficSounds), and
+## (CityAmbience), the engines of passing cars (TrafficSounds) and the
+## trains on the els (TrainSounds), and
 ## switches the sound off and on: N, or the speaker button on touch screens
 ## (remembered between visits, see SoundSettings). Other scripts call the
 ## static functions (play(), play_later(), set_traffic(), ...), which do
@@ -37,9 +38,11 @@ const MAX_PENDING := 16
 
 @export var time_of_day: TimeOfDay
 
-## The city's ambience and the traffic's engines (children, made in _ready).
+## The city's ambience, the traffic's engines and the trains (children,
+## made in _ready).
 var ambience: CityAmbience
 var traffic: TrafficSounds
+var trains: TrainSounds
 var muted := false
 
 ## Microseconds the sound scripts have taken since the last ?stats line
@@ -125,6 +128,9 @@ func _ready() -> void:
 	traffic = TrafficSounds.new()
 	traffic.name = "Traffic"
 	add_child(traffic)
+	trains = TrainSounds.new()
+	trains.name = "Trains"
+	add_child(trains)
 
 	_log_stats = LaunchOptions.has("stats")
 	muted = SoundSettings.load_muted()
@@ -222,6 +228,14 @@ static func set_traffic(positions: PackedVector3Array, speeds: PackedFloat32Arra
 		_instance.traffic.update_cars(positions, speeds, count)
 
 
+## For the trains on the els: each train's nearest point to the listener
+## (world), its speed (m/s) and how much its wheels squeal (0..1), a few
+## times a second. See TrainSounds.
+static func set_trains(points: PackedVector3Array, speeds: PackedFloat32Array, squeals: PackedFloat32Array) -> void:
+	if _instance:
+		_instance.trains.update_trains(points, speeds, squeals)
+
+
 ## A car honks at a world position (stuck behind a hero or a pedestrian,
 ## say). Only one or two horns sound at a time, anywhere.
 static func car_horn(world_position: Vector3) -> void:
@@ -297,8 +311,8 @@ func status_text() -> String:
 	for i in MAX_VOICES:
 		if _voice_end[i] > time:
 			busy += 1
-	return "%s, %d/%d voices, %s, %s" % ["muted" if muted else ("on" if _unlocked else "waiting for input"),
-		busy, MAX_VOICES, ambience.status_text(), traffic.status_text()]
+	return "%s, %d/%d voices, %s, %s, %s" % ["muted" if muted else ("on" if _unlocked else "waiting for input"),
+		busy, MAX_VOICES, ambience.status_text(), traffic.status_text(), trains.status_text()]
 
 
 func _unlock() -> void:

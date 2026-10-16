@@ -84,6 +84,15 @@ LANE_BREAK = 0xFFFFFFFF
 # (landmarks.py, 41 and up), laid out like the buildings surface; the rest of
 # a landmark is in the buildings surface. With collision up close.
 SURFACE_LANDMARKS = 8
+# The tracks trains run on over the els, near tiles only (trains.py): one
+# vertex per point and no indices (so games from before it skip it), each
+# piece of track's points in a row, in the order trains run: position = on
+# the track's centerline at its rails' height; normal = (from node, to node,
+# speed limit m/s there); uv = (1 at a stop (a platform's middle), else 0;
+# the line's service, trains.SERVICES); uv2 = (the piece's number in the
+# tile, its flags: trains.OPEN_START, ...). Node ids are shared by all
+# tiles, like the driving lanes'.
+SURFACE_TRAINS = 9
 
 # Props (uv2.x of the props surface).
 PROP_TREE = 0         # broadleaf tree, round crown
@@ -102,7 +111,9 @@ PROP_BENCH = 8             # benches and leaning bars (CityBench seating)
 PROP_SUBWAY_ENTRANCE = 9   # stairs down, railing and globe lamps; uv.x 0 entrance
                            # (green globes), 1 exit only (red), 2 elevator
 PROP_TRAFFIC_SIGNAL = 10   # pole at an intersection; faces the traffic it controls;
-                           # uv.y its phase (markings.prepare)
+                           # uv.y its phase (markings.prepare); uv.x 0 on its pole,
+                           # SIGNAL_ON_COLUMN its heads on an el's column (els.py)
+SIGNAL_ON_COLUMN = 1
 PROP_LITTER_BASKET = 11    # uv.x 0 wire basket, 1 other (solar compactor)
 PROP_BIKE_RACK = 12        # uv.x 0 hoop, 1 other
 PROP_PARKING_METER = 13    # pay station (Muni-Meter)
