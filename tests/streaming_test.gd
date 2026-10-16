@@ -8,9 +8,10 @@ extends Node
 ## trees, water towers, street lights and street furniture (as many as the
 ## tile holds), the street lights' glows, and road markings, that each near
 ## tile's small and large furniture MultiMeshes hold exactly the pieces of
-## their types in the tile's file (and its parked cars' MultiMesh exactly its
-## parked cars), that each near tile with street lights, bus shelters or
-## newsstands has its pools in the street light map (and none are left of
+## their types in the tile's file (and its parked cars', shop fronts' and
+## sheds', docks' and plaza furniture's MultiMeshes exactly theirs), that each
+## near tile with street lights, bus shelters, newsstands or sidewalk sheds
+## has its pools in the street light map (and none are left of
 ## tiles that have gone), and that the tree canopy map has reached the ground
 ## material (if the city has one).
 ## Run: godot --headless --path . res://tests/streaming_test.tscn
@@ -23,6 +24,9 @@ const FURNITURE_GROUPS := {
 	"LargeFurniture": [CityTileDecoder.PROP_BUS_SHELTER, CityTileDecoder.PROP_LINKNYC,
 		CityTileDecoder.PROP_SUBWAY_ENTRANCE, CityTileDecoder.PROP_TRAFFIC_SIGNAL, CityTileDecoder.PROP_NEWSSTAND],
 	"ParkedCars": [CityTileDecoder.PROP_PARKED_CAR],
+	"ShopFronts": [CityTileDecoder.PROP_SHOP_SIGN, CityTileDecoder.PROP_AWNING],
+	"StreetExtras": [CityTileDecoder.PROP_SIDEWALK_SHED, CityTileDecoder.PROP_BIKE_DOCK, CityTileDecoder.PROP_PLAZA_TABLE,
+		CityTileDecoder.PROP_PLANTER, CityTileDecoder.PROP_KIOSK],
 }
 
 ## [name, world position of the camera]
@@ -171,7 +175,7 @@ func _check() -> void:
 		props += instances
 		street_lights += lamps
 		var in_file: Dictionary = _furniture_in_file.get(Vector2i(tile.i, tile.j), {})
-		var lit: int = in_file.get(CityTileDecoder.PROP_BUS_SHELTER, 0) + in_file.get(CityTileDecoder.PROP_NEWSSTAND, 0)
+		var lit: int = in_file.get(CityTileDecoder.PROP_BUS_SHELTER, 0) + in_file.get(CityTileDecoder.PROP_NEWSSTAND, 0) 				+ in_file.get(CityTileDecoder.PROP_SIDEWALK_SHED, 0)
 		with_pools += 1 if lamps > 0 or lit > 0 else 0
 	var pools: int = _city.light_pool_count()
 	var near_ok: bool = loaded[CityStreamer.LEVEL_NEAR] == 0 or (props > 0 and street_lights > 0
