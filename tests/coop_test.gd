@@ -1,7 +1,8 @@
 extends Node
 ## Headless check of co-op, through the signaling server (tools/signaling,
-## Node.js) and over ENet on this machine (WebRTC needs a browser; everything
-## above the connection is the same). Run it once: it starts the server, hosts
+## Node.js) and over ENet on this machine (everything above the connection is
+## the same as over WebRTC; --net=webrtc tests WebRTC, as desktop builds play,
+## through the webrtc-native extension). Run it once: it starts the server, hosts
 ## a game, starts a second copy of the game that joins, and checks that each
 ## sees the other's hero in the right place, that the host's thugs show up for
 ## the joined player and hurt them, and that the joined player's punches take
@@ -47,6 +48,7 @@ func _ready() -> void:
 		elif arg.begins_with("--room="):
 			_room = arg.trim_prefix("--room=")
 	LaunchOptions.set_default("signal", "ws://127.0.0.1:%d" % _port)
+	LaunchOptions.set_default("net", "enet")
 	_world = load("res://scenes/world.tscn").instantiate()
 	add_child(_world)
 	for node_name in ["PlayerInput", "Crowd"]:

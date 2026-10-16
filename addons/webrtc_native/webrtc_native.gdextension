@@ -1,0 +1,14 @@
+[configuration]
+
+entry_symbol = "webrtc_extension_init"
+compatibility_minimum = 4.3
+
+exclude_tags = ["web", "no-webrtc"]
+
+[libraries]
+
+macos.debug = "lib/libwebrtc_native.macos.template_debug.universal.framework"
+windows.debug.x86_64 = "lib/libwebrtc_native.windows.template_debug.x86_64.dll"
+
+macos.release = "lib/libwebrtc_native.macos.template_release.universal.framework"
+windows.release.x86_64 = "lib/libwebrtc_native.windows.template_release.x86_64.dll"
