@@ -128,7 +128,11 @@ func _check_high_preset() -> void:
 	compare.call("clear fog", Quality.clear_fog(), high.clear_fog)
 	compare.call("pedestrians", _crowd.max_pedestrians, high.pedestrians)
 	compare.call("busy crowd", _crowd.busy_crowd, high.busy_crowd)
+	compare.call("plaza crowd", _crowd.plaza_crowd, high.plaza_crowd)
+	compare.call("pedestrian range", _crowd.spawn_range, high.pedestrian_range)
+	compare.call("pedestrian despawn", _crowd.despawn_distance, high.pedestrian_despawn)
 	compare.call("cars", _traffic.max_cars, high.cars)
+	compare.call("traffic minimum radius", _traffic.minimum_radius, high.traffic_min_radius)
 	compare.call("trains", _trains.max_trains, high.trains)
 	compare.call("gangs", _encounters.max_gangs, high.gangs)
 	compare.call("gang size", _encounters.gang_size, high.gang_size)
@@ -141,6 +145,7 @@ func _check_quality() -> void:
 	var root := get_tree().root
 	var far_before := _city.loaded_counts[2]
 	var cars_before := _traffic.car_count
+	var peds_before := _crowd.pedestrians.size()
 	_options.open()
 	_options._quality_buttons[1].pressed.emit()  # Low
 	var saved := ConfigFile.new()
@@ -148,13 +153,14 @@ func _check_quality() -> void:
 	_check(Quality.level() == Quality.Level.LOW and saved.get_value("settings", "quality", "") == "low",
 		"\"Low\" in the menu: the preset is low, and saved")
 	_check(root.msaa_3d == Viewport.MSAA_DISABLED and not sun.shadow_enabled, "low: no MSAA, no sun shadows (at once)")
-	_check(str(_city.load_distances) == str([350.0, 800.0, 7000.0]), "low: load distances %s" % [_city.load_distances])
-	_check(is_equal_approx(_time_of_day._fog, 0.00016), "low: fog %s" % _time_of_day._fog)
-	_check(_crowd.max_pedestrians == 12 and _crowd.pedestrians.size() <= roundi(12 * _crowd.plaza_crowd),
-		"low: at most 12 pedestrians here (%d now)" % _crowd.pedestrians.size())
-	_check(_traffic.max_cars == 35 and _traffic.car_count <= 35,
-		"low: at most 35 cars (%d before, %d now)" % [cars_before, _traffic.car_count])
-	_check(_trains.max_trains == 2 and _trains.trains.size() <= 2, "low: at most 2 trains (%d now)" % _trains.trains.size())
+	_check(str(_city.load_distances) == str([250.0, 600.0, 4500.0]), "low: load distances %s" % [_city.load_distances])
+	_check(is_equal_approx(_time_of_day._fog, 0.00022), "low: fog %s" % _time_of_day._fog)
+	_check(_crowd.max_pedestrians == 6 and _crowd.plaza_crowd == 1.0 and _crowd.pedestrians.size() <= 6,
+		"low: at most 6 actual pedestrians, including Times Square (%d before, %d now)" % [peds_before, _crowd.pedestrians.size()])
+	_check(peds_before > 6 and cars_before > 12, "the downgrade started with more than Low's actor limits")
+	_check(_traffic.max_cars == 12 and _traffic.car_count <= 12 and _traffic.radius <= 100.0,
+		"low: at most 12 simulated cars in 100 m (%d before, %d now)" % [cars_before, _traffic.car_count])
+	_check(_trains.max_trains == 1 and _trains.trains.size() <= 1, "low: at most 1 train (%d now)" % _trains.trains.size())
 	_check(_encounters.max_gangs == 1 and _encounters.max_bodies == 6, "low: 1 gang, 6 bodies")
 	var furniture := 0
 	var right := 0
@@ -164,22 +170,31 @@ func _check_quality() -> void:
 		var small := tile_node.get_node_or_null(^"SmallFurniture") as GeometryInstance3D
 		if small:
 			furniture += 1
-			if is_equal_approx(small.visibility_range_end, 90.0 + CityProps.FURNITURE_RANGE_PAST_FADE):
+			if is_equal_approx(small.visibility_range_end, 65.0 + CityProps.FURNITURE_RANGE_PAST_FADE):
 				right += 1
 		var shadows := tile_node.get_node_or_null(^"TreesShadows") as GeometryInstance3D
 		if shadows and shadows.visible:
 			tree_shadows_shown += 1
 		var fronts := tile_node.get_node_or_null(^"Fronts") as GeometryInstance3D
-		if fronts and not is_equal_approx(fronts.visibility_range_end, 250.0):
+		if fronts and not is_equal_approx(fronts.visibility_range_end, 150.0):
 			fronts_right = false
 	_check(furniture > 0 and right == furniture and tree_shadows_shown == 0 and fronts_right,
-		"low: built tiles' furniture draws to low's range (%d of %d), no trees' shadows (%d shown), fronts to 250 m" % [
+		"low: built tiles' furniture draws to low's range (%d of %d), no trees' shadows (%d shown), fronts to 150 m" % [
 			right, furniture, tree_shadows_shown])
 	_options.close()
 	await _wait(6.0)
-	_check(_city.loaded_counts[2] < far_before, "low: far tiles unload to 7 km (%d far tiles before, %d now)" % [
+	_check(_city.loaded_counts[2] < far_before, "low: far tiles unload to 4.5 km (%d far tiles before, %d now)" % [
 		far_before, _city.loaded_counts[2]])
-	_check(_traffic.car_count > 0 and _traffic.car_count <= 35, "low: cars still drive (%d)" % _traffic.car_count)
+	_check(_traffic.car_count > 0 and _traffic.car_count <= 12, "low: cars still drive (%d)" % _traffic.car_count)
+	_check(_crowd.get_child_count() <= 6, "low: removed pedestrian nodes are freed, not merely hidden")
+	_world.place_hero(Vector3(420.0, 3.0, -220.0), 0.0, true)
+	var bounded := true
+	for sample in 20:
+		await _wait(0.2)
+		bounded = bounded and _crowd.pedestrians.size() <= 6 and _traffic.car_count <= 12
+	_check(bounded and not _world.hero.frozen and _city.has_collision_at(_world.hero.world_position()),
+		"low: moving to another tile keeps generation capped and ground ready")
+	_world.place_hero(Game.DEFAULT_SPAWN, 0.0, true)
 
 	_options.open()
 	_options._quality_buttons[3].pressed.emit()  # High
@@ -187,10 +202,15 @@ func _check_quality() -> void:
 	_check_high_preset()
 	await _wait(8.0)
 	var multimesh: MultiMesh = _traffic._multimesh
-	_check(_traffic.car_count > 35 and multimesh.instance_count == 180,
-		"high again: more than low's 35 cars come in (%d)" % _traffic.car_count)
+	_check(_traffic.car_count > 12 and multimesh.instance_count == 180,
+		"high again: more than low's 12 cars come in (%d)" % _traffic.car_count)
+	_check(_crowd.pedestrians.size() > 6, "high again: pedestrian generation recovers (%d)" % _crowd.pedestrians.size())
 	_check(_trains._slots.size() == 4, "high again: room for 4 trains (%d running)" % _trains.trains.size())
 	_check(_city.loaded_counts[2] >= far_before, "high again: far tiles load to 30 km again (%d)" % _city.loaded_counts[2])
+	_options._quality_buttons[2].pressed.emit()  # Medium keeps its existing limits.
+	_check(_crowd.max_pedestrians == 24 and _crowd.plaza_crowd == 1.5 and _traffic.max_cars == 90
+		and _traffic.minimum_radius == 160.0 and _city.load_distances == [500.0, 1100.0, 12000.0],
+		"medium keeps its original populations, radius, and load distances")
 	_options._quality_buttons[0].pressed.emit()  # Auto: a computer's high
 	_check(Quality.level() == Quality.Level.HIGH and Settings.get_value("quality", "") == "auto", "\"Auto\" on a computer is high")
 
@@ -281,6 +301,10 @@ func _check(ok: bool, what: String) -> void:
 
 
 func _finish() -> void:
+	if _traffic:
+		# Release active routes through the normal tile-unload path before exit.
+		for key: Vector2i in _traffic.lanes.tiles.keys():
+			_traffic.set_tile_lanes(key, [] as Array[PackedVector3Array], PackedFloat32Array())
 	print("\n".join(_checks))
 	print("%d checks, %d failed" % [_checks.size(), _failed])
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_FILE))

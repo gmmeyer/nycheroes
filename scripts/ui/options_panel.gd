@@ -2,7 +2,8 @@ class_name OptionsPanel
 extends Control
 ## The options menu: O opens and closes it (Esc too in the desktop builds;
 ## a gamepad's Start), and so do the gear button on touch screens and the
-## HUD's Options button. Three pages:
+## HUD's Options button. Four pages:
+##   Hero      saved costume, hair, headgear and colors with a live preview
 ##   Game      graphics quality (Auto, Low, Medium, High), time of day, full
 ##             screen, FPS and stats, joining the public game automatically
 ##   Sound     Master, Effects and Ambience volumes, and the sound switch (N)
@@ -33,7 +34,7 @@ const SAVE_DELAY := 0.4
 ## How often the open menu checks for changes made elsewhere (N, T, the
 ## browser leaving full screen).
 const REFRESH_INTERVAL := 0.25
-const PAGE_NAMES: Array[String] = ["Game", "Sound", "Controls"]
+const PAGE_NAMES: Array[String] = ["Game", "Hero", "Sound", "Controls"]
 const LEVEL_NAMES: Array[String] = ["Low", "Medium", "High"]
 const TIME_NAMES: Array[String] = ["Dawn", "Day", "Dusk", "Night"]
 const VOLUME_NAMES := {"volume_master": "Master volume", "volume_effects": "Effects", "volume_ambience": "Ambience"}
@@ -366,13 +367,18 @@ func _build() -> void:
 	title.add_theme_font_size_override("font_size", 22 if _touch else 26)
 	title.custom_minimum_size.x = 130.0 if _touch else 150.0
 	title_row.add_child(title)
+	var tab_row := title_row
+	if _touch:
+		tab_row = HBoxContainer.new()
+		tab_row.add_theme_constant_override("separation", 6)
+		column.add_child(tab_row)
 	var tab_group := ButtonGroup.new()
 	for i in PAGE_NAMES.size():
 		var tab := _segment(PAGE_NAMES[i])
 		tab.button_group = tab_group
 		tab.custom_minimum_size.x = 0.0
 		tab.pressed.connect(_show_page.bind(i))
-		title_row.add_child(tab)
+		tab_row.add_child(tab)
 		_tabs.append(tab)
 
 	_scroll = ScrollContainer.new()
@@ -381,7 +387,7 @@ func _build() -> void:
 	var pages := VBoxContainer.new()
 	pages.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(pages)
-	for page in [_game_page(), _sound_page(), _controls_page()]:
+	for page in [_game_page(), HeroCustomizationPage.create(_touch), _sound_page(), _controls_page()]:
 		pages.add_child(page)
 		_pages.append(page)
 

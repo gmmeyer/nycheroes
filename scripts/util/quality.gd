@@ -11,30 +11,30 @@ extends Node
 ## ?stats, it also logs memory use every few seconds ("[mem] ...").
 ##
 ##                       low             medium          high
-##   3-D resolution      540 lines       720 lines       full
+##   3-D resolution      360 lines       720 lines       full
 ##   antialiasing        off             MSAA 2x         MSAA 4x
 ##   sun shadows         off             2 splits, 300 m 4 splits, 1500 m
 ##   shadow map          1024            2048            4096
 ##   tree shadows        off             off             on
-##   tiles lod0/1/2 (m)  350/800/7000    500/1100/12000  700/1500/30000
-##   street furniture    90/300          220/500         260/580
+##   tiles lod0/1/2 (m)  250/600/4500    500/1100/12000  700/1500/30000
+##   street furniture    65/200          220/500         260/580
 ##   gone by (m, small/
 ##   large pieces)
-##   cars gone by (m)    170             320             460
-##   rowhouse fronts     250             400             600
+##   cars gone by (m)    120             320             460
+##   rowhouse fronts     150             400             600
 ##   (railings, fences,
 ##   by tile center, m)
 ##   woods' clumps of    none            4000, none in   6000, far
 ##   crowns, by tile                     far tiles       tiles' 9000
 ##   center (m)
-##   fog density         0.00016         0.00013         0.0001
+##   fog density         0.00022         0.00013         0.0001
 ##   (dusk and night)
 ##   clear day's fog     1               0.8             0.5
 ##   (share; TimeOfDay)
-##   pedestrians         12              24              45
-##   (on busy streets)   12              24              up to 68
-##   moving cars         35              90              180
-##   trains on the els   2               3               4
+##   pedestrians         6               24              45
+##   (Times Square)      6               36              up to 68
+##   moving cars         12              90              180
+##   trains on the els   1               3               4
 ##   gangs (thugs; most  1 (2-4; 6)      2 (3-4; 10)     2 (3-5; 16)
 ##   bodies left lying)
 ##
@@ -63,22 +63,27 @@ const NAMES: Array[String] = ["low", "medium", "high"]
 const CHOICES: Array[String] = ["auto", "low", "medium", "high"]
 const PRESETS := {
 	Level.LOW: {
-		"render_height": 540.0,
+		"render_height": 360.0,
+		"min_render_scale": 0.125,
 		"msaa": Viewport.MSAA_DISABLED,
 		"shadows": false,
 		"shadow_atlas": 1024,
 		"tree_shadows": false,
-		"load_distances": [350.0, 800.0, 7000.0],
-		"furniture_fade": [Vector2(60.0, 90.0), Vector2(220.0, 300.0)],
-		"car_fade": Vector2(120.0, 170.0),
-		"fronts_range": 250.0,
+		"load_distances": [250.0, 600.0, 4500.0],
+		"furniture_fade": [Vector2(40.0, 65.0), Vector2(140.0, 200.0)],
+		"car_fade": Vector2(80.0, 120.0),
+		"fronts_range": 150.0,
 		"canopy_ranges": [0.0, 0.0, 0.0],
-		"fog_density": 0.00016,
+		"fog_density": 0.00022,
 		"clear_fog": 1.0,
-		"pedestrians": 12,
+		"pedestrians": 6,
 		"busy_crowd": 1.0,
-		"cars": 35,
-		"trains": 2,
+		"plaza_crowd": 1.0,
+		"pedestrian_range": Vector2(25.0, 90.0),
+		"pedestrian_despawn": 120.0,
+		"cars": 12,
+		"traffic_min_radius": 100.0,
+		"trains": 1,
 		"gangs": 1,
 		"gang_size": Vector2i(2, 4),
 		"bodies": 6,
@@ -100,7 +105,11 @@ const PRESETS := {
 		"clear_fog": 0.8,
 		"pedestrians": 24,
 		"busy_crowd": 1.0,
+		"plaza_crowd": 1.5,
+		"pedestrian_range": Vector2(35.0, 130.0),
+		"pedestrian_despawn": 170.0,
 		"cars": 90,
+		"traffic_min_radius": 160.0,
 		"trains": 3,
 		"gangs": 2,
 		"gang_size": Vector2i(3, 4),
@@ -126,7 +135,11 @@ const PRESETS := {
 		"clear_fog": 0.5,
 		"pedestrians": 45,
 		"busy_crowd": 1.5,
+		"plaza_crowd": 1.5,
+		"pedestrian_range": Vector2(35.0, 130.0),
+		"pedestrian_despawn": 170.0,
 		"cars": 180,
+		"traffic_min_radius": 160.0,
 		"trains": 4,
 		"gangs": 2,
 		"gang_size": Vector2i(3, 5),
@@ -305,6 +318,11 @@ func _apply_preset(live: bool) -> void:
 	if _environment and not LaunchOptions.has("fog"):
 		_environment.fog_density = _preset.fog_density
 	_crowd.busy_crowd = _preset.busy_crowd
+	_crowd.plaza_crowd = _preset.plaza_crowd
+	_crowd.spawn_range = _preset.pedestrian_range
+	_crowd.despawn_distance = _preset.pedestrian_despawn
+	if _traffic:
+		_traffic.set_minimum_radius(_preset.traffic_min_radius)
 	_encounters.max_gangs = _preset.gangs
 	_encounters.gang_size = _preset.gang_size
 	_encounters.max_bodies = _preset.bodies
@@ -325,12 +343,12 @@ func _apply_preset(live: bool) -> void:
 
 func _log() -> void:
 	var root := get_tree().root
-	print("[quality] %s (%s): 3-D %s, MSAA %s, shadows %s, tiles %s, %d pedestrians, %d gang(s)" % [
+	print("[quality] %s (%s): 3-D %s, MSAA %s, shadows %s, tiles %s, %d pedestrians, %d cars, %d gang(s)" % [
 		level_name(), _reason,
 		"%dx%d" % [roundi(root.size.x * root.scaling_3d_scale), roundi(root.size.y * root.scaling_3d_scale)],
 		["off", "2x", "4x", "8x"][root.msaa_3d], "on" if _sun.shadow_enabled else "off",
 		"/".join(_city.load_distances.map(func(d: float) -> String: return str(int(d)))),
-		_crowd.max_pedestrians, _encounters.max_gangs])
+		_crowd.max_pedestrians, _traffic.max_cars if _traffic else 0, _encounters.max_gangs])
 
 
 func _process(delta: float) -> void:
@@ -362,4 +380,4 @@ func _update_render_scale() -> void:
 		if _preset:
 			root.scaling_3d_scale = 1.0
 		return
-	root.scaling_3d_scale = clampf(height / lines, MIN_RENDER_SCALE, 1.0)
+	root.scaling_3d_scale = clampf(height / lines, _preset.get("min_render_scale", MIN_RENDER_SCALE), 1.0)

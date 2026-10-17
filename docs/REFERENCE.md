@@ -7,6 +7,45 @@ drive the next work. Newest round first: round 4 (2026-10-16, closing step
 6) and its backlog of remaining gaps, then round 3 (2026-10-16) and its
 improvements table, all done, then round 1 (2026-10-15) and its table.
 
+## Geometry and Midtown landmarks (2026-10-17)
+
+Four additional buildings now have explicit models and facade treatments at
+all three detail levels: the New York Times Building, Seagram Building,
+Lever House and MetLife Building. The NYT model includes its cruciform shaft,
+ceramic screen, open crown and mast; Lever House keeps its open plaza,
+columns and courtyard. Seagram has bronze mullions and amber glazing, and
+MetLife has its broad chamfered slab, precast grid and mechanical belts.
+These are lightweight architectural approximations, using the city's roof
+outlines where useful. Their principal silhouettes stay the same across LODs.
+
+Design references:
+
+- [RPBW: New York Times Building](https://www.rpbw.com/project/the-new-york-times-building)
+- [SOM: Lever House](https://www.som.com/projects/lever-house/)
+- [Seagram: building exterior](https://seagram375park.com/)
+- [200 Park Avenue brochure](https://www.irvinecompanyoffice.com/content/dam/office/3-readytopublish/portfolio/newyork/midtown/properties/200parkavenue/brochures/200ParkAvenue-Brochure.pdf)
+
+The geometry pass also fixes concave four-corner faces (the old fixed diagonal
+could extend outside the roof) and courtyard wall orientation (roof holes
+must remain open when deciding whether a wall faces air). Existing prepared
+CityGML caches with interior rings are corrected in memory when read; tile
+files must be rebuilt to include these fixes. This does not fill intentional
+courtyards or openings in structures.
+
+The cached-city audit found 36 affected concave quadrilateral faces across
+16 models; 13 of those models are used by the current building pipeline.
+It also confirmed eight incorrectly oriented courtyard walls in BIN 4312614.
+The local build regenerated 42 affected tiles, including the new landmarks,
+at their relevant detail levels. Native views of NYT, Park Avenue and MetLife
+were inspected; the five geometry regression tests passed with real data.
+
+Run `python -m unittest discover -s tools/citygen -p test_geometry.py` with the
+citygen environment. Set `NYC_DATA_DIR` to the data directory to also check
+the actual landmark footprints. Tests cover roof/wall triangulation in both
+windings, courtyard faces, finite geometry, triangle budgets, material routing
+and stable landmark bounds across detail levels. Materials 62/63 use the
+landmark shader; only materials 60/61 use the waterfront shader.
+
 ## How to run
 
 ```

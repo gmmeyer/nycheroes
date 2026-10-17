@@ -186,6 +186,8 @@ func set_max_pedestrians(count: int) -> void:
 	max_pedestrians = maxi(count, 0)
 	var center := hero.world_position()
 	var limit := _limit_at(center)
+	_limit = limit
+	_cooldown = 0.0
 	if pedestrians.size() <= limit:
 		return
 	pedestrians.sort_custom(func(a: Pedestrian, b: Pedestrian) -> bool:

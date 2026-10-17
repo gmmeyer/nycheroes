@@ -116,10 +116,12 @@ PIERSIDE = 60        # ferry terminals and pier sheds: 0 a glass curtain wall, 1
 TIMBER = 61          # 0 fender racks (timber piles), 1 decking (docks; roofs: boards), 2 a boat
                      # (white hull and cabin), 3 a Staten Island ferry (orange); boats' bands by
                      # their height above the water
+NYT = 62            # ceramic sunscreen over glass; 1 the unscreened lobby
+MIDTOWN = 63        # 0 Seagram bronze, 1 Lever teal glass, 2 MetLife precast grid
 # Materials from here on are painted by shaders/landmark.gdshader, in the tiles'
 # landmarks surface (the buildings' shader would grow too big to compile fast),
-# and from WATERFRONT_SHADER on by shaders/waterfront.gdshader, in the
-# waterfront surface (so the landmarks' shader stays small too).
+# except PIERSIDE/TIMBER (60/61), which use shaders/waterfront.gdshader.
+# 62/63 return to the landmarks surface. The six-bit material slot is full.
 OWN_SHADER = GUGGENHEIM
 WATERFRONT_SHADER = PIERSIDE
 
@@ -454,7 +456,7 @@ def footprint_frame(footprint, nominal_degrees: float) -> Frame:
 def place(model: Model, builder, frame: Frame, ground: float, own_builder=None, waterfront_builder=None) -> None:
     """Adds a model to a tile's MeshBuilders (Godot space), standing at
     `ground`: faces in the materials from OWN_SHADER on to `own_builder` (the
-    landmarks surface, shaders/landmark.gdshader), from WATERFRONT_SHADER on to
+    landmarks surface, shaders/landmark.gdshader), PIERSIDE and TIMBER to
     `waterfront_builder` (the waterfront surface, shaders/waterfront.gdshader),
     the rest to `builder` (the buildings surface)."""
     c, s = math.cos(frame.angle), math.sin(frame.angle)
@@ -469,7 +471,7 @@ def place(model: Model, builder, frame: Frame, ground: float, own_builder=None, 
         uv2 = np.repeat(np.column_stack([code, param + SEED])[:, None, :], 3, axis=1)
         material = np.mod(code, FLAG_SCALE)
         own = (material >= OWN_SHADER) if own_builder is not None else np.zeros(len(code), bool)
-        waterfront = own & (material >= WATERFRONT_SHADER) if waterfront_builder is not None else np.zeros(len(code), bool)
+        waterfront = own & np.isin(material, [PIERSIDE, TIMBER]) if waterfront_builder is not None else np.zeros(len(code), bool)
         own &= ~waterfront
         for target, keep in ((builder, ~own & ~waterfront), (own_builder, own), (waterfront_builder, waterfront)):
             if keep.any():
@@ -972,7 +974,7 @@ def _local_footprint(ctx: Context):
 
 # --- The second batch ---
 
-def _beam(m, a, b, w, h, material, variant=0, normal=(0.0, 0.0, 1.0), sides=4):
+def _beam(m, a, b, w, h, material, variant=0, normal=(0.0, 0.0, 1.0), sides=4, capped=False):
     """A straight member from a to b (3-D points): a box `w` wide and `h`
     deep, its depth along `normal` (as far as it's square to the member), or
     with sides=3 a triangular one about `w` across. Open ends; uv = (m around,
@@ -994,7 +996,8 @@ def _beam(m, a, b, w, h, material, variant=0, normal=(0.0, 0.0, 1.0), sides=4):
     else:
         section = np.array([side * w / 2 + up * h / 2, -side * w / 2 + up * h / 2,
                             -side * w / 2 - up * h / 2, side * w / 2 - up * h / 2])
-    m.loft([a + section, b + section], material, variant=variant, smooth=False, along=True)
+    m.loft([a + section, b + section], material, variant=variant, smooth=False, along=True,
+           close_top=capped, close_bottom=capped)
 
 
 def _quads(m, corners, uv, material, param, flags=0, normals=None):
@@ -2690,7 +2693,85 @@ BBP_BOATS = ((-1302.2, -6873.1, 138.0, 9.6, 3.1), (-1312.4, -6893.3, 153.0, 11.7
              (-1249.1, -6972.7, 155.0, 5.5, 2.6))
 
 
+def _new_york_times(m: Model, ctx: Context) -> None:
+    """RPBW/FXFowle's cruciform tower, ceramic veil and rooftop mast.
+    https://www.rpbw.com/project/the-new-york-times-building
+    Local placement follows BIN 1087186's measured podium/tower outlines.
+    The 27 m open screen is geometry; the fine ceramic rods on occupied
+    floors are filtered in the shader, not thousands of separate meshes.
+    """
+    d = m.detail
+    # The low newsroom wraps an open garden east of the tower.
+    podium = shapely.difference(_local_footprint(ctx), rect(-42, -12, -10, 13))
+    m.prism(podium, -1.0, 18.2, NYT, variant=1)
+    # Recessed corners make the cross-shaped plan legible from above.
+    shaft = shapely.union_all([rect(14.3, -23.8, 62.0, 24.9), rect(19.2, -28.7, 57.1, 29.9)])
+    m.prism(shaft, 18.2, 227.6, NYT)
+    m.prism(rect(33.9, -7.5, 42.9, 8.9), 227.6, 239.5, NYT, variant=1)
+    # Closed structural bars form an intentionally open crown. Identical
+    # bounds at every LOD keep the skyline from changing as tiles switch.
+    corners = np.asarray(shaft.exterior.coords)[:-1]
+    for a, b in zip(corners, np.roll(corners, -1, axis=0)):
+        _beam(m, (*a, 227.6), (*a, 254.6), 0.22, 0.22, WHITE_STEEL, capped=True)
+        for z in np.arange(228.0, 254.6, (1.2, 2.4, 4.8)[d]):
+            _beam(m, (*a, z), (*b, z), 0.10, 0.14, WHITE_STEEL, capped=True)
+    tower(m, 38.4, 0.7, [(239.5, 0.8), (280.0, 0.48), (318.8, 0.12)],
+          (8, 6, 4)[d], STEEL, smooth=False)
+    if d < 2:
+        # Exposed steel on the two narrow sides, visible around the glass
+        # corner recesses rather than painted onto a flat box.
+        for x in (14.1, 62.2):
+            for y in (-20.0, 20.0):
+                _beam(m, (x, y, 0.0), (x, y, 227.6), 0.42, 0.42, STEEL, capped=True)
+            for z in np.arange(18.2, 215.0, 32.0):
+                _beam(m, (x, -20, z), (x, 20, min(z + 32, 227.6)), 0.3, 0.3, STEEL, capped=True)
+                _beam(m, (x, 20, z), (x, -20, min(z + 32, 227.6)), 0.3, 0.3, STEEL, capped=True)
+
+
+def _seagram(m: Model, ctx: Context) -> None:
+    """Bronze mullions, amber glazing and rear wings, not a random facade.
+    https://seagram375park.com/the-building/exterior/
+    Massing follows the city's measured roof terraces, capped at 157 m.
+    """
+    terraces = model_terraces(ctx.shape, ctx.frame, 157.0, 0) if ctx.shape is not None else []
+    if not terraces:
+        terraces = [(22.5, _local_footprint(ctx)), (43.5, rect(-28, -21, 32, 22)),
+                    (157.0, rect(-3, -21, 32, 22))]
+    add_terraces(m, terraces, lambda _a, _b: (MIDTOWN, 0))
+
+
+def _lever_house(m: Model, ctx: Context) -> None:
+    """SOM's teal slab, open columned plaza, courtyard and roof pavilion.
+    https://www.som.com/projects/lever-house/
+    Keep the courtyard and the underside of the raised podium at every LOD.
+    """
+    slab = shapely.difference(_local_footprint(ctx), rect(-12, 7, 14, 23))
+    m.prism(slab, 6.2, 10.3, MIDTOWN, variant=1, bottom=True)
+    m.prism(rect(-25, -12, 20, -1), -1.0, 6.2, MIDTOWN, variant=1)
+    for x in np.arange(-24.0, 29.0, 8.5):
+        for y in (-24.0, 29.0):
+            m.prism(rect(x - 0.25, y - 0.25, x + 0.25, y + 0.25), -1.0, 6.2, STEEL)
+    m.prism(rect(-27.9, -13.9, 24.0, 2.5), 10.3, 82.8, MIDTOWN, variant=1)
+    m.prism(rect(0.3, -13.9, 24.0, 2.5), 82.8, 94.0, MIDTOWN, variant=1)
+
+
+def _metlife(m: Model, ctx: Context) -> None:
+    """The broad chamfered slab over Grand Central, precast piers and paired
+    mechanical belts. Roof outlines from the city's model retain the podium.
+    https://www.irvinecompanyoffice.com/content/dam/office/3-readytopublish/portfolio/newyork/midtown/properties/200parkavenue/brochures/200ParkAvenue-Brochure.pdf
+    """
+    terraces = model_terraces(ctx.shape, ctx.frame, 243.8, 0) if ctx.shape is not None else []
+    if not terraces:
+        terraces = [(36.7, _local_footprint(ctx)), (44.1, rect(-46, -42, 45, 41)),
+                    (243.8, chamfered(-0.5, 12.5, 45.5, 21.5, 9.0))]
+    add_terraces(m, terraces, lambda _a, _b: (MIDTOWN, 2))
+
+
 LANDMARKS = [
+    Landmark("New York Times Building", (1087186,), 151.0, _new_york_times),
+    Landmark("Seagram Building", (1036465,), 151.0, _seagram),
+    Landmark("Lever House", (1035732,), 151.0, _lever_house),
+    Landmark("MetLife Building", (1085630,), 151.0, _metlife),
     Landmark("Empire State Building", (1015862,), 151.06, _empire_state),
     Landmark("Chrysler Building", (1036156,), 150.94, _chrysler),
     Landmark("One World Trade Center", (1088469,), 151.0, _one_wtc),

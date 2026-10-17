@@ -181,7 +181,7 @@ func _draw_marker(target: Vector3, label: String, color: Color, near_enough: flo
 func _add_options_button() -> void:
 	_options_button = Button.new()
 	_options_button.name = "OptionsButton"
-	_options_button.text = "OPTIONS  ·  O"
+	_options_button.text = "HERO / OPTIONS  ·  O"
 	_options_button.focus_mode = Control.FOCUS_NONE
 	_options_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 	_options_button.mouse_filter = Control.MOUSE_FILTER_STOP

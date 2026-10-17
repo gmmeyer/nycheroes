@@ -9,8 +9,6 @@ const HARD_LANDING_SPEED := 35.0
 const PIVOT_HEIGHT := 0.9
 
 @export var hero: Hero
-@export var suit_color := Color(0.72, 0.06, 0.08)
-@export var trim_color := Color(0.06, 0.1, 0.32)
 
 var _player: AnimationPlayer
 var _hand: BoneAttachment3D
@@ -19,6 +17,8 @@ var _up := Vector3.UP
 var _land_timer := 0.0
 var _hard_landing := false
 var _punch_id := -1
+var outfit: HeroOutfit
+var appearance: Dictionary = {}
 
 
 func _ready() -> void:
@@ -27,18 +27,30 @@ func _ready() -> void:
 	_hand = BoneAttachment3D.new()
 	_hand.bone_name = "DEF-hand.R"
 	skeleton.add_child(_hand)
-	_paint(find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D)
+	var body := find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+	outfit = HeroOutfit.new()
+	outfit.name = "Outfit"
+	skeleton.add_child(outfit)
+	if appearance.is_empty():
+		appearance = HeroAppearance.current() if hero.remote_id == 0 else HeroAppearance.DEFAULT.duplicate()
+	outfit.setup(skeleton, body, appearance)
+	if hero.remote_id == 0:
+		Settings.changed.connect(_appearance_changed)
 	SkinWarmup.add_to(self)
 	hero.landed.connect(_on_landed)
 	_yaw = hero.facing
 
 
-## Repaints the suit (co-op players each get their own color).
-func set_colors(suit: Color, trim: Color) -> void:
-	suit_color = suit
-	trim_color = trim
-	if is_node_ready():
-		_paint(find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D)
+## Network identities are shown by name tags; cosmetics belong to the player.
+func set_appearance(value: Dictionary) -> void:
+	appearance = HeroAppearance.sanitize(value)
+	if outfit:
+		outfit.apply(appearance)
+
+
+func _appearance_changed(key: String) -> void:
+	if key == HeroAppearance.KEY:
+		set_appearance(HeroAppearance.current())
 
 
 ## World position of the hand that shoots webs.
@@ -47,6 +59,8 @@ func hand_position() -> Vector3:
 
 
 func _process(delta: float) -> void:
+	if outfit:
+		outfit.set_motion(hero.velocity.length())
 	_land_timer -= delta
 	_yaw = lerp_angle(_yaw, hero.facing, 1.0 - exp(-14.0 * delta))
 	# Blend and renormalize (Vector3.slerp errors when the vectors are nearly equal).
@@ -142,16 +156,3 @@ func _on_landed(impact_speed: float) -> void:
 		return
 	_hard_landing = impact_speed >= HARD_LANDING_SPEED
 	_land_timer = 0.45 if _hard_landing else 0.25
-
-
-func _paint(mesh: MeshInstance3D) -> void:
-	# Surface 0 is the body (M_Main), surface 1 the joints (M_Joints).
-	mesh.set_surface_override_material(0, _material(suit_color))
-	mesh.set_surface_override_material(1, _material(trim_color))
-
-
-static func _material(color: Color) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = 0.5
-	return material

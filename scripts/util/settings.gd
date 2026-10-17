@@ -27,7 +27,7 @@ extends Node
 ## Keys: muted, volume_master, volume_effects, volume_ambience (0..1),
 ## quality ("auto", "low", "medium", "high"), look_mouse and look_touch (look
 ## speed, times the usual), invert_y, show_stats, fullscreen (desktop),
-## online_public.
+## online_public, hero_appearance (validated versioned cosmetic profile).
 
 ## A setting changed (set_value), e.g. for nodes that follow it.
 signal changed(key: String)

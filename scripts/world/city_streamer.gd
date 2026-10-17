@@ -70,6 +70,11 @@ const REQUEST_TIMEOUT := 120.0
 const MANIFEST_TIMEOUT := 10.0
 ## Desktop builds: tiles decoding on worker threads at once, at most.
 const MAX_DECODES := 4
+## Bound downloads awaiting construction instead of accumulating a city's
+## worth of decoded arrays while the main thread catches up.
+const MAX_BUILD_BACKLOG := 12
+const PREFETCH_SECONDS := 3.0
+const MAX_PREFETCH_DISTANCE := 600.0
 ## Mesh surfaces without collision.
 const NO_COLLISION: Array[int] = [CityTileDecoder.SURFACE_MARKINGS, CityTileDecoder.SURFACE_FRONTS]
 ## Physics layer 1, "world".
@@ -118,8 +123,8 @@ const PHOTO_OPTIONS := {"aerial_shadow": "aerial_shadow_softening", "aerial_brig
 ## distance of each extra focus.
 @export var extra_focus_radius := 350.0
 @export var max_requests := 6
-## Time per frame spent turning downloaded tiles into meshes.
-@export var build_budget_msec := 6.0
+## Soft frame budget for meshes and collision; a single surface may exceed it.
+@export var build_budget_msec := 3.0
 ## Buildings in full-detail tiles; coarser tiles get a copy with merged_blocks
 ## set, since their merged blocks have no street fronts marked.
 @export var building_material: Material
@@ -149,7 +154,7 @@ var loaded_counts: Array[int] = [0, 0, 0]
 ## camera's: other players' heroes on the host, so thugs near them have
 ## streets to stand on.
 var extra_foci: Array[Vector3] = []
-## Time the last tile took to turn into meshes and collision, in milliseconds.
+## Time the last surface took to turn into meshes and collision, in milliseconds.
 var last_build_msec := 0.0
 ## Trees, water towers, street lights, furniture and parked cars in loaded
 ## near tiles.
@@ -197,6 +202,12 @@ var _start_msec := 0
 var _initial_load_done := false
 var _load_build_msec := 0.0  # main thread time spent building tiles during the first load
 var _load_longest_frame := 0.0  # the first load's longest frame (s)
+var _last_focus := Vector3.INF
+var _focus_velocity := Vector3.ZERO
+var _building_tile: Tile
+var _building_node: Node3D
+var _building_surfaces: Array[Dictionary] = []
+var _building_surface := 0
 
 
 class Tile:
@@ -235,9 +246,12 @@ class Tile:
 	var photo := Photo.NONE
 
 	func distance_to(x: float, z: float) -> float:
+		return sqrt(distance_squared_to(x, z))
+
+	func distance_squared_to(x: float, z: float) -> float:
 		var dx := maxf(maxf(i * size - x, 0.0), x - (i + 1) * size)
 		var dz := maxf(maxf(j * size - z, 0.0), z - (j + 1) * size)
-		return sqrt(dx * dx + dz * dz)
+		return dx * dx + dz * dz
 
 
 func _ready() -> void:
@@ -283,6 +297,22 @@ func _exit_tree() -> void:
 		WorkerThreadPool.wait_for_task_completion(task)
 	_decode_tasks.clear()
 	_cleanup_tasks.clear()
+	if _building_node:
+		_building_node.free()
+		_building_node = null
+	_building_tile = null
+	_building_surfaces.clear()
+	_queue.clear()
+	_ready_to_build.clear()
+	_ready_photos.clear()
+	_decoded.clear()
+	# RefCounted tiles link both ways. Release those cycles explicitly, after
+	# all workers have finished using the tree, when changing scenes or quitting.
+	for level in _levels:
+		for tile: Tile in level.tiles:
+			tile.parent = null
+			tile.children.clear()
+	_levels.clear()
 
 
 func _process(delta: float) -> void:
@@ -294,15 +324,15 @@ func _process(delta: float) -> void:
 		_load_longest_frame = maxf(_load_longest_frame, delta)
 	if _levels.is_empty():
 		return
+	_track_motion(delta)
 	_update_cooldown -= delta
 	if _update_cooldown <= 0.0:
 		_update_cooldown = UPDATE_INTERVAL
 		_update_wanted_tiles()
-		_refresh_visibility()
 		var camera := get_viewport().get_camera_3d()
 		if camera:
 			_light_map.follow(WorldOrigin.to_world(camera.global_position))
-	while _in_flight < max_requests and not _queue.is_empty():
+	while _in_flight < max_requests and _build_backlog() < MAX_BUILD_BACKLOG and not _queue.is_empty():
 		var entry: Array = _queue.pop_front()
 		var tile: Tile = entry[1]
 		if not entry[2]:
@@ -371,8 +401,33 @@ func light_pool_count() -> int:
 
 
 func pending_count() -> int:
-	return _in_flight + _queue.size() + _ready_to_build.size() + _ready_photos.size() + _decode_tasks.size() \
-		+ _decoded.size()
+	return _build_backlog() + _queue.size() + _ready_photos.size()
+
+
+func _build_backlog() -> int:
+	_decoded_mutex.lock()
+	var decoded_count := _decoded.size()
+	_decoded_mutex.unlock()
+	return _in_flight + _ready_to_build.size() + _decode_tasks.size() + decoded_count + int(_building_tile != null)
+
+
+## Sample world coordinates so origin shifts aren't mistaken for travel.
+## Teleports reset the predictor; camera turns alone never request tiles.
+func _track_motion(delta: float) -> void:
+	var camera := get_viewport().get_camera_3d()
+	if camera == null or delta <= 0.0:
+		return
+	var focus := WorldOrigin.to_world(camera.global_position)
+	if _last_focus.is_finite():
+		var velocity := (focus - _last_focus) / delta
+		_focus_velocity = _focus_velocity.lerp(velocity, 1.0 - exp(-6.0 * delta)) if velocity.length() < 500.0 else Vector3.ZERO
+	_last_focus = focus
+
+
+func _predicted_focus(focus: Vector3) -> Vector3:
+	if _focus_velocity.length() < 20.0:
+		return focus
+	return focus + (_focus_velocity * PREFETCH_SECONDS).limit_length(MAX_PREFETCH_DISTANCE)
 
 
 ## True once the ground at this world position can be stood on: its lod0 tile
@@ -396,7 +451,7 @@ func lanes_near(world_position: Vector3, radius: float) -> Array[PackedVector3Ar
 	for j in range(floori(around.position.y / size), floori(around.end.y / size) + 1):
 		for i in range(floori(around.position.x / size), floori(around.end.x / size) + 1):
 			var tile: Tile = by_coord.get(Vector2i(i, j))
-			if tile == null or tile.lanes.is_empty():
+			if tile == null or tile.node == null or tile.lanes.is_empty():
 				continue
 			for n in tile.lanes.size():
 				if tile.lane_bounds[n].intersects(around, true):
@@ -423,7 +478,7 @@ func busyness_at(world_position: Vector3, reach := 1) -> float:
 	if lx >= reach and lz >= reach and lx < cells - reach and lz < cells - reach:
 		# All in one tile (most of the time): no lookups per square.
 		var tile: Tile = by_coord.get(Vector2i(i, j))
-		if tile == null or tile.busy.is_empty():
+		if tile == null or tile.node == null or tile.busy.is_empty():
 			return 0.0
 		for cz in range(lz - reach, lz + reach + 1):
 			for cx in range(lx - reach, lx + reach + 1):
@@ -432,7 +487,7 @@ func busyness_at(world_position: Vector3, reach := 1) -> float:
 	for cz in range(z - reach, z + reach + 1):
 		for cx in range(x - reach, x + reach + 1):
 			var tile: Tile = by_coord.get(Vector2i(floori(float(cx) / cells), floori(float(cz) / cells)))
-			if tile and not tile.busy.is_empty():
+			if tile and tile.node and not tile.busy.is_empty():
 				total += tile.busy[posmod(cz, cells) * cells + posmod(cx, cells)]
 	return total
 
@@ -444,7 +499,7 @@ func traffic_lanes() -> Dictionary:
 	if _levels.is_empty():
 		return found
 	for tile: Tile in _levels[LEVEL_NEAR]["tiles"]:
-		if not tile.traffic_lanes.is_empty():
+		if tile.node and not tile.traffic_lanes.is_empty():
 			found[Vector2i(tile.i, tile.j)] = [tile.traffic_lanes, tile.traffic_info]
 	return found
 
@@ -456,7 +511,7 @@ func train_tracks() -> Dictionary:
 	if _levels.is_empty():
 		return found
 	for tile: Tile in _levels[LEVEL_NEAR]["tiles"]:
-		if not tile.train_tracks.is_empty():
+		if tile.node and not tile.train_tracks.is_empty():
 			found[Vector2i(tile.i, tile.j)] = tile.train_tracks
 	return found
 
@@ -535,26 +590,45 @@ func _update_wanted_tiles() -> void:
 	if camera == null:
 		return
 	var focus := WorldOrigin.to_world(camera.global_position)
+	var ahead := _predicted_focus(focus)
 	var now := Time.get_ticks_msec()
 	# Height counts too, so flying high doesn't load street-level detail.
 	var height := maxf(focus.y, 0.0)
+	var ahead_height := maxf(ahead.y, 0.0)
+	var changed := false
 	_queue.clear()
 	for level in _levels.size():
 		var limit: float = load_distances[mini(level, load_distances.size() - 1)]
+		var limit_squared := limit * limit
+		var unload_squared := (limit + unload_margin) * (limit + unload_margin)
+		# Siblings share a parent and therefore the same LOD distance. Work
+		# it out once per family, without square roots for radius comparisons.
+		var anchor_distances := {}
 		for tile: Tile in _levels[level]["tiles"]:
 			# A tile is wanted when its parent is near (or itself, at the top level).
 			var anchor: Tile = tile.parent if tile.parent else tile
-			var distance := Vector2(anchor.distance_to(focus.x, focus.z), height).length()
+			var distance_squared: float
+			if anchor_distances.has(anchor):
+				distance_squared = anchor_distances[anchor]
+			else:
+				distance_squared = anchor.distance_squared_to(focus.x, focus.z) + height * height
+				if ahead != focus:
+					distance_squared = minf(distance_squared, anchor.distance_squared_to(ahead.x, ahead.z) + ahead_height * ahead_height)
+				anchor_distances[anchor] = distance_squared
 			var extra := _extra_focus_distance(tile) if level == LEVEL_NEAR else INF
 			if tile.node == null:
-				if ((distance < limit or extra < extra_focus_radius) and not tile.pending
+				if ((distance_squared < limit_squared or extra < extra_focus_radius) and not tile.pending
 						and tile.failures < MAX_ATTEMPTS and now >= tile.retry_msec):
-					_queue.append([minf(tile.distance_to(focus.x, focus.z), extra) + LEVEL_PRIORITY[level], tile, false])
-			elif distance > limit + unload_margin and extra > extra_focus_radius + unload_margin:
+					var priority := minf(tile.distance_to(focus.x, focus.z), tile.distance_to(ahead.x, ahead.z) + 250.0)
+					_queue.append([minf(priority, extra) + LEVEL_PRIORITY[level], tile, false])
+			elif distance_squared > unload_squared and extra > extra_focus_radius + unload_margin:
 				_unload(tile)
+				changed = true
 			elif tile.photo == Photo.WANTED:
 				_queue.append([tile.distance_to(focus.x, focus.z) + LEVEL_PRIORITY[level] + PHOTO_PRIORITY, tile, true])
 	_queue.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	if changed:
+		_refresh_visibility()
 
 
 func _extra_focus_distance(tile: Tile) -> float:
@@ -576,7 +650,9 @@ func _refresh_visibility() -> void:
 
 ## Draws a tile, or its children instead once they're all ready.
 func _show(tile: Tile) -> void:
-	var use_children := _children_ready(tile)
+	# On first load (or after a failed parent download), show any available
+	# descendants rather than hiding them until every sibling arrives.
+	var use_children := tile.node == null or _children_ready(tile)
 	if tile.node:
 		tile.node.visible = not use_children
 	for child in tile.children:
@@ -648,45 +724,72 @@ func _build_ready_tiles() -> void:
 	if _threaded:
 		_start_decodes()
 	while Time.get_ticks_usec() < deadline:
-		var tile: Tile
-		var surfaces: Variant  # Array[Dictionary], or null if the tile is broken
-		var build_start := Time.get_ticks_usec()
-		if _threaded:
-			_decoded_mutex.lock()
-			var item: Array = _decoded.pop_front() if not _decoded.is_empty() else []
-			_decoded_mutex.unlock()
-			if item.is_empty():
-				break
-			tile = item[0]
-			surfaces = item[1]
-		else:
-			if _ready_to_build.is_empty():
-				break
-			var item: Array = _ready_to_build.pop_front()
-			tile = item[0]
-			surfaces = _decode(_tile_file(tile), item[1], int(tile.info.raw_bytes), tile.cached, tile.level == LEVEL_NEAR)
-		tile.pending = false
-		if surfaces == null and tile.cached:
-			# Our copy was broken (and is gone now): download it right away
-			# (a failure counted skips the cache).
-			tile.failures += 1
-			_request_tile(tile)
+		if _building_tile == null:
+			var tile: Tile
+			var surfaces: Variant  # Array[Dictionary], or null if the tile is broken
+			var build_start := Time.get_ticks_usec()
+			if _threaded:
+				_decoded_mutex.lock()
+				var item: Array = _decoded.pop_front() if not _decoded.is_empty() else []
+				_decoded_mutex.unlock()
+				if item.is_empty():
+					break
+				tile = item[0]
+				surfaces = item[1]
+			else:
+				if _ready_to_build.is_empty():
+					break
+				var item: Array = _ready_to_build.pop_front()
+				tile = item[0]
+				surfaces = _decode(_tile_file(tile), item[1], int(tile.info.raw_bytes), tile.cached, tile.level == LEVEL_NEAR)
+			if surfaces == null:
+				tile.pending = false
+			if surfaces == null and tile.cached:
+				# Our copy was broken (and is gone now): download it right away
+				# (a failure counted skips the cache).
+				tile.failures += 1
+				_request_tile(tile)
+				continue
+			if surfaces == null:
+				# A failed download, or a stale copy (say, cached at the edge just
+				# after the site was updated): an update asks again a little later,
+				# a few times.
+				tile.failures += 1
+				tile.retry_msec = Time.get_ticks_msec() + RETRY_MSEC * tile.failures
+				if tile.failures >= MAX_ATTEMPTS:
+					push_error("Giving up on tile %s %d_%d" % [_levels[tile.level]["name"], tile.i, tile.j])
+				continue
+			_building_tile = tile
+			_building_surfaces = surfaces
+			_building_surface = 0
+			_building_node = _new_tile_node(tile)
+			# Register surfaces and collision with the scene incrementally too:
+			# adding an entire detached tile at once defeats the frame budget.
+			# It remains invisible and absent from tile.node until complete.
+			_building_node.visible = false
+			add_child(_building_node)
+			last_build_msec = (Time.get_ticks_usec() - build_start) / 1000.0
+			_load_build_msec += last_build_msec
+			# Web decoding also consumes this frame's budget.
 			continue
-		if surfaces == null:
-			# A failed download, or a stale copy (say, cached at the edge just
-			# after the site was updated): an update asks again a little later,
-			# a few times.
-			tile.failures += 1
-			tile.retry_msec = Time.get_ticks_msec() + RETRY_MSEC * tile.failures
-			if tile.failures >= MAX_ATTEMPTS:
-				push_error("Giving up on tile %s %d_%d" % [_levels[tile.level]["name"], tile.i, tile.j])
+		if _building_surface < _building_surfaces.size():
+			var start := Time.get_ticks_usec()
+			_add_tile_surface(_building_tile, _building_node, _building_surfaces[_building_surface])
+			_building_surface += 1
+			last_build_msec = (Time.get_ticks_usec() - start) / 1000.0
+			_load_build_msec += last_build_msec
 			continue
-		var node := _build_tile_node(tile, surfaces)
-		last_build_msec = (Time.get_ticks_usec() - build_start) / 1000.0
-		_load_build_msec += last_build_msec
+		# Publish only a complete tile: collision readiness and lanes are
+		# advertised together, and its parent stays visible while it builds.
+		var tile := _building_tile
+		var node := _building_node
+		_building_tile = null
+		_building_node = null
+		_building_surfaces = []
 		node.visible = false  # _refresh_visibility decides
-		add_child(node)
+		tile.pending = false
 		tile.node = node
+		prop_count += tile.prop_count
 		loaded_counts[tile.level] += 1
 		if not tile.traffic_lanes.is_empty():
 			traffic_lanes_changed.emit(Vector2i(tile.i, tile.j), tile.traffic_lanes, tile.traffic_info)
@@ -763,7 +866,7 @@ static func _finish_tasks(tasks: Array[int]) -> void:
 			tasks.remove_at(n)
 
 
-func _build_tile_node(tile: Tile, surfaces: Array[Dictionary]) -> Node3D:
+func _new_tile_node(tile: Tile) -> Node3D:
 	var near := tile.level == LEVEL_NEAR
 	var node := Node3D.new()
 	node.name = "%s_%d_%d" % [_levels[tile.level]["name"], tile.i, tile.j]
@@ -771,86 +874,90 @@ func _build_tile_node(tile: Tile, surfaces: Array[Dictionary]) -> Node3D:
 	var body: StaticBody3D = null
 	if near:
 		body = StaticBody3D.new()
+		body.name = "Collision"
 		body.collision_layer = COLLISION_LAYER
 		body.collision_mask = 0
 		node.add_child(body)
-	for surface in surfaces:
-		if surface.kind == CityTileDecoder.SURFACE_LANES:
-			tile.lanes.clear()
-			tile.lane_bounds.clear()
-			for lane: PackedVector3Array in surface.lanes:
-				var bounds := Rect2(lane[0].x + node.position.x, lane[0].z + node.position.z, 0.0, 0.0)
-				for p in lane.size():
-					var point := lane[p] + node.position
-					lane[p] = point
-					bounds = bounds.expand(Vector2(point.x, point.z))
-				tile.lanes.append(lane)
-				tile.lane_bounds.append(bounds)
-			continue
-		if surface.kind == CityTileDecoder.SURFACE_TRAFFIC:
-			tile.traffic_lanes.clear()
-			for lane: PackedVector3Array in surface.lanes:
-				for p in lane.size():
-					lane[p] += node.position
-				tile.traffic_lanes.append(lane)
-			tile.traffic_info = surface.info
-			continue
-		if surface.kind == CityTileDecoder.SURFACE_TRAINS:
-			for track: PackedVector3Array in surface.tracks:
-				for p in track.size():
-					track[p] += node.position
-			tile.train_tracks = surface
-			continue
-		if surface.kind == CityTileDecoder.SURFACE_WATER:
-			node.add_child(_water_node(surface, near))
-			continue
-		if surface.kind == CityTileDecoder.SURFACE_PROPS:
-			tile.prop_count = _props.add_to(node, surface, tile.level)
-			prop_count += tile.prop_count
-			if near:
-				tile.busy = _busy_squares(surface, tile.size)
-			continue
-		if surface.kind == CityTileDecoder.SURFACE_MARKINGS:
-			# Paint on the road, without collision or shadows.
-			var markings := MeshInstance3D.new()
-			markings.name = "Markings"
-			markings.mesh = CityTileDecoder.mesh(surface)
-			markings.material_override = markings_material
-			markings.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			markings.visibility_range_end = MARKINGS_RANGE
-			node.add_child(markings)
-			continue
-		if surface.kind == CityTileDecoder.SURFACE_FRONTS:
-			# Railings, fences, shrubs and awnings: no collision, and only up close;
-			# no shadows (thin, and the sun's splits would draw them up to four
-			# more times).
-			var fronts := MeshInstance3D.new()
-			fronts.name = "Fronts"
-			fronts.mesh = CityTileDecoder.mesh(surface)
-			fronts.material_override = fronts_material
-			fronts.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			fronts.visibility_range_end = fronts_range
-			node.add_child(fronts)
-			continue
-		var is_buildings: bool = surface.kind == CityTileDecoder.SURFACE_BUILDINGS
-		var instance := MeshInstance3D.new()
-		instance.mesh = CityTileDecoder.mesh(surface)
-		instance.material_override = _building_material(tile.level) if is_buildings else ground_material
-		if surface.kind == CityTileDecoder.SURFACE_LANDMARKS:
-			instance.material_override = landmark_material
-		elif surface.kind == CityTileDecoder.SURFACE_CHURCHES:
-			instance.material_override = church_material
-		elif surface.kind == CityTileDecoder.SURFACE_WATERFRONT:
-			instance.material_override = waterfront_material
-		var casts_shadow: bool = near and surface.kind != CityTileDecoder.SURFACE_GROUND
-		if not casts_shadow:
-			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		node.add_child(instance)
-		if body:
-			var shape := CollisionShape3D.new()
-			shape.shape = _collision_shape(surface, instance.mesh)
-			body.add_child(shape)
 	return node
+
+
+func _add_tile_surface(tile: Tile, node: Node3D, surface: Dictionary) -> void:
+	var near := tile.level == LEVEL_NEAR
+	var body := node.get_node_or_null(^"Collision") as StaticBody3D
+	if surface.kind == CityTileDecoder.SURFACE_LANES:
+		tile.lanes.clear()
+		tile.lane_bounds.clear()
+		for lane: PackedVector3Array in surface.lanes:
+			var bounds := Rect2(lane[0].x + node.position.x, lane[0].z + node.position.z, 0.0, 0.0)
+			for p in lane.size():
+				var point := lane[p] + node.position
+				lane[p] = point
+				bounds = bounds.expand(Vector2(point.x, point.z))
+			tile.lanes.append(lane)
+			tile.lane_bounds.append(bounds)
+		return
+	if surface.kind == CityTileDecoder.SURFACE_TRAFFIC:
+		tile.traffic_lanes.clear()
+		for lane: PackedVector3Array in surface.lanes:
+			for p in lane.size():
+				lane[p] += node.position
+			tile.traffic_lanes.append(lane)
+		tile.traffic_info = surface.info
+		return
+	if surface.kind == CityTileDecoder.SURFACE_TRAINS:
+		for track: PackedVector3Array in surface.tracks:
+			for p in track.size():
+				track[p] += node.position
+		tile.train_tracks = surface
+		return
+	if surface.kind == CityTileDecoder.SURFACE_WATER:
+		node.add_child(_water_node(surface, near))
+		return
+	if surface.kind == CityTileDecoder.SURFACE_PROPS:
+		tile.prop_count = _props.add_to(node, surface, tile.level)
+		if near:
+			tile.busy = _busy_squares(surface, tile.size)
+		return
+	if surface.kind == CityTileDecoder.SURFACE_MARKINGS:
+		# Paint on the road, without collision or shadows.
+		var markings := MeshInstance3D.new()
+		markings.name = "Markings"
+		markings.mesh = CityTileDecoder.mesh(surface)
+		markings.material_override = markings_material
+		markings.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		markings.visibility_range_end = MARKINGS_RANGE
+		node.add_child(markings)
+		return
+	if surface.kind == CityTileDecoder.SURFACE_FRONTS:
+		# Railings, fences, shrubs and awnings: no collision, and only up close;
+		# no shadows (thin, and the sun's splits would draw them up to four
+		# more times).
+		var fronts := MeshInstance3D.new()
+		fronts.name = "Fronts"
+		fronts.mesh = CityTileDecoder.mesh(surface)
+		fronts.material_override = fronts_material
+		fronts.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		fronts.visibility_range_end = fronts_range
+		node.add_child(fronts)
+		return
+	var is_buildings: bool = surface.kind == CityTileDecoder.SURFACE_BUILDINGS
+	var instance := MeshInstance3D.new()
+	instance.mesh = CityTileDecoder.mesh(surface)
+	instance.material_override = _building_material(tile.level) if is_buildings else ground_material
+	if surface.kind == CityTileDecoder.SURFACE_LANDMARKS:
+		instance.material_override = landmark_material
+	elif surface.kind == CityTileDecoder.SURFACE_CHURCHES:
+		instance.material_override = church_material
+	elif surface.kind == CityTileDecoder.SURFACE_WATERFRONT:
+		instance.material_override = waterfront_material
+	var casts_shadow: bool = near and surface.kind != CityTileDecoder.SURFACE_GROUND
+	if not casts_shadow:
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.add_child(instance)
+	if body:
+		var shape := CollisionShape3D.new()
+		shape.shape = _collision_shape(surface, instance.mesh)
+		body.add_child(shape)
 
 
 ## A near tile's surface's collision, from its faces (see _decode()).

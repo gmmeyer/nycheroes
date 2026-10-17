@@ -466,12 +466,19 @@ def triangulate_planar(rings: list) -> np.ndarray | None:
     normal = polygon_normal(outline)
     if not normal.any():
         return None
-    if len(rings) == 1 and len(outline) == 4:
-        return outline[[[0, 1, 2], [0, 2, 3]]]
     # Flatten onto the two axes the polygon faces least, triangulate, then
     # put the dropped axis back from the polygon's plane.
     drop = int(np.argmax(np.abs(normal)))
     keep = [axis for axis in range(3) if axis != drop]
+    if len(rings) == 1 and len(outline) == 4:
+        # Only convex quads admit either diagonal. CityGML also contains
+        # concave four-corner walls/roofs; a fixed diagonal overlaps their
+        # notch and leaves an incorrect silhouette. Keep the cheap path for
+        # ordinary rectangular faces and triangulate everything else below.
+        edge = np.roll(outline[:, keep], -1, axis=0) - outline[:, keep]
+        turns = edge[:, 0] * np.roll(edge[:, 1], -1) - edge[:, 1] * np.roll(edge[:, 0], -1)
+        if np.all(turns > 1e-9) or np.all(turns < -1e-9):
+            return outline[[[0, 1, 2], [0, 2, 3]]]
     try:
         flat = shapely.Polygon(outline[:, keep], [ring[:, keep] for ring in rings[1:]])
         tris = shapely.get_coordinates(shapely.constrained_delaunay_triangles(flat)).reshape(-1, 4, 2)[:, :3]

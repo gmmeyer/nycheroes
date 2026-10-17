@@ -63,7 +63,18 @@ def load() -> dict:
     if not CACHE_PATH.exists():
         prepare()
     with open(CACHE_PATH, "rb") as f:
-        return pickle.load(f)
+        buildings = pickle.load(f)
+    # Old caches were oriented using solid roof outlines, so courtyard
+    # walls could be turned inward. Repair only shapes with interior rings,
+    # in memory, so a tile rebuild also fixes an existing prepared cache.
+    for bin_number, shape in buildings.items():
+        vertices, offsets, ring_polygon, kinds, ground = shape
+        if len(ring_polygon) == len(kinds):
+            continue
+        rings = [vertices[offsets[r]:offsets[r + 1]].astype(np.float64) for r in range(len(ring_polygon))]
+        _face_outward(rings, ring_polygon, kinds, probe=WALL_PROBE * US_FOOT)
+        buildings[bin_number] = (np.concatenate(rings).astype(np.float32), offsets, ring_polygon, kinds, ground)
+    return buildings
 
 
 def _read_file(name: str):
@@ -139,14 +150,17 @@ def _read_building(element, to_local):
     return int(bin_text), shape
 
 
-def _face_outward(rings: list, ring_polygon: list, kinds: np.ndarray) -> None:
+def _face_outward(rings: list, ring_polygon: list, kinds: np.ndarray, probe=WALL_PROBE) -> None:
     """Turns every roof to face up and every wall to face open air (the model
     has some backwards), by reversing their rings. A wall faces the wrong way
     if just in front of it is inside the building: under a roof higher than
     the wall's middle."""
-    outlines = {}
+    outlines, holes = {}, {}
     for ring, polygon in zip(rings, ring_polygon):
-        outlines.setdefault(polygon, ring)
+        if polygon in outlines:
+            holes.setdefault(polygon, []).append(ring[:, :2])
+        else:
+            outlines[polygon] = ring
     normals = {p: polygon_normal(outline) for p, outline in outlines.items()}
     roofs = [p for p in outlines if kinds[p] == ROOF and abs(normals[p][2]) > 0.05]
     flip = set()
@@ -154,14 +168,14 @@ def _face_outward(rings: list, ring_polygon: list, kinds: np.ndarray) -> None:
         if normals[p][2] < 0.0:
             flip.add(p)
             normals[p] = -normals[p]
-    roof_shapes = [shapely.Polygon(outlines[p][:, :2]) for p in roofs]
+    roof_shapes = [shapely.make_valid(shapely.Polygon(outlines[p][:, :2], holes.get(p, []))) for p in roofs]
     walls = [p for p in outlines if kinds[p] == WALL and np.linalg.norm(normals[p][:2]) > 0.1]
     if roofs and walls:
         probes, heights = [], []
         for p in walls:
             across = normals[p][:2] / np.linalg.norm(normals[p][:2])
             middle = outlines[p].mean(axis=0)
-            probes.append(middle[:2] + across * WALL_PROBE)
+            probes.append(middle[:2] + across * probe)
             heights.append(middle[2])
         probes, heights = np.array(probes), np.array(heights)
         inside = np.zeros(len(walls), dtype=bool)

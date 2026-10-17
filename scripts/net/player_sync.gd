@@ -44,11 +44,13 @@ var _animations := {}  # player number -> their copy's AnimationPlayer
 var _send_cooldown := 0.0
 var _sends := 0
 var _detail_cooldown := 0.0
+var _appearance_cooldown := 0.0
 
 
 func _ready() -> void:
 	# After the heroes' own physics, so copies are placed for this tick's drawing.
 	process_physics_priority = 10
+	Settings.changed.connect(_on_appearance_changed)
 	Net.player_joined.connect(_add_player)
 	Net.player_left.connect(_remove_player)
 	Net.state_changed.connect(_on_net_state_changed)
@@ -58,6 +60,10 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not Net.is_online():
 		return
+	_appearance_cooldown -= delta
+	if _appearance_cooldown <= 0.0:
+		_appearance_cooldown = 3.0
+		_broadcast_appearance()
 	_send_cooldown -= delta
 	if _send_cooldown <= 0.0:
 		_send_cooldown = SEND_INTERVAL
@@ -156,12 +162,12 @@ func _add_player(id: int) -> void:
 	copy.remote_id = id
 	copy.frozen = true
 	copy.name = "Player%d" % id
-	(copy.get_node("Model") as HeroAnimator).suit_color = Net.player_color(id)
 	add_child(copy)
 	copy.add_child(_name_tag(id))
 	remote_heroes[id] = copy
 	_snapshots[id] = SnapshotBuffer.new()
 	_animations[id] = copy.find_child("AnimationPlayer", true, false)
+	_hero_appearance.rpc_id(id, HeroAppearance.current())
 	if Net.state == Net.State.HOSTING and Net.is_newcomer(id) and not Net.is_public:
 		# Beside our hero, a few meters apart per player.
 		var right := Vector3(cos(hero.facing), 0.0, -sin(hero.facing))
@@ -182,9 +188,7 @@ func _on_net_state_changed() -> void:
 	if not Net.is_online():
 		for id: int in remote_heroes.keys():
 			_remove_player(id)
-	# Our suit takes our player color, so everyone sees the same colors.
-	var animator := hero.get_node("Model") as HeroAnimator
-	animator.set_colors(Net.player_color(Net.local_id()), animator.trim_color)
+	_appearance_cooldown = 0.0  # Send the saved costume after joining; names retain team colors.
 
 
 func _name_tag(id: int) -> Label3D:
@@ -199,3 +203,30 @@ func _name_tag(id: int) -> Label3D:
 	tag.outline_size = 8
 	tag.modulate = Net.player_color(id).lightened(0.35)
 	return tag
+
+
+func _on_appearance_changed(key: String) -> void:
+	if key == HeroAppearance.KEY and Net.is_online():
+		_broadcast_appearance()
+
+
+func _broadcast_appearance() -> void:
+	var appearance := HeroAppearance.current()
+	for id in Net.peers():
+		_hero_appearance.rpc_id(id, appearance)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _hero_appearance(value: Dictionary) -> void:
+	_apply_remote_appearance(multiplayer.get_remote_sender_id(), value)
+
+
+func _apply_remote_appearance(id: int, value: Dictionary) -> bool:
+	var copy: Hero = remote_heroes.get(id)
+	if copy == null or value.size() > 16:
+		return false
+	var profile := HeroAppearance.sanitize(value)
+	var animator := copy.get_node("Model") as HeroAnimator
+	if animator.appearance != profile:
+		animator.set_appearance(profile)
+	return true

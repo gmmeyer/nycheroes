@@ -178,6 +178,8 @@ const LOG_INTERVAL := 2.0
 @export var radius := 300.0
 @export var grow_distance := 180.0
 @export var despawn_distance := 360.0
+## Low quality concentrates its small population in a smaller active area.
+@export var minimum_radius := 160.0
 
 ## The lane graph.
 var lanes := TrafficLanes.new()
@@ -358,9 +360,15 @@ func set_max_cars(count: int) -> void:
 
 ## Fewer cars drive nearer, as densely (see radius).
 func _fit_radius() -> void:
-	radius = clampf(_full_radius.x * sqrt(max_cars / FULL_CARS), 160.0, _full_radius.x)
+	radius = clampf(_full_radius.x * sqrt(max_cars / FULL_CARS), minimum_radius, _full_radius.x)
 	despawn_distance = _full_radius.z + radius - _full_radius.x
 	grow_distance = minf(_full_radius.y, radius * 0.6)
+
+
+func set_minimum_radius(meters: float) -> void:
+	minimum_radius = clampf(meters, MIN_SPAWN_DISTANCE, _full_radius.x)
+	_fit_radius()
+	_upkeep = 0.0
 
 
 ## A tile's driving lanes arrived, or went (both empty): cars on lanes that

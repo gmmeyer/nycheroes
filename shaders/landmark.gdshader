@@ -3,8 +3,8 @@
 // the Hearst Tower, the Met, the Vessel, the Oculus, Yankee Stadium, the
 // Unisphere, the Wonder Wheel, the Parachute Jump and Radio City's marquee;
 // St. Patrick's carved work; the Pier 3 berm's meadow). Their faces with
-// materials 41 to 59 come in each tile's landmarks surface
-// (CityTileDecoder.SURFACE_LANDMARKS; the waterfront's, 60 and up, have a
+// materials 41 to 59 and 62/63 come in each tile's landmarks surface
+// (CityTileDecoder.SURFACE_LANDMARKS; the waterfront's, 60/61, have a
 // shader of their own, waterfront.gdshader); faces in the first batch's materials
 // (paving, plain stone, copper...) stay in the buildings surface, which
 // shaders/building.gdshader paints. They have a shader of their own so the
@@ -47,6 +47,8 @@ const int LM_UNISPHERE = 56;
 const int LM_RIDE = 57;
 const int LM_MARQUEE = 58;
 const int LM_GOTHIC = 59;
+const int LM_NYT = 62;
+const int LM_MIDTOWN = 63;
 
 // Flags (UV2.x / 64), as in building.gdshader.
 const int ROOF = 1;
@@ -644,6 +646,38 @@ Surface landmark_wall_2(int material, int variant, vec2 p, vec2 fp, float width,
 			glazed = 0.0;
 		}
 		flood = 1.0;
+	} else if (material == LM_NYT || material == LM_MIDTOWN) {
+		// Building-specific grids; fine rods/mullions filter to their average
+		// coverage at distance instead of sparkling or vanishing on LOD swaps.
+		bool nyt = material == LM_NYT;
+		bool bronze = !nyt && variant == 0;
+		bool lever = !nyt && variant == 1;
+		float floor_h = nyt ? 4.05 : (lever ? 3.75 : 3.9);
+		float bay = nyt ? 1.5 : (bronze ? 1.4 : (lever ? 1.5 : 2.8));
+		cell_size = vec2(bay, floor_h);
+		cell = floor(p / cell_size);
+		vec3 tint = nyt ? vec3(0.29, 0.38, 0.42) : (bronze ? vec3(0.22, 0.18, 0.12) :
+				(lever ? vec3(0.16, 0.37, 0.35) : vec3(0.25, 0.28, 0.28)));
+		vec3 frame = bronze ? vec3(0.30, 0.23, 0.14) : (lever ? ALUMINUM : vec3(0.77, 0.76, 0.72));
+		float piers = centered_stripes(p.x / bay, (!nyt && !bronze && !lever) ? 0.24 : 0.07, fp.x / bay);
+		float spandrel = stripes(p.y / floor_h, lever ? 0.38 : 0.22, fp.y / floor_h);
+		vec3 glass = srgb(tint) * mix(1.0, 0.90 + 0.16 * hash(cell), visible(bay, pixel));
+		color = mix(mix(glass, srgb(frame) * (lever || bronze ? 0.52 : 0.88), spandrel), srgb(frame), piers);
+		float covered = max(piers, spandrel);
+		if (nyt && variant == 0) {
+			float rods = stripes(p.y / 0.45, 0.28, fp.y / 0.45);
+			color = mix(color, srgb(vec3(0.85, 0.84, 0.80)), rods * 0.78);
+			covered = max(covered, rods * 0.78);
+		} else if (!nyt && !bronze && !lever) {
+			float mech = max(band(p.y, 110.0, 118.0, fp.y), band(p.y, 227.0, 1e4, fp.y));
+			float louvers = stripes(p.y / 0.6, 0.5, fp.y / 0.6);
+			color = mix(color, srgb(frame) * (0.50 + 0.25 * louvers), mech);
+			covered = max(covered, mech);
+		}
+		s.glass = (1.0 - covered) * (bronze ? 0.55 : 0.85);
+		lit = 1.0 - covered;
+		up = fract(p.y / floor_h);
+		seed = nyt ? 0.42 : (bronze ? 0.25 : 0.62);
 	} else if (material == LM_UN_GLASS) {
 		// Blue-green glass in a thin aluminum grid; the mechanical floors behind
 		// grilles; the lobby's glass at the foot.
