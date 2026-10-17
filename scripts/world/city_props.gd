@@ -274,9 +274,29 @@ func set_car_fade(fade: Vector2) -> void:
 
 ## Sets how far woods' clumps of crowns draw, by tile level (see
 ## canopy_ranges). Takes effect for tiles built from then on, so set it
-## before the city loads (Quality does).
+## before the city loads (Quality does; refresh() brings built tiles up to
+## date, except crowns a tile was built without).
 func set_canopy_ranges(ranges: Array[float]) -> void:
 	canopy_ranges = ranges
+
+
+## Brings a built tile's props (under `parent`; `level` is the tile's) up to
+## date after the ranges changed (Quality, while playing): how far furniture,
+## cars and crowns draw, and whether trees' shadows show (a tile built
+## without them gets them only when it's built again).
+func refresh(parent: Node3D, level: int) -> void:
+	for child in parent.get_children():
+		var instance := child as MultiMeshInstance3D
+		if instance == null:
+			continue
+		var group := GROUP_NAMES.find(String(instance.name))
+		if group == CANOPY:
+			instance.visibility_range_end = canopy_ranges[level]
+			instance.visible = canopy_ranges[level] > 0.0
+		elif group >= SMALL_FURNITURE:
+			instance.visibility_range_end = _range_end(group)
+		elif group < 0 and String(instance.name).ends_with("Shadows"):
+			instance.visible = tree_shadows
 
 
 ## Adds a tile's props (a decoded props surface) under its node; `level` is
@@ -391,32 +411,41 @@ func _instance(group: int, buffer: PackedFloat32Array, mesh: Mesh) -> MultiMeshI
 	instance.name = GROUP_NAMES[group]
 	instance.multimesh = multimesh
 	instance.material_override = _materials[group]
+	instance.visibility_range_end = _range_end(group)
 	match group:
-		WATER_TOWERS:
-			instance.extra_cull_margin = CULL_MARGIN
-			instance.visibility_range_end = water_tower_range
 		STREET_LIGHTS, UTILITY_POLES:
 			instance.extra_cull_margin = STREET_LIGHT_CULL_MARGIN
-			instance.visibility_range_end = street_light_range
 		WIRES:
 			instance.extra_cull_margin = WIRE_CULL_MARGIN
-			instance.visibility_range_end = large_furniture_fade.y * WIRE_FADE_SHARE + FURNITURE_RANGE_PAST_FADE
-		SMALL_FURNITURE:
+		SMALL_FURNITURE, LARGE_FURNITURE, STREET_EXTRAS, SIDEWALK_SHEDS:
 			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
-			instance.visibility_range_end = small_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
-		LARGE_FURNITURE, STREET_EXTRAS:
-			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
-			instance.visibility_range_end = large_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
-		SIDEWALK_SHEDS:
-			instance.extra_cull_margin = FURNITURE_CULL_MARGIN
-			instance.visibility_range_end = large_furniture_fade.y * SHED_FADE_SHARE + FURNITURE_RANGE_PAST_FADE
 		SHOP_FRONTS:
 			instance.extra_cull_margin = SHOP_CULL_MARGIN
-			instance.visibility_range_end = large_furniture_fade.y * SHOP_FADE_SHARE + FURNITURE_RANGE_PAST_FADE
 		PARKED_CARS:
 			instance.extra_cull_margin = CAR_CULL_MARGIN
-			instance.visibility_range_end = car_fade.y + FURNITURE_RANGE_PAST_FADE
 		_:
 			instance.extra_cull_margin = CULL_MARGIN
-			instance.visibility_range_end = tree_range
 	return instance
+
+
+## How far a group's instances draw (tile center to camera, m), from the
+## fades and ranges set now.
+func _range_end(group: int) -> float:
+	match group:
+		WATER_TOWERS:
+			return water_tower_range
+		STREET_LIGHTS, UTILITY_POLES:
+			return street_light_range
+		WIRES:
+			return large_furniture_fade.y * WIRE_FADE_SHARE + FURNITURE_RANGE_PAST_FADE
+		SMALL_FURNITURE:
+			return small_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
+		LARGE_FURNITURE, STREET_EXTRAS:
+			return large_furniture_fade.y + FURNITURE_RANGE_PAST_FADE
+		SIDEWALK_SHEDS:
+			return large_furniture_fade.y * SHED_FADE_SHARE + FURNITURE_RANGE_PAST_FADE
+		SHOP_FRONTS:
+			return large_furniture_fade.y * SHOP_FADE_SHARE + FURNITURE_RANGE_PAST_FADE
+		PARKED_CARS:
+			return car_fade.y + FURNITURE_RANGE_PAST_FADE
+	return tree_range

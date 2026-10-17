@@ -344,6 +344,27 @@ func set_car_fade(fade: Vector2) -> void:
 	_props.set_car_fade(fade)
 
 
+## Whether trees cast shadows (?tree_shadows=0 leaves them out; Quality):
+## for tiles built from then on (refresh_detail() hides built tiles' shadows).
+func set_tree_shadows(on: bool) -> void:
+	_props.tree_shadows = on
+
+
+## Brings the tiles already built up to date after Quality changed its
+## preset while playing: how far their furniture, cars, rowhouse fronts and
+## woods' crowns draw, and whether trees' shadows show. What a tile was built
+## without (trees' shadows, far woods' crowns) comes when it's built again.
+func refresh_detail() -> void:
+	for level in _levels.size():
+		for tile: Tile in _levels[level]["tiles"]:
+			if tile.node == null:
+				continue
+			_props.refresh(tile.node, level)
+			var fronts := tile.node.get_node_or_null(^"Fronts") as GeometryInstance3D
+			if fronts:
+				fronts.visibility_range_end = fronts_range
+
+
 ## The street light map's pools: one MultiMeshInstance2D per near tile with lamps.
 func light_pool_count() -> int:
 	return _light_map.get_child_count() if _light_map else 0

@@ -13,16 +13,19 @@ extends Control
 ##   SPEED  super speed as a toggle (lit while on): it stays on until tapped
 ##          again or the stick has been let go for a moment
 ##   CO-OP  the co-op menu, a full screen button where the browser can, and
-##          a speaker that switches the sound off and on (GameAudio)
-## A finger holding WEB or JUMP that slides also turns the camera.
+##          a speaker that switches the sound off and on (GameAudio); a gear
+##          in the corner opens the options menu (OptionsPanel)
+## A finger holding WEB or JUMP that slides also turns the camera, at the
+## options menu's look speed (look_touch; up and down swapped with invert_y).
 ##
 ## Buttons press the same input actions as the keyboard (Input.action_press),
 ## so PlayerInput and the hero can't tell the difference; any number of
 ## fingers work at once. A quick tap stays pressed until PlayerInput has seen
 ## it (this node's physics step runs after PlayerInput's).
-## While the co-op menu is open, the first finger on the screen works it like
-## a mouse instead. Godot's own touch-to-mouse emulation is off: it would
-## press the attack action (left mouse button) with every touch.
+## While the co-op or options menu is open, the first finger on the screen
+## works it like a mouse instead (and these controls keep running while the
+## options menu pauses the game). Godot's own touch-to-mouse emulation is
+## off: it would press the attack action (left mouse button) with every touch.
 
 const STICK_RADIUS := 58.0
 const KNOB_RADIUS := 26.0
@@ -84,6 +87,7 @@ class TouchButton:
 var hero: Hero
 var camera_rig: ThirdPersonCamera
 var coop_panel: CoopPanel
+var options_panel: OptionsPanel
 ## Turned on by a touch: Godot's mouse emulation stays on until that first
 ## finger lifts, so the mouse press it made is released too.
 var started_by_touch := false
@@ -115,6 +119,9 @@ var _pill_style_pressed: StyleBoxFlat
 var _pill_style_on: StyleBoxFlat
 ## The sound is off (the speaker button shows it crossed out).
 var _muted := false
+## The options menu's look speed, and -1 with up and down swapped.
+var _look_scale := 1.0
+var _look_y := 1.0
 
 
 func _ready() -> void:
@@ -122,6 +129,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	process_physics_priority = -5  # after PlayerInput (-10) has read the input
+	process_mode = Node.PROCESS_MODE_ALWAYS  # (the options menu pauses the game)
 	_font = ThemeDB.fallback_font
 	_pill_style = _pill(FILL)
 	_pill_style_pressed = _pill(FILL_PRESSED)
@@ -136,9 +144,16 @@ func _ready() -> void:
 	_add(&"coop", "CO-OP", &"")
 	_add(&"fullscreen", "", &"")
 	_add(&"sound", "", &"")
+	_add(&"options", "", &"")
 	if not started_by_touch:
 		Input.emulate_mouse_from_touch = false
-	coop_panel.toggled.connect(_on_coop_toggled)
+	coop_panel.toggled.connect(_on_menu_toggled)
+	if options_panel:
+		options_panel.toggled.connect(_on_menu_toggled)
+	_read_look_settings()
+	Settings.changed.connect(func(key: String) -> void:
+		if key in ["look_touch", "invert_y"]:
+			_read_look_settings())
 	_can_fullscreen = Device.can_fullscreen()
 	_poll_page()
 	_update_hero_state(0.0)
@@ -189,7 +204,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _touch_down(index: int, at: Vector2) -> void:
-	if coop_panel.visible:
+	if _menu_open():
 		if _menu_touch == -1:
 			_menu_touch = index
 			_send_mouse_motion(at, Vector2.ZERO)
@@ -240,8 +255,14 @@ func _touch_drag(index: int, at: Vector2, relative: Vector2) -> void:
 
 
 func _look(relative: Vector2) -> void:
-	camera_rig.yaw -= relative.x * LOOK_SPEED
-	camera_rig.pitch = clampf(camera_rig.pitch - relative.y * LOOK_SPEED, MIN_PITCH, MAX_PITCH)
+	var turn := LOOK_SPEED * _look_scale
+	camera_rig.yaw -= relative.x * turn
+	camera_rig.pitch = clampf(camera_rig.pitch - relative.y * turn * _look_y, MIN_PITCH, MAX_PITCH)
+
+
+func _read_look_settings() -> void:
+	_look_scale = ThirdPersonCamera.look_speed(true)
+	_look_y = ThirdPersonCamera.look_y_sign()
 
 
 func _move_stick(at: Vector2) -> void:
@@ -285,6 +306,10 @@ func _press(button: TouchButton, index: int, at: Vector2) -> void:
 		&"sound":
 			GameAudio.toggle_mute()
 			_muted = GameAudio.is_muted()
+		&"options":
+			if options_panel:
+				coop_panel.close()
+				options_panel.open()
 		_:
 			if button.toggle:
 				_set_toggle(button, not button.on)
@@ -353,10 +378,14 @@ func _send_mouse_motion(at: Vector2, relative: Vector2) -> void:
 	get_viewport().push_input.call_deferred(event, true)
 
 
-func _on_coop_toggled(open: bool) -> void:
+func _on_menu_toggled(open: bool) -> void:
 	if open:
 		_release_all()
-	visible = not open
+	visible = not _menu_open()
+
+
+func _menu_open() -> bool:
+	return coop_panel.visible or (options_panel != null and options_panel.visible)
 
 
 ## Labels and which buttons show follow what the hero is doing.
@@ -412,9 +441,12 @@ func _layout() -> void:
 	_place(&"web", punch + Vector2(6.0, -100.0), 36.0)
 	_place(&"speed", punch + Vector2(-88.0, -84.0), 31.0)
 	_place(&"fly", punch + Vector2(-14.0, -182.0), 31.0)
-	# Co-op in the top right corner, full screen to its left, then the speaker.
+	# The gear in the top right corner, co-op to its left, then full screen
+	# and the speaker.
 	var top := safe_insets.y + 10.0
-	var coop := Rect2(size.x - safe_insets.z - 12.0 - 84.0, top, 84.0, 44.0)
+	var options := Rect2(size.x - safe_insets.z - 12.0 - 44.0, top, 44.0, 44.0)
+	(_by_id[&"options"] as TouchButton).rect = options
+	var coop := Rect2(options.position.x - 10.0 - 84.0, top, 84.0, 44.0)
 	(_by_id[&"coop"] as TouchButton).rect = coop
 	var fullscreen: TouchButton = _by_id[&"fullscreen"]
 	fullscreen.rect = Rect2(coop.position.x - 10.0 - 44.0, top, 44.0, 44.0)
@@ -490,6 +522,9 @@ func _draw_button(button: TouchButton) -> void:
 	if button.id == &"sound":
 		_draw_speaker_icon(center, _muted)
 		return
+	if button.id == &"options":
+		_draw_gear_icon(center)
+		return
 	var font_size := 15 if button.radius >= 40.0 else 13
 	var width := _font.get_string_size(button.label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
 	var at := center + Vector2(-width * 0.5, font_size * 0.36)
@@ -505,6 +540,17 @@ func _draw_fullscreen_icon(center: Vector2) -> void:
 		var tip: Vector2 = center + corner * r
 		draw_polyline(PackedVector2Array([tip - Vector2(corner.x * arm, 0.0), tip, tip - Vector2(0.0, corner.y * arm)]),
 			Color.WHITE, 2.5, true)
+
+
+## A gear: a ring with eight teeth.
+func _draw_gear_icon(center: Vector2) -> void:
+	var outline := PackedVector2Array()
+	for i in 32:
+		var angle := TAU * i / 32.0
+		var tooth := (i + 1) % 4 < 2  # two points out, two in, eight times round
+		outline.append(center + Vector2.from_angle(angle) * (10.5 if tooth else 7.5))
+	draw_colored_polygon(outline, Color.WHITE)
+	draw_circle(center, 3.6, Color(0.1, 0.1, 0.1), true, -1.0, true)
 
 
 ## A speaker with sound waves, or crossed out when the sound is off.

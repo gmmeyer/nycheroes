@@ -77,20 +77,56 @@ static func safe_area_css() -> Vector4:
 	return Vector4(parts[0].to_float(), parts[1].to_float(), parts[2].to_float(), parts[3].to_float())
 
 
-## Whether the page can go full screen (not on iPhones, whose browsers can't
-## for anything but video).
+## Whether the game can go full screen: desktop builds can, and pages
+## where the browser can (not iPhones, whose browsers can't for anything but
+## video).
 static func can_fullscreen() -> bool:
+	if not is_web():
+		return true
 	return _has_page() and _js_bool("can_fullscreen", "nycPage.canFullscreen()")
 
 
 static func is_fullscreen() -> bool:
-	return _has_page() and _js_true("nycPage.isFullscreen()")
+	if not is_web():
+		var mode := DisplayServer.window_get_mode()
+		return mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+	return _js_true("document.fullscreenElement || document.webkitFullscreenElement")
+
+
+## Goes full screen or back (the options menu, F11 on desktop). In the
+## browser only a click or tap may start it: a button's press, which Godot
+## handles a frame after the browser saw it, still counts. On a touch screen
+## it also turns the screen sideways where the browser can, as the page does.
+static func set_fullscreen(on: bool) -> void:
+	if not is_web():
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
+		return
+	JavaScriptBridge.eval("""(function (on) {
+	var d = document, root = d.documentElement;
+	try {
+		if (on) {
+			var request = root.requestFullscreen || root.webkitRequestFullscreen;
+			if (!request || d.fullscreenElement || d.webkitFullscreenElement) return;
+			var lock = function () {
+				if (!root.classList.contains('nyc-touch')) return;
+				try { screen.orientation.lock('landscape').catch(function () {}); } catch (e) {}
+			};
+			var result = request.call(root, { navigationUI: 'hide' });
+			if (result && result.then) result.then(lock, function () {}); else lock();
+		} else if (d.fullscreenElement || d.webkitFullscreenElement) {
+			var result = (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+			if (result && result.catch) result.catch(function () {});
+		}
+	} catch (e) {}
+})(%s)""" % ("true" if on else "false"), true)
 
 
 ## Goes full screen when the finger that's touching the screen lifts: browsers
 ## only allow it during a tap, and Godot sees touches a frame later.
 static func request_fullscreen() -> void:
-	if _has_page():
+	if not is_web():
+		set_fullscreen(true)  # (touch controls on desktop: --touch=1)
+	elif _has_page():
 		JavaScriptBridge.eval("nycPage.armFullscreen()", true)
 
 
