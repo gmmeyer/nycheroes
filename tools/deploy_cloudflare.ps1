@@ -23,6 +23,9 @@ $bucket = "nyc-hero-files"
 
 if ($Build) { & (Join-Path $PSScriptRoot "build_web.ps1") }
 if (-not (Test-Path (Join-Path $Web "index.wasm"))) { throw "No web build in $Web. Run tools\build_web.ps1 first." }
+# Also covers builds exported directly from the editor; the fix is idempotent.
+& node (Join-Path $PSScriptRoot "web\fix_audio_loops.mjs") (Join-Path $Web "index.js")
+if ($LASTEXITCODE -ne 0) { throw "Web audio compatibility fix failed" }
 $zips = @()
 if ($Desktop) {
     $zips = "nyc-heroes-windows.zip", "nyc-heroes-macos.zip" | ForEach-Object { Join-Path $root "build\desktop\$_" }

@@ -11,8 +11,8 @@ extends RefCounted
 
 ## Quieter than this (linear gain), it counts as silent.
 const SILENT := 0.004
-const MIN_DB_STEP := 0.3
-const MIN_PITCH_STEP := 0.02
+const MIN_DB_STEP := 0.15
+const MIN_PITCH_STEP := 0.005
 
 ## AudioStreamPlayer or AudioStreamPlayer3D.
 var player: Node
@@ -29,6 +29,7 @@ var on := false
 
 var _applied_db := -80.0
 var _quiet_time := 0.0
+var _smooth_pitch := 1.0
 
 
 func _init(player_node: Node, loudness_db: float, linger_seconds := 0.0) -> void:
@@ -56,16 +57,18 @@ func update(delta: float, rate: float) -> void:
 	if not on:
 		on = true
 		_applied_db = db
+		_smooth_pitch = pitch
 		player.volume_db = db
-		player.pitch_scale = pitch
+		player.pitch_scale = _smooth_pitch
 		if GameAudio.audible():
 			player.play(randf() * player.stream.get_length())
 		return
 	if absf(db - _applied_db) >= MIN_DB_STEP:
 		player.volume_db = db
 		_applied_db = db
-	if absf(player.pitch_scale - pitch) > MIN_PITCH_STEP:
-		player.pitch_scale = pitch
+	_smooth_pitch = lerpf(_smooth_pitch, pitch, 1.0 - exp(-delta * rate))
+	if absf(player.pitch_scale - _smooth_pitch) > MIN_PITCH_STEP:
+		player.pitch_scale = _smooth_pitch
 
 
 ## Stops at once.

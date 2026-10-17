@@ -1,12 +1,12 @@
 class_name SoundBank
 ## Every sound the game plays and how: its files, loudness, pitch spread, bus,
-## how far it carries and how many may play at once. The files are mono Ogg
-## Vorbis in assets/audio/, made by tools/audio/build_sounds.py (some are
+## how far it carries and how many may play at once. The files are Ogg
+## Vorbis in assets/audio/ (mono positional effects, stereo recorded beds),
+## made by tools/audio/build_sounds.py (some are
 ## synthesized there, the rest cut from CC0 recordings; CREDITS.md lists
 ## them). A sound with several files plays a random one, never the same one
 ## twice in a row; phones (Quality's low preset) load two at most, since
-## browsers keep every sound decoded (Godot's web build: 48 kHz stereo, 384
-## kB a second).
+## browsers keep every sound decoded (at the web audio mix rate, stereo).
 ##
 ## Per sound:
 ##   count   files: <name>.ogg for one, <name>_1.ogg .. <name>_<count>.ogg
@@ -37,10 +37,10 @@ const SOUNDS := {
 	&"whoosh_punch": {count = 4, db = -12.0, pitch = 0.1, unit = 4.0, reach = 40.0, voices = 3},
 	&"whoosh_heavy": {count = 2, db = -8.0, pitch = 0.08, unit = 5.0, reach = 60.0, voices = 2},
 	&"whoosh_swing": {count = 3, db = -9.0, pitch = 0.08, unit = 6.0, reach = 100.0, voices = 2},
-	&"dive": {count = 1, db = -7.0, pitch = 0.05, unit = 8.0, reach = 150.0, voices = 2},
-	&"takeoff": {count = 1, db = -9.0, pitch = 0.06, unit = 6.0, reach = 100.0, voices = 2},
-	&"zoom": {count = 1, db = -8.0, pitch = 0.05, unit = 8.0, reach = 150.0, voices = 2},
-	&"thwip": {count = 3, db = -8.0, pitch = 0.08, unit = 5.0, reach = 80.0, voices = 3},
+	&"dive": {count = 1, db = -11.0, pitch = 0.05, unit = 8.0, reach = 150.0, voices = 2},
+	&"takeoff": {count = 1, db = -11.0, pitch = 0.06, unit = 6.0, reach = 100.0, voices = 2},
+	&"zoom": {count = 1, db = -12.0, pitch = 0.05, unit = 8.0, reach = 150.0, voices = 2},
+	&"thwip": {count = 3, db = -11.0, pitch = 0.08, unit = 5.0, reach = 80.0, voices = 3},
 	&"web_release": {count = 1, db = -16.0, pitch = 0.1, unit = 4.0, reach = 40.0, voices = 2},
 	&"creak": {count = 3, db = -17.0, pitch = 0.1, unit = 4.0, reach = 40.0, voices = 2},
 	&"powerup": {count = 1, db = -6.0, pitch = 0.0, unit = 8.0, reach = 120.0, voices = 1},
@@ -48,10 +48,10 @@ const SOUNDS := {
 	&"hero_effort": {count = 2, db = -13.0, pitch = 0.06, unit = 5.0, reach = 50.0, voices = 1, gap = 1.0},
 	&"splash": {count = 2, db = -7.0, pitch = 0.08, unit = 6.0, reach = 100.0, voices = 2},
 	&"swim": {count = 3, db = -15.0, pitch = 0.1, unit = 4.0, reach = 40.0, voices = 2},
-	&"air_low": {count = 1, db = -10.0, unit = 6.0, reach = 200.0, loop = true},
-	&"air_high": {count = 1, db = -12.0, unit = 6.0, reach = 200.0, loop = true},
-	&"speed_loop": {count = 1, db = -11.0, unit = 6.0, reach = 150.0, loop = true},
-	&"charge_loop": {count = 1, db = -14.0, unit = 5.0, reach = 60.0, loop = true},
+	&"air_low": {count = 1, db = -14.0, unit = 6.0, reach = 200.0, loop = true},
+	&"air_high": {count = 1, db = -18.0, unit = 6.0, reach = 200.0, loop = true},
+	&"speed_loop": {count = 1, db = -15.0, unit = 6.0, reach = 150.0, loop = true},
+	&"charge_loop": {count = 1, db = -17.0, unit = 5.0, reach = 60.0, loop = true},
 
 	# Fights (Thug, Combat, Pedestrian).
 	&"punch": {count = 5, db = -6.0, pitch = 0.08, unit = 6.0, reach = 80.0, voices = 4},
@@ -68,19 +68,19 @@ const SOUNDS := {
 	&"siren": {count = 2, db = -12.0, pitch = 0.03, unit = 80.0, reach = 1500.0, voices = 1, bus = &"Ambience"},
 	&"bird": {count = 4, db = -15.0, pitch = 0.1, unit = 10.0, reach = 120.0, voices = 3, bus = &"Ambience"},
 	&"dog": {count = 2, db = -17.0, pitch = 0.06, unit = 30.0, reach = 600.0, voices = 1, gap = 6.0, bus = &"Ambience"},
-	&"engine": {count = 1, db = -12.0, unit = 6.0, reach = 70.0, loop = true, bus = &"Ambience"},
-	&"amb_traffic_day": {count = 1, db = -9.0, loop = true, bus = &"Ambience"},
-	&"amb_traffic_night": {count = 1, db = -10.0, loop = true, bus = &"Ambience"},
-	&"amb_city_far": {count = 1, db = -12.0, loop = true, bus = &"Ambience"},
-	&"amb_times_square": {count = 1, db = -8.0, loop = true, bus = &"Ambience"},
-	&"amb_birds": {count = 1, db = -13.0, loop = true, bus = &"Ambience"},
-	&"amb_crickets": {count = 1, db = -15.0, loop = true, bus = &"Ambience"},
-	&"amb_water": {count = 1, db = -11.0, loop = true, bus = &"Ambience"},
-	&"amb_wind": {count = 1, db = -12.0, loop = true, bus = &"Ambience"},
+	&"engine": {count = 1, db = -17.0, unit = 6.0, reach = 70.0, loop = true, bus = &"Ambience"},
+	&"amb_traffic_day": {count = 1, db = -12.0, loop = true, bus = &"Ambience"},
+	&"amb_traffic_night": {count = 1, db = -13.0, loop = true, bus = &"Ambience"},
+	&"amb_city_far": {count = 1, db = -16.0, loop = true, bus = &"Ambience"},
+	&"amb_times_square": {count = 1, db = -13.0, loop = true, bus = &"Ambience"},
+	&"amb_birds": {count = 1, db = -15.0, loop = true, bus = &"Ambience"},
+	&"amb_crickets": {count = 1, db = -18.0, loop = true, bus = &"Ambience"},
+	&"amb_water": {count = 1, db = -13.0, loop = true, bus = &"Ambience"},
+	&"amb_wind": {count = 1, db = -16.0, loop = true, bus = &"Ambience"},
 
 	# The trains on the els (TrainSounds).
-	&"train_rumble": {count = 1, db = -5.0, unit = 18.0, reach = 260.0, loop = true, bus = &"Ambience"},
-	&"train_squeal": {count = 1, db = -13.0, unit = 12.0, reach = 220.0, loop = true, bus = &"Ambience"},
+	&"train_rumble": {count = 1, db = -9.0, unit = 18.0, reach = 260.0, loop = true, bus = &"Ambience"},
+	&"train_squeal": {count = 1, db = -19.0, unit = 12.0, reach = 220.0, loop = true, bus = &"Ambience"},
 
 	# The interface.
 	&"ui_toggle": {count = 1, db = -8.0, bus = &"UI"},

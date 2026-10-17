@@ -1632,10 +1632,10 @@ and 29):**
   concrete), super speed's wind and zoom, jumps and the super jump's
   charge and boom, landings by fall speed, rushing air when flying,
   falling, swinging or diving, web thwips, creaks and swing whooshes,
-  punches, dives, hits, splashes. Fights: hits, grunts, shouts, knockdowns,
+  punches, dives, hits, splashes. Fights: hits, grunts, knockdowns,
   bodies landing; fleeing pedestrians scream now and then.
 - The city (`scripts/audio/city_ambience.gd`): eight looping beds (day and
-  night streets, the far hum up high, the Times Square crowd, birds by day
+  night streets, the far hum up high, Times Square traffic, birds by day
   and crickets at night in green areas, waves near water, wind up high)
   crossfading with the time of day and with where you are, from a 64 m
   soundscape map made from the land cover map; horns, far sirens, bird
@@ -1646,20 +1646,44 @@ and 29):**
   with the menu's Master, Effects (SFX) and Ambience volumes (`?mute=1|0`,
   `?audio=0` leaves sound out). Nothing plays before the first click, tap or
   key (browsers' rule).
-- 118 sounds, CC0 (Kenney packs, Freesound uploads checked one by one,
-  listed in CREDITS.md) or synthesized; 1.6 MB with the soundscape map;
+- 120 sounds, CC0 (Kenney packs, Freesound uploads checked one by one,
+  listed in CREDITS.md) or synthesized; 3.3 MB with the soundscape map;
   `tools/audio/build_sounds.py` rebuilds them. Cost: about 0.05-0.1 ms a
-  frame; in the browser 25-60 MB of decoded samples (Godot's web build keeps
-  them as float at the mix rate, set to 32 kHz on the web to save a third).
+  frame. Godot's web build keeps decoded stereo floats at the mix rate,
+  set to 32 kHz on the web to save a third.
+- Audio polish (2026-10-17): beds preserve stereo, run 12-24 s
+  before repeating and use higher-quality Vorbis. Wind has slower, gentler
+  gusts without the narrow whistles; ambience and engines sit lower under
+  gameplay effects. Engine pitch stays between 0.9 and 1.3, and loop pitch
+  changes glide. The train rumble's abrupt rail-joint onset at the loop
+  boundary is faded, and synthesized noise frames wrap evenly. The longer
+  loops add about 20 MB of decoded sample data at the web mix rate, before
+  playback copies. DSP and encoded-file checks: `python -m unittest discover
+  -s tools/audio -p "test_*.py"` (set `FFMPEG` to include the encoded checks).
+- Movement cues use broad air bursts for sprinting and diving, with the
+  swept whistles removed. Takeoff balances its air against the low thump;
+  web snaps have less high-frequency click and tonal edge, and super-jump
+  charging uses a softer low hum without the fast pulsing buzz.
+- No background talking: the four urban beds are synthesized traffic wash
+  and distant motors, replacing the field recordings with crowd chatter.
+  Nearby cars, horns and sirens remain spatial sounds. Spoken NPC calls
+  are removed too.
+- Web loops use native Web Audio looping (`tools/web/fix_audio_loops.mjs`,
+  applied by the build and deploy scripts). Godot 4.7.2 restarted each lap
+  through `ended`, repeating only the tail after the random initial offset,
+  introducing gaps and resetting pitch. Full-buffer loops now stay on the
+  audio thread, and pause/resume keeps pitch. Tests against an exported
+  engine: `node --test tools/web/fix_audio_loops.test.mjs`. After a direct
+  editor export, run `node tools/web/fix_audio_loops.mjs build/web/index.js`
+  before serving locally. The fix fails explicitly if an engine upgrade
+  changes the code it patches; review it rather than silently skipping it.
 - The headless test (`tests/audio_test.tscn`) no longer depends on luck.
   While it checks the engines on the cars it drives past the hero, Traffic
   is paused: its reports of the real cars, ten times a second, took the
   engines off the test's cars, and they all faded out together and came
   back, so a check landing in that moment read "0 engines" (2 runs of 4 on
   a loaded machine). The four engines must now stay on their cars the whole
-  way. And thugs still walking up look at the hero again until one has
-  shouted: each shouts only half the time it spots the hero, so all four
-  kept quiet about 1 run in 16.
+  way. It also checks that NPCs no longer play spoken calls.
 
 Groundwork: streamed imagery in GPU-compressed formats (Godot 4.7 can load
 DDS/KTX at runtime), instancing and LOD for props, a multi-threaded web build

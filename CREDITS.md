@@ -96,18 +96,14 @@ which file is which sound.
   whooshes, web shots and releases, take-off, super speed's zoom and wind,
   the air rushing past, a super jump's charge and launch, heavy landings,
   rubble, getting back up, wind up high, and the trains on the els'
-  rumble and squeal.
+  rumble and squeal; the day, night, distant-city and Times Square traffic
+  beds (no recorded crowd or conversation).
 - **Kenney** (kenney.nl, CC0): "Impact Sounds" (footsteps on concrete,
   grass and wood; punches; soft landings), "RPG Audio" (cloth for jumps,
   creaks for the web's tension), "Sci-fi Sounds" (the low explosion under a
   ground slam), "Interface Sounds" (the sound switch's click).
 - **Freesound** (freesound.org, each CC0), by uploader:
-  - City beds: quantumriver, "Recording of Busy New York City Street"
-    (552120, the day's street); SpliceSound, "New York City night evening
-    rooftop ambience traffic, Bushwick, Brooklyn" (369891, the night);
-    Yakobb1, "City Ambience Distant Stereo" (495866, the far-off hum up
-    high); olofgud, "Times square 1700" (639703, Times Square's crowd);
-    cynthia_1968, "morning-birds-urban-city-ambience-field-recording"
+  - Nature beds: cynthia_1968, "morning-birds-urban-city-ambience-field-recording"
     (578150, birds); kyles, "crickets night short nice some skyline
     Montreal, Canada" (455685, crickets); craigsmith, "G54-04-Pier Lap"
     (438839, waves lapping).
