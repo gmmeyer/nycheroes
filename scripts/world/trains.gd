@@ -333,6 +333,30 @@ func _ready() -> void:
 	set_physics_process(max_trains > 0)
 
 
+## Changes how many trains may run (Quality, while playing): trains past the
+## new number go at once; more come in out of sight. (Not after starting
+## with none: ?trains=0.)
+func set_max_trains(count: int) -> void:
+	count = maxi(count, 1)
+	if max_trains == 0 or count == max_trains:
+		return
+	for train in trains.duplicate():
+		if train.slot >= count:
+			_despawn(train)
+	var slots := _slots.size()
+	max_trains = count
+	_slots.resize(count)
+	_buffer.resize(count * MAX_CARS * STRIDE)
+	for n in range(slots * MAX_CARS * STRIDE, _buffer.size()):
+		_buffer[n] = 0.0
+	_multimesh.instance_count = count * MAX_CARS
+	var highest := -1
+	for train in trains:
+		highest = maxi(highest, train.slot)
+	_multimesh.visible_instance_count = (highest + 1) * MAX_CARS
+	_multimesh.buffer = _buffer
+
+
 ## Which way express trains run at `hours` (CityTileDecoder.TRACK_EXPRESS_*;
 ## 0: none run).
 static func express_way(hours: float) -> int:

@@ -74,7 +74,7 @@ func toggle() -> void:
 		open()
 
 
-## Set up for fingers: a Close button instead of the M/Esc hint, buttons
+## Set up for fingers: a Close button instead of the M hint, buttons
 ## and boxes tall enough to tap, a tighter fit for phones' short screens, and
 ## the room code typed into a browser text box (WebTextField) in the browser.
 func use_touch_layout() -> void:
@@ -275,7 +275,7 @@ func _build() -> void:
 
 
 	_hint = Label.new()
-	_hint.text = "M or Esc closes this menu"
+	_hint.text = "M closes this menu"
 	_hint.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.5))
 	_hint.add_theme_font_size_override("font_size", 13)
 	column.add_child(_hint)

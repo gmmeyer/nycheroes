@@ -17,12 +17,16 @@ extends Node3D
 ## T steps the time of day on to the next of dawn, day, dusk and night
 ## (TimeOfDay; ?time=HH:MM and ?daylength=MINUTES set the clock).
 ## Sound is the Audio node's (GameAudio): N switches it off and on.
+## O opens the options menu (OptionsPanel; Esc too in the desktop builds), as
+## do the HUD's Options button and the touch gear; one menu shows at a time.
 ##
 ## Phones and tablets: touch screens get on-screen controls (TouchControls;
 ## ?touch=1 or ?touch=0 forces them on or off, see Device), and a graphics
-## quality preset is picked for the device (Quality; ?quality=low|medium|high).
+## quality preset is picked for the device (Quality; ?quality=low|medium|high),
+## unless the options menu has picked one.
 ##
-## Desktop builds: F11 switches full screen on and off. --screenshot=PATH
+## Desktop builds: F11 switches full screen on and off (remembered, like the
+## options menu's switch). --screenshot=PATH
 ## saves the screen to PATH (PNG) a few seconds after the city has loaded
 ## (--screenshot_delay=SECONDS, default 5), logs the frame times meanwhile,
 ## and quits: for checking builds.
@@ -50,6 +54,7 @@ var _free_camera_on := false
 var _drop_to_ground := false
 var _drop_tries := 0
 var _touch_controls: TouchControls
+var _options: OptionsPanel
 
 
 func _enter_tree() -> void:
@@ -71,7 +76,11 @@ func _ready() -> void:
 	var quality := Quality.new()
 	quality.name = "Quality"
 	add_child(quality)
-	quality.apply(time_of_day.sun, get_world_3d().environment, city, get_node("Crowd") as CrowdManager, encounters)
+	quality.apply(time_of_day.sun, get_world_3d().environment, city, get_node("Crowd") as CrowdManager, encounters,
+		get_node_or_null("Traffic") as Traffic, get_node_or_null("Trains") as Trains, time_of_day)
+	_add_options(quality)
+	if not Device.is_web() and bool(Settings.get_value("fullscreen", false)) and not LaunchOptions.has("screenshot"):
+		Device.set_fullscreen(true)
 	if Device.wants_touch_controls() and not LaunchOptions.has("demo"):
 		_add_touch_controls(false)
 	if LaunchOptions.has("demo"):
@@ -82,7 +91,10 @@ func _ready() -> void:
 		Net.join(LaunchOptions.get_string("join"))
 	elif _plays_public():
 		# Once the city is there: joining doesn't hold up its loading.
-		city.initial_load_finished.connect(func(_seconds: float) -> void: Net.start_public(), CONNECT_ONE_SHOT)
+		encounters.hold_for_public = true
+		city.initial_load_finished.connect(func(_seconds: float) -> void:
+			Net.start_public()
+			encounters.hold_for_public = false, CONNECT_ONE_SHOT)
 	if LaunchOptions.has("screenshot") and not Device.is_web():
 		_take_screenshot(LaunchOptions.get_string("screenshot"))
 
@@ -119,7 +131,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and _touch_controls == null and Device.touch_allowed() \
 			and not LaunchOptions.has("demo"):
 		_add_touch_controls(true)  # a touch screen the browser didn't tell us about
-	if event.is_action_pressed("coop_menu") and not coop_panel.is_typing():
+	if event.is_action_pressed("options_menu") and not coop_panel.is_typing() and not LaunchOptions.has("demo"):
+		coop_panel.close()
+		_options.toggle(true)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("coop_menu") and not coop_panel.is_typing():
+		_options.close(false, false)
 		coop_panel.toggle()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("time_of_day") and not coop_panel.is_typing():
@@ -132,8 +149,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_set_free_camera(not _free_camera_on)
 	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11 \
 			and not Device.is_web():
-		var window := get_window()
-		window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
+		var on := not Device.is_fullscreen()
+		Device.set_fullscreen(on)
+		Settings.set_value("fullscreen", on)
 		get_viewport().set_input_as_handled()
 
 
@@ -191,6 +209,7 @@ func _take_screenshot(path: String) -> void:
 func _on_net_state_changed() -> void:
 	# Show what went wrong, e.g. a join link for a game that has ended.
 	if Net.state == Net.State.OFFLINE and Net.error:
+		_options.close(false, false)
 		coop_panel.open()
 
 
@@ -211,7 +230,25 @@ func _set_free_camera(on: bool) -> void:
 
 
 func _update_controls() -> void:
-	player_input.enabled = not _free_camera_on and not coop_panel.visible
+	player_input.enabled = not _free_camera_on and not coop_panel.visible and not (_options and _options.visible)
+
+
+## The options menu, over the co-op menu in the HUD (only one shows at a time).
+func _add_options(quality: Quality) -> void:
+	OptionsPanel.add_action()
+	_options = OptionsPanel.new()
+	_options.name = "OptionsPanel"
+	_options.coop_panel = coop_panel
+	_options.quality = quality
+	_options.time_of_day = time_of_day
+	_options.debug_label = hud.get_node_or_null("DebugLabel") as Control
+	hud.add_child(_options)
+	_options.toggled.connect(func(_open: bool) -> void: _update_controls())
+	var game_hud := hud.get_node_or_null("GameHud") as GameHud
+	if game_hud:
+		game_hud.options_requested.connect(func() -> void:
+			coop_panel.close()
+			_options.open())
 
 
 ## On-screen controls for touch screens. The UI is then measured in CSS
@@ -223,6 +260,7 @@ func _add_touch_controls(started_by_touch: bool) -> void:
 	_touch_controls.hero = hero
 	_touch_controls.camera_rig = hero_camera
 	_touch_controls.coop_panel = coop_panel
+	_touch_controls.options_panel = _options
 	_touch_controls.started_by_touch = started_by_touch
 	hud.add_child(_touch_controls)
 	hud.move_child(_touch_controls, coop_panel.get_index())  # under the co-op menu
@@ -230,10 +268,10 @@ func _add_touch_controls(started_by_touch: bool) -> void:
 	if game_hud:
 		game_hud.touch_controls = _touch_controls
 	coop_panel.use_touch_layout()
+	_options.use_touch_layout()
 	var debug_label := hud.get_node_or_null("DebugLabel") as Label
 	if debug_label:
-		# Only with ?stats, small, under the health bar.
-		debug_label.visible = LaunchOptions.has("stats")
+		# Small, under the health bar (shown with ?stats or the options menu's switch).
 		debug_label.add_theme_font_size_override("font_size", 10)
 		debug_label.position = Vector2(_touch_controls.safe_insets.x + 20.0, _touch_controls.safe_insets.y + 56.0)
 	Device.set_page_touch_mode(true)

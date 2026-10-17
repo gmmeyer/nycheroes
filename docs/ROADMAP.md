@@ -110,7 +110,8 @@ peer can drive one later. Nearby tiles get collision.
   are near it); other games show a copy, drawn a moment in the past so it
   moves smoothly. Each game runs the gangs it puts down around its own hero,
   and puts none down where enough gangs are about already, whoever runs
-  them; it tells each player about its thugs within 400 m. A game whose
+  them (nor while it's getting into a room and for 3 s after, so it hears
+  of the others' first); it tells each player about its thugs within 400 m. A game whose
   thugs stayed with another player's hero (it went off and left them
   fighting) keeps the streets around that hero loaded so they have ground.
   (Until the public game the host ran every thug and loaded the streets
@@ -216,11 +217,11 @@ peer can drive one later. Nearby tiles get collision.
   a free camera (`?cam`) or `--screenshot`, in headless runs and headless
   Chrome (the tests and page checks; `?public=1` joins anyway), by desktop
   builds without WebRTC (they can't meet browser players), nor when the
-  player has turned the setting `online_public` off (kept by the `Settings`
-  autoload, on by default; the game checks it every second while running:
-  off leaves the public game, on joins it). It's quiet: if the server can't
-  be reached (or the room's host can't), the game plays alone without a
-  word and asks again after 30 s, then less often, up to every 5 minutes
+  player has turned off the options menu's "Join the public game
+  automatically" (`online_public`, on by default; switched while playing,
+  off leaves the public game and on joins it). It's quiet: if the server
+  can't be reached (or the room's host can't), the game plays alone without
+  a word and asks again after 30 s, then less often, up to every 5 minutes
   (3 s after losing a public room's host). The menu (M) shows "Public game
   · N players", the room code and link, the players, and "Leave (play
   alone)", "Host a private game" and "Join with code"; either of the last
@@ -323,7 +324,8 @@ peer can drive one later. Nearby tiles get collision.
     public game by themselves: six at different places land in one room,
     keep their starts and see each other where they are; a seventh opens
     another room as its host; one leaves (and stays alone), then joins
-    again from the menu, back in the first room; the first room's host's
+    again from the menu, back in the first room; another turns the options'
+    switch off (it leaves) and on (it's back); the first room's host's
     game is closed and the next player hosts the still-public room; an
     eighth gets the old host's number in it; the server restarts and every
     game comes back to its room; the seventh leaves (its room closes) and a
@@ -1639,8 +1641,9 @@ and 29):**
   soundscape map made from the land cover map; horns, far sirens, bird
   calls and dogs around you. The nearest 4 moving cars get engine loops
   pitched by speed, and cars held up by someone in the road honk.
-- Positional in co-op; buses Master, SFX, Ambience and UI; N or the touch
-  UI's speaker button mutes, remembered between visits (`?mute=1|0`,
+- Positional in co-op; buses Master, SFX, Ambience and UI; N, the touch
+  UI's speaker button or the options menu mutes, remembered between visits
+  with the menu's Master, Effects (SFX) and Ambience volumes (`?mute=1|0`,
   `?audio=0` leaves sound out). Nothing plays before the first click, tap or
   key (browsers' rule).
 - 118 sounds, CC0 (Kenney packs, Freesound uploads checked one by one,
@@ -1679,8 +1682,10 @@ phone, in the phone's browser, at https://nycheroes.party.
   its rim; walking speed follows how far it's pushed), dragging anywhere
   else turns the camera, and buttons on the right: PUNCH (DIVE in the air),
   JUMP (hold for a super jump; UP while flying), DOWN (flying), WEB (hold),
-  FLY, SPEED (a toggle, off 0.8 s after the stick is let go), CO-OP and
-  fullscreen. Holding WEB or JUMP and sliding also turns the camera. They
+  FLY, SPEED (a toggle, off 0.8 s after the stick is let go), and along the
+  top the speaker, fullscreen, CO-OP and a gear for the options menu.
+  Holding WEB or JUMP and sliding also turns the camera (at the options
+  menu's look speed). They
   press the same input actions as the keyboard, so the hero is unchanged.
   The UI is measured in CSS pixels, so it's the same physical size on
   every phone.
@@ -1697,7 +1702,8 @@ phone, in the phone's browser, at https://nycheroes.party.
   first tap where browsers allow it (iPhones can't; the overlay suggests
   Add to Home Screen, which runs without browser bars).
 - **Quality presets** (`scripts/util/quality.gd`; `?quality=low|medium|high`,
-  else phones low, tablets medium, computers high):
+  else the options menu's choice, else phones low, tablets medium, computers
+  high; the menu switches them while playing, see "Options menu"):
 
   | | low | medium | high |
   |---|---|---|---|
@@ -2112,7 +2118,8 @@ deployed); in a computer's browser the co-op menu links to it.
   signaling server, both ways (the browser hosting and the desktop game
   joining, then the reverse): each connected and showed the other's hero
   next to its own.
-- **On desktop also:** F11 switches full screen. `--screenshot=PATH` saves
+- **On desktop also:** F11 switches full screen (remembered, like the
+  options menu's switch; Esc opens the options menu too). `--screenshot=PATH` saves
   a screenshot a few seconds after the city is ready
   (`--screenshot_delay=S`, default 5), logs the frame times and quits.
 - **Downloads:** `download.html` (`tools/web`, copied by build_web.ps1)
@@ -2135,6 +2142,78 @@ deployed); in a computer's browser the co-op menu links to it.
   signatures and entitlements were checked here); sign the Windows exe with
   a code-signing certificate, so SmartScreen stops warning ("More info, Run
   anyway" until then); an icon.
+
+## Options menu (done; added 2026-10-16 at the user's request)
+
+- **Opening it:** O in every build (Esc too in the desktop builds: browsers
+  keep Esc for leaving the pointer lock and full screen, and the page
+  doesn't reliably get it), a gamepad's Start, the HUD's "OPTIONS · O"
+  button in the top right corner, or the gear at the end of the touch
+  controls' top row. It frees the mouse; closing it with a click (Resume,
+  or the dimmed game around it) locks the pointer again, and so do keys in
+  the desktop builds; in the browser, after O, the next click on the game
+  does. One menu at a time: M swaps it for the co-op menu, and so does its
+  "Co-op..." button; O swaps back; Esc closes the co-op menu. The HUD's help
+  line says "O options". `scripts/ui/options_panel.gd`, made by Game.
+- **Pages:** Game: graphics quality (Auto, Low, Medium, High; a note says
+  what Auto is on this device), time of day (dawn, day, dusk, night, as T
+  steps through them; at once while paused), full screen (desktop, and
+  browsers that can: not iPhones), "Show FPS and stats" (the debug text: on
+  for computers and off for phones and tablets unless changed; `?stats`
+  shows it for the session) and "Join the public game automatically"
+  (stored as `online_public`, default on, for co-op's automatic joining).
+  Sound: Master, Effects and Ambience volumes (squared on the way to the
+  buses, so half way is -12 dB) and the sound switch (N). Controls: look
+  speed (the mouse's and the gamepad stick's, or the fingers' on touch
+  screens, 25-300%), swapping looking up and down, and what each key (or
+  touch button) does. It looks like the co-op menu and works with the
+  mouse, keys (Tab or arrows, Enter or Space), gamepads and fingers; on
+  phones its buttons are 44 px tall, it keeps clear of notches, and its
+  page scrolls when the screen is too short. The panel keeps the height of
+  its tallest page, so the tabs stay put.
+- **Pausing:** in single player the game pauses while the menu is open
+  (the city's sound goes on, so the sliders can be heard, and the stats
+  keep counting); in co-op (any Net state but offline) it goes on, and a
+  game that goes online while the menu is open un-pauses.
+- **Graphics quality while playing:** a preset picked in the menu applies
+  at once, with no restart: 3-D resolution, MSAA, the sun's shadows and
+  shadow map, fog, load distances (tiles past them unload over the next
+  seconds, and load again going up), pedestrians (the furthest go), cars
+  and trains (`Traffic.set_max_cars()`, `Trains.set_max_trains()`: those
+  past the new number go, more come in out of sight), gangs, and how far
+  the tiles already built draw their furniture, parked cars, rowhouse
+  fronts and woods' crowns (`CityStreamer.refresh_detail()`). Trees'
+  shadows and far woods' crowns that a tile was built without (under a
+  lower preset) come when it's built again as the hero moves on; going
+  down, they go at once. The sound variants loaded (fewer on low) stay as
+  at the start. `Quality.PRESETS` now spells out "high" (the scene's own
+  values; the options test checks they still match).
+- **Settings** (`scripts/util/settings.gd`, the autoload `Settings`:
+  `get_value(key, default)`, `set_value(key, value)` which saves at once,
+  and a `changed(key)` signal): `user://settings.cfg`, under [settings]. On
+  the web user:// is IndexedDB, which Godot writes a frame after a file
+  changes, usually within a tenth of a second; but in a fresh browser
+  session the first write waited 15-20 s behind Godot's own first files,
+  and a page reloaded meanwhile lost the change (headless Chrome). So the
+  web build also keeps the file in localStorage (`nycheroes.settings`,
+  written at once) and reads that first. The old mute switch
+  (localStorage's `nycheroes.muted` on the web, `[sound] muted` on desktop)
+  moves in at the first start. Launch options win for the session
+  (`?quality=low` shows in the menu as "for this visit"); the menu's own
+  changes are saved as usual. Keys: muted, volume_master, volume_effects,
+  volume_ambience, quality, look_mouse, look_touch, invert_y, show_stats,
+  fullscreen (desktop), online_public.
+- **Tested:** `tests/options_test.tscn` (41 checks): settings saved and
+  read back, the old mute switch moved in, "high" matching the scene, low
+  and back to high while playing (everything above; at Times Square the far
+  tiles went from 84 to 12 and back, cars from 180 to 35 and back),
+  volumes on the buses, look speed and invert, O, Esc, M and the Co-op
+  button swapping menus and pausing. In headless Chrome: the menu at
+  1600x900 and on an 844x390 phone (also with notch insets), opened by O,
+  the HUD button and the gear; settings kept over reloads, even one 0.1 s
+  after a change; `?quality=low` winning for one visit; the old mute switch
+  moved in. Pointer lock can't be checked there (headless Chrome never
+  grants it). The other tests pass as before.
 
 ## Constraints
 
@@ -2246,7 +2325,8 @@ deployed); in a computer's browser the co-op menu links to it.
   `--net=webrtc`; none joins the public game unless it means to),
   `res://tests/coop_load_test.tscn` (not a pass/fail test: what 3 and 7
   players far off cost a host's frames, physics and memory),
-  `res://tests/audio_test.tscn` and
+  `res://tests/audio_test.tscn`, `res://tests/options_test.tscn` (the
+  options menu and the settings, with a settings file of its own) and
   `res://tests/traffic_test.tscn` (75 s of
   midtown traffic: no red light run, no overlaps, cars stop for the hero,
   and leave with their tiles) and `res://tests/trains_test.tscn` (the 7 at
@@ -2258,8 +2338,9 @@ deployed); in a computer's browser the co-op menu links to it.
   with the trains surface around the 7, the 4 on Jerome Avenue and
   Woodlawn; `TRAINS_TERMINAL_ONLY=1` goes straight to Woodlawn).
 - Launch options (URL or `-- --name=value` on desktop): `?cam=x,y,z,yaw,pitch`
-  free camera, `?spawn=x,y,z,yaw` hero start, `?stats` console stats,
-  `?peds=N`, `?gangs=N`, `?traffic=N`, `?trains=N` (0: none), `?demo` / `?demo=fight` / `?demo=city` / `?demo=new` scripted tours for videos,
+  free camera, `?spawn=x,y,z,yaw` hero start, `?stats` the stats text
+  (also on phones) and console stats, `?quality=low|medium|high`,
+  `?mute=1|0`, `?touch=1|0`, `?time=HH:MM`, `?peds=N`, `?gangs=N`, `?traffic=N`, `?trains=N` (0: none), `?demo` / `?demo=fight` / `?demo=city` / `?demo=new` scripted tours for videos,
   `?host` / `?join=CODE` co-op (a private game), `?solo=1` play alone (no
   public game), `?public=1` join the public game even headless or from a
   script (headless Chrome), `?signal=wss://...` signaling server
@@ -2271,4 +2352,6 @@ deployed); in a computer's browser the co-op menu links to it.
   desktop only: `--tiles_url=URL` stream tiles from another server,
   `--decode_threads=0` decode tiles on the main thread, `--net=enet|webrtc`
   how co-op connects, `--screenshot=PATH` (and `--screenshot_delay=S`) save
-  a screenshot once the city has loaded, then quit.
+  a screenshot once the city has loaded, then quit. Launch options win over
+  the options menu's saved settings for that session (the menu's own changes
+  are saved as usual).

@@ -271,17 +271,16 @@ var _manhattan := PackedVector2Array()
 var _gap := INF
 var _closing := 0.0
 var _cap := INF
+## radius, grow_distance and despawn_distance for FULL_CARS (as set up).
+var _full_radius := Vector3.ZERO
 
 
 func _ready() -> void:
 	if LaunchOptions.has("traffic"):
 		max_cars = maxi(int(LaunchOptions.get_string("traffic")), 0)
 	_log_stats = LaunchOptions.has("stats")
-	# Fewer cars drive nearer, as densely.
-	var full := radius
-	radius = clampf(full * sqrt(max_cars / FULL_CARS), 160.0, full)
-	despawn_distance += radius - full
-	grow_distance = minf(grow_distance, radius * 0.6)
+	_full_radius = Vector3(radius, grow_distance, despawn_distance)
+	_fit_radius()
 	for corner in MANHATTAN:
 		_manhattan.append(Vector2((corner.y - ORIGIN_LON) * METERS_PER_DEGREE * cos(deg_to_rad(ORIGIN_LAT)),
 			-(corner.x - ORIGIN_LAT) * METERS_PER_DEGREE))
@@ -331,6 +330,37 @@ func _ready() -> void:
 		for key: Vector2i in loaded:
 			set_tile_lanes(key, loaded[key][0], loaded[key][1])
 	set_process(max_cars > 0)
+
+
+## Changes how many cars may drive (Quality, while playing): fewer drive
+## nearer, as at the start. Cars past the new number go at once; more come in
+## out of sight. (Not after starting with none: ?traffic=0.)
+func set_max_cars(count: int) -> void:
+	count = maxi(count, 1)
+	if max_cars == 0 or count == max_cars:
+		return
+	max_cars = count
+	_fit_radius()
+	for i in range(_highest, -1, -1):
+		if car_count <= max_cars:
+			break
+		_despawn(i)
+	var slots := _path.size()
+	if max_cars > slots:
+		_setup_slots(max_cars)
+		for n in range(slots * STRIDE, _buffer.size()):
+			_buffer[n] = 0.0
+		for multimesh in [_multimesh, _glow_multimesh]:
+			multimesh.instance_count = max_cars
+			multimesh.visible_instance_count = _highest + 1
+			multimesh.buffer = _buffer
+
+
+## Fewer cars drive nearer, as densely (see radius).
+func _fit_radius() -> void:
+	radius = clampf(_full_radius.x * sqrt(max_cars / FULL_CARS), 160.0, _full_radius.x)
+	despawn_distance = _full_radius.z + radius - _full_radius.x
+	grow_distance = minf(_full_radius.y, radius * 0.6)
 
 
 ## A tile's driving lanes arrived, or went (both empty): cars on lanes that
@@ -1224,8 +1254,11 @@ func _setup_slots(count: int) -> void:
 	_drawn_time.resize(count)
 	_going.resize(count)
 	_at.resize(count)
-	_buffer.resize(count * STRIDE)
-	_buffer.fill(0.0)
+	if _buffer.is_empty():
+		_buffer.resize(count * STRIDE)
+		_buffer.fill(0.0)
+	else:
+		_buffer.resize(count * STRIDE)  # (set_max_cars() clears the new part)
 
 
 ## Four quads (corners -1..1 in UV), one per light: UV2.x 0 and 1 the

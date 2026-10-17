@@ -89,8 +89,6 @@ const PUBLIC_RETRY_MAX := 300.0
 ## After losing the public room's host (or being dropped), look for a public
 ## room again after this long (seconds).
 const PUBLIC_REJOIN := 3.0
-## How often to check the player's "online_public" setting (seconds).
-const SETTING_INTERVAL := 1.0
 const SIGNALING_PORT := 8070
 ## The public site, whose signaling server desktop builds use by default; their
 ## invite links open the game there.
@@ -175,8 +173,7 @@ var _auto_public := false  # Game allows the public game (start_public): we foll
 var _wants_public := false  # we're in the public game, or looking for it (quietly, see _give_up)
 var _public_at := 0  # when to look for a public room again (msec; 0: not waiting to)
 var _public_retry := PUBLIC_RETRY
-var _setting_cooldown := 0.0
-var _setting_on := true  # the "online_public" setting, as of the last check
+var _setting_on := true  # the "online_public" setting, as we last followed it
 
 static var _webrtc := -1  # whether a WebRTC library loaded (desktop): -1 not checked yet, else 1 or 0
 
@@ -184,10 +181,10 @@ static var _webrtc := -1  # whether a WebRTC library loaded (desktop): -1 not ch
 func _ready() -> void:
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	Settings.changed.connect(_on_setting_changed)
 
 
 func _process(delta: float) -> void:
-	_follow_setting(delta)
 	if _public_at != 0 and Time.get_ticks_msec() >= _public_at:
 		_public_at = 0
 		if state == State.OFFLINE and _wants_public:
@@ -333,7 +330,7 @@ func join_public() -> void:
 ## then on: turning it off leaves the public game, turning it on joins it.
 func start_public() -> void:
 	_auto_public = true
-	_setting_on = _public_setting()
+	_setting_on = bool(Settings.get_value("online_public", true))
 	if _setting_on and state == State.OFFLINE:
 		join_public()
 
@@ -372,23 +369,11 @@ func _stop_public() -> void:
 	_public_at = 0
 
 
-## The player's "online_public" setting: on unless they turned it off (kept
-## by the Settings autoload, if there is one).
-func _public_setting() -> bool:
-	var settings := get_node_or_null("/root/Settings")
-	if settings == null or not settings.has_method("get_value"):
-		return true
-	return bool(settings.call("get_value", "online_public", true))
-
-
-## Once the public game is allowed (start_public), follows the setting.
-func _follow_setting(delta: float) -> void:
-	_setting_cooldown -= delta
-	if not _auto_public or _setting_cooldown > 0.0:
-		return
-	_setting_cooldown = SETTING_INTERVAL
-	var on := _public_setting()
-	if on == _setting_on:
+## Once the public game is allowed (start_public), follows the player's
+## "online_public" setting (the options menu's switch).
+func _on_setting_changed(key: String) -> void:
+	var on := bool(Settings.get_value("online_public", true))
+	if key != "online_public" or not _auto_public or on == _setting_on:
 		return
 	_setting_on = on
 	if on and state == State.OFFLINE:

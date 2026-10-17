@@ -10,6 +10,8 @@ extends Node
 ##   - C leaves (plays alone): it stays alone, and the others see it go. It
 ##     joins the public game again from the menu: back in the first room
 ##     (the fullest with a place free), not the seventh's.
+##   - D turns the public game off in the options (it leaves), then on (it's
+##     back in the first room).
 ##   - The first room's host's game is closed: the next player hosts, and the
 ##     room stays public with its code.
 ##   - An eighth asks: it's put in the first room, with the old host's number.
@@ -118,6 +120,13 @@ func _runner_steps() -> Array[Dictionary]:
 					and ["a", "b", "d", "e", "f"].all(func(role: String) -> bool: return (_state(role).peers as Array).size() == 4)),
 		_step("C joins the public game again from the menu: the first room", 60.0, _command.bind("c", "public"),
 			func() -> bool: return _all_in_room(["c"], 5) and _state("c").room == _rooms.first),
+		_step("D turns the public game off in the options: it leaves", 30.0, _command.bind("d", "setting_off"),
+			func() -> bool:
+				var d := _state("d")
+				return d.state == "OFFLINE" and not d.wants_public \
+					and ["a", "b", "c", "e", "f"].all(func(role: String) -> bool: return (_state(role).peers as Array).size() == 4)),
+		_step("D turns it back on: it's in the first room again", 60.0, _command.bind("d", "setting_on"),
+			func() -> bool: return _all_in_room(["d"], 5) and _state("d").room == _rooms.first),
 		_step("the first room's host's game closes: the next hosts, the room stays public", 60.0, func() -> void:
 			OS.kill(_pids[_role_numbered(_host_number)]),
 			func() -> bool:
@@ -256,6 +265,8 @@ func _process(delta: float) -> void:
 				Net.leave()  # the menu's Leave
 			"public":
 				Net.join_public()  # the menu's Join the public game
+			"setting_off", "setting_on":
+				Settings.set_value("online_public", command == "setting_on")  # the options menu's switch
 	_report()
 
 

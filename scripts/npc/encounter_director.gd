@@ -53,6 +53,10 @@ const IDS_PER_SECOND := 4
 ## The host waits this long (seconds) for a player's copies before telling
 ## them which thugs there are, once it has taken over a departed player's.
 const HANDOVER_WAIT := 3.0
+## While getting into a room (at most CONNECTING_HOLD), and for SETTLE_IN
+## seconds after, we put no gangs down: we hear of the others' first.
+const CONNECTING_HOLD := 8.0
+const SETTLE_IN := 3.0
 
 @export var city: CityStreamer
 ## Our hero.
@@ -64,6 +68,10 @@ const HANDOVER_WAIT := 3.0
 @export var respawn_delay := 5.0
 ## Oldest bodies are removed beyond this many.
 @export var max_bodies := 16
+## Set (by Game) while the game is about to join the public game: no gangs
+## until it has (or couldn't), so a newcomer doesn't add its own where the
+## others' are already about.
+var hold_for_public := false
 
 var _gangs: Array[Array] = []  # the gangs we run
 var _bodies: Array[Thug] = []
@@ -80,6 +88,7 @@ var _handed := {}  # (host) player number -> msec: when their copies last came
 var _handovers := {}  # player number -> copies they handed over before we knew we're the host
 var _handover: Array = []  # copies of departed players' thugs, for the host
 var _handover_due := false  # (players) _handover is still to go to the host
+var _settled_msec := 0  # no gangs of ours before this (Time.get_ticks_msec): getting into a room
 
 
 func _ready() -> void:
@@ -172,7 +181,8 @@ func _spawn_near_hero() -> void:
 	_spawn_cooldown -= UPDATE_INTERVAL
 	var center := hero.world_position()
 	var above_street := center.y - city.ground_height_at(center, 0.5)
-	if _spawn_cooldown > 0.0 or hero.frozen or not above_street < MAX_SPAWN_ALTITUDE or _gangs_near(center) >= max_gangs:
+	if _spawn_cooldown > 0.0 or hero.frozen or not above_street < MAX_SPAWN_ALTITUDE or _gangs_near(center) >= max_gangs \
+			or hold_for_public or Time.get_ticks_msec() < _settled_msec:
 		return
 	if _spawn_gang_near(hero, center):
 		_spawn_cooldown = respawn_delay
@@ -361,6 +371,13 @@ func _thug_states(sender_msec: int, net_ids: PackedInt32Array, states: PackedFlo
 ## go; ours stay, and stay ours in a room we go into.
 func _on_net_state_changed() -> void:
 	_shared.clear()
+	match Net.state:
+		Net.State.CONNECTING:
+			_settled_msec = Time.get_ticks_msec() + int(CONNECTING_HOLD * 1000.0)
+		Net.State.OFFLINE:
+			_settled_msec = 0
+		_:
+			_settled_msec = mini(_settled_msec, Time.get_ticks_msec() + int(SETTLE_IN * 1000.0))
 	if Net.is_online():
 		return
 	_told.clear()

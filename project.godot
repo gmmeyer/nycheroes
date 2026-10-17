@@ -23,6 +23,7 @@ driver/mix_rate.web=32000
 
 [autoload]
 
+Settings="*res://scripts/util/settings.gd"
 WorldOrigin="*res://scripts/world/world_origin.gd"
 Net="*res://scripts/net/net.gd"
 Combat="*res://scripts/combat/combat.gd"

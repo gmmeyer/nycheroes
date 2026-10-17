@@ -4,8 +4,11 @@ extends Node
 ## the 3-D world from a pool of players, runs the city's ambience
 ## (CityAmbience), the engines of passing cars (TrafficSounds) and the
 ## trains on the els (TrainSounds), and
-## switches the sound off and on: N, or the speaker button on touch screens
-## (remembered between visits, see SoundSettings). Other scripts call the
+## switches the sound off and on: N, the speaker button on touch screens or
+## the options menu (remembered between visits, with the menu's volumes: see
+## SoundSettings). It keeps playing while the options menu pauses the game
+## (the city's ambience goes on, and the volume sliders can be heard).
+## Other scripts call the
 ## static functions (play(), play_later(), set_traffic(), ...), which do
 ## nothing when there's no GameAudio. The hero's own sounds are HeroSounds,
 ## on every hero (ours and other players').
@@ -133,8 +136,13 @@ func _ready() -> void:
 	add_child(trains)
 
 	_log_stats = LaunchOptions.has("stats")
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	muted = SoundSettings.load_muted()
 	AudioServer.set_bus_mute(0, muted)
+	SoundSettings.apply_volumes()
+	Settings.changed.connect(func(key: String) -> void:
+		if SoundSettings.VOLUMES.has(key):
+			SoundSettings.apply_volumes())
 	_unlocked = not OS.has_feature("web") or LaunchOptions.has("demo")
 	if OS.has_feature("web") and int(ProjectSettings.get_setting("audio/general/default_playback_type", 0)) == 1:
 		_to_register = SoundBank.all_streams()
