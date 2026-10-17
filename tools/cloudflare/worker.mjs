@@ -7,6 +7,9 @@
 // direct connections). Deploy with tools/deploy_cloudflare.ps1.
 
 const MAX_PLAYERS = 8;
+// Public rooms take this many players by matchmaking, leaving places for
+// friends joining with the code.
+const PUBLIC_PLAYERS = 6;
 const FIRST_HOST = 1;
 // No 0/O, 1/I/L: codes get read out loud and typed.
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -40,7 +43,8 @@ export default {
       if (request.headers.get('Upgrade') !== 'websocket') {
         return new Response('signaling ok\n', { headers: { 'content-type': 'text/plain' } });
       }
-      // One room keeper for everyone: a few games at a time fit easily.
+      // One room keeper for everyone, so it sees every public room's players
+      // when it matches a newcomer to one: thousands of players fit easily.
       return env.ROOMS.get(env.ROOMS.idFromName('lobby')).fetch(request);
     }
     if (url.pathname === '/index.wasm') {
@@ -107,18 +111,22 @@ async function wasm(request, env) {
 }
 
 // Rooms of players, kept in the sockets' attachments ({code, id, since, key,
-// host, back}) so they survive the Durable Object sleeping between messages.
-// Players connect to each other in a full mesh. One is the host (`host` is set
-// on it): first the one who opened the room; when the host leaves, the player
-// who has been in the room longest takes over, passing over any who stopped
-// pinging (see tools/signaling/server.mjs for the protocol). A room and its
-// code last until its last player leaves.
+// host, back, public, version}) so they survive the Durable Object sleeping
+// between messages. Players connect to each other in a full mesh. One is the
+// host (`host` is set on it): first the one who opened the room; when the host
+// leaves, the player who has been in the room longest takes over, passing over
+// any who stopped pinging (see tools/signaling/server.mjs for the protocol). A
+// room and its code last until its last player leaves. Every player of a
+// public room carries `public` and the room's `version` (the game's, which
+// games from before public rooms don't send), so the room keeps them whoever
+// leaves; a player asking for the public game is put in the fullest one of its
+// version with a place free, or opens a new one.
 //
 // A restart (a deploy) loses every room and closes every socket; the players
 // play on, come back and rebuild their rooms ("rejoin"). Until they're all
 // back, the places of those still away are kept in storage, under
-// "away:<code>" ({[id]: {since, at, host}}), as they have no socket to carry
-// them.
+// "away:<code>" ({[id]: {since, at, host, public, version}}), as they have no
+// socket to carry them.
 export class Rooms {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -145,33 +153,32 @@ export class Rooms {
     }
     // Hosting, joining and rejoining hand out ICE servers: get them first, so
     // the rooms can't change between the checks below and the replies.
-    const ice = ['host', 'join', 'rejoin'].includes(message?.type) ? await this.iceServers() : null;
+    const ice = ['host', 'join', 'public', 'rejoin'].includes(message?.type) ? await this.iceServers() : null;
     const me = socket.deserializeAttachment() ?? {};
     switch (message?.type) {
-      case 'host': {
+      case 'host':
         if (me.code) return send(socket, { type: 'error', message: 'Already in a game' });
-        const code = this.newCode();
-        const key = crypto.randomUUID();
-        this.setAway(code, {}); // (left from a room that had this code before a restart)
-        socket.serializeAttachment({ code, id: FIRST_HOST, since: Date.now(), key, host: true });
-        send(socket, { type: 'hosted', code, id: FIRST_HOST, key, ice });
+        this.open(socket, ice, false, versionOf(message));
         break;
-      }
       case 'join': {
         if (me.code) return send(socket, { type: 'error', message: 'Already in a game' });
         const code = String(message.code ?? '').trim().toUpperCase();
         const players = this.players(code);
         if (players.size === 0) return send(socket, { type: 'error', message: `No game with code ${code}`, reason: 'no_room' });
-        // The lowest free number, so player numbers (and colors) stay small.
-        let id = FIRST_HOST;
-        while (players.has(id)) id++;
-        if (id > MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full' });
-        const key = crypto.randomUUID();
-        socket.serializeAttachment({ code, id, since: Date.now(), key });
-        send(socket, { type: 'joined', code, id, key, host: this.hostOf(players), peers: [...players.keys()], ice });
-        // Everyone there sends the newcomer an offer. Their credentials may be
-        // older than a long game; these are fresh.
-        for (const player of players.values()) send(player, { type: 'peer_joined', id, ice });
+        const version = versionOf(message);
+        const room = roomOf(players);
+        if (version !== null && room.version !== null && version !== room.version) {
+          return send(socket, { type: 'error', message: OTHER_VERSION, reason: 'version' });
+        }
+        this.admit(socket, code, players, ice);
+        break;
+      }
+      case 'public': {
+        if (me.code) return send(socket, { type: 'error', message: 'Already in a game' });
+        const version = versionOf(message);
+        const code = this.publicRoom(version);
+        if (code) this.admit(socket, code, this.players(code), ice);
+        else this.open(socket, ice, true, version);
         break;
       }
       case 'rejoin':
@@ -212,6 +219,60 @@ export class Rooms {
     this.leave(socket);
   }
 
+  /** Opens a room with this player as its host. */
+  open(socket, ice, isPublic, version) {
+    const code = this.newCode();
+    const key = crypto.randomUUID();
+    this.setAway(code, {}); // (left from a room that had this code before a restart)
+    socket.serializeAttachment({ code, id: FIRST_HOST, since: Date.now(), key, host: true, ...roomFlags(isPublic, version) });
+    send(socket, { type: 'hosted', code, id: FIRST_HOST, key, ice, ...(isPublic && { public: true }) });
+  }
+
+  /** Puts a player in room `code` (its players, from players()), as its lowest free number. */
+  admit(socket, code, players, ice) {
+    // The lowest free number, so player numbers (and colors) stay small.
+    let id = FIRST_HOST;
+    while (players.has(id)) id++;
+    if (id > MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full', reason: 'full' });
+    const key = crypto.randomUUID();
+    const room = roomOf(players);
+    socket.serializeAttachment({ code, id, since: Date.now(), key, ...roomFlags(room.public, room.version) });
+    send(socket, {
+      type: 'joined', code, id, key, host: this.hostOf(players), peers: [...players.keys()], ice,
+      ...(room.public && { public: true }),
+    });
+    // Everyone there sends the newcomer an offer. Their credentials may be
+    // older than a long game; these are fresh.
+    for (const player of players.values()) send(player, { type: 'peer_joined', id, ice });
+  }
+
+  /**
+   * The code of the public room to put a player in: of those for its version
+   * with a place free, the one with the most players (places kept for players
+   * not back since a restart count too), the oldest of those. Null if there's
+   * none.
+   */
+  publicRoom(version) {
+    const rooms = new Map(); // code -> {count, opened}
+    for (const socket of this.ctx.getWebSockets()) {
+      const them = socket.deserializeAttachment() ?? {};
+      if (!them.code || !them.public || (them.version ?? null) !== version) continue;
+      const room = rooms.get(them.code) ?? { count: 0, opened: Infinity };
+      room.count++;
+      room.opened = Math.min(room.opened, them.since ?? 0);
+      rooms.set(them.code, room);
+    }
+    let best = null;
+    for (const [code, room] of rooms) {
+      room.count += Object.keys(this.away(code)).length;
+      if (room.count >= PUBLIC_PLAYERS) continue;
+      if (!best || room.count > best.count || (room.count === best.count && room.opened < best.opened)) {
+        best = { code, ...room };
+      }
+    }
+    return best?.code ?? null;
+  }
+
   /** A player coming back to its room after its socket dropped, or after we restarted. */
   rejoin(socket, message, ice) {
     if (socket.deserializeAttachment()?.code) return send(socket, { type: 'error', message: 'Already in a game' });
@@ -223,6 +284,10 @@ export class Rooms {
     }
     const found = this.players(code);
     const players = found.size > 0 ? found : this.rebuild(code, id, message);
+    // Any player back may know better than the first (a game from before
+    // public rooms doesn't say).
+    const room = roomOf(players);
+    const flags = roomFlags(room.public || message.public === true, room.version ?? versionOf(message));
     const there = players.get(id);
     let since = Date.now();
     let host = false;
@@ -248,12 +313,14 @@ export class Rooms {
       missed = [...players.values()].filter((player) => !player.away && info(player).since >= there.at);
     } else {
       // The room let them go meanwhile: everyone connects to them again.
-      if (players.size >= MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full' });
+      if (players.size >= MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full', reason: 'full' });
       back = true;
     }
-    socket.serializeAttachment({ code, id, since, key, ...(host && { host }), ...(back && { back }) });
+    socket.serializeAttachment({ code, id, since, key, ...(host && { host }), ...(back && { back }), ...flags });
     const now = this.players(code);
-    send(socket, { type: 'rejoined', code, id, host: this.hostOf(now), players: [...now.keys()], back, ice });
+    send(socket, {
+      type: 'rejoined', code, id, host: this.hostOf(now), players: [...now.keys()], back, ice, ...(flags.public && { public: true }),
+    });
     for (const player of missed) send(socket, { type: 'peer_joined', id: info(player).id, back: info(player).back });
     if (back) {
       for (const player of now.values()) {
@@ -264,9 +331,9 @@ export class Rooms {
 
   /**
    * A room we lost (a restart), as the first player back says it was: who was
-   * in it, in the order they came, and who hosted. The places of all of them
-   * are kept until they're back (the first takes its own at once). Returns its
-   * players (all away), as players() does.
+   * in it, in the order they came, who hosted, whether it was public and its
+   * version. The places of all of them are kept until they're back (the first
+   * takes its own at once). Returns its players (all away), as players() does.
    */
   rebuild(code, id, message) {
     const claimed = Array.isArray(message.players) ? message.players : [];
@@ -280,7 +347,8 @@ export class Rooms {
       if (!open.has(name.slice('away:'.length))) this.ctx.storage.kv.delete(name);
     }
     const away = {};
-    ids.forEach((n, i) => { away[n] = { since: now - ids.length + i, at: now, ...(n === host && { host: true }) }; });
+    const flags = roomFlags(message.public === true, versionOf(message));
+    ids.forEach((n, i) => { away[n] = { since: now - ids.length + i, at: now, ...(n === host && { host: true }), ...flags }; });
     this.setAway(code, away);
     return new Map(ids.map((n) => [n, { ...away[n], away: true, code, id: n }]));
   }
@@ -390,6 +458,29 @@ export class Rooms {
 function info(player) {
   return player.away ? player : player.deserializeAttachment() ?? {};
 }
+
+/** Whether a room (its players, from players()) is public, and its version (null if unknown). */
+function roomOf(players) {
+  const room = { public: false, version: null };
+  for (const player of players.values()) {
+    const them = info(player);
+    room.public ||= them.public === true;
+    room.version ??= Number.isInteger(them.version) ? them.version : null;
+  }
+  return room;
+}
+
+/** What every player of a room carries about it (see Rooms). */
+function roomFlags(isPublic, version) {
+  return { ...(isPublic && { public: true }), ...(version !== null && { version }) };
+}
+
+/** The game's version a message gives, or null (games from before public rooms send none). */
+function versionOf(message) {
+  return Number.isInteger(message?.version) ? message.version : null;
+}
+
+const OTHER_VERSION = 'That game is on another version of NYC Heroes. Reload the page (or get the new version), then try again.';
 
 function isCode(code) {
   return code.length === CODE_LENGTH && [...code].every((letter) => CODE_LETTERS.includes(letter));

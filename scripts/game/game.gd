@@ -6,8 +6,14 @@ extends Node3D
 ## ?cam=... also starts in the free camera). ?demo plays a scripted tour
 ## instead of taking player input (see DemoDirector).
 ##
-## Co-op: M opens the co-op menu; ?host hosts a game and ?join=CODE joins one
-## (invite links use it). Players who join start next to the host's hero.
+## Co-op: once the city has loaded, the game joins the public game (see Net),
+## so players online see each other without doing anything; they keep their
+## own start. Not with ?solo=1 (play alone), a free camera or a screenshot,
+## nor when nobody's playing (headless runs, browsers driven by scripts) unless
+## ?public=1, nor where the player turned it off (the "online_public" setting).
+## M opens the co-op menu; ?host hosts a private game and ?join=CODE joins one
+## (invite links use it). Players who join a private game start next to the
+## host's hero.
 ## T steps the time of day on to the next of dawn, day, dusk and night
 ## (TimeOfDay; ?time=HH:MM and ?daylength=MINUTES set the clock).
 ## Sound is the Audio node's (GameAudio): N switches it off and on.
@@ -74,6 +80,9 @@ func _ready() -> void:
 		Net.host()
 	elif LaunchOptions.has("join"):
 		Net.join(LaunchOptions.get_string("join"))
+	elif _plays_public():
+		# Once the city is there: joining doesn't hold up its loading.
+		city.initial_load_finished.connect(func(_seconds: float) -> void: Net.start_public(), CONNECT_ONE_SHOT)
 	if LaunchOptions.has("screenshot") and not Device.is_web():
 		_take_screenshot(LaunchOptions.get_string("screenshot"))
 
@@ -126,6 +135,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		var window := get_window()
 		window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
 		get_viewport().set_input_as_handled()
+
+
+## Whether this session joins the public game (see the top). Only games that
+## connect over WebRTC meet other players there (desktop builds without the
+## extension don't); ?public=1 joins anyway (tests over ENet meet each other).
+func _plays_public() -> bool:
+	if LaunchOptions.has("solo") and LaunchOptions.get_string("solo") != "0":
+		return false
+	if LaunchOptions.has("public"):
+		return LaunchOptions.get_string("public") != "0"
+	if LaunchOptions.has("cam") or LaunchOptions.has("screenshot") or DisplayServer.get_name() == "headless":
+		return false
+	if Device.is_web():
+		# (Headless Chrome, which the page checks use, doesn't set webdriver.)
+		return JavaScriptBridge.eval("navigator.webdriver === true || navigator.userAgent.includes('HeadlessChrome')") != true
+	return Net.uses_webrtc()
 
 
 func _start_demo() -> void:

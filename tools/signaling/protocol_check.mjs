@@ -4,12 +4,17 @@
 // code, rooms rebuilt by their players after a restart (two coming back at
 // once, a friend joining before the host is back, the host's place and the
 // players' order kept, a player's socket dropping on its side only, a player
-// the room let go coming back, a host that never comes back), and (with
+// the room let go coming back, a host that never comes back), public games
+// (players asking for one fill a room up to its public places, the next opens
+// another, friends join a full one with its code up to the mesh's limit, a
+// place freed goes to the next player asking, versions kept apart, a room
+// closing with its last player, a rebuilt room staying public), and (with
 // --slow, half a minute more) players who stop pinging: passed over for host,
 // and dropped when another player says it lost them (but not one that kept
 // pinging). With --restart, it also holds a room while you restart the server
 // (or the Durable Object: restart `wrangler dev`), then comes back to it.
-// Plays fake players over plain WebSockets; no game or browser needed.
+// Plays fake players over plain WebSockets; no game or browser needed. Its
+// public games use a version of their own, so real players' aren't touched.
 // Usage: node protocol_check.mjs <ws url> [--slow] [--restart]
 //   e.g. node protocol_check.mjs ws://127.0.0.1:8070
 //        node protocol_check.mjs wss://nycheroes.party/signal --slow
@@ -206,6 +211,7 @@ try {
   f.close();
 
   await rebuildCheck();
+  await publicCheck();
   if (restart) await restartCheck();
 } catch (error) {
   check(false, String(error));
@@ -313,6 +319,127 @@ async function rebuildCheck() {
     "a friend joining now gets the old host's number", describe(rJoined));
   q.close();
   r.close();
+}
+
+/**
+ * Public games: matchmaking fills a room up to its public places (6), then
+ * opens another; friends join a full one with its code (up to 8); a place
+ * freed goes to the next player asking; games of other versions get rooms of
+ * their own; a room closes with its last player; a room rebuilt after a
+ * restart stays public. With versions of its own (so real players are left
+ * out), the rooms are all this check's.
+ */
+async function publicCheck() {
+  const PUBLIC_PLAYERS = 6;
+  const version = 1000000 + Math.floor(Math.random() * 1000000);
+  const ask = async (name, v = version) => {
+    const p = await player(name);
+    p.send({ type: 'public', version: v });
+    p.answer = await p.next();
+    return p;
+  };
+
+  const first = await ask('Pub1');
+  check(first.answer?.type === 'hosted' && first.answer.id === 1 && first.answer.public === true && first.answer.key,
+    'the first player asking for the public game opens a public room as its host', describe(first.answer));
+  const code = first.answer.code;
+  const room = [first];
+  for (let n = 2; n <= PUBLIC_PLAYERS; n++) {
+    const p = await ask(`Pub${n}`);
+    const heard = await Promise.all(room.map((q) => q.next()));
+    check(p.answer?.type === 'joined' && p.answer.code === code && p.answer.id === n && p.answer.public === true
+      && p.answer.host === 1 && describe(p.answer.peers) === describe(room.map((_, i) => i + 1))
+      && heard.every((m) => m?.type === 'peer_joined' && m.id === n),
+    `player ${n} asking is put in the same room, and everyone there hears of it`, describe(p.answer));
+    room.push(p);
+  }
+
+  const next = await ask('Pub7');
+  check(next.answer?.type === 'hosted' && next.answer.public === true && next.answer.code !== code && next.answer.id === 1,
+    `with ${PUBLIC_PLAYERS} in it, the next player asking opens another public room`, describe(next.answer));
+  check(await quiet(room, 500), 'nobody in the full room hears of it');
+
+  const friends = [];
+  for (const id of [7, 8]) {
+    const f = await player(`Friend${id}`);
+    f.send({ type: 'join', code, version });
+    const joined = await f.next();
+    await Promise.all([...room, ...friends].map((q) => q.next()));
+    check(joined?.type === 'joined' && joined.id === id && joined.public === true,
+      `a friend joins the full public room with its code: player ${id}`, describe(joined));
+    friends.push(f);
+  }
+  const ninth = await player('Friend9');
+  ninth.send({ type: 'join', code, version });
+  const full = await ninth.next();
+  check(full?.type === 'error' && full.reason === 'full', 'a ninth is turned away: the game is full', describe(full));
+  ninth.close();
+
+  room[2].close();
+  const left = await Promise.all([...room.filter((_, i) => i !== 2), ...friends].map((q) => q.next()));
+  check(left.every((m) => m?.type === 'peer_left' && m.id === 3 && m.host === 1),
+    'player 3 leaves the public room: everyone there hears of it', left.map(describe).join(' '));
+  for (const f of friends) f.close();
+  await Promise.all(room.filter((_, i) => i !== 2).map(async (q) => { await q.next(); await q.next(); }));
+  const back = await ask('Pub3again');
+  check(back.answer?.type === 'joined' && back.answer.code === code && back.answer.id === 3,
+    'a place is free again: the next player asking gets it (player 3), not the emptier room', describe(back.answer));
+  await Promise.all(room.filter((_, i) => i !== 2).map((q) => q.next()));
+  await next.next(200); // (nothing for it)
+
+  const other = await ask('Other', version + 1);
+  check(other.answer?.type === 'hosted' && other.answer.public === true && ![code, next.answer.code].includes(other.answer.code),
+    'a player of another version gets a public room of its own', describe(other.answer));
+  const stranger = await player('Stranger');
+  stranger.send({ type: 'join', code, version: version + 1 });
+  const turned = await stranger.next();
+  check(turned?.type === 'error' && turned.reason === 'version',
+    'joining a room of another version with its code is turned away', describe(turned));
+  stranger.close();
+  const old = await player('Old');
+  old.send({ type: 'join', code: next.answer.code });
+  const oldJoined = await old.next();
+  check(oldJoined?.type === 'joined' && oldJoined.public === true && oldJoined.id === 2,
+    'a game from before versions (it sends none) joins a public room with its code', describe(oldJoined));
+  await next.next();
+  const host = await player('Private');
+  host.send({ type: 'host', version });
+  const hosted = await host.next();
+  check(hosted?.type === 'hosted' && hosted.public === undefined, 'hosting still opens a private room', describe(hosted));
+  const seventh = await ask('Pub8');
+  check(seventh.answer?.type === 'joined' && seventh.answer.code === next.answer.code && seventh.answer.id === 3,
+    'with the first room full, a player asking goes to the other public room (not the private one)',
+    describe(seventh.answer));
+
+  for (const p of [next, old, seventh, other, host]) p.close();
+  await sleep(500);
+  const late = await player('Late');
+  late.send({ type: 'join', code: next.answer.code });
+  const closed = await late.next();
+  check(closed?.type === 'error' && closed.reason === 'no_room', 'a public room closes with its last player', describe(closed));
+  late.close();
+  for (const p of [...room.filter((_, i) => i !== 2), back]) p.close();
+  await sleep(500);
+  const fresh = await ask('Fresh');
+  check(fresh.answer?.type === 'hosted' && fresh.answer.public === true && fresh.answer.code !== code,
+    'once every public room has closed, the next player asking opens a new one', describe(fresh.answer));
+  fresh.close();
+
+  // After a restart: a player comes back to its public room (rebuilt from
+  // what it says), and the next player asking is put in it.
+  const lost = await unknownCode();
+  const rebuilt = version + 2;
+  const r = await player('R2');
+  r.send({ type: 'rejoin', code: lost, id: 2, key: 'key-r2', host: 1, players: [1, 2], public: true, version: rebuilt });
+  const rBack = await r.next();
+  check(rBack?.type === 'rejoined' && rBack.public === true, 'a player rebuilds its public room after a restart',
+    describe(rBack));
+  const newcomer = await ask('Newcomer', rebuilt);
+  check(newcomer.answer?.type === 'joined' && newcomer.answer.code === lost && newcomer.answer.id === 3
+    && newcomer.answer.public === true && describe(newcomer.answer.peers) === '[1,2]',
+  'the next player asking is put in the rebuilt room (the host\'s place still kept)', describe(newcomer.answer));
+  r.close();
+  newcomer.close();
 }
 
 /** Holds a room while the server restarts, then comes back to it. */

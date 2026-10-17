@@ -6,8 +6,12 @@ extends Node
 ## a game, starts a second copy of the game that joins, and checks that each
 ## sees the other's hero in the right place, that the host's thugs show up for
 ## the joined player and hurt them, and that the joined player's punches take
-## the host's thugs down. The joined copy sends its results back before
-## leaving. See coop_migration_test for the host leaving.
+## the host's thugs down. Then the joined player goes across the city: its own
+## game puts gangs down there, and the host's runs none and loads no streets
+## there; the host comes over, sees the joined player's gang (run by that
+## game) and takes it down with punches that game applies. The joined copy
+## sends its results back before leaving. See coop_migration_test for the host
+## leaving, and coop_public_test for the public game.
 ## Run: godot --headless --path . res://tests/coop_test.tscn [-- --port=8071]
 ## (--port: the signaling server's; other options, e.g. --tiles, go to both games)
 
@@ -25,6 +29,7 @@ var _room := ""
 var _server := SignalingServer.new()
 var _world: Node
 var _hero: Hero
+var _city: CityStreamer
 var _players: PlayerSync
 var _encounters: EncounterDirector
 var _steps: Array[Dictionary] = []
@@ -37,6 +42,7 @@ var _client_log := ""
 var _client_report: Array = []
 var _gang: Array[Thug] = []
 var _position_checked := false
+var _far_since := -1.0  # (host) when the other hero was last seen arriving far off
 
 
 func _ready() -> void:
@@ -54,6 +60,7 @@ func _ready() -> void:
 	for node_name in ["PlayerInput", "Crowd"]:
 		_world.get_node(node_name).process_mode = Node.PROCESS_MODE_DISABLED
 	_hero = _world.get_node("Hero")
+	_city = _world.get_node("City")
 	_players = _world.get_node("Players")
 	_encounters = _world.get_node("Encounters")
 	_encounters.max_gangs = 0  # only the gang this test puts down
@@ -90,12 +97,31 @@ func _host_steps() -> Array[Dictionary]:
 			_gang = _encounters.spawn_gang(other.world_position() + Vector3(0.0, 0.0, -5.0), 3, along, other)),
 		_step("their punches take our thugs down", 45.0, Callable(), func() -> bool:
 			return _gang.all(func(thug: Thug) -> bool: return not is_instance_valid(thug) or thug.is_down())),
-		_step("a gang shows up where they went", 60.0, func() -> void: _encounters.max_gangs = 1, func() -> bool:
+		_step("they go across the city: we run no thugs there, nor load its streets", 60.0, Callable(), func() -> bool:
 			var other := _other_hero()
-			if other == null or other.global_position.distance_to(_hero.global_position) < 1000.0:
+			if other == null or other.frozen or other.global_position.distance_to(_hero.global_position) < 1000.0:
+				_far_since = -1.0
 				return false
-			return Combat.thugs.any(func(thug: Thug) -> bool:
-				return not thug.is_down() and thug.global_position.distance_to(other.global_position) < 150.0)),
+			if _far_since < 0.0:
+				_far_since = _time
+			return _time - _far_since > 10.0 and _city.extra_foci.is_empty() \
+				and not _city.has_collision_at(other.world_position()) \
+				and Combat.thugs.all(func(thug: Thug) -> bool:
+					return thug.global_position.distance_to(other.global_position) > 500.0)),
+		_step("go over to them: their gang shows up for us, run by their game", 60.0, func() -> void:
+			var other := _other_hero()
+			(_world as Game).place_hero(other.world_position() + Vector3(4.0, 0.0, 0.0), other.facing, true),
+			func() -> bool:
+				_gang.assign(_standing_thugs().filter(func(thug: Thug) -> bool:
+					return thug.puppet and thug.run_by == _other_id()))
+				return not _hero.frozen and _gang.size() >= 3),
+		_step("go up to it; our punches (applied by their game) take it down", 60.0, func() -> void:
+			var center := Vector3.ZERO
+			for thug in _gang:
+				center += thug.global_position / _gang.size()
+			(_world as Game).place_hero(WorldOrigin.to_world(center) + Vector3(0.0, 2.0, 2.5), _hero.facing, true),
+			func() -> bool:
+				return _gang.all(func(thug: Thug) -> bool: return not is_instance_valid(thug) or thug.is_down())),
 		_step("they report back", 20.0, Callable(), func() -> bool: return not _client_report.is_empty()),
 		_step("their hero goes away when they leave", 10.0, Callable(), func() -> bool:
 			return _players.remote_heroes.is_empty()),
@@ -122,9 +148,18 @@ func _client_steps() -> Array[Dictionary]:
 			_hero.velocity = Vector3.ZERO
 			_hero.frozen = true,  # until the ground there loads
 			func() -> bool: return _time > 0.5 and not _hero.frozen),
-		_step("the host's thugs show up over there", 60.0, Callable(), func() -> bool:
-			return _standing_thugs().any(func(thug: Thug) -> bool:
-				return thug.global_position.distance_to(_hero.global_position) < 150.0)),
+		_step("our own gang shows up over there", 60.0, func() -> void: _encounters.max_gangs = 1, func() -> bool:
+			_gang.assign(_standing_thugs().filter(func(thug: Thug) -> bool:
+				return not thug.puppet and thug.global_position.distance_to(_hero.global_position) < 150.0))
+			if _gang.size() < 3:
+				return false
+			_encounters.max_gangs = 0  # just that one
+			return true),
+		_step("the host comes over", 60.0, Callable(), func() -> bool:
+			var other := _other_hero()
+			return other != null and other.global_position.distance_to(_hero.global_position) < 200.0),
+		_step("the host's punches (applied by us) take our gang down", 60.0, Callable(), func() -> bool:
+			return _gang.all(func(thug: Thug) -> bool: return is_instance_valid(thug) and thug.is_down())),
 	]
 
 
@@ -133,7 +168,7 @@ func _physics_process(delta: float) -> void:
 		_begin(0)
 	var step := _steps[_index]
 	_time += delta
-	if _role == "client" and step.name == "our punches take them down":
+	if step.name in ["our punches take them down", "go up to it; our punches (applied by their game) take it down"]:
 		_punch_nearest_thug()
 	var done: bool = step.until.call() if step.until.is_valid() else _time >= step.seconds
 	if not done:
@@ -187,6 +222,10 @@ func _fail(text: String) -> void:
 
 func _other_hero() -> Hero:
 	return _players.remote_heroes.values().front() if not _players.remote_heroes.is_empty() else null
+
+
+func _other_id() -> int:
+	return _players.remote_heroes.keys().front() if not _players.remote_heroes.is_empty() else 0
 
 
 func _standing_thugs() -> Array[Thug]:

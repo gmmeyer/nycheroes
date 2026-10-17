@@ -38,11 +38,16 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_font = ThemeDB.fallback_font
+	Net.player_joined.connect(func(id: int) -> void:
+		if Net.is_public and Net.is_newcomer(id):  # (strangers: say who came)
+			notify("%s joined" % Net.player_name(id)))
 	Net.left_room.connect(func(id: int) -> void:
 		if Net.is_online():
 			notify("%s left" % Net.player_name(id)))
 	Net.host_changed.connect(func(id: int) -> void:
-		if Net.is_online():  # the host left, or the server named another (not: we joined, or left)
+		# The host left, or the server named another (not: we joined, or left);
+		# nobody minds who hosts a public game.
+		if Net.is_online() and not Net.is_public:
 			notify("You're the host now" if id == Net.local_id() else "%s is now the host" % Net.player_name(id)))
 
 
@@ -97,7 +102,9 @@ func _draw_coop_status() -> void:
 	var people := "%d player%s" % [count, "" if count == 1 else "s"]
 	match Net.state:
 		Net.State.CONNECTING:
-			line = "Co-op: connecting..."
+			line = "Co-op: joining the public game..." if Net.wants_public() else "Co-op: connecting..."
+		Net.State.HOSTING, Net.State.JOINED when Net.is_public:
+			line = "Public game %s  ·  %s" % [Net.room_code, people]
 		Net.State.HOSTING:
 			line = "Co-op: hosting room %s  ·  %s" % [Net.room_code, people]
 		Net.State.JOINED:
