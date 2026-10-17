@@ -24,6 +24,9 @@ $marker = Join-Path $root "build\.gdignore"
 if (-not (Test-Path $marker)) { New-Item -ItemType File $marker | Out-Null }
 & $godot --headless --path $root --export-release "Web" "build/web/index.html"
 if ($LASTEXITCODE -ne 0) { throw "Godot export failed (exit code $LASTEXITCODE)" }
+# Native sample loops avoid gaps, truncated repeats and pitch resets in 4.7.2.
+& node (Join-Path $PSScriptRoot "web\fix_audio_loops.mjs") (Join-Path $out "index.js")
+if ($LASTEXITCODE -ne 0) { throw "Web audio compatibility fix failed" }
 # The page with the Windows and Mac versions (tools/build_desktop.ps1 makes them).
 Copy-Item (Join-Path $PSScriptRoot "web\download.html") (Join-Path $out "download.html")
 

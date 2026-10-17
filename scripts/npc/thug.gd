@@ -235,8 +235,6 @@ func _physics_process(delta: float) -> void:
 		if target:
 			hero = target
 			state = State.CHASE
-			if randf() < 0.5:
-				GameAudio.play(&"thug_shout", body_center())  # (one of a gang at a time)
 	elif not is_instance_valid(hero):
 		hero = null
 		_release_attack_slot()

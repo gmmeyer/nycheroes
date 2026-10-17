@@ -163,4 +163,6 @@ func _follow(voice: int, car: int, positions: PackedVector3Array, speeds: Packed
 	(_engines[voice].player as Node3D).global_position = WorldOrigin.to_local(positions[car])
 	# Idling cars are quieter; faster ones higher.
 	_wanted_gain[voice] = 0.35 + 0.65 * smoothstep(0.0, 14.0, speed)
-	_wanted_pitch[voice] = clampf(0.8 + speed / 18.0, 0.8, 1.9)
+	# An idle recording shifted nearly an octave sounded like a small motor
+	# whining. Keep the engine's body while still suggesting acceleration.
+	_wanted_pitch[voice] = lerpf(0.9, 1.3, smoothstep(0.0, 22.0, speed))

@@ -45,6 +45,7 @@ func _ready() -> void:
 	_city = _world.get_node("City")
 	_audio = _world.get_node("Audio")
 	_traffic = _world.get_node("Traffic")
+	_check_loop_transitions()
 	process_physics_priority = -20
 	_steps = [
 		_step("wait for the city to load", 30.0, Callable(), func() -> bool:
@@ -83,12 +84,6 @@ func _ready() -> void:
 			elif _spawned_at < 0.0 and t >= 0.5:
 				_spawned_at = t
 				_spawn_gang(OPEN_AVENUE + AVENUE * 8.0, 4)
-			elif t >= 1.0 and t < 2.5 and not _played("thug_shout", _audio.play_counts):
-				# A thug shouts, or not (at random), as it spots the hero: until
-				# one has, those still walking up look again.
-				for thug in _gang:
-					if is_instance_valid(thug) and thug.state == Thug.State.CHASE:
-						thug.state = Thug.State.IDLE
 			i.aim = AVENUE
 			i.attack_held = t > 2.5 and fmod(t, 0.3) < 0.12),
 		_step("Central Park by day, walking", 4.0, func(i: HeroInput, t: float) -> void:
@@ -152,7 +147,39 @@ func _physics_process(delta: float) -> void:
 		for line in _checks:
 			print("  " + line)
 		print("%d of %d checks passed" % [_checks.size() - _failed, _checks.size()])
-		get_tree().quit()
+		get_tree().quit(1 if _failed > 0 else 0)
+
+
+## Abrupt speed/charge changes must glide in pitch, then settle on target;
+## fading and lingering must still release the player and allow a restart.
+func _check_loop_transitions() -> void:
+	var player := AudioStreamPlayer.new()
+	player.stream = SoundBank.streams(&"air_low")[0]
+	add_child(player)
+	var voice := LoopVoice.new(player, -14.0, 0.2)
+	voice.target = 1.0
+	voice.update(1.0 / 60.0, 6.0)
+	_check("a loop fades in below its full gain", voice.on and voice.gain > 0.0 and voice.gain < 0.15)
+	voice.pitch = 1.5
+	voice.update(1.0 / 60.0, 6.0)
+	_check("a pitch change glides instead of jumping", player.pitch_scale > 1.0 and player.pitch_scale < 1.1)
+	for i in 120:
+		voice.update(1.0 / 60.0, 6.0)
+	_check("pitch settles on the requested speed", absf(player.pitch_scale - 1.5) < 0.01)
+	voice.target = 0.0
+	for i in 60:
+		voice.update(1.0 / 60.0, 6.0)
+	_check("a quiet loop lingers before stopping", voice.on and voice.gain < LoopVoice.SILENT)
+	for i in 30:
+		voice.update(1.0 / 60.0, 6.0)
+	_check("a faded loop releases its player", not voice.on)
+	voice.target = 1.0
+	voice.pitch = 0.9
+	voice.update(1.0 / 60.0, 6.0)
+	_check("a restarted loop uses its new pitch", voice.on and is_equal_approx(player.pitch_scale, 0.9))
+	voice.silence()
+	_check("muting stops a loop immediately", not voice.on and voice.gain == 0.0)
+	player.queue_free()
 
 
 func _report(step_name: String) -> void:
@@ -167,7 +194,7 @@ func _report(step_name: String) -> void:
 	var beds := _audio.ambience.status_text()
 	match step_name:
 		"Times Square by day":
-			_check("Times Square's crowd plays there", beds.contains("times_square"))
+			_check("Times Square's traffic bed plays there", beds.contains("times_square"))
 			_check("the day's street plays by day", beds.contains("traffic_day"))
 		"run along the avenue":
 			_check("footsteps on the avenue", _played("step_concrete", new_counts))
@@ -191,7 +218,7 @@ func _report(step_name: String) -> void:
 			_check("punches land", _played("punch", new_counts) or _played("punch_heavy", new_counts))
 			_check("thugs go down", _played("thug_down", new_counts))
 			_check("bodies fall", _played("body_fall", new_counts))
-			_check("thugs shout", _played("thug_shout", new_counts))
+			_check("no spoken NPC calls", not _played("thug_shout", new_counts))
 		"Central Park by day, walking":
 			_check("birds in the park by day", beds.contains("birds"))
 			_check("grass underfoot", _played("step_grass", new_counts))

@@ -3,7 +3,7 @@ extends Node
 ## The city around the listener (the camera): looping beds of sound that
 ## crossfade with the time of day (TimeOfDay.night) and with where the
 ## listener is, read from the soundscape map (Soundscape): the street's
-## traffic by day and a quieter street at night, Times Square's crowd, birds
+## traffic by day and a quieter street at night, Times Square's traffic, birds
 ## in parks by day and crickets at night, waves lapping near the water, and
 ## wind up high and out over the water. Up high the street gives way to the
 ## whole city's far-off hum. Now and then a horn honks, a siren wails far

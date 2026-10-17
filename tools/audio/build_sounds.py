@@ -1,8 +1,8 @@
-"""Builds the game's sounds into assets/audio/ as mono Ogg Vorbis (the list of
+"""Builds the game's sounds into assets/audio/ as Ogg Vorbis (the list of
 sounds and how loud each plays is scripts/audio/sound_bank.gd).
 
 Some are synthesized here with numpy (whooshes, webs, wind, booms, rubble,
-the trains on the els);
+the trains on the els, and speech-free city traffic beds);
 the rest are cut from CC0 recordings: Kenney's audio packs (kenney.nl) and
 Freesound uploads whose pages say Creative Commons 0 (CREDITS.md lists every
 one). Download them once into a folder of their own (`fetch` checks each
@@ -14,9 +14,9 @@ Freesound page's license before downloading its preview), then build:
 with tools/citygen's Python (numpy). Recordings are trimmed, cut into single
 sounds where a file has several takes, faded, looped where they loop (the
 end crossfaded into the start), filtered and normalized; one-off sounds are
-44.1 kHz, the ambience's beds 22.05 kHz to keep the download small. Godot's
-web build decodes every sound into memory as 48 kHz stereo anyway (384 kB
-a second) and copies it for each play, so loops are kept short. Everything
+44.1 kHz, the ambience's beds 32 kHz. Positional effects are mono; beds keep
+the recordings' stereo image. Godot's web build keeps decoded stereo samples
+and copies them for each play, so beds stay under 24 seconds. Everything
 is seeded, so a rebuild makes the same sounds (though Ogg files come out
 with new stream serial numbers: --only rewrites just the files named).
 """
@@ -34,7 +34,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "assets" / "audio"
 RATE = 44100
-BED_RATE = 22050
+BED_RATE = 32000
 # With --only, just these sounds' files are written.
 ONLY = set()
 
@@ -47,10 +47,6 @@ KENNEY_PACKS = {
 
 # Freesound uploads used (id: what for). All Creative Commons 0.
 FREESOUND = {
-    "552120": "day street bed (quantumriver, Busy New York City Street)",
-    "369891": "night bed (SpliceSound, NYC night rooftop, Bushwick)",
-    "495866": "far city hum (Yakobb1, City Ambience Distant)",
-    "639703": "Times Square bed (olofgud, Times square 1700)",
     "578150": "birds bed (cynthia_1968, morning birds urban)",
     "688301": "bird calls (Shankfosho, Park Birds [Clean])",
     "455685": "crickets bed (kyles, crickets night, Montreal)",
@@ -137,16 +133,17 @@ class Sources:
         self.ffmpeg = ffmpeg
         self.index = {p.name: p for p in downloads.rglob("*.ogg")}
 
-    def load(self, name: str, rate: int = RATE) -> np.ndarray:
+    def load(self, name: str, rate: int = RATE, channels: int = 1) -> np.ndarray:
         path = self.index.get(name)
         if path is None:
             sys.exit(f"missing download: {name}")
-        raw = subprocess.run([self.ffmpeg, "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(rate),
+        raw = subprocess.run([self.ffmpeg, "-v", "error", "-i", str(path), "-ac", str(channels), "-ar", str(rate),
                               "-f", "f32le", "-"], capture_output=True, check=True).stdout
-        return np.frombuffer(raw, np.float32).astype(np.float64)
+        pcm = np.frombuffer(raw, np.float32).astype(np.float64)
+        return pcm if channels == 1 else pcm.reshape(-1, channels)
 
-    def freesound(self, sound_id: str, rate: int = RATE) -> np.ndarray:
-        return self.load(f"{sound_id}.ogg", rate)
+    def freesound(self, sound_id: str, rate: int = RATE, channels: int = 1) -> np.ndarray:
+        return self.load(f"{sound_id}.ogg", rate, channels)
 
 
 def write(name: str, x: np.ndarray, rate: int, quality: float, ffmpeg: str) -> None:
@@ -154,7 +151,8 @@ def write(name: str, x: np.ndarray, rate: int, quality: float, ffmpeg: str) -> N
         return
     pcm = np.clip(x, -1.0, 1.0).astype(np.float32).tobytes()
     out = OUT / f"{name}.ogg"
-    subprocess.run([ffmpeg, "-v", "error", "-y", "-f", "f32le", "-ar", str(rate), "-ac", "1", "-i", "-",
+    channels = 1 if x.ndim == 1 else x.shape[1]
+    subprocess.run([ffmpeg, "-v", "error", "-y", "-f", "f32le", "-ar", str(rate), "-ac", str(channels), "-i", "-",
                     "-c:a", "libvorbis", "-q:a", str(quality), "-map_metadata", "-1", str(out)],
                    input=pcm, check=True)
 
@@ -176,11 +174,13 @@ def normalize(x: np.ndarray, rms_db: float = -16.0, peak_db: float = -1.0) -> np
 
 def fades(x: np.ndarray, rate: int, fade_in: float = 0.004, fade_out: float = 0.04) -> np.ndarray:
     x = x.copy()
-    n_in, n_out = int(fade_in * rate), int(fade_out * rate)
+    n_in, n_out = min(len(x), int(fade_in * rate)), min(len(x), int(fade_out * rate))
     if n_in:
-        x[:n_in] *= np.linspace(0.0, 1.0, n_in) ** 2
+        envelope = np.linspace(0.0, 1.0, n_in) ** 2
+        x[:n_in] *= envelope if x.ndim == 1 else envelope[:, None]
     if n_out:
-        x[-n_out:] *= np.linspace(1.0, 0.0, n_out) ** 2
+        envelope = np.linspace(1.0, 0.0, n_out) ** 2
+        x[-n_out:] *= envelope if x.ndim == 1 else envelope[:, None]
     return x
 
 
@@ -188,9 +188,10 @@ def spectral(x: np.ndarray, rate: int, gain) -> np.ndarray:
     """A zero-phase filter: gain(frequencies) in the frequency domain (zero padded)."""
     n = len(x)
     size = 1 << int(np.ceil(np.log2(n + rate // 10)))
-    spectrum = np.fft.rfft(x, size)
-    spectrum *= gain(np.fft.rfftfreq(size, 1.0 / rate))
-    return np.fft.irfft(spectrum, size)[:n]
+    spectrum = np.fft.rfft(x, size, axis=0)
+    curve = gain(np.fft.rfftfreq(size, 1.0 / rate))
+    spectrum *= curve if x.ndim == 1 else curve[:, None]
+    return np.fft.irfft(spectrum, size, axis=0)[:n]
 
 
 def highpass(f: np.ndarray, cutoff: float, order: int = 2) -> np.ndarray:
@@ -209,7 +210,9 @@ def band(f, center, octaves):
 def loudness_track(x: np.ndarray, rate: int, hop: float = 0.25) -> np.ndarray:
     n = int(hop * rate)
     frames = len(x) // n
-    return 20 * np.log10(np.sqrt(np.mean(x[:frames * n].reshape(frames, n) ** 2, axis=1)) + 1e-9)
+    # Joint channel energy keeps the selection and edit points identical on
+    # both sides, without cancelling out-of-phase stereo information.
+    return 20 * np.log10(np.sqrt(np.mean(x[:frames * n].reshape(frames, -1) ** 2, axis=1)) + 1e-9)
 
 
 def steadiest(x: np.ndarray, rate: int, seconds: float, avoid: tuple = ()) -> int:
@@ -241,10 +244,18 @@ def make_loop(x: np.ndarray, rate: int, seconds: float, start: int | None = None
     piece = x[start:start + n + fade]
     if len(piece) < n + fade:
         sys.exit("recording too short for the loop")
-    t = np.linspace(0.0, 1.0, fade)
+    t = np.linspace(0.0, np.pi / 2, fade)
     loop = piece[:n].copy()
-    # Equal power: the start fades in under the stretch just past the end.
-    loop[:fade] = piece[:fade] * np.sqrt(t) + piece[n:n + fade] * np.sqrt(1.0 - t)
+    # Smooth equal-power curves, compensated for correlated material (e.g.
+    # engine idle); otherwise coherent overlap gets a 3 dB bulge every lap.
+    head, tail = piece[:fade], piece[n:n + fade]
+    correlation = np.clip(np.sum(head * tail) / np.sqrt(np.sum(head ** 2) * np.sum(tail ** 2) + 1e-24), 0, 1)
+    a, b = np.sin(t), np.cos(t)
+    scale = np.sqrt(1.0 + 2.0 * correlation * a * b)
+    a, b = a / scale, b / scale
+    if x.ndim > 1:
+        a, b = a[:, None], b[:, None]
+    loop[:fade] = head * a + tail * b
     return loop
 
 
@@ -336,7 +347,10 @@ class Synth:
         around its end (and shape should repeat over `seconds`)."""
         n = int(seconds * rate)
         frames = int(np.ceil(n / self.HOP)) + (0 if loop else 1)
-        t = ((np.arange(frames) * self.HOP) / rate)[:, None]
+        # Space looping frames uniformly over the exact sample count. A
+        # shortened last hop otherwise piles extra noise up at the seam.
+        centers = np.rint(np.arange(frames) * n / frames).astype(int) if loop else np.arange(frames) * self.HOP
+        t = (centers / rate)[:, None]
         f = np.fft.rfftfreq(self.FRAME, 1.0 / rate)[None, :]
         magnitude = np.broadcast_to(shape(t, f), (frames, f.shape[1]))
         phase = self.rng.uniform(0.0, 2 * np.pi, magnitude.shape)
@@ -345,8 +359,8 @@ class Synth:
         if loop:
             out = np.zeros(n)
             span = np.arange(self.FRAME)
-            for i, block in enumerate(blocks):
-                np.add.at(out, (span + i * self.HOP - half) % n, block)
+            for center, block in zip(centers, blocks):
+                np.add.at(out, (span + center - half) % n, block)
             return out
         out = np.zeros(n + 2 * self.FRAME)
         for i, block in enumerate(blocks):
@@ -427,32 +441,35 @@ def make_synth(ffmpeg: str) -> None:
                                                     (0.7, 0.33, 280, 1000)]):
         sounds[f"whoosh_swing_{i + 1}"] = whoosh(s, seconds, peak, low, high, 1.0, body=0.35, decay=0.22)
 
-    # Dive: a rising rush and a whistle.
-    t = np.arange(int(1.0 * RATE)) / RATE
-    rush = s.noise(1.0, lambda t, f: np.clip(t / 0.9, 0, 1) ** 1.2 * band(f, 300 * (2500 / 300) ** np.clip(t / 0.95, 0, 1), 0.8))
-    whistle = Synth.tone(900 * (2200 / 900) ** np.clip(t / 0.95, 0, 1) * (1 + 0.01 * np.sin(2 * np.pi * 7 * t)))
-    dive = normalize(rush) + 0.08 * whistle * np.clip(t / 0.9, 0, 1) ** 2
-    sounds["dive"] = fades(dive, RATE, 0.02, 0.15)
+    # Dive: broad rushing air. A sustained swept sine on top made every
+    # dive whistle, especially when it overlapped the flight loops.
+    rush = s.noise(1.0, lambda t, f: np.clip(t / 0.9, 0, 1) ** 1.2
+                   * (band(f, 300 * (1800 / 300) ** np.clip(t / 0.95, 0, 1), 1.0) + 0.25 * band(f, 400, 1.0))
+                   * highpass(f, 80) * lowpass(f, 5500))
+    sounds["dive"] = fades(normalize(rush), RATE, 0.035, 0.22)
 
     # Take-off: a low push and a rising whoosh.
-    sounds["takeoff"] = mix(whoosh(s, 0.8, 0.12, 200, 1400, 1.0, body=0.5, decay=0.3), 0.5 * normalize(thump(0.4, 90, 45, 0.12)))
+    # Normalize both layers before balancing: raw synthesized noise was
+    # much quieter than the normalized thump, which buried the air.
+    sounds["takeoff"] = mix(normalize(whoosh(s, 0.8, 0.12, 200, 1400, 1.0, body=0.5, decay=0.3)),
+                            0.25 * normalize(thump(0.4, 90, 45, 0.12)))
 
-    # Super speed's burst: a zing and a rush.
-    t = np.arange(int(0.7 * RATE)) / RATE
-    zing = Synth.tone(700 * (2600 / 700) ** np.clip(t / 0.25, 0, 1), RATE, (1.0, 0.25, 0.1)) * swell(t, 0.05, 1.0, 0.15)
-    sounds["zoom"] = normalize(whoosh(s, 0.7, 0.15, 500, 3000, 0.9, decay=0.25)) + 0.12 * zing
+    # Super speed starts with a compact air burst and a little low weight.
+    sounds["zoom"] = mix(normalize(whoosh(s, 0.7, 0.09, 350, 1800, 1.1, body=0.4, decay=0.18)),
+                         0.18 * normalize(thump(0.3, 105, 55, 0.08)))
 
-    # Webs: a click, a resonant swish falling fast, and a tonal edge.
+    # Webs retain a short snap; the swish carries it, with a subtle tonal edge.
     for i, (hi, lo, length) in enumerate([(3600, 1100, 0.16), (4200, 1300, 0.14), (3200, 950, 0.17)]):
         t = np.arange(int(length * RATE)) / RATE
         fall = lo + (hi - lo) * np.exp(-t / 0.03)
         swish = s.noise(length, lambda tt, f, hi=hi, lo=lo: np.exp(-tt / 0.045) * np.clip(tt / 0.004, 0, 1)
-                        * band(f, lo + (hi - lo) * np.exp(-tt / 0.03), 0.25))
+                        * band(f, lo + (hi - lo) * np.exp(-tt / 0.03), 0.45))
         edge = Synth.tone(fall * 0.7, RATE, (1.0, 0.3)) * np.exp(-t / 0.035) * np.clip(t / 0.003, 0, 1)
         click = np.zeros_like(t)
         click[:int(0.003 * RATE)] = s.rng.normal(0, 1, int(0.003 * RATE))
-        click = spectral(click, RATE, lambda f: highpass(f, 2500, 3))
-        sounds[f"thwip_{i + 1}"] = normalize(swish) + 0.35 * normalize(edge) + 0.4 * normalize(click)
+        click = spectral(click, RATE, lambda f: highpass(f, 1800, 3) * lowpass(f, 6500))
+        sounds[f"thwip_{i + 1}"] = fades(normalize(swish) + 0.1 * normalize(edge) + 0.16 * normalize(click),
+                                         RATE, 0.006, 0.025)
     sounds["web_release"] = s.noise(0.13, lambda t, f: swell(t, 0.05, 1.0, 0.03) * band(f, 900 * (2600 / 900) ** np.clip(t / 0.1, 0, 1), 0.4))
 
     # Booms: a super jump's launch, heavy landings, the slam's punch.
@@ -480,23 +497,50 @@ def make_synth(ffmpeg: str) -> None:
     loops = {}
     def gusts(t, length, parts):
         return 1.0 + sum(a * np.sin(2 * np.pi * k * t / length + p) for k, a, p in parts)
-    loops["air_low"] = s.noise(4.0, lambda t, f: gusts(t, 4.0, [(2, 0.3, 0.0), (5, 0.15, 1.0)])
+    loops["air_low"] = s.noise(8.0, lambda t, f: gusts(t, 8.0, [(1, 0.12, 0.0), (3, 0.06, 1.0)])
                                * band(f, 260, 1.4) * (f / 100 + 0.2) ** -0.2, loop=True)
-    loops["air_high"] = s.noise(4.0, lambda t, f: gusts(t, 4.0, [(3, 0.3, 0.5), (11, 0.15, 2.0)])
-                                * (band(f, 2600, 1.1) + 0.15 * band(f, 1800, 0.12)), loop=True)
-    loops["speed_loop"] = s.noise(3.0, lambda t, f: gusts(t, 3.0, [(12, 0.25, 0.0), (5, 0.15, 1.0)])
-                                  * (band(f, 900, 1.2) + 0.08 * band(f, 3100, 0.1)), loop=True)
+    loops["air_high"] = s.noise(8.0, lambda t, f: gusts(t, 8.0, [(1, 0.1, 0.5), (3, 0.05, 2.0)])
+                                * band(f, 2100, 1.2) * lowpass(f, 6500), loop=True)
+    loops["speed_loop"] = s.noise(6.0, lambda t, f: gusts(t, 6.0, [(1, 0.1, 0.0), (4, 0.05, 1.0)])
+                                  * band(f, 700, 1.3) * lowpass(f, 5000), loop=True)
     t = np.arange(int(2.0 * RATE)) / RATE
-    hum = Synth.tone(np.full(len(t), 55.0), RATE, (1.0, 0.5, 0.35, 0.2, 0.15))
-    loops["charge_loop"] = normalize(hum) + 0.5 * normalize(
-        s.noise(2.0, lambda tt, f: (1 + 0.4 * np.sin(2 * np.pi * 12 * tt / 2.0)) * band(f, 420, 0.9), loop=True))
+    hum = Synth.tone(np.full(len(t), 65.0), RATE, (1.0, 0.16, 0.04))
+    loops["charge_loop"] = 0.35 * normalize(hum) + normalize(
+        s.noise(2.0, lambda tt, f: (1 + 0.08 * np.sin(2 * np.pi * tt)) * band(f, 220, 0.95), loop=True))
     for name, x in loops.items():
-        write(name, normalize(x, -16.0), RATE, 3, ffmpeg)
-    wind = s.noise(6.0, lambda t, f: gusts(t, 6.0, [(1, 0.45, 0.0), (2, 0.3, 1.0), (5, 0.2, 2.0)])
-                   * (lowpass(f, 650, 2) * highpass(f, 60) * (f / 100 + 0.3) ** -0.4
-                      + 0.12 * gusts(t, 6.0, [(3, 0.6, 0.3)]) * band(f, 950, 0.08)), BED_RATE, loop=True)
-    write("amb_wind", normalize(wind, -20.0), BED_RATE, 2, ffmpeg)
+        write(name, normalize(x, -18.0), RATE, 5, ffmpeg)
+    wind = s.noise(10.0, lambda t, f: gusts(t, 10.0, [(1, 0.15, 0.0), (3, 0.08, 1.0)])
+                   * lowpass(f, 900, 2) * highpass(f, 90) * (f / 100 + 0.3) ** -0.4, BED_RATE, loop=True)
+    write("amb_wind", normalize(wind, -22.0), BED_RATE, 5, ffmpeg)
     make_trains(s, ffmpeg)
+    make_city_beds(ffmpeg)
+
+
+def make_city_beds(ffmpeg: str) -> None:
+    """Traffic wash and distant motors, with no crowd/voice recordings.
+
+    Nearby car engines, horns and sirens are separate spatial sounds in
+    the game. These quiet, continuous stereo textures fill the distance.
+    Independent seeds keep other assets unchanged when a bed is edited.
+    """
+    for seed, (name, seconds, tires, cutoff) in enumerate((
+        ("amb_traffic_day", 20.0, 0.65, 3200.0),
+        ("amb_traffic_night", 20.0, 0.35, 2200.0),
+        ("amb_city_far", 16.0, 0.2, 1000.0),
+        ("amb_times_square", 24.0, 0.85, 3800.0),
+    ), start=810):
+        if ONLY and name not in ONLY:
+            continue
+        synth = Synth(seed)
+
+        def road(t, f):
+            return (band(f, 90, 1.0) + 0.6 * band(f, 240, 1.1) + tires * band(f, 950, 1.4)) \
+                * highpass(f, 45) * lowpass(f, cutoff)
+
+        center, left, right = [normalize(synth.noise(seconds, road, BED_RATE, loop=True), -20.0)
+                               for _ in range(3)]
+        stereo = np.column_stack((0.7 * center + 0.45 * left, 0.7 * center + 0.45 * right))
+        write(name, normalize(stereo, -22.0, -3.0), BED_RATE, 5, ffmpeg)
 
 
 def make_trains(s: Synth, ffmpeg: str) -> None:
@@ -518,8 +562,11 @@ def make_trains(s: Synth, ffmpeg: str) -> None:
         for at in (0.0, 0.12, 0.71, 0.83):
             burst = s.rng.normal(0, 1, length) * np.exp(-np.arange(length) / (0.008 * BED_RATE))
             burst = spectral(burst, BED_RATE, lambda f: band(f, 900, 0.9) + 0.6 * band(f, 250, 0.8))
+            # The joint at t=0 used to start with a full-amplitude filtered
+            # sample, making a click much larger than the surrounding rumble.
+            burst = fades(burst, BED_RATE, 0.002, 0.015)
             clatter[(int((car + at) * BED_RATE) + np.arange(length)) % n] += burst * s.rng.uniform(0.8, 1.2)
-    write("train_rumble", normalize(normalize(body) + 0.55 * normalize(clatter), -16.0), BED_RATE, 3, ffmpeg)
+    write("train_rumble", normalize(normalize(body) + 0.4 * normalize(clatter), -18.0), BED_RATE, 5, ffmpeg)
 
     # Whole cycles in the loop (base tones times its length), so it loops seamlessly.
     seconds = 3.0
@@ -621,21 +668,19 @@ def make_recorded(src: Sources, ffmpeg: str) -> None:
     write("engine", normalize(make_loop(spectral(engine, RATE, lambda f: highpass(f, 35)), RATE, 2.5, start=0,
                                         crossfade=0.6), -16.0), RATE, 3, ffmpeg)
 
-    # Beds (22.05 kHz).
+    # Beds keep the recording's stereo width. Mono field recordings stay
+    # centered; duplicating them is preferable to artificial phase widening.
     def bed(name, sound_id, seconds, rms=-20.0, hp=45.0, lp=None, avoid=(), start=None):
-        x = src.freesound(sound_id, BED_RATE)
+        if ONLY and name not in ONLY:
+            return
+        x = src.freesound(sound_id, BED_RATE, channels=2)
         x = spectral(x, BED_RATE, lambda f: highpass(f, hp) * (lowpass(f, lp, 2) if lp else 1.0))
         loop = make_loop(x, BED_RATE, seconds, start=start, avoid=avoid)
-        write(name, normalize(loop, rms, -3.0), BED_RATE, 2, ffmpeg)
-    # Beds are short loops: Godot's web build keeps each sound as 48 kHz
-    # stereo samples (384 kB a second) and copies one for every play.
-    bed("amb_traffic_day", "552120", 10.0)
-    bed("amb_traffic_night", "369891", 10.0, avoid=((0.0, 100.0), (1250.0, 1400.0)))
-    bed("amb_city_far", "495866", 8.0, lp=2500.0)
-    bed("amb_times_square", "639703", 12.0)
-    bed("amb_birds", "578150", 8.0, hp=900.0)
-    bed("amb_crickets", "455685", 6.0, hp=1500.0)
-    bed("amb_water", "438839", 8.0, hp=60.0)
+        write(name, normalize(loop, rms, -3.0), BED_RATE, 5, ffmpeg)
+    # Longer, less conspicuous repeats without unbounded sample memory.
+    bed("amb_birds", "578150", 16.0, hp=900.0, lp=10000.0)
+    bed("amb_crickets", "455685", 12.0, hp=1500.0, lp=8500.0)
+    bed("amb_water", "438839", 16.0, hp=90.0, lp=8000.0)
 
 
 def main() -> None:
