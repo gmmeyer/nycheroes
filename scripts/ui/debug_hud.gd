@@ -1,15 +1,19 @@
+class_name DebugHud
 extends Label
 ## Debug overlay: frame rate, hero (or free camera) status and position, the
-## time of day, tile streaming, and controls. Add ?stats to the page URL (--stats on desktop) to
-## also log it to the console.
+## time of day, tile streaming, and controls. Shown on computers and hidden
+## on phones and tablets unless the options menu's "Show FPS and stats" says
+## otherwise (Settings "show_stats"); ?stats (--stats on desktop) shows it
+## for the session and also logs it to the console. It keeps counting while
+## the options menu pauses the game (to see what a preset does).
 
 const ORIGIN_LAT := 40.7580
 const ORIGIN_LON := -73.9855
 const METERS_PER_DEGREE := 111320.0
 const REFRESH_INTERVAL := 0.25
 const LOG_INTERVAL := 2.0
-const HERO_HELP := "WASD move  ·  Left mouse punch (in the air: dive attack)  ·  Space jump (hold: super jump)  ·  Shift super speed  ·  F fly (Space/C up/down)  ·  E / right mouse web swing  ·  M co-op  ·  T time of day  ·  N mute  ·  F1 free camera"
-const FREE_CAMERA_HELP := "Free camera: WASD move  ·  Space/C up/down  ·  Shift boost  ·  Wheel speed  ·  T time of day  ·  N mute  ·  F1 back to hero"
+const HERO_HELP := "WASD move  ·  Left mouse punch (in the air: dive)  ·  Space jump (hold: super jump)  ·  Shift super speed  ·  F fly (Space/C up/down)  ·  E / right mouse web  ·  M co-op  ·  O options  ·  T time of day  ·  N mute  ·  F1 free camera"
+const FREE_CAMERA_HELP := "Free camera: WASD move  ·  Space/C up/down  ·  Shift boost  ·  Wheel speed  ·  O options  ·  T time of day  ·  N mute  ·  F1 back to hero"
 
 @export var city: CityStreamer
 @export var hero: Hero
@@ -23,9 +27,19 @@ var _log_stats := false
 
 func _ready() -> void:
 	_log_stats = LaunchOptions.has("stats")
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	visible = wanted()
+
+
+## Whether it's shown at the start: ?stats, else the options menu's choice
+## (computers yes, phones and tablets no).
+static func wanted() -> bool:
+	return LaunchOptions.has("stats") or bool(Settings.get_value("show_stats", not Device.is_mobile()))
 
 
 func _process(delta: float) -> void:
+	if not visible and not _log_stats:
+		return
 	_refresh_cooldown -= delta
 	if _refresh_cooldown > 0.0:
 		return

@@ -85,8 +85,7 @@ func _process(delta: float) -> void:
 			pedestrian.queue_free()
 	var above_street := center.y - city.ground_height_at(center, 0.5)
 	var crowded := in_sign_district(center, PLAZA_REACH)
-	var busy := clampf(city.busyness_at(center, 3) * (9.0 / 49.0) / BUSY_FULL, 0.0, 1.0)
-	var limit := roundi(max_pedestrians * (plaza_crowd if crowded else lerpf(1.0, busy_crowd, busy)))
+	var limit := _limit_at(center)
 	_limit = limit
 	if hero.frozen or not above_street <= MAX_SPAWN_ALTITUDE or pedestrians.size() >= limit:
 		return
@@ -178,6 +177,30 @@ static func in_sign_district(world_position: Vector3, margin := 0.0) -> bool:
 	var across := 0.875 * world_position.x + 0.485 * world_position.z
 	return along >= SIGN_ALONG.x - margin and along <= SIGN_ALONG.y + margin \
 			and across >= SIGN_ACROSS.x - margin and across <= SIGN_ACROSS.y + margin
+
+
+## Changes how many pedestrians there are (Quality, while playing): more
+## come in over the next updates, out of sight; fewer leave at once, the
+## furthest from the hero first.
+func set_max_pedestrians(count: int) -> void:
+	max_pedestrians = maxi(count, 0)
+	var center := hero.world_position()
+	var limit := _limit_at(center)
+	if pedestrians.size() <= limit:
+		return
+	pedestrians.sort_custom(func(a: Pedestrian, b: Pedestrian) -> bool:
+		return a.world_position.distance_squared_to(center) < b.world_position.distance_squared_to(center))
+	while pedestrians.size() > limit:
+		pedestrians.pop_back().queue_free()
+
+
+## How many pedestrians there may be around a world position: more around
+## busy streets, and more again around Times Square's plazas.
+func _limit_at(center: Vector3) -> int:
+	if in_sign_district(center, PLAZA_REACH):
+		return roundi(max_pedestrians * plaza_crowd)
+	var busy := clampf(city.busyness_at(center, 3) * (9.0 / 49.0) / BUSY_FULL, 0.0, 1.0)
+	return roundi(max_pedestrians * lerpf(1.0, busy_crowd, busy))
 
 
 ## How many pedestrians the camera sees (for ?stats).

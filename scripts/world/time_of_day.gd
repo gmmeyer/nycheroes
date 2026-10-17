@@ -27,7 +27,8 @@ extends Node
 ## gray, and the fog thickens and grays;
 ## dusk and night follow with their own overcast looks (no moon or stars, the
 ## city's glow on the clouds).
-## T (Game) steps on to the next of day, dusk, night and dawn. With
+## T (Game) steps on to the next of day, dusk, night and dawn, and the
+## options menu goes to one (go_to()). With
 ## ?sun_dir=az,el (LightingOverrides) the sun keeps that direction while up.
 
 ## Where the clock starts without ?time: the scene's afternoon.
@@ -358,6 +359,28 @@ func step_forward() -> void:
 	_transition_from = clock
 	_transition_hours = fposmod(next - clock, 24.0)
 	_transition = 0.0
+
+
+## Goes to dawn, day, dusk or night (0..3, the order T steps through them)
+## the short way round, over transition_seconds; at once while the game is
+## paused (the options menu).
+func go_to(preset: int) -> void:
+	var target := _presets[clampi(preset, 0, _presets.size() - 1)]
+	if not can_process():
+		set_clock(target)
+		return
+	_transition_from = clock
+	_transition_hours = wrapf(target - clock, -12.0, 12.0)
+	_transition = 0.0
+
+
+## Quality changed its preset while playing: the haze of dusk and night
+## (see _keep_fog(); not with ?fog) and a clear day's share of it.
+func set_quality_fog(density: float) -> void:
+	_day["fog"] = Quality.clear_fog()
+	if _fog > 0.0:
+		_fog = density
+	_apply()
 
 
 ## The clock as HH:MM.

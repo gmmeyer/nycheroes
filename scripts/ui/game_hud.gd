@@ -4,7 +4,11 @@ extends Control
 ## thug, and in co-op a marker for each other player (markers sit at the
 ## screen edge when what they point at is off screen), the game's status and
 ## short notices ("Player 2 is now the host"), plus the aerial photos' credit
-## while any are shown.
+## while any are shown. An Options button in the top right corner opens the
+## options menu with a click (touch screens have TouchControls' gear instead).
+
+## The Options button was clicked.
+signal options_requested
 
 ## Thugs closer than this and on screen don't need a marker.
 const NEAR_ENOUGH := 35.0
@@ -28,10 +32,15 @@ const AERIAL_CREDIT := "Aerial imagery: NYC OTI / NYS Orthoimagery Program 2024 
 ## Set on touch screens (by Game): the health bar moves to the top left, out
 ## of the thumbs' way, and the HUD keeps clear of the screen's notches and of
 ## the touch buttons in the top right.
-var touch_controls: TouchControls
+var touch_controls: TouchControls:
+	set(value):
+		touch_controls = value
+		if _options_button:
+			_options_button.visible = value == null
 
 var _font: Font
 var _notices: Array = []  # [text, msec when it goes]
+var _options_button: Button
 
 
 func _ready() -> void:
@@ -44,6 +53,7 @@ func _ready() -> void:
 	Net.host_changed.connect(func(id: int) -> void:
 		if Net.is_online():  # the host left, or the server named another (not: we joined, or left)
 			notify("You're the host now" if id == Net.local_id() else "%s is now the host" % Net.player_name(id)))
+	_add_options_button()
 
 
 ## Shows a line near the top of the screen for a few seconds.
@@ -107,6 +117,8 @@ func _draw_coop_status() -> void:
 	if line:
 		var width := _font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 16).x
 		var at := Vector2(size.x - width - 24.0, 30.0)
+		if _options_button and _options_button.visible:  # (left of it)
+			at.x -= _options_button.size.x + 4.0
 		if touch_controls:  # under the co-op button
 			at = Vector2(size.x - touch_controls.safe_insets.z - width - 16.0, touch_controls.safe_insets.y + 78.0)
 		_text(at, line, 16)
@@ -150,6 +162,42 @@ func _draw_marker(target: Vector3, label: String, color: Color, near_enough: flo
 	var tip := point + direction * 14.0
 	draw_colored_polygon(PackedVector2Array([tip, point - direction * 6.0 + side * 10.0, point - direction * 6.0 - side * 10.0]), color)
 	_text(point + Vector2(-34.0, 30.0) - direction * 10.0, "%s %d m" % [label, distance], 15, color)
+
+
+## A small button in the top right corner: "OPTIONS  O". It never takes the
+## keyboard's focus (Space would press it), and works as the mouse button
+## goes down: the menu is open by the time the hero would read it as a punch.
+func _add_options_button() -> void:
+	_options_button = Button.new()
+	_options_button.name = "OptionsButton"
+	_options_button.text = "OPTIONS  ·  O"
+	_options_button.focus_mode = Control.FOCUS_NONE
+	_options_button.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+	_options_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	_options_button.add_theme_font_size_override("font_size", 14)
+	for state: String in ["normal", "hover", "pressed"]:
+		var box := StyleBoxFlat.new()
+		box.bg_color = {"normal": Color(0.0, 0.0, 0.0, 0.38), "hover": Color(0.2, 0.32, 0.55, 0.85),
+			"pressed": Color(1.0, 1.0, 1.0, 0.38)}[state]
+		box.border_color = Color(1.0, 1.0, 1.0, 0.6)
+		box.set_border_width_all(1)
+		box.set_corner_radius_all(14)
+		box.content_margin_left = 14.0
+		box.content_margin_right = 14.0
+		box.content_margin_top = 5.0
+		box.content_margin_bottom = 5.0
+		_options_button.add_theme_stylebox_override(state, box)
+	# Pinned 16 px from the right edge, growing leftwards to fit its text.
+	_options_button.anchor_left = 1.0
+	_options_button.anchor_right = 1.0
+	_options_button.offset_left = -16.0
+	_options_button.offset_right = -16.0
+	_options_button.offset_top = 14.0
+	_options_button.offset_bottom = 14.0
+	_options_button.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_options_button.pressed.connect(options_requested.emit)
+	_options_button.visible = touch_controls == null
+	add_child(_options_button)
 
 
 func _text(at: Vector2, text: String, font_size: int, color := Color.WHITE) -> void:

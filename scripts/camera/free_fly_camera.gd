@@ -2,9 +2,11 @@ class_name FreeFlyCamera
 extends Camera3D
 ## Debug camera for flying around the city.
 ##
-## Click to look around (Esc releases the mouse), WASD to move, Space/E up,
-## C/Q down, Shift for a speed boost, mouse wheel to change speed, arrow keys
-## to turn. Ctrl is avoided because Ctrl+W closes the browser tab.
+## Click to look around (the options menu releases the mouse, and so does
+## Esc in the browser), WASD to move, Space/E up, C/Q down, Shift for a speed
+## boost, mouse wheel to change speed, arrow keys to turn; the options menu's
+## mouse look speed and invert_y apply. Ctrl is avoided because Ctrl+W closes
+## the browser tab.
 ## Start pose: ?cam=x,y,z,yaw,pitch (world meters, degrees). Like everything
 ## else, it stays below WorldOrigin.CEILING.
 
@@ -49,11 +51,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				speed = minf(speed * 1.25, max_speed)
 			MOUSE_BUTTON_WHEEL_DOWN:
 				speed = maxf(speed / 1.25, min_speed)
-	elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		_yaw -= event.relative.x * mouse_sensitivity
-		_pitch -= event.relative.y * mouse_sensitivity
+		var turn := mouse_sensitivity * ThirdPersonCamera.look_speed()
+		_yaw -= event.relative.x * turn
+		_pitch -= event.relative.y * turn * ThirdPersonCamera.look_y_sign()
 		_apply_rotation()
 
 
