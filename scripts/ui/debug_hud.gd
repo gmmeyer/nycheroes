@@ -54,11 +54,14 @@ func _process(delta: float) -> void:
 	if not free and hero.frozen:
 		who = "Waiting for ground"
 
-	var render := "FPS %d  ·  %d draw calls  ·  %.2fM triangles  ·  %d MB textures" % [
+	var render := "FPS %d  ·  %d draw calls  ·  %.2fM triangles  ·  %d MB textures  ·  physics %.1f ms" % [
 		int(Engine.get_frames_per_second()),
 		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 		Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1e6,
-		int(Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1e6)]
+		int(Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1e6),
+		Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0]
+	if OS.get_static_memory_usage() > 0:  # (not counted in web builds)
+		render += "  ·  %d MB memory" % (OS.get_static_memory_usage() / 1000000)
 	var status := "%s  ·  %.0f m/s (%.0f km/h)  ·  altitude %.0f m  ·  %.5f, %.5f  ·  %s %s" % [
 		who, speed, speed * 3.6, world.y, lat, lon, time_of_day.clock_text(), time_of_day.phase_name()]
 	var tiles := "Tiles: %d near, %d mid, %d far, %d loading  ·  %d props  ·  last tile build %.1f ms  ·  %d photos (last %.0f ms)" % [
@@ -73,6 +76,9 @@ func _process(delta: float) -> void:
 	var trains := get_node_or_null("../../Trains") as Trains
 	if trains:
 		people += "  ·  %d trains (%.2f ms)" % [trains.trains.size(), trains.update_msec]
+	if Net.is_online():
+		people += "  ·  co-op: %sroom %s, player %d of %d" % ["public " if Net.is_public else "", Net.room_code,
+			Net.local_id(), Net.peers().size() + 1]
 	tiles += "  ·  " + people
 	text = "\n".join([render, status, tiles, FREE_CAMERA_HELP if free else HERO_HELP])
 

@@ -94,9 +94,11 @@ peer can drive one later. Nearby tiles get collision.
 
 ## 5. Co-op multiplayer (done)
 
-- **Joining:** press M for the co-op menu. "Host a game" gives a 4-letter
-  room code and an invite link (`?join=CODE`); friends join with either.
-  Players who join start next to the host's hero. Up to 8 players.
+- **Joining:** everyone playing online is put in a public game by
+  themselves (see "Public game" below). Press M for the co-op menu. "Host a
+  private game" gives a 4-letter room code and an invite link
+  (`?join=CODE`); friends join with either. Players who join a private game
+  start next to the host's hero. Up to 8 players.
 - **Connections:** browsers connect directly over WebRTC, every player to
   every other (a full mesh, so nobody's traffic depends on the host's
   connection). A small signaling server (`tools/signaling`, Node.js) only
@@ -104,19 +106,28 @@ peer can drive one later. Nearby tiles get collision.
   also hands out the STUN/TURN servers to use (`ICE_SERVERS`), so a relay can
   be added without rebuilding the game.
 - **Who runs what:** each player moves their own hero and sends its state 20
-  times a second; other games show a copy, drawn a moment in the past so it
-  moves smoothly. The host runs every thug and spawns gangs near every
-  player, loading the streets around each player's hero so thugs there have
-  ground to stand on. It tells each player about thugs within 400 m.
+  times a second (4 times to players more than 1 km away, unless their thugs
+  are near it); other games show a copy, drawn a moment in the past so it
+  moves smoothly. Each game runs the gangs it puts down around its own hero,
+  and puts none down where enough gangs are about already, whoever runs
+  them (nor while it's getting into a room and for 3 s after, so it hears
+  of the others' first); it tells each player about its thugs within 400 m. A game whose
+  thugs stayed with another player's hero (it went off and left them
+  fighting) keeps the streets around that hero loaded so they have ground.
+  (Until the public game the host ran every thug and loaded the streets
+  around every hero: see "Public game" for why that changed.)
 - **Hits:** a player's punch on a thug shows at once on their screen and is
-  reported to the host, which applies it and tells everyone else. Thugs
-  punching another player's hero are sent to that player. Pedestrians stay
-  local to each player but run from fights anywhere.
+  reported to the game running the thug, which applies it and tells everyone
+  else. Thugs punching another player's hero are sent to that player.
+  Pedestrians stay local to each player but run from fights anywhere.
 - **Positions** go between games in world coordinates, since each player has
   their own floating origin.
 - **Tested:** `tests/coop_test.tscn` runs a host and a second game through
   the signaling server and over ENet (desktop had no WebRTC then: see step 9) and checks
-  positions, thugs showing up and fighting both ways, and players far apart.
+  positions, thugs showing up and fighting both ways, and players far apart
+  (since the public game: the far player's own game puts gangs down there,
+  the host's runs none and loads no streets there, and the host, coming
+  over, sees that gang and beats it with hits the other game applies).
   Two headless Chrome instances also connected over WebRTC through the
   signaling server.
 - **Public (2026-10-15):** https://nycheroes.party on Cloudflare: the game,
@@ -191,6 +202,144 @@ peer can drive one later. Nearby tiles get collision.
   the HUD read "3 players · reconnecting..." meanwhile, all three were back
   in the room within 13 s of losing it, a fourth joined with the code, and
   closing the host's tab passed its role on in a fifth of a second.
+- **Public game (2026-10-16):** everyone playing online is put in the same
+  game without doing anything. Once the city has loaded, the game asks the
+  signaling server for the public game, which puts it in the public room
+  with the most players and a place free, or opens a new one when they're
+  all full (or there are none). Public rooms take 6 players this way and
+  have codes like any other, so friends can still join one with its code or
+  link (up to the mesh's 8). A newcomer keeps its own start (Times Square,
+  unless `?spawn`) and isn't moved to the host the way invited friends are;
+  the others' heroes show with their name tags and HUD markers ("PLAYER 2
+  9112 m"), and the HUD reads "Public game JDQS · 3 players", with "Player 3
+  joined" and "Player 3 left" (but not who hosts: nobody minds). It isn't
+  joined with `?join=CODE` or `?host`, `?demo`, `?solo=1` (new: play alone),
+  a free camera (`?cam`) or `--screenshot`, in headless runs and headless
+  Chrome (the tests and page checks; `?public=1` joins anyway), by desktop
+  builds without WebRTC (they can't meet browser players), nor when the
+  player has turned off the options menu's "Join the public game
+  automatically" (`online_public`, on by default; switched while playing,
+  off leaves the public game and on joins it). It's quiet: if the server
+  can't be reached (or the room's host can't), the game plays alone without
+  a word and asks again after 30 s, then less often, up to every 5 minutes
+  (3 s after losing a public room's host). The menu (M) shows "Public game
+  · N players", the room code and link, the players, and "Leave (play
+  alone)", "Host a private game" and "Join with code"; either of the last
+  two leaves the public room too. Alone, "Join the public game" puts the
+  player back in the fullest public room with a place free.
+  - **Matchmaking** is done where the rooms already are: the one Durable
+    Object ("lobby") that keeps every room sees every public room's players
+    at once, so no other object is needed (the local server keeps rooms in
+    memory, as before). Every player of a public room carries `public` and
+    the room's version in its socket's attachment (places kept after a
+    restart, in storage), so the room stays public whoever leaves, and comes
+    back public after a restart (the players who rebuild it say so). A room
+    closes with its last player; the next player asking opens a new one.
+    Each match reads every socket's attachment once; a few thousand players
+    online at once fit easily, and past that rooms would move to objects of
+    their own, with the lobby only matching.
+  - **Versions:** games send `Net.NET_VERSION` (raised whenever what games
+    send each other changes; games over ENet send another), and are matched
+    only with games of the same version; a room code of another version is
+    turned away ("That game is on another version of NYC Heroes. Reload the
+    page..."), so a desktop download that's behind never ends up in a room
+    it can't play with. This change is the first version: games from before
+    can't play with it (their thug messages differ).
+  - **Protocol:** new `{type: "public", version}`, answered like a join
+    (`joined`) or, opening a room, like `host` (`hosted`), with `public:
+    true`; `host`, `join` and `rejoin` carry `version` (`rejoin` also
+    `public`); `joined` and `rejoined` say `public: true` in public rooms;
+    errors give `reason` "full" or "version" (besides "no_room").
+    `protocol_check.mjs` checks it (with versions of its own, so real
+    players are left out): six asking fill a room, the seventh opens
+    another, friends join the full one with its code up to 8 and a ninth is
+    turned away, a place freed goes to the next player asking (not the
+    emptier room), other versions get rooms of their own and their codes
+    are turned away, a game sending no version still joins with a code,
+    hosting stays private, rooms close with their last player, and a room
+    rebuilt after a restart stays public and takes the next player. Both
+    servers pass (the Durable Object under `wrangler dev`).
+  - **During a deploy:** games from before never ask for the public game
+    and send no version, so they get exactly the answers they got before:
+    old pages and old desktop builds keep hosting and joining with codes
+    (among themselves), and are never put in public rooms. A new page that
+    reaches a server from before (the Worker not updated yet) gets "Unknown
+    message", plays alone quietly and asks again later. The deploy restarts
+    the Durable Object as before, and public rooms come back with their
+    players.
+  - **Who runs the thugs (host load):** with the host running every thug
+    and loading the streets around every hero, players spread across the
+    city made the host's game do the city's work. Measured with
+    `tests/coop_load_test.tscn` (a host at Times Square, then 3 and 7
+    players gone to Yankee Stadium, Wall Street, Downtown Brooklyn, Long
+    Island City, Flushing, Harlem and Park Slope; headless desktop games,
+    ENet): physics 1.7, 3.1 and 5.3 ms a tick, memory 408, 470 and 565 MB,
+    16, 34 and 55 near tiles loaded, 8, 34 and 71 thugs, the 99th
+    percentile frame 19, 22 and 30 ms; each of those players moving would
+    also have it download lod0 tiles (about 0.5 MB each) around them, and
+    in browsers unpack them on its main thread. A phone hosting strangers
+    couldn't. Now each game runs the gangs around its own hero, and a
+    player's thugs are copies in the others' games, with their hits going to
+    the game running them (thug numbers carry the player's number, and
+    start from the clock, so a newcomer given a departed player's number
+    doesn't reuse theirs); when a player leaves, the host takes their thugs
+    over, the way a new host takes the old host's (everyone hands it their
+    copies). Same measure: physics 1.4, 1.7 and 2.4 ms, memory 408, 410 and
+    410 MB, 16 near tiles and 8 thugs throughout, the 99th percentile frame
+    17, 18 and 18 ms. In the browser (a headless Chrome page hosting at
+    Times Square, the players desktop games joining it over WebRTC), with
+    the host running everything, frames took 9.4, 19.1 and 32.0 ms on
+    average (99th percentile 22, 39 and 56 ms; 0, 24 and 128 frames over 33
+    ms in 20 s) and the engine's memory grew from 280 to 336 and 403 MB; now
+    8.8, 9.4 and 11.8 ms (99th percentile 22, 22 and 28 ms, none over 33
+    ms), 280 MB throughout (the page also had 12 thugs of gangs the players
+    left at Times Square when they went off: their games ran them, it drew
+    copies). Copies of other players' heroes more than 800 m from the
+    camera aren't drawn (the markers show where they are), and past 150 m
+    they hold their pose (animated characters cost the browser).
+  - **Why 8 and 6:** in a full mesh each player keeps a connection to every
+    other and sends its hero's state to each, so at 8 that's 7 connections
+    and up to 7 streams of hero states each way: fine on home connections
+    and phones (below), and the cap stays 8 (more would want a server in
+    the middle). Public rooms fill to 6 so friends can still join a full
+    one with its code.
+  - **Bandwidth:** a hero's state is 156 bytes, about 260 on the wire
+    (SCTP, DTLS, UDP and IP): 5.2 KB/s to each player within 1 km, 1 KB/s to
+    each further off. Thug states go only to players within 400 m: 36 bytes
+    a thug, about 8 KB/s for 8 thugs. Hits, blows, blood and danger go only
+    to players within 600 m (they went to everyone). In a public room of 6,
+    a player sends about 5 KB/s with everyone far off, and about 26 KB/s of
+    hero states plus up to 40 KB/s of thug states with everyone together,
+    and receives about as much.
+  - **TURN relay cost:** only connections that can't go direct are relayed
+    (commonly 10-20% of players' networks need it). Cloudflare's TURN is free
+    up to 1,000 GB a month, then $0.05/GB. A player whose connections are
+    all relayed, in a public room of 6 with everyone together, moves at most
+    about 130 KB/s through the relay (0.47 GB an hour, $0.024 an hour past
+    the free tier); with everyone spread out about 10 KB/s (36 MB an hour).
+    The free tier covers about 2,100 such player-hours a month at worst and
+    about 28,000 with players spread out: at 15% of players relayed, roughly
+    14,000 to 180,000 player-hours of play a month.
+  - **Tested:** `tests/coop_public_test.tscn` runs ten games that join the
+    public game by themselves: six at different places land in one room,
+    keep their starts and see each other where they are; a seventh opens
+    another room as its host; one leaves (and stays alone), then joins
+    again from the menu, back in the first room; another turns the options'
+    switch off (it leaves) and on (it's back); the first room's host's
+    game is closed and the next player hosts the still-public room; an
+    eighth gets the old host's number in it; the server restarts and every
+    game comes back to its room; the seventh leaves (its room closes) and a
+    ninth, the first room being full, opens a new one; one leaves the first
+    room and a tenth is put in it (still public after the restart).
+    `coop_test` (also over WebRTC), `coop_migration_test` and
+    `coop_reconnect_test` pass, none of them joining the public game. In
+    three headless Chrome pages (`?public=1`, signaling by the Durable
+    Object under `wrangler dev`), the first opened a public room once its
+    city had loaded (25 s from a cold start, 10 s warm), the two others (a
+    block away, and at Yankee Stadium) joined it by themselves and saw each
+    other with markers, and closing the host's page left the other two in
+    the same public room, the next player hosting, within 2 s; no errors in
+    the console.
 
 ## 6. Realism from open data (done)
 
@@ -2168,11 +2317,14 @@ deployed); in a computer's browser the co-op menu links to it.
   `tools/cloudflare/.dev.vars`, gitignored); $0.05/GB after 1,000 GB free.
 - Tests (headless): `godot --headless --path . res://tests/hero_moves_test.tscn`,
   `res://tests/combat_test.tscn`, `res://tests/streaming_test.tscn`,
-  `res://tests/coop_test.tscn`, `res://tests/coop_migration_test.tscn` and
-  `res://tests/coop_reconnect_test.tscn` (they run the signaling server, so
+  `res://tests/coop_test.tscn`, `res://tests/coop_migration_test.tscn`,
+  `res://tests/coop_reconnect_test.tscn` and
+  `res://tests/coop_public_test.tscn` (they run the signaling server, so
   `npm install` in `tools/signaling` first; `-- --port=N` picks its port,
   default 8071; they connect over ENet, `coop_test` over WebRTC with
-  `--net=webrtc`),
+  `--net=webrtc`; none joins the public game unless it means to),
+  `res://tests/coop_load_test.tscn` (not a pass/fail test: what 3 and 7
+  players far off cost a host's frames, physics and memory),
   `res://tests/audio_test.tscn`, `res://tests/options_test.tscn` (the
   options menu and the settings, with a settings file of its own) and
   `res://tests/traffic_test.tscn` (75 s of
@@ -2189,7 +2341,9 @@ deployed); in a computer's browser the co-op menu links to it.
   free camera, `?spawn=x,y,z,yaw` hero start, `?stats` the stats text
   (also on phones) and console stats, `?quality=low|medium|high`,
   `?mute=1|0`, `?touch=1|0`, `?time=HH:MM`, `?peds=N`, `?gangs=N`, `?traffic=N`, `?trains=N` (0: none), `?demo` / `?demo=fight` / `?demo=city` / `?demo=new` scripted tours for videos,
-  `?host` / `?join=CODE` co-op, `?signal=wss://...` signaling server
+  `?host` / `?join=CODE` co-op (a private game), `?solo=1` play alone (no
+  public game), `?public=1` join the public game even headless or from a
+  script (headless Chrome), `?signal=wss://...` signaling server
   (default: the page's host, port 8070), `?relay=1` co-op only through the
   TURN relay (testing), `?weather=overcast`, `?date=MM-DD` (or
   `YYYY-MM-DD`) the sun's arc on that day, `?fog_scatter=` (sun tint of

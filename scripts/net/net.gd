@@ -4,12 +4,14 @@ extends Node
 ## Players find each other through a small signaling server (tools/signaling
 ## locally, tools/cloudflare on the public site) using a short room code,
 ## then connect directly over WebRTC, every player to every other (a full
-## mesh). One of them is the host: its game runs the thugs and decides every
-## hit (see Combat). When the host leaves, the game goes on: the signaling
-## server names the player who has been in the room longest the new host
-## (host_changed), whose game takes the thugs over from the copies it and the
-## others have (see EncounterDirector); the room keeps its code, so friends
-## can still join. Desktop builds get WebRTC from the webrtc-native
+## mesh). Each game runs the thugs around its own hero and decides the hits on
+## them (see EncounterDirector, Combat). One of the players is the host: in a
+## private game, players who join start next to its hero, and when a player
+## leaves, its game takes over their thugs. When the host leaves, the game goes
+## on: the signaling server names the player who has been in the room longest
+## the new host (host_changed), whose game takes the thugs over from the
+## copies it and the others have; the room keeps its code, so friends can
+## still join. Desktop builds get WebRTC from the webrtc-native
 ## GDExtension (addons/webrtc_native), so they play with browser players, and
 ## use the public site's signaling server by default. The co-op tests connect
 ## over ENet on this machine instead (--net=enet), through the same signaling;
@@ -31,7 +33,18 @@ extends Node
 ## it from the players who come back (see tools/signaling/server.mjs). Only if
 ## that takes more than a few seconds does the menu say so (is_reconnecting).
 ##
+## The public game: everyone playing online is put in a public room
+## (join_public), the fullest one with a place free, or a new one when they're
+## all full; the signaling server matches only games of the same NET_VERSION.
+## Game asks for it once the city has loaded (start_public), unless the player
+## asked for something else or turned it off (the setting "online_public"); it
+## goes quietly: if the server can't be reached, or the room's host can't, we
+## play alone and try again later (PUBLIC_RETRY), and nothing is shown. Public
+## rooms have codes like any other, so friends can join one with its code.
+##
 ## Launch options (read by Game): ?host hosts a game, ?join=CODE joins one,
+## ?solo=1 plays alone (no public game), ?public=1 joins the public game even
+## where Game wouldn't (headless, or a browser driven by a script),
 ## ?signal=wss://... picks the signaling server (default: /signal on the page's
 ## host over https, else the page's host on port 8070; desktop builds the
 ## public site's, the editor port 8070 on this machine), and ?relay=1 connects
@@ -52,12 +65,30 @@ signal left_room(id: int)
 signal host_changed(id: int)
 ## is_reconnecting changed.
 signal reconnecting_changed
+## We're back in the room after the signaling server let us go meanwhile (our
+## socket dropped): the others took us for gone, and connect to us again.
+signal readmitted
 
 enum State { OFFLINE, CONNECTING, HOSTING, JOINED }
 
 ## The first host's number (and ours when offline).
 const FIRST_HOST := 1
+## The full mesh's limit: each player connects to every other, and sends its
+## hero's state to each (see PlayerSync).
 const MAX_PLAYERS := 8
+## Games send the signaling server this number (plus ENET_VERSION over ENet),
+## which matches public games only with games of the same number, and turns
+## away room codes of another. Raise it whenever what games send each other
+## changes (RPCs), so games that can't play together never meet.
+const NET_VERSION := 1
+const ENET_VERSION := 1000000
+## After failing to reach the public game, try again after this long
+## (seconds), twice as long after each try that fails, up to PUBLIC_RETRY_MAX.
+const PUBLIC_RETRY := 30.0
+const PUBLIC_RETRY_MAX := 300.0
+## After losing the public room's host (or being dropped), look for a public
+## room again after this long (seconds).
+const PUBLIC_REJOIN := 3.0
 const SIGNALING_PORT := 8070
 ## The public site, whose signaling server desktop builds use by default; their
 ## invite links open the game there.
@@ -109,6 +140,9 @@ var room_code := ""
 var host_id := FIRST_HOST
 ## The last problem worth telling the player about (empty when all is well).
 var error := ""
+## Whether our room is a public one (we asked for the public game, or joined a
+## public room with its code).
+var is_public := false
 
 var _signaling: WebSocketPeer
 var _signaling_url := ""
@@ -135,6 +169,11 @@ var _connect_time := 0.0
 var _host_missing_time := 0.0
 var _ping_cooldown := 0.0
 var _report_cooldown := 0.0
+var _auto_public := false  # Game allows the public game (start_public): we follow the setting
+var _wants_public := false  # we're in the public game, or looking for it (quietly, see _give_up)
+var _public_at := 0  # when to look for a public room again (msec; 0: not waiting to)
+var _public_retry := PUBLIC_RETRY
+var _setting_on := true  # the "online_public" setting, as we last followed it
 
 static var _webrtc := -1  # whether a WebRTC library loaded (desktop): -1 not checked yet, else 1 or 0
 
@@ -142,9 +181,14 @@ static var _webrtc := -1  # whether a WebRTC library loaded (desktop): -1 not ch
 func _ready() -> void:
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	Settings.changed.connect(_on_setting_changed)
 
 
 func _process(delta: float) -> void:
+	if _public_at != 0 and Time.get_ticks_msec() >= _public_at:
+		_public_at = 0
+		if state == State.OFFLINE and _wants_public:
+			_start({type = "public"})
 	if _signaling:
 		_poll_signaling()
 	elif _retry_msec != 0 and Time.get_ticks_msec() >= _retry_msec:
@@ -161,11 +205,11 @@ func _process(delta: float) -> void:
 	if state == State.CONNECTING:
 		_connect_time += delta
 		if _connect_time > CONNECT_TIMEOUT:
-			leave("Couldn't reach the game. The host's or your network may be blocking it.")
+			_give_up("Couldn't reach the game. The host's or your network may be blocking it.")
 			return
 	_host_missing_time = _host_missing_time + delta if state == State.JOINED and not _connected(host_id) else 0.0
 	if _host_missing_time > HOST_TIMEOUT:
-		leave("Lost the connection to the host.")
+		_give_up("Lost the connection to the host.")
 		return
 	_ping_cooldown -= delta
 	if _ping_cooldown <= 0.0 and _signaling and _signaling.get_ready_state() == WebSocketPeer.STATE_OPEN:
@@ -197,12 +241,6 @@ func is_online() -> bool:
 	return state == State.HOSTING or state == State.JOINED
 
 
-## Whether this game runs the thugs and decides hits: true when playing alone
-## or hosting, false when playing in someone else's game.
-func is_authority() -> bool:
-	return state != State.JOINED
-
-
 ## Whether the signaling server has us in our room now: not while it's gone
 ## and we're getting back to it (the game goes on meanwhile).
 func has_signaling() -> bool:
@@ -213,6 +251,12 @@ func has_signaling() -> bool:
 ## it's been gone for more than RECONNECTING_NOTICE (reconnecting_changed).
 func is_reconnecting() -> bool:
 	return _reconnecting
+
+
+## Whether we're in the public game or looking for it (also while waiting to
+## try again after failing to reach it).
+func wants_public() -> bool:
+	return _wants_public
 
 
 ## This player's number (1 when offline).
@@ -256,7 +300,9 @@ func invite_link() -> String:
 	return link
 
 
+## Hosts a private game (leaving the public one, if we're in it).
 func host() -> void:
+	_stop_public()
 	_start({type = "host"})
 
 
@@ -266,18 +312,74 @@ func join(code: String) -> void:
 		error = "Type in the room code first."
 		state_changed.emit()
 		return
+	_stop_public()
 	_start({type = "join", code = code})
+
+
+## Joins the public game: the public room with the most players and a place
+## free, or a new one. Quietly: if it can't be reached, we play alone and try
+## again in a while.
+func join_public() -> void:
+	_wants_public = true
+	_public_retry = PUBLIC_RETRY
+	_start({type = "public"})
+
+
+## Game allows the public game in this session: we join it now unless the
+## player turned it off (or is in a game already), and follow the setting from
+## then on: turning it off leaves the public game, turning it on joins it.
+func start_public() -> void:
+	_auto_public = true
+	_setting_on = bool(Settings.get_value("online_public", true))
+	if _setting_on and state == State.OFFLINE:
+		join_public()
 
 
 ## Leaves the game. `reason`, if any, is shown to the player. The others play on.
 func leave(reason := "") -> void:
-	var was_offline := state == State.OFFLINE
+	var was_offline := state == State.OFFLINE and not _wants_public
+	_stop_public()
 	_reset()
 	error = reason
 	if reason:
 		push_warning("[net] " + reason)
 	if not was_offline or reason:
 		_set_state(State.OFFLINE)
+
+
+## Something went wrong: we leave the game, telling the player why, unless
+## it's the public game. Then we play alone without a word, and look for a
+## public room again in a while (soon if we were in one: its host may be gone).
+func _give_up(reason: String) -> void:
+	if not _wants_public:
+		leave(reason)
+		return
+	var delay := PUBLIC_REJOIN
+	if not is_online():
+		delay = _public_retry
+		_public_retry = minf(_public_retry * 2.0, PUBLIC_RETRY_MAX)
+	print("[net] public game: %s; looking again in %.0f s" % [reason, delay])
+	_reset()
+	_public_at = Time.get_ticks_msec() + int(delay * 1000.0)
+	_set_state(State.OFFLINE)
+
+
+func _stop_public() -> void:
+	_wants_public = false
+	_public_at = 0
+
+
+## Once the public game is allowed (start_public), follows the player's
+## "online_public" setting (the options menu's switch).
+func _on_setting_changed(key: String) -> void:
+	var on := bool(Settings.get_value("online_public", true))
+	if key != "online_public" or not _auto_public or on == _setting_on:
+		return
+	_setting_on = on
+	if on and state == State.OFFLINE:
+		join_public()
+	elif not on and _wants_public:
+		leave()
 
 
 func _reset() -> void:
@@ -307,6 +409,7 @@ func _reset() -> void:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	room_code = ""
+	is_public = false
 	state = State.OFFLINE
 	if _reconnecting:
 		_reconnecting = false
@@ -318,8 +421,9 @@ func _start(greeting: Dictionary) -> void:
 	_reset()
 	_signaling_url = _default_signaling_url()
 	if not _open_signaling():
-		leave("Couldn't reach the co-op server at %s." % _signaling_url)
+		_give_up("Couldn't reach the co-op server at %s." % _signaling_url)
 		return
+	greeting.version = _version()
 	_greeting = greeting
 	_join_retries = JOIN_RETRIES
 	_connect_time = 0.0
@@ -332,7 +436,7 @@ func _default_signaling_url() -> String:
 	if not OS.has_feature("web"):
 		# Desktop builds play with the public site's players; the editor
 		# (and a build without WebRTC) with a local server.
-		if OS.has_feature("editor") or not _uses_webrtc():
+		if OS.has_feature("editor") or not uses_webrtc():
 			return "ws://127.0.0.1:%d" % SIGNALING_PORT
 		return PUBLIC_SIGNALING_URL
 	# The public site (https, tools/cloudflare) has it at /signal on the same
@@ -391,7 +495,7 @@ func _signaling_dropped() -> void:
 	if state == State.OFFLINE:
 		return
 	if not _got_through:
-		leave("Couldn't reach the co-op server at %s." % _signaling_url)
+		_give_up("Couldn't reach the co-op server at %s." % _signaling_url)
 		return
 	var now := Time.get_ticks_msec()
 	if _signaling_lost_msec == 0:
@@ -409,12 +513,22 @@ func _signaling_back() -> void:
 			% ((Time.get_ticks_msec() - _signaling_lost_msec) / 1000.0))
 	_signaling_lost_msec = 0
 	_greeting = {}
+	_public_retry = PUBLIC_RETRY
 
 
 ## Our place in the room, for a signaling server that dropped us (and may have
 ## lost the room: it rebuilds it from what its players say).
 func _rejoin_request() -> Dictionary:
-	return {type = "rejoin", code = room_code, id = local_id(), key = _key, host = host_id, players = _order}
+	var request := {type = "rejoin", code = room_code, id = local_id(), key = _key, host = host_id, players = _order,
+		version = _version()}
+	if is_public:
+		request.public = true
+	return request
+
+
+## What we tell the signaling server our version is (see NET_VERSION).
+static func _version() -> int:
+	return NET_VERSION + (0 if uses_webrtc() else ENET_VERSION)
 
 
 func _on_signaling_message(message: Dictionary) -> void:
@@ -423,15 +537,17 @@ func _on_signaling_message(message: Dictionary) -> void:
 			room_code = message.code
 			_key = str(message.get("key", ""))
 			_ice_servers = message.get("ice", [])
+			is_public = message.get("public") == true
 			_open_mesh(int(message.id))
 			_order.assign([int(message.id)])
 			_signaling_back()
-			print("[net] hosting room %s" % room_code)
+			print("[net] hosting %sroom %s" % ["public " if is_public else "", room_code])
 			_set_host(int(message.id))
 		"joined":
 			room_code = message.code
 			_key = str(message.get("key", ""))
 			_ice_servers = message.get("ice", [])
+			is_public = message.get("public") == true
 			_open_mesh(int(message.id))
 			# The players already in the room each send us an offer.
 			_order.clear()
@@ -442,7 +558,7 @@ func _on_signaling_message(message: Dictionary) -> void:
 					_add_connection(int(id))
 			_order.append(int(message.id))
 			_signaling_back()
-			print("[net] joining room %s as player %d" % [room_code, int(message.id)])
+			print("[net] joining %sroom %s as player %d" % ["public " if is_public else "", room_code, int(message.id)])
 			_set_host(int(message.get("host", FIRST_HOST)))
 		"rejoined":
 			_on_rejoined(message)
@@ -476,9 +592,11 @@ func _on_signaling_message(message: Dictionary) -> void:
 				_hello_msec = Time.get_ticks_msec() + int(JOIN_RETRY_DELAY * 1000.0)
 			elif _rejoining:
 				push_warning("[net] couldn't rejoin room %s: %s" % [room_code, message.get("message", "")])
-				leave("Lost the connection to the co-op server.")
+				_give_up("Lost the connection to the co-op server.")
 			else:
-				leave(str(message.get("message", "Something went wrong.")))
+				# (Also a server from before the public game, which doesn't know
+				# the request: we try again later, and it may have been updated.)
+				_give_up(str(message.get("message", "Something went wrong.")))
 
 
 ## Back in the room after the signaling server dropped us: who's in it now,
@@ -486,6 +604,7 @@ func _on_signaling_message(message: Dictionary) -> void:
 func _on_rejoined(message: Dictionary) -> void:
 	_rejoining = false
 	_update_ice(message.get("ice", []))
+	is_public = is_public or message.get("public") == true
 	_order.assign(message.get("players", []).map(func(id: Variant) -> int: return int(id)))
 	for id: int in _members.keys():
 		if not _order.has(id):
@@ -501,6 +620,7 @@ func _on_rejoined(message: Dictionary) -> void:
 			_drop(id)
 		for id: int in _members:
 			_reconnect_at[id] = Time.get_ticks_msec() + RECONNECT_INTERVAL
+		readmitted.emit()
 	else:
 		# Connections that broke meanwhile: the one of us with the lower
 		# number connects again (players who joined meanwhile hear from us
@@ -538,7 +658,7 @@ static func _has_relay(servers: Array) -> bool:
 ## Whether connections between players go over WebRTC: always in the
 ## browser; on desktop when the webrtc-native extension loaded, unless
 ## --net=enet (the co-op tests) says otherwise.
-static func _uses_webrtc() -> bool:
+static func uses_webrtc() -> bool:
 	if OS.has_feature("web"):
 		return true
 	match LaunchOptions.get_string("net"):
@@ -561,7 +681,7 @@ static func _has_webrtc() -> bool:
 
 
 func _open_mesh(id: int) -> void:
-	if _uses_webrtc():
+	if uses_webrtc():
 		var rtc := WebRTCMultiplayerPeer.new()
 		rtc.create_mesh(id)
 		_mesh = rtc

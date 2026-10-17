@@ -2,12 +2,12 @@ extends Node
 ## Resolves fights (autoload "Combat"): heroes hitting thugs, thugs hitting
 ## heroes, and the danger that sends pedestrians running.
 ##
-## In co-op the host's game runs the thugs and has the final say on every hit.
-## A player hitting a thug in someone else's game sees the hit at once (the
-## thug there is a copy) and reports it to the host, which applies it and tells
-## everyone else. Thugs hitting another player's hero are sent to that player,
-## whose game owns their hero. When the host changes, so does who may send
-## the host's messages (the node's multiplayer authority).
+## In co-op each thug runs in one player's game (see EncounterDirector), which
+## has the final say on every hit on it. A player hitting a copy of a thug
+## sees the hit at once and reports it to the game running the thug, which
+## applies it and tells everyone else. Thugs hitting another player's hero are
+## sent to that player, whose game owns their hero. What happens somewhere
+## (hits, blood, danger) is told only to players whose hero is near it.
 ##
 ## Positions passed in are scene space (see WorldOrigin) unless named world_*;
 ## positions sent between games are always world space.
@@ -26,6 +26,9 @@ const NPC_LAYER := 4
 const RAGDOLL_LAYER := 8
 ## At most this many thugs swing at a hero at once.
 const MAX_ATTACKERS := 2
+## Other players hear of what happens within this far of their hero (m): past
+## where they have copies of thugs (EncounterDirector.FORGET_RANGE).
+const NEAR_EVENTS := 600.0
 
 var thugs: Array[Thug] = []
 ## Every hero in the game: ours, and copies of the other players' heroes.
@@ -37,10 +40,6 @@ var effects: CombatEffects
 var _thugs_by_id := {}
 var _attackers := {}  # hero instance id -> thugs swinging at it
 var _hit_stop_end_msec := 0
-
-
-func _ready() -> void:
-	Net.host_changed.connect(func(id: int) -> void: set_multiplayer_authority(id, false))
 
 
 func _process(_delta: float) -> void:
@@ -111,7 +110,7 @@ func shockwave(center: Vector3, radius: float, damage: float, launch_speed: floa
 	impact.emit(center, clampf(radius / 10.0, 0.3, 1.0))
 
 
-## A thug's punch landing on a hero (decided by the game running the thugs).
+## A thug's punch landing on a hero (decided by the game running the thug).
 func hurt_hero(hero: Hero, damage: float, push: Vector3) -> void:
 	if hero.is_remote():
 		_hurt_our_hero.rpc_id(hero.remote_id, damage, push)
@@ -124,8 +123,9 @@ func hurt_hero(hero: Hero, damage: float, push: Vector3) -> void:
 func on_thug_down(thug: Thug, launch: Vector3) -> void:
 	defeated_count += 1
 	thug_defeated.emit(thug)
-	if Net.is_online() and Net.is_authority():
-		_thug_down.rpc(thug.net_id, launch)
+	if Net.is_online() and not thug.puppet:
+		for id in players_near(WorldOrigin.to_world(thug.global_position)):
+			_thug_down.rpc_id(id, thug.net_id, launch)
 
 
 ## Thugs ask before swinging, so only a couple attack a hero at once.
@@ -153,44 +153,58 @@ func hit_stop(seconds: float) -> void:
 ## Tells bystanders here and in every other player's game to run.
 func raise_danger(world_position: Vector3, radius: float) -> void:
 	danger.emit(world_position, radius)
-	if Net.is_online():
-		_danger.rpc(world_position, radius)
+	for id in players_near(world_position):
+		_danger.rpc_id(id, world_position, radius)
 
 
 func show_shockwave(world_position: Vector3, radius: float) -> void:
 	if effects:
 		effects.shockwave(WorldOrigin.to_local(world_position), radius)
-	if Net.is_online():
-		_shockwave.rpc(world_position, radius)
+	for id in players_near(world_position):
+		_shockwave.rpc_id(id, world_position, radius)
 
 
 ## Blood from a hit hero, in every game (each draws it on its own copy of the hero).
 func show_hero_blood(hero: Hero, direction: Vector3, amount: float) -> void:
 	if effects:
 		effects.blood_burst(hero.global_position + Vector3.UP * 1.3, direction, amount)
-	if Net.is_online():
-		_hero_blood.rpc(hero.remote_id if hero.is_remote() else Net.local_id(), direction, amount)
+	for id in players_near(hero.world_position()):
+		_hero_blood.rpc_id(id, hero.remote_id if hero.is_remote() else Net.local_id(), direction, amount)
 
 
 ## Hits made by our hero: [thug, damage, push, launch] each. Thugs we run take
-## them for real (and everyone is told); copies show them at once and the
-## host is asked to apply them.
+## them for real (and everyone is told); copies show them at once, and the
+## games running them are asked to apply them.
 func _hit_thugs(hits: Array) -> void:
-	var reports: Array = []
+	var reports := {}  # player number -> [net id, damage, push, launch] each
 	for hit: Array in hits:
 		var thug: Thug = hit[0]
-		if Net.is_authority():
-			_tell_hit(thug, hit[2], hit[3], Net.local_id())  # before it can go down
+		if thug.puppet:
+			reports.get_or_add(thug.run_by, []).append([thug.net_id, hit[1], hit[2], hit[3]])
 		else:
-			reports.append([thug.net_id, hit[1], hit[2], hit[3]])
+			_tell_hit(thug, hit[2], hit[3], Net.local_id())  # before it can go down
 		thug.take_hit(hit[1], hit[2], hit[3])
-	if not reports.is_empty() and Net.peers().has(Net.host_id):
-		_report_hits.rpc_id(Net.host_id, reports)
+	var connected := Net.peers()
+	for player: int in reports:
+		if connected.has(player):
+			_report_hits.rpc_id(player, reports[player])
 
 
 func _tell_hit(thug: Thug, push: Vector3, launch: bool, attacker: int) -> void:
-	if Net.is_online():
-		_thug_hit.rpc(thug.net_id, push, launch, attacker)
+	for id in players_near(WorldOrigin.to_world(thug.global_position)):
+		_thug_hit.rpc_id(id, thug.net_id, push, launch, attacker)
+
+
+## The other players (connected to us) whose hero is within NEAR_EVENTS of a
+## world position.
+func players_near(world_position: Vector3) -> Array[int]:
+	var near: Array[int] = []
+	var connected := Net.peers()
+	for hero in heroes:
+		if hero.is_remote() and connected.has(hero.remote_id) \
+				and hero.world_position().distance_to(world_position) < NEAR_EVENTS:
+			near.append(hero.remote_id)
+	return near
 
 
 func _hero_of(player: int) -> Hero:
@@ -200,38 +214,39 @@ func _hero_of(player: int) -> Hero:
 	return null
 
 
-## On the host: another player hit thugs. [net id, damage, push, launch] each.
+## Another player hit thugs our game runs. [net id, damage, push, launch] each.
 @rpc("any_peer", "call_remote", "reliable")
 func _report_hits(reports: Array) -> void:
-	if not Net.is_authority():
-		return
 	var attacker := multiplayer.get_remote_sender_id()
 	for report: Array in reports:
 		var thug := thug_by_id(int(report[0]))
-		if thug == null or thug.is_down():
+		if thug == null or thug.puppet or thug.is_down():
 			continue
 		_tell_hit(thug, report[2], bool(report[3]), attacker)
 		thug.take_hit(float(report[1]), report[2], bool(report[3]))
 
 
-@rpc("authority", "call_remote", "reliable")
+## The game running a thug says someone hit it.
+@rpc("any_peer", "call_remote", "reliable")
 func _thug_hit(net_id: int, push: Vector3, launch: bool, attacker: int) -> void:
 	var thug := thug_by_id(net_id)
-	if attacker == Net.local_id() or thug == null or thug.is_down():
+	if attacker == Net.local_id() or thug == null or thug.is_down() or thug.run_by != multiplayer.get_remote_sender_id():
 		return  # we showed our own hits already
 	if effects:
 		effects.blood_burst(thug.body_center(), push.normalized(), 1.5 if launch else 0.6)
 	GameAudio.play(&"punch_heavy" if launch else &"punch", thug.body_center())
 
 
-@rpc("authority", "call_remote", "reliable")
+## The game running a thug says it went down.
+@rpc("any_peer", "call_remote", "reliable")
 func _thug_down(net_id: int, launch: Vector3) -> void:
 	var thug := thug_by_id(net_id)
-	if thug and not thug.is_down():
+	if thug and thug.puppet and thug.run_by == multiplayer.get_remote_sender_id() and not thug.is_down():
 		thug.go_down(launch)
 
 
-@rpc("authority", "call_remote", "reliable")
+## A thug (whichever game runs it) punched our hero.
+@rpc("any_peer", "call_remote", "reliable")
 func _hurt_our_hero(damage: float, push: Vector3) -> void:
 	var hero := _hero_of(Net.local_id())
 	if hero:

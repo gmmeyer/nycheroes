@@ -6,6 +6,16 @@
 // WebRTC offers, answers and network candidates between any two players in a
 // room: the players already there each send the newcomer an offer.
 //
+// Public games: a player asking for the public game ("public") is put in the
+// public room with the most players that has a place free (PUBLIC_PLAYERS at
+// most), of those for its version of the game, or opens a new one when they're
+// all full (or there are none). Public rooms have codes like any other, so
+// friends can join one with its code (up to MAX_PLAYERS, the full mesh's
+// limit). A game's version is a number it sends when hosting, joining or
+// asking for the public game (games that can't play together have different
+// ones); joining a room of another version with its code is turned away.
+// Games from before public rooms never ask for one, and send no version.
+//
 // One player is the room's host (the one whose game runs the thugs): first
 // the one who opened it. When the host leaves, the player who has been in the
 // room longest takes over (passing over any who stopped pinging: their
@@ -21,14 +31,15 @@
 // tools/cloudflare) forgets every room and closes every socket, but the games
 // play on over their own connections: each connects again and rejoins its room
 // as the same player ("rejoin"), saying who was in it, in the order they came,
-// and who hosted. The first one back rebuilds the room from that; the places
-// of the others (the host's role too) are kept for them until they're back, so
-// a friend joining meanwhile gets a free number, and those coming back later
-// are told to connect to the friend. One still away after AWAY_TIMEOUT_MS whom
-// another player has lost touch with is taken to have left. A player whose
-// socket alone dropped (so the room let it go) rejoins the same way, and the
-// others connect to it again. Hosting or joining gives a player a key, so only
-// it can take its place back.
+// and who hosted (and whether the room is public, and its version). The first
+// one back rebuilds the room from that; the places of the others (the host's
+// role too) are kept for them until they're back, so a friend joining
+// meanwhile gets a free number, and those coming back later are told to
+// connect to the friend. One still away after AWAY_TIMEOUT_MS whom another
+// player has lost touch with is taken to have left. A player whose socket
+// alone dropped (so the room let it go) rejoins the same way, and the others
+// connect to it again. Hosting or joining gives a player a key, so only it can
+// take its place back.
 //
 // Usage: npm install && node server.mjs
 // Environment:
@@ -39,11 +50,14 @@
 //   ALLOWED_ORIGINS   comma-separated page origins allowed to connect (default: any)
 //
 // Protocol (JSON text messages, plus "ping"/"pong" as plain text):
-//   player -> server  {type: "host"}               server -> {type: "hosted", code, id: 1, key, ice}
-//   player -> server  {type: "join", code}         server -> {type: "joined", code, id, key, host, peers, ice}
+//   player -> server  {type: "host", version}      server -> {type: "hosted", code, id: 1, key, ice}
+//   player -> server  {type: "join", code, version}
+//                                                  server -> {type: "joined", code, id, key, host, peers, ice, public}
 //                                                  others <- {type: "peer_joined", id}
-//   player -> server  {type: "rejoin", code, id, key, host, players}
-//                                                  server -> {type: "rejoined", code, id, host, players, back, ice}
+//   player -> server  {type: "public", version}    server -> {type: "joined", ..., public: true} (as for "join"),
+//                                                            or {type: "hosted", ..., public: true} (a new room)
+//   player -> server  {type: "rejoin", code, id, key, host, players, public, version}
+//                                                  server -> {type: "rejoined", code, id, host, players, back, ice, public}
 //                                                  then   <- {type: "peer_joined", id, back} for each player who
 //                                                            joined while it was away (it makes the offer)
 //                                                  if back: others <- {type: "peer_joined", id, back: true}
@@ -51,8 +65,11 @@
 //   player -> server  {type: "lost", id}           (drops player id if it stopped pinging, or isn't back)
 //   others <- {type: "peer_left", id, host}        anyone <- {type: "error", message, reason}
 // `peers` and `players` are in the order the players came (`players` includes
-// the player itself). An error with reason "no_room" answers a join for a code
-// with no room: after a restart, perhaps not yet.
+// the player itself); `public` is true in public rooms (left out in others);
+// games from before public rooms send no `version` (and no `public`). An error
+// with reason "no_room" answers a join for a code with no room: after a
+// restart, perhaps not yet; "full", a room with no place free; "version", a
+// room of another version of the game.
 
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
@@ -64,6 +81,9 @@ const ICE_SERVERS = process.env.ICE_SERVERS
   : [{ urls: ['stun:stun.l.google.com:19302'] }];
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean);
 const MAX_PLAYERS = 8;
+// Public rooms take this many players by matchmaking, leaving places for
+// friends joining with the code.
+const PUBLIC_PLAYERS = 6;
 const FIRST_HOST = 1;
 // No 0/O, 1/I/L: codes get read out loud and typed.
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -76,16 +96,18 @@ const PING_TIMEOUT_MS = 25000;
 const AWAY_TIMEOUT_MS = 10000;
 
 /**
- * code -> {code, host, players: Map<id, player>}, players in the order they
- * came: their sockets ({room, id, key, since, seen, back}), or, after a
- * restart, places kept for those not back yet ({away: true, id, since, at}).
+ * code -> {code, host, players: Map<id, player>, public, version, opened},
+ * players in the order they came: their sockets ({room, id, key, since, seen,
+ * back}), or, after a restart, places kept for those not back yet ({away: true,
+ * id, since, at}). `version` is the game's (null from games before public rooms).
  */
 const rooms = new Map();
 
 const http = createServer((request, response) => {
   // A plain GET is a health check.
   response.writeHead(200, { 'content-type': 'text/plain' });
-  response.end(`signaling ok, ${rooms.size} rooms\n`);
+  const open = [...rooms.values()].filter((room) => room.public).length;
+  response.end(`signaling ok, ${rooms.size} rooms (${open} public)\n`);
 });
 const wss = new WebSocketServer({
   server: http,
@@ -113,30 +135,28 @@ wss.on('connection', (socket) => {
 
 function handle(socket, message) {
   switch (message?.type) {
-    case 'host': {
+    case 'host':
       if (socket.room) return send(socket, { type: 'error', message: 'Already in a game' });
-      const room = { code: newCode(), host: FIRST_HOST, players: new Map([[FIRST_HOST, socket]]) };
-      rooms.set(room.code, room);
-      Object.assign(socket, { room, id: FIRST_HOST, key: randomUUID(), since: Date.now() });
-      send(socket, { type: 'hosted', code: room.code, id: FIRST_HOST, key: socket.key, ice: ICE_SERVERS });
-      log(`room ${room.code} opened`);
+      open(socket, { public: false, version: versionOf(message) });
       break;
-    }
     case 'join': {
       if (socket.room) return send(socket, { type: 'error', message: 'Already in a game' });
       const code = String(message.code ?? '').trim().toUpperCase();
       const room = rooms.get(code);
       if (!room) return send(socket, { type: 'error', message: `No game with code ${code}`, reason: 'no_room' });
-      // The lowest free number, so player numbers (and colors) stay small.
-      let id = FIRST_HOST;
-      while (room.players.has(id)) id++;
-      if (id > MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full' });
-      const peers = [...room.players.keys()];
-      room.players.set(id, socket);
-      Object.assign(socket, { room, id, key: randomUUID(), since: Date.now() });
-      send(socket, { type: 'joined', code, id, key: socket.key, host: room.host, peers, ice: ICE_SERVERS });
-      for (const peer of peers) send(room.players.get(peer), { type: 'peer_joined', id });
-      log(`room ${code}: player ${id} joined (${room.players.size} players)`);
+      const version = versionOf(message);
+      if (version !== null && room.version !== null && version !== room.version) {
+        return send(socket, { type: 'error', message: OTHER_VERSION, reason: 'version' });
+      }
+      admit(socket, room);
+      break;
+    }
+    case 'public': {
+      if (socket.room) return send(socket, { type: 'error', message: 'Already in a game' });
+      const version = versionOf(message);
+      const room = publicRoom(version);
+      if (room) admit(socket, room);
+      else open(socket, { public: true, version });
       break;
     }
     case 'rejoin':
@@ -162,6 +182,60 @@ function handle(socket, message) {
   }
 }
 
+const OTHER_VERSION = 'That game is on another version of NYC Heroes. Reload the page (or get the new version), then try again.';
+
+/** Opens a room with this player as its host. */
+function open(socket, { public: isPublic, version }) {
+  const room = {
+    code: newCode(), host: FIRST_HOST, players: new Map([[FIRST_HOST, socket]]), public: isPublic, version,
+    opened: Date.now(),
+  };
+  rooms.set(room.code, room);
+  Object.assign(socket, { room, id: FIRST_HOST, key: randomUUID(), since: Date.now() });
+  send(socket, { type: 'hosted', code: room.code, id: FIRST_HOST, key: socket.key, ice: ICE_SERVERS, ...publicFlag(room) });
+  log(`${room.public ? 'public ' : ''}room ${room.code} opened`);
+}
+
+/** Puts a player in a room, as its lowest free number; everyone there sends it an offer. */
+function admit(socket, room) {
+  // The lowest free number, so player numbers (and colors) stay small.
+  let id = FIRST_HOST;
+  while (room.players.has(id)) id++;
+  if (id > MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full', reason: 'full' });
+  const peers = [...room.players.keys()];
+  room.players.set(id, socket);
+  Object.assign(socket, { room, id, key: randomUUID(), since: Date.now() });
+  send(socket, {
+    type: 'joined', code: room.code, id, key: socket.key, host: room.host, peers, ice: ICE_SERVERS, ...publicFlag(room),
+  });
+  for (const peer of peers) send(room.players.get(peer), { type: 'peer_joined', id });
+  log(`room ${room.code}: player ${id} joined (${room.players.size} players)`);
+}
+
+/**
+ * The public room to put a player in: of those for its version with a place
+ * free, the one with the most players (places kept for players not back since
+ * a restart count too), the oldest of those. Null if there's none.
+ */
+function publicRoom(version) {
+  let best = null;
+  for (const room of rooms.values()) {
+    if (!room.public || room.version !== version || room.players.size >= PUBLIC_PLAYERS) continue;
+    if (!best || room.players.size > best.players.size
+      || (room.players.size === best.players.size && room.opened < best.opened)) best = room;
+  }
+  return best;
+}
+
+function publicFlag(room) {
+  return room.public ? { public: true } : {};
+}
+
+/** The game's version a message gives, or null (games from before public rooms send none). */
+function versionOf(message) {
+  return Number.isInteger(message?.version) ? message.version : null;
+}
+
 /** A player coming back to its room after its socket dropped, or after we restarted. */
 function rejoin(socket, message) {
   if (socket.room) return send(socket, { type: 'error', message: 'Already in a game' });
@@ -172,6 +246,10 @@ function rejoin(socket, message) {
     return send(socket, { type: 'error', message: 'Bad message' });
   }
   const room = rooms.get(code) ?? rebuild(code, id, message);
+  // Any player back may know better than the first (a game from before public
+  // rooms doesn't say).
+  if (message.public === true) room.public = true;
+  room.version ??= versionOf(message);
   const there = room.players.get(id);
   let since = Date.now();
   let back = false;
@@ -188,12 +266,14 @@ function rejoin(socket, message) {
     missed = [...room.players.values()].filter((player) => !player.away && player.since >= there.at);
   } else {
     // The room let them go meanwhile: everyone connects to them again.
-    if (room.players.size >= MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full' });
+    if (room.players.size >= MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full', reason: 'full' });
     back = true;
   }
   room.players.set(id, socket); // (in their old place, if they had one)
   Object.assign(socket, { room, id, key, since, back });
-  send(socket, { type: 'rejoined', code, id, host: room.host, players: [...room.players.keys()], back, ice: ICE_SERVERS });
+  send(socket, {
+    type: 'rejoined', code, id, host: room.host, players: [...room.players.keys()], back, ice: ICE_SERVERS, ...publicFlag(room),
+  });
   for (const player of missed) send(socket, { type: 'peer_joined', id: player.id, back: player.back });
   if (back) {
     for (const player of room.players.values()) {
@@ -205,8 +285,9 @@ function rejoin(socket, message) {
 
 /**
  * A room we lost (a restart), as the first player back says it was: who was
- * in it, in the order they came, and who hosted. The places of all of them are
- * kept until they're back (the first takes its own at once).
+ * in it, in the order they came, who hosted, whether it was public and its
+ * version. The places of all of them are kept until they're back (the first
+ * takes its own at once).
  */
 function rebuild(code, id, message) {
   const claimed = Array.isArray(message.players) ? message.players : [];
@@ -214,10 +295,10 @@ function rebuild(code, id, message) {
     .filter((n) => Number.isInteger(n) && n >= FIRST_HOST && n <= MAX_PLAYERS);
   const host = ids.includes(Number(message.host)) ? Number(message.host) : id;
   const now = Date.now();
-  const room = { code, host, players: new Map() };
+  const room = { code, host, players: new Map(), public: message.public === true, version: versionOf(message), opened: now };
   ids.forEach((n, i) => room.players.set(n, { away: true, id: n, since: now - ids.length + i, at: now }));
   rooms.set(code, room);
-  log(`room ${code} rebuilt: players ${ids.join(', ')}, player ${host} hosting`);
+  log(`${room.public ? 'public ' : ''}room ${code} rebuilt: players ${ids.join(', ')}, player ${host} hosting`);
   return room;
 }
 

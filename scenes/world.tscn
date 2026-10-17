@@ -173,10 +173,9 @@ script = ExtResource("15_encounters")
 city = NodePath("../City")
 hero = NodePath("../Hero")
 
-[node name="Players" type="Node" parent="." node_paths=PackedStringArray("hero", "city")]
+[node name="Players" type="Node" parent="." node_paths=PackedStringArray("hero")]
 script = ExtResource("17_player_sync")
 hero = NodePath("../Hero")
-city = NodePath("../City")
 
 [node name="Audio" type="Node" parent="." node_paths=PackedStringArray("time_of_day")]
 script = ExtResource("50_audio")

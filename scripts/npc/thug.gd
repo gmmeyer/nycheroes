@@ -4,10 +4,11 @@ extends CharacterBody3D
 ## surrounds that hero and attacks (only a couple at a time; see Combat).
 ## Goes down as a ragdoll and leaves a pool of blood.
 ##
-## In co-op only the host's game runs thugs. In the other players' games each
-## thug is a copy (`puppet`) that follows the host's updates; hits on a copy
-## show at once and go to the host to be applied (see Combat). When the host
-## leaves, the new host's game takes its copies over (take_over).
+## In co-op each thug runs in one game: the game of the player who put its
+## gang down (see EncounterDirector). In the other players' games it's a copy
+## (`puppet`) that follows that game's updates; hits on a copy show at once and
+## go to that game to be applied (see Combat). When that player leaves, the
+## host's game takes its copies over (take_over).
 
 enum State { IDLE, CHASE, PUNCH, RECOVER, STAGGER, DOWN }
 
@@ -39,10 +40,13 @@ var state := State.IDLE
 var gang := 0
 ## Where around the hero this thug tries to stand (radians).
 var surround_angle := 0.0
-## The same number in every player's game (given out by the host).
+## The same number in every player's game (given out by the game running it).
 var net_id := 0
-## A copy of a thug the host runs (set before adding to the scene).
+## A copy of a thug another player's game runs (set before adding to the scene).
 var puppet := false
+## Copies: the player whose game runs this thug (its updates come from there,
+## and our hits on it go there).
+var run_by := 0
 ## Holds still while set: a thug taken over where our game hasn't loaded the
 ## ground yet (see EncounterDirector).
 var frozen := false
@@ -63,7 +67,7 @@ var _skeleton: Skeleton3D
 var _ragdoll: PhysicalBoneSimulator3D
 ## Each ragdoll body's position relative to this node, as of the last tick.
 var _bone_offsets: Array[Vector3] = []
-# Copies only: the host's updates, and until when (msec) a hit shown here
+# Copies only: the running game's updates, and until when (msec) a hit shown here
 # plays out before they take over the animation again.
 var _snapshots: SnapshotBuffer
 var _shown_restarts := -1
@@ -101,8 +105,9 @@ func setup(target: Hero, gang_index: int, angle: float) -> void:
 	NpcLook.paint_thug($Model, gang, net_id)
 
 
-## Sets up a thug as another game described it: a copy from what the host
-## sent when it came into range, or one handed over to us as the new host.
+## Sets up a thug as another game described it: a copy from what the game
+## running it sent when it came into range, or one handed over to us (the host)
+## from a player who left.
 func setup_described(gang_index: int, facing: float, health_left: float, down: bool) -> void:
 	gang = gang_index
 	_facing = facing
@@ -113,11 +118,12 @@ func setup_described(gang_index: int, facing: float, health_left: float, down: b
 		go_down(Vector3.ZERO, false)
 
 
-## Our game runs this thug from now on: it was a copy of the old host's, or
-## another player's copy handed over, and we're the new host. It picks its
-## own fight.
+## Our game runs this thug from now on: the player whose game ran it left, and
+## we're the host (it was our copy, or another player's handed over). It picks
+## its own fight.
 func take_over() -> void:
 	puppet = false
+	run_by = 0
 	_snapshots = null
 	if state != State.DOWN:
 		state = State.IDLE
@@ -126,10 +132,11 @@ func take_over() -> void:
 		_cooldown = randf_range(0.5, 1.5)
 
 
-## Copies only: a new host runs this thug now, and its updates are timed by
-## its own clock.
-func follow_new_host() -> void:
+## Copies only: player `id`'s game runs this thug now (it took it over), and
+## its updates are timed by that game's clock.
+func follow_new_runner(id: int) -> void:
 	if puppet:
+		run_by = id
 		_snapshots = SnapshotBuffer.new()
 		_shown_restarts = -1
 
@@ -206,7 +213,7 @@ func _process(delta: float) -> void:
 		_player.active = global_position.distance_to(camera.global_position) < ANIMATE_DISTANCE
 
 
-## A copy's update from the host (world position).
+## A copy's update from the game running it (world position).
 func push_snapshot(sender_msec: float, world_position: Vector3, facing_angle: float, health_left: float,
 		animation: int, speed: float, restarts: int) -> void:
 	_snapshots.push(sender_msec, [world_position, facing_angle, health_left, animation, speed, restarts])
@@ -217,7 +224,7 @@ func _physics_process(delta: float) -> void:
 		_update_down(delta)
 		return
 	if puppet:
-		_follow_host(delta)
+		_follow_updates(delta)
 		return
 	if frozen:
 		return
@@ -320,9 +327,9 @@ func _land_punch(flat: Vector3, distance: float, reachable: bool) -> void:
 	Combat.hurt_hero(hero, PUNCH_DAMAGE, forward * 5.0)
 
 
-## A copy follows the host's updates, drawn a little in the past so it moves
-## smoothly between them.
-func _follow_host(delta: float) -> void:
+## A copy follows the running game's updates, drawn a little in the past so it
+## moves smoothly between them.
+func _follow_updates(delta: float) -> void:
 	if _snapshots.is_empty():
 		return
 	var sample := _snapshots.sample()

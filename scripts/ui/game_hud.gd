@@ -47,11 +47,16 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_font = ThemeDB.fallback_font
+	Net.player_joined.connect(func(id: int) -> void:
+		if Net.is_public and Net.is_newcomer(id):  # (strangers: say who came)
+			notify("%s joined" % Net.player_name(id)))
 	Net.left_room.connect(func(id: int) -> void:
 		if Net.is_online():
 			notify("%s left" % Net.player_name(id)))
 	Net.host_changed.connect(func(id: int) -> void:
-		if Net.is_online():  # the host left, or the server named another (not: we joined, or left)
+		# The host left, or the server named another (not: we joined, or left);
+		# nobody minds who hosts a public game.
+		if Net.is_online() and not Net.is_public:
 			notify("You're the host now" if id == Net.local_id() else "%s is now the host" % Net.player_name(id)))
 	_add_options_button()
 
@@ -107,7 +112,9 @@ func _draw_coop_status() -> void:
 	var people := "%d player%s" % [count, "" if count == 1 else "s"]
 	match Net.state:
 		Net.State.CONNECTING:
-			line = "Co-op: connecting..."
+			line = "Co-op: joining the public game..." if Net.wants_public() else "Co-op: connecting..."
+		Net.State.HOSTING, Net.State.JOINED when Net.is_public:
+			line = "Public game %s  ·  %s" % [Net.room_code, people]
 		Net.State.HOSTING:
 			line = "Co-op: hosting room %s  ·  %s" % [Net.room_code, people]
 		Net.State.JOINED:
@@ -158,6 +165,10 @@ func _draw_marker(target: Vector3, label: String, color: Color, near_enough: flo
 			absf((area.size.x * 0.5) / direction.x) if absf(direction.x) > 0.001 else INF,
 			absf((area.size.y * 0.5) / direction.y) if absf(direction.y) > 0.001 else INF)
 		point = center + direction * reach
+	if _options_button and _options_button.visible:
+		var button := _options_button.get_rect().grow(24.0)  # (kept clear of it)
+		if button.has_point(point):
+			point.y = button.end.y
 	var side := Vector2(-direction.y, direction.x)
 	var tip := point + direction * 14.0
 	draw_colored_polygon(PackedVector2Array([tip, point - direction * 6.0 + side * 10.0, point - direction * 6.0 - side * 10.0]), color)

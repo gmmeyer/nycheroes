@@ -2,16 +2,29 @@ class_name PlayerSync
 extends Node
 ## The other players in co-op. Shows a copy of each one's hero, moved to match
 ## what their game sends 20 times a second (drawn a little in the past, so it
-## moves smoothly in between), and sends our hero's state to them. The host
-## (whoever it is now: see Net) also places players who join next to its hero,
-## and keeps the ground loaded around every hero so its thugs have streets to
-## stand on.
+## moves smoothly in between), and sends our hero's state to them: 20 times a
+## second to players near our hero (or whose thugs are), 4 times to those far
+## off, who only show where we are. Copies far from the camera aren't drawn
+## (the HUD's markers show where those players are). In a private game the
+## host (whoever it is now: see Net) also places players who join next to its
+## hero; in the public game everyone keeps their own start.
 
 ## The host put our hero next to its own (world position).
 signal placed_by_host(world_position: Vector3, facing: float)
 
 const HERO_SCENE := preload("res://scenes/hero/hero.tscn")
 const SEND_INTERVAL := 0.05
+## Players whose hero is further than this from ours get our hero's state
+## every FAR_SEND_EVERY sends (m), unless their thugs are within
+## THUG_NEAR of our hero (their game needs to know where it is).
+const FAR := 1000.0
+const FAR_SEND_EVERY := 5
+const THUG_NEAR := 150.0
+## Copies further than this from the camera aren't drawn (m), and past
+## ANIMATE_DISTANCE they hold their pose: each animated character costs GPU
+## time in browsers (see SkinWarmup), and from afar a hero is a few pixels.
+const SHOW_DISTANCE := 800.0
+const ANIMATE_DISTANCE := 150.0
 ## Modes, in the order they're numbered when sent.
 const MODES: Array[StringName] = [&"OnFoot", &"Flight", &"Swing", &"Melee", &"Dive", &"KnockedOut"]
 const GROUNDED := 1
@@ -23,12 +36,14 @@ const JOIN_SPACING := 3.0
 
 ## Our hero.
 @export var hero: Hero
-@export var city: CityStreamer
 
 ## Copies of the other players' heroes, by player number.
 var remote_heroes := {}
 var _snapshots := {}  # player number -> SnapshotBuffer
+var _animations := {}  # player number -> their copy's AnimationPlayer
 var _send_cooldown := 0.0
+var _sends := 0
+var _detail_cooldown := 0.0
 
 
 func _ready() -> void:
@@ -46,13 +61,35 @@ func _physics_process(delta: float) -> void:
 	_send_cooldown -= delta
 	if _send_cooldown <= 0.0:
 		_send_cooldown = SEND_INTERVAL
-		_hero_state.rpc(_encode(hero))
-	var foci: Array[Vector3] = []
+		_sends += 1
+		var state := _encode(hero)
+		for id in Net.peers():
+			if _sends % FAR_SEND_EVERY == 0 or _is_near(id):
+				_hero_state.rpc_id(id, state)
 	for id: int in remote_heroes:
-		var copy: Hero = remote_heroes[id]
-		_follow(copy, _snapshots[id])
-		foci.append(copy.world_position())
-	city.extra_foci = foci if Net.is_authority() else ([] as Array[Vector3])
+		_follow(remote_heroes[id], _snapshots[id])
+	_detail_cooldown -= delta
+	var camera := get_viewport().get_camera_3d()
+	if _detail_cooldown <= 0.0 and camera:
+		_detail_cooldown = 0.5
+		for id: int in remote_heroes:
+			var copy: Hero = remote_heroes[id]
+			var distance := copy.global_position.distance_to(camera.global_position)
+			copy.visible = distance < SHOW_DISTANCE
+			(_animations[id] as AnimationPlayer).active = distance < ANIMATE_DISTANCE
+
+
+## Whether player `id` needs our hero's every state: their hero is near ours
+## (or we don't know where it is yet), or thugs their game runs are.
+func _is_near(id: int) -> bool:
+	var copy: Hero = remote_heroes.get(id)
+	var at := hero.world_position()
+	if copy == null or _snapshots[id].is_empty() or copy.world_position().distance_to(at) < FAR:
+		return true
+	for thug in Combat.thugs:
+		if thug.puppet and thug.run_by == id and WorldOrigin.to_world(thug.global_position).distance_to(at) < THUG_NEAR:
+			return true
+	return false
 
 
 func _encode(source: Hero) -> Array:
@@ -124,7 +161,8 @@ func _add_player(id: int) -> void:
 	copy.add_child(_name_tag(id))
 	remote_heroes[id] = copy
 	_snapshots[id] = SnapshotBuffer.new()
-	if Net.state == Net.State.HOSTING and Net.is_newcomer(id):
+	_animations[id] = copy.find_child("AnimationPlayer", true, false)
+	if Net.state == Net.State.HOSTING and Net.is_newcomer(id) and not Net.is_public:
 		# Beside our hero, a few meters apart per player.
 		var right := Vector3(cos(hero.facing), 0.0, -sin(hero.facing))
 		_place.rpc_id(id, hero.world_position() + right * JOIN_SPACING * remote_heroes.size(), hero.facing)
@@ -137,13 +175,13 @@ func _remove_player(id: int) -> void:
 		copy.queue_free()
 	remote_heroes.erase(id)
 	_snapshots.erase(id)
+	_animations.erase(id)
 
 
 func _on_net_state_changed() -> void:
 	if not Net.is_online():
 		for id: int in remote_heroes.keys():
 			_remove_player(id)
-		city.extra_foci = [] as Array[Vector3]
 	# Our suit takes our player color, so everyone sees the same colors.
 	var animator := hero.get_node("Model") as HeroAnimator
 	animator.set_colors(Net.player_color(Net.local_id()), animator.trim_color)
