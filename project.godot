@@ -10,8 +10,7 @@ config_version=5
 
 [application]
 
-config/name="New Game"
-config/name.desktop="NYC Heroes"
+config/name="NYC Heroes"
 config/version="0.9.0"
 run/main_scene="res://scenes/world.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
