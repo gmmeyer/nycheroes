@@ -22,6 +22,8 @@ const TOUCH_BUTTONS_WIDTH := 100.0
 const MARKER_COLOR := Color(1.0, 0.35, 0.25)
 ## Co-op notices show for this long (seconds).
 const NOTICE_TIME := 6.0
+## "Player joined" waits this long for their name (seconds).
+const NAME_WAIT := 1.0
 const NOTICE_COLOR := Color(1.0, 0.9, 0.45)
 ## The license (CC BY 4.0) asks for this whenever the photos are shown.
 const AERIAL_CREDIT := "Aerial imagery: NYC OTI / NYS Orthoimagery Program 2024 (CC BY 4.0)"
@@ -51,7 +53,10 @@ func _ready() -> void:
 	_font = ThemeDB.fallback_font
 	Net.player_joined.connect(func(id: int) -> void:
 		if Net.is_public and Net.is_newcomer(id):  # (strangers: say who came)
-			notify("%s joined" % Net.player_name(id)))
+			# Once their name has had a moment to arrive.
+			get_tree().create_timer(NAME_WAIT).timeout.connect(func() -> void:
+				if Net.peers().has(id):
+					notify("%s joined" % Net.player_name(id))))
 	Net.left_room.connect(func(id: int) -> void:
 		if Net.is_online():
 			notify("%s left" % Net.player_name(id)))

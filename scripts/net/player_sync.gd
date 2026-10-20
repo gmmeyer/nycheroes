@@ -57,6 +57,7 @@ func _ready() -> void:
 	# After the heroes' own physics, so copies are placed for this tick's drawing.
 	process_physics_priority = 10
 	Settings.changed.connect(_on_appearance_changed)
+	Net.player_named.connect(_on_player_named)
 	Net.player_joined.connect(_add_player)
 	Net.player_left.connect(_remove_player)
 	Net.state_changed.connect(_on_net_state_changed)
@@ -175,6 +176,7 @@ func _add_player(id: int) -> void:
 	_snapshots[id] = SnapshotBuffer.new()
 	_animations[id] = copy.find_child("AnimationPlayer", true, false)
 	_hero_appearance.rpc_id(id, HeroAppearance.current())
+	_player_name.rpc_id(id, Net.local_name())
 	if Net.state == Net.State.HOSTING and Net.is_newcomer(id) and not Net.is_public:
 		# Beside our hero, a few meters apart per player.
 		var right := Vector3(cos(hero.facing), 0.0, -sin(hero.facing))
@@ -200,6 +202,7 @@ func _on_net_state_changed() -> void:
 
 func _name_tag(id: int) -> Label3D:
 	var tag := Label3D.new()
+	tag.name = "NameTag"
 	tag.text = Net.player_name(id)
 	tag.position = Vector3.UP * 2.3
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -210,6 +213,24 @@ func _name_tag(id: int) -> Label3D:
 	tag.outline_size = 8
 	tag.modulate = Net.player_color(id).lightened(0.35)
 	return tag
+
+
+## Names: ours goes to each player who comes and to everyone when we change
+## it; theirs show on their copies' tags (and wherever Net.player_name is used).
+@rpc("any_peer", "call_remote", "reliable")
+func _player_name(value: String) -> void:
+	Net.set_remote_name(multiplayer.get_remote_sender_id(), value)
+
+
+func _on_player_named(id: int) -> void:
+	if id == Net.local_id():
+		if Net.is_online():
+			for peer in Net.peers():
+				_player_name.rpc_id(peer, Net.local_name())
+		return
+	var copy: Hero = remote_heroes.get(id)
+	if copy:
+		(copy.get_node("NameTag") as Label3D).text = Net.player_name(id)
 
 
 func _on_appearance_changed(key: String) -> void:

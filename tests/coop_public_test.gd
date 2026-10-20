@@ -5,7 +5,8 @@ extends Node
 ## relays the public game's traffic (here with rooms of 6, RELAY_PUBLIC_PLAYERS).
 ##   - Six games start at different places: all join the same public room
 ##     (its public places, 6), each keeps its own start (nobody is moved to
-##     the host), and each sees the others' heroes where they are.
+##     the host), and each sees the others' heroes where they are, and their
+##     names (each game gets one: --name).
 ##   - A seventh opens another public room.
 ##   - C leaves (plays alone): it stays alone, and the others see it go. It
 ##     joins the public game again from the menu: back in the first room
@@ -60,6 +61,7 @@ var _time := 0.0
 var _results: Array[String] = []
 var _failures := 0
 var _rooms := {}  # name -> room code, as the runner saw them
+var _leaver := ""  # who leaves in the last step
 var _host_number := 0  # the first room's first host's number
 var _dropped := {}  # role -> true: the game said it had lost the server (while it restarted)
 
@@ -110,6 +112,8 @@ func _runner_steps() -> Array[Dictionary]:
 					and _numbers(["a", "b", "c", "d", "e", "f"]) == [1, 2, 3, 4, 5, 6]),
 		_step("each keeps its own start, and sees the others where they are", 30.0, Callable(), func() -> bool:
 			return _at_starts(["a", "b", "c", "d", "e", "f"]) and _copies_in_place(["a", "b", "c", "d", "e", "f"])),
+		_step("each sees the others' names", 30.0, Callable(), func() -> bool:
+			return _names_seen(["a", "b", "c", "d", "e", "f"])),
 		_step("a seventh opens another public room, as its host", 60.0, _launch.bind("g"), func() -> bool:
 			var g := _state("g")
 			if not _all_in_room(["g"], 0) or g.room == _rooms.first:
@@ -164,11 +168,14 @@ func _runner_steps() -> Array[Dictionary]:
 				return _state("g").state == "OFFLINE" and _all_in_room(["i"], 0) \
 					and not [_rooms.first, _rooms.second].has(i.room) and int(i.id) == 1),
 		_step("C leaves; a tenth is put in the first room (still public after the restart)", 60.0, func() -> void:
-			_command("c", "leave")
+			# (C, unless it was the first host, whose game was closed: then another.)
+			var alive := _first_room_roles()
+			_leaver = "c" if alive.has("c") else alive[0]
+			_command(_leaver, "leave")
 			_launch("j"),
 			func() -> bool:
 				var j := _state("j")
-				return _state("c").state == "OFFLINE" and _all_in_room(["j"], 5) and j.room == _rooms.first),
+				return _state(_leaver).state == "OFFLINE" and _all_in_room(["j"], 5) and j.room == _rooms.first),
 	]
 
 
@@ -176,11 +183,29 @@ func _runner_steps() -> Array[Dictionary]:
 func _launch(role: String) -> void:
 	var args := ["--headless", "--log-file", _run_dir.path_join(role + ".log"), "--path",
 		ProjectSettings.globalize_path("res://"), "res://tests/coop_public_test.tscn", "--",
-		"--role=" + role, "--run=" + _run_dir]
+		"--role=" + role, "--run=" + _run_dir, "--name=" + _name_of(role)]
 	for arg in OS.get_cmdline_user_args():
 		if not arg.begins_with("--role=") and not arg.begins_with("--run="):
 			args.append(arg)  # --port, --tiles, ...
 	_pids[role] = OS.create_process(OS.get_executable_path(), args)
+
+
+## The name a game plays under.
+static func _name_of(role: String) -> String:
+	return "Hero " + role.to_upper()
+
+
+## Each of these games shows every other one's name for it.
+func _names_seen(roles: Array) -> bool:
+	var by_id := {}
+	for role: String in roles:
+		by_id[str(int(_state(role).id))] = _name_of(role)
+	for role: String in roles:
+		var names: Dictionary = _state(role).get("names", {})
+		for id: String in by_id:
+			if id != str(int(_state(role).id)) and names.get(id, "") != by_id[id]:
+				return false
+	return true
 
 
 func _command(role: String, what: String) -> void:
@@ -276,6 +301,9 @@ func _process(delta: float) -> void:
 ## Tells the runner what we see.
 func _report() -> void:
 	var others := {}
+	var names := {}
+	for id in Net.peers():
+		names[str(id)] = Net.player_name(id)
 	for id: int in _players.remote_heroes:
 		var at := (_players.remote_heroes[id] as Hero).world_position()
 		others[str(id)] = [at.x, at.y, at.z]
@@ -283,7 +311,7 @@ func _report() -> void:
 	_write(_run_dir.path_join(_role + ".state"), JSON.stringify({
 		state = Net.State.keys()[Net.state], room = Net.room_code, id = Net.local_id(), host = Net.host_id,
 		public = Net.is_public, wants_public = Net.wants_public(), signaling = Net.has_signaling(), peers = Array(Net.peers()),
-		hero = [at.x, at.y, at.z], others = others, frozen = _hero.frozen}))
+		hero = [at.x, at.y, at.z], others = others, frozen = _hero.frozen, names = names}))
 
 
 func _write(path: String, content: String) -> void:
