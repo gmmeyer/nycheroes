@@ -298,6 +298,14 @@ peer can drive one later. Nearby tiles get collision.
     second after they come, for the name to arrive). Names are printable,
     single-spaced and at most 16 characters; `--name=NAME` sets one for a
     game only (`coop_public_test` checks six games see each other's).
+  - **Loading screen (2026-10-20):** the first 10-20 s on the web (tiles
+    streaming in, the hero held until its ground loads) looked frozen; a
+    LoadingScreen now covers them: "NYC HEROES", a bar of tiles loaded (it
+    never goes back), "Building New York · N tiles", a spinner and control
+    tips, under the name prompt, fading out once the city has loaded and
+    the hero stands in it (at most 6 s after). Not with `?cam`,
+    `--screenshot` or headless. The boot splash is the same dark color, no
+    Godot logo.
   - **Who runs the thugs (host load):** with the host running every thug
     and loading the streets around every hero, players spread across the
     city made the host's game do the city's work. Measured with
