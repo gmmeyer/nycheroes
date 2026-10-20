@@ -28,6 +28,9 @@ const REGEN_RATE := 15.0
 const SLAM_SPEED := 35.0
 ## How long a hit staggers the hero.
 const HURT_TIME := 0.35
+## Stepping up a curb eases the drawn hero (and camera) up at this speed (m/s)
+## instead of popping up in one tick.
+const STEP_EASE_SPEED := 2.5
 
 var input := HeroInput.new()
 ## Yaw the hero faces, in radians (0 = north, which is -Z).
@@ -61,6 +64,7 @@ var _prev_attack := false
 var _prev_position := Vector3.ZERO
 var _was_on_floor := false
 var _regen_delay := 0.0
+var _step_offset := 0.0  # height still to ease up after stepping onto a curb (m)
 
 
 func _ready() -> void:
@@ -81,6 +85,7 @@ func _exit_tree() -> void:
 
 func _physics_process(delta: float) -> void:
 	_prev_position = global_position
+	_step_offset = move_toward(_step_offset, 0.0, STEP_EASE_SPEED * delta)
 	if frozen or is_remote():
 		return
 	water_level = _find_water_level()
@@ -135,7 +140,14 @@ func get_mode(mode_name: StringName) -> HeroMode:
 ## Position to draw at: blended between physics ticks so motion stays smooth
 ## at any frame rate.
 func get_visual_position() -> Vector3:
-	return _prev_position.lerp(global_position, Engine.get_physics_interpolation_fraction())
+	var position := _prev_position.lerp(global_position, Engine.get_physics_interpolation_fraction())
+	return position + Vector3.DOWN * _step_offset
+
+
+## Moved up a curb this tick (LedgeClimb): draw the rise smoothly.
+func eased_step(rise: float) -> void:
+	_prev_position.y += rise
+	_step_offset += rise
 
 
 func world_position() -> Vector3:

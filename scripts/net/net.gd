@@ -24,7 +24,7 @@ extends Node
 ## a player is still there, only the connection between us broke: the one of
 ## us with the lower number connects again.
 ##
-## Game traffic never goes through the signaling server, so when it drops us
+## In private rooms, game traffic never goes through the signaling server, so when it drops us
 ## (a Worker deploy restarts its Durable Object and closes every socket) the
 ## game goes on over the connections between players, and we connect to it
 ## again, sooner at first, then every RETRY_DELAY_MAX. We rejoin the room as
@@ -33,9 +33,13 @@ extends Node
 ## it from the players who come back (see tools/signaling/server.mjs). Only if
 ## that takes more than a few seconds does the menu say so (is_reconnecting).
 ##
-## The public game: everyone playing online is put in a public room
-## (join_public), the fullest one with a place free, or a new one when they're
-## all full; the signaling server matches only games of the same NET_VERSION.
+## The public game: everyone playing online is put in one big public room
+## (join_public), whose game traffic goes through the signaling server instead
+## of a connection to each player (RelayPeer), so it isn't limited to what a
+## full mesh can carry; a new one opens only when it's full (64 players). The
+## signaling server matches only games of the same NET_VERSION. While the
+## signaling server is gone, a relayed room's players don't hear from each
+## other (their heroes stand still) until we're back.
 ## Game asks for it once the city has loaded (start_public), unless the player
 ## asked for something else or turned it off (the setting "online_public"); it
 ## goes quietly: if the server can't be reached, or the room's host can't, we
@@ -80,7 +84,7 @@ const MAX_PLAYERS := 8
 ## which matches public games only with games of the same number, and turns
 ## away room codes of another. Raise it whenever what games send each other
 ## changes (RPCs), so games that can't play together never meet.
-const NET_VERSION := 1
+const NET_VERSION := 2
 const ENET_VERSION := 1000000
 ## After failing to reach the public game, try again after this long
 ## (seconds), twice as long after each try that fails, up to PUBLIC_RETRY_MAX.
@@ -103,6 +107,9 @@ const HOST_TIMEOUT := 60.0
 ## players we've lost touch with.
 const PING_INTERVAL := 10.0
 const LOST_REPORT_INTERVAL := 5.0
+## In a relayed room, a player we haven't heard from for this long (msec) is
+## reported lost too (the server drops them if they stopped pinging).
+const RELAY_SILENCE := 15000
 ## A signaling connection still opening after this long, or that hasn't
 ## answered a ping for this long, is given up on and made again (seconds).
 const SIGNALING_TIMEOUT := 15.0
@@ -128,6 +135,9 @@ const ENET_CHANNELS := 8
 ## and at most): long enough to ride out a slow frame with four games on one
 ## machine.
 const ENET_TIMEOUT := Vector2i(15000, 30000)
+## The signaling socket's buffers (bytes): a relayed room's traffic goes
+## through it too.
+const SOCKET_BUFFER := 4 * 1024 * 1024
 ## One color per player number (1 is the first host), used for their hero's suit.
 const PLAYER_COLORS: Array[Color] = [
 	Color(0.72, 0.06, 0.08), Color(0.1, 0.3, 0.85), Color(0.1, 0.6, 0.2), Color(0.9, 0.7, 0.05),
@@ -143,6 +153,9 @@ var error := ""
 ## Whether our room is a public one (we asked for the public game, or joined a
 ## public room with its code).
 var is_public := false
+## Whether our room's game traffic goes through the signaling server (RelayPeer):
+## the public game.
+var is_relayed := false
 
 var _signaling: WebSocketPeer
 var _signaling_url := ""
@@ -188,7 +201,7 @@ func _process(delta: float) -> void:
 	if _public_at != 0 and Time.get_ticks_msec() >= _public_at:
 		_public_at = 0
 		if state == State.OFFLINE and _wants_public:
-			_start({type = "public"})
+			_start(_public_greeting())
 	if _signaling:
 		_poll_signaling()
 	elif _retry_msec != 0 and Time.get_ticks_msec() >= _retry_msec:
@@ -217,6 +230,14 @@ func _process(delta: float) -> void:
 		_signaling.send_text("ping")
 		if _awaiting_msec == 0:
 			_awaiting_msec = Time.get_ticks_msec()
+	if _mesh is RelayPeer and has_signaling():
+		var silent := (_mesh as RelayPeer).silent_peers(RELAY_SILENCE)
+		for id: int in _lost.keys():
+			if not silent.has(id):
+				_lost.erase(id)  # (heard from again)
+		for id: int in silent:
+			if not _lost.has(id):
+				_lost[id] = false
 	_report_cooldown -= delta
 	if _report_cooldown <= 0.0 and not _lost.is_empty():
 		_report_cooldown = LOST_REPORT_INTERVAL
@@ -322,7 +343,13 @@ func join(code: String) -> void:
 func join_public() -> void:
 	_wants_public = true
 	_public_retry = PUBLIC_RETRY
-	_start({type = "public"})
+	_start(_public_greeting())
+
+
+## Asking for the public game: a relayed room (any game can relay, over
+## WebRTC or not, so they all meet).
+func _public_greeting() -> Dictionary:
+	return {type = "public", relay = true, version = NET_VERSION}
 
 
 ## Game allows the public game in this session: we join it now unless the
@@ -410,6 +437,7 @@ func _reset() -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	room_code = ""
 	is_public = false
+	is_relayed = false
 	state = State.OFFLINE
 	if _reconnecting:
 		_reconnecting = false
@@ -423,7 +451,8 @@ func _start(greeting: Dictionary) -> void:
 	if not _open_signaling():
 		_give_up("Couldn't reach the co-op server at %s." % _signaling_url)
 		return
-	greeting.version = _version()
+	if not greeting.has("version"):
+		greeting.version = _version()
 	_greeting = greeting
 	_join_retries = JOIN_RETRIES
 	_connect_time = 0.0
@@ -449,6 +478,8 @@ func _default_signaling_url() -> String:
 ## Starts connecting to the signaling server. False if it can't even try.
 func _open_signaling() -> bool:
 	_signaling = WebSocketPeer.new()
+	_signaling.inbound_buffer_size = SOCKET_BUFFER
+	_signaling.outbound_buffer_size = SOCKET_BUFFER
 	if _signaling.connect_to_url(_signaling_url) != OK:
 		_signaling = null
 		return false
@@ -470,7 +501,12 @@ func _poll_signaling() -> void:
 				_send(_rejoin_request() if _rejoining else _greeting)
 			while _signaling and _signaling.get_available_packet_count() > 0:
 				_awaiting_msec = 0
-				var text := _signaling.get_packet().get_string_from_utf8()
+				var packet := _signaling.get_packet()
+				if not _signaling.was_string_packet():
+					if _mesh is RelayPeer:
+						(_mesh as RelayPeer).receive(packet)
+					continue
+				var text := packet.get_string_from_utf8()
 				if text == "pong":
 					continue
 				var message = JSON.parse_string(text)
@@ -520,9 +556,11 @@ func _signaling_back() -> void:
 ## lost the room: it rebuilds it from what its players say).
 func _rejoin_request() -> Dictionary:
 	var request := {type = "rejoin", code = room_code, id = local_id(), key = _key, host = host_id, players = _order,
-		version = _version()}
+		version = NET_VERSION if is_relayed else _version()}
 	if is_public:
 		request.public = true
+	if is_relayed:
+		request.relay = true
 	return request
 
 
@@ -538,6 +576,7 @@ func _on_signaling_message(message: Dictionary) -> void:
 			_key = str(message.get("key", ""))
 			_ice_servers = message.get("ice", [])
 			is_public = message.get("public") == true
+			is_relayed = message.get("relay") == true
 			_open_mesh(int(message.id))
 			_order.assign([int(message.id)])
 			_signaling_back()
@@ -548,8 +587,10 @@ func _on_signaling_message(message: Dictionary) -> void:
 			_key = str(message.get("key", ""))
 			_ice_servers = message.get("ice", [])
 			is_public = message.get("public") == true
+			is_relayed = message.get("relay") == true
 			_open_mesh(int(message.id))
-			# The players already in the room each send us an offer.
+			# The players already in the room each send us an offer (in a
+			# relayed room they're there already: added once we know who hosts).
 			_order.clear()
 			for id in message.get("peers", [FIRST_HOST]):
 				_members[int(id)] = true
@@ -560,6 +601,9 @@ func _on_signaling_message(message: Dictionary) -> void:
 			_signaling_back()
 			print("[net] joining %sroom %s as player %d" % ["public " if is_public else "", room_code, int(message.id)])
 			_set_host(int(message.get("host", FIRST_HOST)))
+			if _mesh is RelayPeer:
+				for id: int in _members:
+					_offer(id)
 		"rejoined":
 			_on_rejoined(message)
 		"peer_joined":
@@ -615,11 +659,14 @@ func _on_rejoined(message: Dictionary) -> void:
 	if message.get("back") == true:
 		# The server had let us go, and the others dropped their connections
 		# to us: they connect to us again, as when we joined (we do only if
-		# they haven't after a while).
+		# they haven't after a while). In a relayed room, we're all back now.
 		for id: int in _members.keys():
 			_drop(id)
 		for id: int in _members:
-			_reconnect_at[id] = Time.get_ticks_msec() + RECONNECT_INTERVAL
+			if _mesh is RelayPeer:
+				_offer(id)
+			else:
+				_reconnect_at[id] = Time.get_ticks_msec() + RECONNECT_INTERVAL
 		readmitted.emit()
 	else:
 		# Connections that broke meanwhile: the one of us with the lower
@@ -681,7 +728,13 @@ static func _has_webrtc() -> bool:
 
 
 func _open_mesh(id: int) -> void:
-	if uses_webrtc():
+	if is_relayed:
+		var relay := RelayPeer.new(id)
+		relay.transport = _send_relayed
+		relay.backlog = func() -> int:
+			return _signaling.get_current_outbound_buffered_amount() if _signaling else 0
+		_mesh = relay
+	elif uses_webrtc():
 		var rtc := WebRTCMultiplayerPeer.new()
 		rtc.create_mesh(id)
 		_mesh = rtc
@@ -693,9 +746,11 @@ func _open_mesh(id: int) -> void:
 
 
 ## Starts connecting to a player who just joined, or to one we lost touch
-## with (we make the offer).
+## with (we make the offer). In a relayed room, they're just there.
 func _offer(id: int) -> void:
-	if _mesh is WebRTCMultiplayerPeer:
+	if _mesh is RelayPeer:
+		(_mesh as RelayPeer).add_peer(id)
+	elif _mesh is WebRTCMultiplayerPeer:
 		_add_connection(id).create_offer()
 	elif _mesh is ENetMultiplayerPeer:
 		# Listen on a port of the system's choosing; they connect to it.
@@ -763,7 +818,9 @@ func _poll_enet_connections() -> void:
 func _drop(id: int) -> void:
 	var connection: Object = _connections.get(id)
 	_connections.erase(id)
-	if _mesh is WebRTCMultiplayerPeer:
+	if _mesh is RelayPeer:
+		(_mesh as RelayPeer).remove_peer(id)
+	elif _mesh is WebRTCMultiplayerPeer:
 		if (_mesh as WebRTCMultiplayerPeer).has_peer(id):
 			(_mesh as WebRTCMultiplayerPeer).remove_peer(id)
 	elif _mesh is ENetMultiplayerPeer:
@@ -787,7 +844,7 @@ func _on_peer_connected(id: int) -> void:
 
 
 func _on_peer_disconnected(id: int) -> void:
-	if _members.has(id):
+	if _members.has(id) and not is_relayed:
 		# The server still counts them in: tell it, unless it says they left
 		# meanwhile (its word usually comes a moment after). If they're still
 		# there, the one of us with the lower number connects again.
@@ -829,6 +886,13 @@ func _follow_host() -> void:
 func _send(message: Dictionary) -> void:
 	if _signaling and _signaling.get_ready_state() == WebSocketPeer.STATE_OPEN:
 		_signaling.send_text(JSON.stringify(message))
+
+
+## A relayed room's packets (RelayPeer), while the signaling server has us:
+## meanwhile they're lost.
+func _send_relayed(message: PackedByteArray) -> void:
+	if _signaling and _signaling.get_ready_state() == WebSocketPeer.STATE_OPEN and _signaling_lost_msec == 0:
+		_signaling.send(message, WebSocketPeer.WRITE_MODE_BINARY)
 
 
 func _set_state(new_state: State) -> void:

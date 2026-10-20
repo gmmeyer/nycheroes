@@ -73,7 +73,9 @@ func physics_update(delta: float) -> StringName:
 		_fall(delta)
 	var intended := hero.velocity
 	hero.move_and_slide()
-	LedgeClimb.climb(hero, intended, delta)  # curbs
+	var before := hero.global_position.y
+	if LedgeClimb.climb(hero, intended, delta):  # curbs
+		hero.eased_step(hero.global_position.y - before)
 	return &""
 
 

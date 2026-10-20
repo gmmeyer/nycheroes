@@ -377,6 +377,7 @@ func set_tile_lanes(key: Vector2i, polylines: Array[PackedVector3Array], info: P
 	var started := Time.get_ticks_usec()
 	var removed := lanes.set_tile(key, polylines, info)
 	last_tile_msec = (Time.get_ticks_usec() - started) / 1000.0
+	_refresh_spawn_tiles()  # (a tile that went can't be spawned on until the next upkeep)
 	if removed.is_empty():
 		return
 	for i in _highest + 1:

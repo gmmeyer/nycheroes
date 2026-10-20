@@ -17,6 +17,8 @@ signal toggled(open: bool)
 
 const WIDTH := 460.0
 const ERROR_COLOR := Color(1.0, 0.55, 0.45)
+## The players line names this many at most (the public game can have dozens).
+const MAX_NAMES := 12
 
 var _status: Label
 var _reconnecting: Label
@@ -141,11 +143,11 @@ func _refresh() -> void:
 				_status.text = Net.error
 				_status.add_theme_color_override("font_color", ERROR_COLOR)
 			else:
-				_status.text = "Play together: join the public game with everyone playing online, or host a private game and send your friends the link, or join a friend's game with their room code."
+				_status.text = "You're playing alone. Join the public game with everyone playing online, or host a private game and send your friends the link, or join a friend's game with their room code."
 		Net.State.CONNECTING:
 			_status.text = "Joining the public game..." if public else "Connecting..."
 		Net.State.HOSTING, Net.State.JOINED when Net.is_public:
-			_status.text = "Everyone playing online meets in public games. Friends can join this one with its room code or the link."
+			_status.text = "Everyone playing online is here, in the public game. Leave to play alone, or host a private game for just your friends."
 		Net.State.HOSTING:
 			_status.text = "You're hosting. Friends can join with the room code or the link."
 		Net.State.JOINED:
@@ -159,13 +161,16 @@ func _refresh() -> void:
 	_room_code.visible = Net.is_public
 	_link_edit.text = Net.invite_link()
 	var names: Array[String] = []
-	for id: int in [Net.local_id()] + Array(Net.peers()):
+	var everyone: Array = [Net.local_id()] + Array(Net.peers())
+	for id: int in everyone.slice(0, MAX_NAMES):
 		var notes: Array[String] = []
 		if id == Net.local_id():
 			notes.append("you")
 		if id == Net.host_id and not Net.is_public:
 			notes.append("host")
 		names.append(Net.player_name(id) + (" (%s)" % ", ".join(notes) if notes else ""))
+	if everyone.size() > MAX_NAMES:
+		names.append("and %d more" % (everyone.size() - MAX_NAMES))
 	_players.text = "Players: " + ", ".join(names)
 
 

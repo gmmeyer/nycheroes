@@ -14,6 +14,8 @@ signal options_requested
 const NEAR_ENOUGH := 35.0
 ## Other players have name tags; on screen and closer than this, that's enough.
 const PLAYER_NEAR_ENOUGH := 120.0
+## In a big public game, only the nearest few players get a marker.
+const MAX_PLAYER_MARKERS := 8
 const EDGE_MARGIN := 48.0
 ## On touch screens, markers keep this far from the right edge, off the buttons.
 const TOUCH_BUTTONS_WIDTH := 100.0
@@ -100,7 +102,14 @@ func _draw() -> void:
 	var thug := encounters.nearest_thug(hero.world_position())
 	if thug:
 		_draw_marker(thug.global_position + Vector3.UP * 2.2, "THUGS", MARKER_COLOR, NEAR_ENOUGH)
-	for id: int in players.remote_heroes:
+	var ids: Array = players.remote_heroes.keys()
+	if ids.size() > MAX_PLAYER_MARKERS:
+		var at := hero.global_position
+		ids.sort_custom(func(a: int, b: int) -> bool:
+			return (players.remote_heroes[a] as Hero).global_position.distance_squared_to(at) \
+				< (players.remote_heroes[b] as Hero).global_position.distance_squared_to(at))
+		ids.resize(MAX_PLAYER_MARKERS)
+	for id: int in ids:
 		var other: Hero = players.remote_heroes[id]
 		_draw_marker(other.global_position + Vector3.UP * 2.6, Net.player_name(id).to_upper(),
 			Net.player_color(id).lightened(0.35), PLAYER_NEAR_ENOUGH)

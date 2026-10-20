@@ -52,6 +52,25 @@ class PlanarFaces(unittest.TestCase):
                         holes=[[[2, 2], [2, 6], [6, 6], [6, 2]]])
 
 
+class RooftopProps(unittest.TestCase):
+    def test_tank_over_a_roofs_hole_stands_on_the_lower_roof(self):
+        import build_tiles
+        outer = [[0, 0, 20], [10, 0, 20], [10, 10, 20], [0, 10, 20]]
+        hole = [[3, 3, 20], [3, 7, 20], [7, 7, 20], [7, 3, 20]]
+        inner = [[3, 3, 10], [7, 3, 10], [7, 7, 10], [3, 7, 10]]
+        shape = (np.array(outer + hole + inner, np.float32), np.array([0, 4, 8, 12]), np.array([0, 0, 1]),
+                 np.array([buildings3d.ROOF, buildings3d.ROOF]), np.float32(0.0))
+        self.assertAlmostEqual(build_tiles._shape_roof_at(shape, 5.0, np.array([1.0, 1.0])), 25.0)
+        self.assertAlmostEqual(build_tiles._shape_roof_at(shape, 5.0, np.array([5.0, 5.0])), 15.0)
+
+    def test_prism_parts_follow_the_levels_simplification(self):
+        import build_tiles
+        build_tiles._W["level"] = "lod0"
+        parts = build_tiles._prism_parts(shapely.MultiPolygon([shapely.box(0, 0, 10, 10), shapely.box(30, 0, 40, 10),
+                                                               shapely.box(60, 0, 61, 1)]))
+        self.assertEqual(len(parts), 2)  # (the 1 m^2 scrap is under lod0's min_area)
+
+
 class MidtownLandmarks(unittest.TestCase):
     names = ("New York Times Building", "Seagram Building", "Lever House", "MetLife Building")
 

@@ -6,6 +6,11 @@ extends Node3D
 ## (look_mouse, times mouse_sensitivity and stick_sensitivity) and whether up
 ## and down are swapped (invert_y; TouchControls follows both too). Pulls
 ## back and widens the view at speed, and shakes on hard landings.
+##
+## The near plane moves out (up to NEAR_MAX) while nothing of the city is
+## within CLEAR_RADIUS of the camera: with WebGL's depth buffer and a 40 km
+## far plane, a 0.3 m near plane can't tell the shore (2 m up) from the sea a
+## few kilometers off, and the coastline flickers seen from the air.
 
 @export var target: Hero
 @export var mouse_sensitivity := 0.0025
@@ -16,6 +21,13 @@ extends Node3D
 @export var base_fov := 70.0
 @export var max_fov := 90.0
 
+const NEAR_MIN := 0.3
+const NEAR_MAX := 4.0
+## The near plane stays this far in front of the hero (a share of the arm).
+const NEAR_ARM_SHARE := 0.45
+## The near plane moves out only with nothing solid this close to the camera (m).
+const CLEAR_RADIUS := 9.0
+
 var yaw := 0.0
 var pitch := -0.15
 
@@ -24,6 +36,7 @@ var _shake := 0.0
 ## The options menu's look speed and invert_y (-1 when swapped).
 var _look_scale := 1.0
 var _look_y := 1.0
+var _clear_query: PhysicsShapeQueryParameters3D
 
 @onready var spring_arm: SpringArm3D = $SpringArm
 @onready var camera: Camera3D = $SpringArm/Camera
@@ -34,6 +47,12 @@ func _ready() -> void:
 	target.landed.connect(_on_target_landed)
 	Combat.impact.connect(_on_impact)
 	_read_look_settings()
+	var sphere := SphereShape3D.new()
+	sphere.radius = CLEAR_RADIUS
+	_clear_query = PhysicsShapeQueryParameters3D.new()
+	_clear_query.shape = sphere
+	_clear_query.collision_mask = Hero.WORLD_LAYER | CityStreamer.WATER_LAYER
+	_clear_query.exclude = [target.get_rid()]
 	Settings.changed.connect(func(key: String) -> void:
 		if key in ["look_mouse", "invert_y"]:
 			_read_look_settings())
@@ -86,9 +105,23 @@ func _process(delta: float) -> void:
 	var fov := lerpf(base_fov, max_fov, clampf((speed - 10.0) / 70.0, 0.0, 1.0))
 	camera.fov = lerpf(camera.fov, fov, 1.0 - exp(-4.0 * delta))
 
+	camera.near = _near_plane()
+
 	_shake = maxf(_shake - delta, 0.0)
 	camera.h_offset = randf_range(-1.0, 1.0) * _shake
 	camera.v_offset = randf_range(-1.0, 1.0) * _shake
+
+
+## As far out as the hero in front and the city around allow (see the top).
+func _near_plane() -> float:
+	var arm := spring_arm.get_hit_length()
+	var near := clampf(arm * NEAR_ARM_SHARE, NEAR_MIN, NEAR_MAX)
+	if near <= NEAR_MIN or camera.global_position.y < CLEAR_RADIUS:  # (the sea is at 0)
+		return NEAR_MIN
+	_clear_query.transform = Transform3D(Basis.IDENTITY, camera.global_position)
+	if not get_world_3d().direct_space_state.intersect_shape(_clear_query, 1).is_empty():
+		return NEAR_MIN
+	return near
 
 
 func _read_look_settings() -> void:
