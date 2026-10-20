@@ -1,8 +1,8 @@
 extends Node
 ## Headless check of the public game: copies of the game that join it by
 ## themselves once their city has loaded (as players' games do, here with
-## --public=1), through the signaling server (tools/signaling, Node.js) and
-## over ENet on this machine, like coop_test.
+## --public=1), through the signaling server (tools/signaling, Node.js), which
+## relays the public game's traffic (here with rooms of 6, RELAY_PUBLIC_PLAYERS).
 ##   - Six games start at different places: all join the same public room
 ##     (its public places, 6), each keeps its own start (nobody is moved to
 ##     the host), and each sees the others' heroes where they are.
@@ -28,6 +28,9 @@ extends Node
 
 const SignalingServer := preload("res://tests/signaling_server.gd")
 const DEFAULT_PORT := 8071
+## The public game is one big relayed room; a small one here, so the test
+## sees it fill up and another open.
+const SERVER_ENVIRONMENT := {RELAY_PUBLIC_PLAYERS = 6}
 const ROLES: Array[String] = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
 ## Each game's start (world x, z; dropped from SPAWN_HEIGHT).
 const SPAWNS: Array[Vector2] = [
@@ -91,7 +94,7 @@ func _ready() -> void:
 func _runner_steps() -> Array[Dictionary]:
 	return [
 		_step("start the co-op server on port %d" % _port, 10.0, func() -> void:
-			var problem := _server.start(_port)
+			var problem := _server.start(_port, SERVER_ENVIRONMENT)
 			if problem:
 				_fail(problem),
 			func() -> bool: return _server.is_up()),
@@ -144,7 +147,7 @@ func _runner_steps() -> Array[Dictionary]:
 		_step("the server restarts: every game comes back to its room", 120.0, func() -> void:
 			_server.stop()
 			await get_tree().create_timer(3.0).timeout
-			_server.start(_port),
+			_server.start(_port, SERVER_ENVIRONMENT),
 			func() -> bool:
 				var first := _first_room_roles()
 				for role: String in first + ["g"]:

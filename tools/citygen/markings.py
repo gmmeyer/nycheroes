@@ -71,6 +71,9 @@ SIGNAL_BEHIND = 0.6  # meters behind the crosswalk
 # for traffic on its widest street going WAVE_SPEED (both ways on two-way
 # streets can't be; there it favors north and east).
 CROSSING_ANGLE = np.cos(np.radians(45.0))
+# Two ends of a node whose streets head within this angle of opposite ways are
+# one street going on through it (not a crossing of each other's).
+CONTINUING = np.cos(np.radians(35.0))
 SIGNAL_CYCLE = 60.0  # s, as in the game
 WAVE_SPEED = 10.0    # m/s, about what drivers do on a 25 mph street
 
@@ -113,29 +116,38 @@ def prepare() -> dict:
     signal = np.zeros(degree.size, dtype=bool)
     np.logical_or.at(signal, node, wide_end)
     widest = np.zeros(degree.size)
-    second = np.zeros(degree.size)
     widest_end = np.zeros(degree.size, dtype=np.int64)
     major = np.zeros(degree.size, dtype=bool)
-    # The widest and second-widest street at each node: an end's setback is the
-    # widest *other* street's half width.
-    order = np.argsort(both_half)
-    for e in order:
-        n = node[e]
-        second[n] = widest[n]
-        widest[n] = both_half[e]
-        widest_end[n] = e
-    np.logical_or.at(major, node, major_end)
-    other = np.where(both_half >= widest[node], second[node], widest[node])
-    setback = np.minimum(other + CROSSWALK_SETBACK, MAX_SETBACK)
-    is_crossing = degree[node] >= 3
-    setback = np.where(is_crossing, setback, 0.0)
-
-    # Each end's direction into its segment, and its signal phase (-1: none).
+    # Each end's direction into its segment.
     length = shapely.length(lines)
     step = np.minimum(3.0, length / 2)
     inward = np.vstack([shapely.get_coordinates(shapely.line_interpolate_point(lines, step)) - starts,
                         shapely.get_coordinates(shapely.line_interpolate_point(lines, length - step)) - ends])
     inward /= np.maximum(np.linalg.norm(inward, axis=1, keepdims=True), 1e-9)
+    # The widest street at each node (and which end it is).
+    order = np.argsort(both_half)
+    for e in order:
+        widest[node[e]] = both_half[e]
+        widest_end[node[e]] = e
+    np.logical_or.at(major, node, major_end)
+    # An end's setback is the widest *other* street's half width: not that of
+    # the end opposite it, which is the same street going on through the node.
+    other = np.zeros(2 * count)
+    by_node = np.argsort(node, kind="stable")
+    for here in np.split(by_node, np.flatnonzero(np.diff(node[by_node])) + 1):
+        if len(here) < 3:
+            continue
+        straight = inward[here] @ inward[here].T < -CONTINUING
+        for i, e in enumerate(here):
+            others = (np.arange(len(here)) != i) & ~straight[i]
+            if not others.any():
+                others = np.arange(len(here)) != i
+            other[e] = both_half[here[others]].max()
+    setback = np.minimum(other + CROSSWALK_SETBACK, MAX_SETBACK)
+    is_crossing = degree[node] >= 3
+    setback = np.where(is_crossing, setback, 0.0)
+
+    # Each end's signal phase (-1: none) comes from its direction into its segment.
     across = np.abs(np.sum(inward * inward[widest_end[node]], axis=1)) < CROSSING_ANGLE
     # The green wave: the widest street's direction of travel at each node
     # (north or east first where it's two-way), and how far along it the node

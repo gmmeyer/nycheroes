@@ -10,13 +10,16 @@ var _started_msec := 0
 var _probe: StreamPeerTCP
 
 
-## Starts the server on `port`. Returns what went wrong, or "" if it's starting.
-func start(port: int) -> String:
+## Starts the server on `port`, with these environment variables too (see
+## server.mjs). Returns what went wrong, or "" if it's starting.
+func start(port: int, environment := {}) -> String:
 	var dir := ProjectSettings.globalize_path("res://tools/signaling")
 	if not DirAccess.dir_exists_absolute(dir.path_join("node_modules/ws")):
 		return "the co-op server needs `npm install` in tools/signaling"
 	_port = port
 	OS.set_environment("PORT", str(port))
+	for key: String in environment:
+		OS.set_environment(key, str(environment[key]))
 	pid = OS.create_process("node", [dir.path_join("server.mjs")])
 	_started_msec = Time.get_ticks_msec()
 	return "" if pid > 0 else "couldn't start Node.js (node server.mjs)"

@@ -267,6 +267,29 @@ peer can drive one later. Nearby tiles get collision.
     message", plays alone quietly and asks again later. The deploy restarts
     the Durable Object as before, and public rooms come back with their
     players.
+  - **One big room, relayed (2026-10-20):** the public game is now one
+    room for everyone online, not rooms of 6. Its game traffic goes
+    through the signaling server instead of a WebRTC mesh: games ask
+    `{type: "public", relay: true, version}` (`Net.NET_VERSION` 2) and get
+    `relay: true` in `hosted`/`joined`/`rejoined`; each game's
+    `RelayPeer` (a `MultiplayerPeerExtension`) sends its packets as binary
+    messages `[channel][mode][count u16][player u16 x count][packet]` and
+    the server passes them on as `[from u16][channel][mode][packet]` (count
+    0: everyone else). Packets with the same contents in a frame go out as
+    one message naming all their players (a hero's state, an RPC to each
+    player), so a game sends about as much in a big room as in a small one.
+    A relayed room takes 64 players by matchmaking (8 more with its code;
+    `RELAY_PUBLIC_PLAYERS` on the local server, 6 in
+    `coop_public_test`), and the next opens another. In it far-off players
+    get our hero's state once a second (not 4 times), costumes are resent
+    every 30 s (not 3), the HUD marks the 8 nearest players, and the menu
+    names 12. Private rooms (`?host`, `?join`, "Host a private game") stay
+    a mesh. While the signaling server is gone (a deploy), a relayed room's
+    players stand still for each other until they're back. Checked:
+    `protocol_check.mjs` (ten in one relayed room, packets to some and to
+    everyone, none from a mesh room or to a player gone; local server and
+    the Durable Object under `wrangler dev`), and `coop_public_test` and
+    `coop_test` pass.
   - **Who runs the thugs (host load):** with the host running every thug
     and loading the streets around every hero, players spread across the
     city made the host's game do the city's work. Measured with

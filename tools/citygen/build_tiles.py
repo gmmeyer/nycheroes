@@ -1847,10 +1847,16 @@ def _water_towers(indices: np.ndarray, shapes_from: float = 0.0) -> dict:
         shape = _W["shapes"].get(int(b["bin"][index])) if height[k] >= shapes_from else None
         if shape is not None and not _shape_matches(shape, b["geoms"][index], float(height[k])):
             shape = None
+        # A prism's parts each stand on their own lowest corner (_add_prism), so a tank
+        # on a flat roof rides on the part's ground, not the whole building's.
+        parts = _prism_parts(b["geoms"][index]) if shape is None else []
         for n, spot in enumerate(props.tower_spots(poly, _W["streets"], diameter, seed)):
             roof = _shape_roof_at(shape, ground, spot) if shape is not None else None
+            if roof is None:
+                under = [part for part in parts if part.contains(shapely.Point(spot))]
+                roof = (_footprint_ground(under[0]) if under else ground) + float(height[k])
             found["en"].append(spot)
-            found["y"].append(roof if roof is not None else ground + float(height[k]))
+            found["y"].append(roof)
             found["height"].append(tower_height)
             found["width"].append(diameter)
             found["tone"].append(variant)
@@ -1864,15 +1870,28 @@ def _water_towers(indices: np.ndarray, shapes_from: float = 0.0) -> dict:
     return out
 
 
+def _prism_parts(geom) -> list:
+    """The footprint parts _add_building draws as prisms at the current level."""
+    settings = LEVELS[_W["level"]]
+    geom = shapely.simplify(geom, settings["building_tolerance"], preserve_topology=True)
+    return polygons_of(geom, settings["min_area"])
+
+
 def _shape_roof_at(shape, ground: float, en: np.ndarray) -> float | None:
     """The highest roof of a 3-D model building over a point (moved to stand
     at `ground`, like _add_shape), or None if no roof covers it."""
     vertices, offsets, ring_polygon, kinds, model_ground = shape
     starts = np.searchsorted(ring_polygon, np.arange(len(kinds)))
+    ends = np.append(starts[1:], len(ring_polygon))
     best = None
     for polygon in np.flatnonzero(np.asarray(kinds) == buildings3d.ROOF):
-        outline = vertices[offsets[starts[polygon]]:offsets[starts[polygon] + 1]].astype(np.float64)
-        if len(outline) < 3 or not shapely.contains_xy(Polygon(outline[:, :2]), en[0], en[1]):
+        rings = [vertices[offsets[r]:offsets[r + 1]].astype(np.float64) for r in range(starts[polygon], ends[polygon])]
+        outline = rings[0]
+        if len(outline) < 3:
+            continue
+        # (Not over the roof's holes: a lower level shows through them.)
+        flat = Polygon(outline[:, :2], [ring[:, :2] for ring in rings[1:] if len(ring) >= 3])
+        if not shapely.contains_xy(flat, en[0], en[1]):
             continue
         normal = polygon_normal(outline)
         if abs(normal[2]) < 1e-3:

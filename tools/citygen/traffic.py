@@ -29,6 +29,7 @@ from markings import AGAINST, BOTH, CROSSWALK_DEPTH, HIGHWAY, STOP_GAP, STOP_WID
 STREET_SPEED = 11.2   # m/s: 25 mph, New York's default limit
 HIGHWAY_SPEED = 17.9  # 40 mph
 LANE_STEP = 20.0      # lane points at least this often (the road bends with the terrain every 20 m)
+GROUND_CELL = 20.0    # the lod0 ground's cell (build_tiles.LEVELS): lanes get a point where they cross its lines
 MIN_LANE_LENGTH = 1.0
 
 # Car models (common.CAR_*): length, width, height (m), and their shares of
@@ -120,7 +121,7 @@ def lanes(data: dict, segments: np.ndarray, bounds, height) -> list[tuple[np.nda
                     float(data["phase"][k][last]),
                     (2.0 if data["priority"][k][last] else 1.0) if data["crossing"][k][last] else 0.0)
             for j, offset in enumerate(offsets):
-                en = points + normal * offset
+                en = _grid_cuts(points + normal * offset, GROUND_CELL)
                 out.append((np.column_stack([en, height(en)]),
                             (info[0], info[1], info[2], float(j), float(len(offsets)), info[3], info[4])))
     return out
@@ -207,6 +208,25 @@ def _stations(line, a: float, b: float) -> np.ndarray:
     bends = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(coords, axis=0), axis=1))])
     even = np.linspace(a, b, max(2, int(np.ceil((b - a) / LANE_STEP)) + 1))
     return np.union1d(even, bends[(bends > a + 0.5) & (bends < b - 0.5)])
+
+
+def _grid_cuts(en: np.ndarray, cell: float) -> np.ndarray:
+    """A polyline (P, 2) with a point added wherever it crosses a line of a
+    `cell`-meter grid, which is where the road bends with the terrain: a lane
+    that only had points between them would cut across the bends, floating
+    over or sinking into the road."""
+    out = [en[:1]]
+    for a, b in zip(en[:-1], en[1:]):
+        ts = []
+        for axis in (0, 1):
+            lo, hi = sorted((a[axis], b[axis]))
+            marks = np.arange(np.floor(lo / cell) + 1.0, np.ceil(hi / cell)) * cell
+            if len(marks):
+                ts.append((marks - a[axis]) / (b[axis] - a[axis]))
+        if ts:
+            out.append(a + np.outer(np.sort(np.concatenate(ts)), b - a))
+        out.append(b[None])
+    return np.concatenate(out)
 
 
 def _blocked(line, center: np.ndarray, length: np.ndarray, side: int, travel: tuple, blockers: tuple) -> np.ndarray:

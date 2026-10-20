@@ -88,6 +88,12 @@ func _ready() -> void:
 		_step("walk up the curb onto the sidewalk", 2.0, func(i: HeroInput, _t: float) -> void:
 			i.move = AVENUE * 0.4
 			i.stick = Vector2(0.0, -0.4)),
+		# Running into a curb mustn't stop the hero: its low speed stays near 9 m/s.
+		_step("back to the road", 15.0, func(_i: HeroInput, t: float) -> void:
+			if t < 0.02:
+				_world.place_hero(OPEN_AVENUE, 0.0, true),
+			func() -> bool: return _time > 1.0 and not _hero.frozen),
+		_step("run up the curb", 2.0, func(i: HeroInput, _t: float) -> void: _move(i, AVENUE)),
 	]
 
 
@@ -102,6 +108,8 @@ func _physics_process(delta: float) -> void:
 
 	var world := _hero.world_position()
 	_stats.max_speed = maxf(_stats.max_speed, _hero.velocity.length())
+	if _stats.max_speed > 8.5:  # (once up to running speed)
+		_stats.low_speed = minf(_stats.low_speed, Vector2(_hero.velocity.x, _hero.velocity.z).length())
 	_stats.max_height = maxf(_stats.max_height, world.y)
 	_stats.min_height = minf(_stats.min_height, world.y)
 	if not _stats.modes.has(_hero.mode.name):
@@ -112,9 +120,10 @@ func _physics_process(delta: float) -> void:
 	var finished: bool = _time >= step.seconds or (step.until.is_valid() and step.until.call())
 	if not finished:
 		return
-	print("%-28s %5.1fs  modes %-15s now %-7s speed %5.1f  max %5.1f  height %6.1f..%6.1f  wall %3d  at %s" % [
+	print("%-28s %5.1fs  modes %-15s now %-7s speed %5.1f  max %5.1f  low %5.1f  height %6.1f..%6.1f  wall %3d  at %s" % [
 		step.name, _time, ",".join(_stats.modes), _hero.mode.name, _hero.velocity.length(),
-		_stats.max_speed, _stats.min_height, _stats.max_height, _stats.wall_ticks, world.round()])
+		_stats.max_speed, _stats.low_speed if _stats.low_speed < INF else 0.0, _stats.min_height, _stats.max_height,
+		_stats.wall_ticks, world.round()])
 	if _index + 1 >= _steps.size():
 		get_tree().quit()
 		return
@@ -125,7 +134,7 @@ func _begin(index: int) -> void:
 	_index = index
 	_time = 0.0
 	var y := _hero.world_position().y
-	_stats = {max_speed = 0.0, max_height = y, min_height = y, modes = [], wall_ticks = 0}
+	_stats = {max_speed = 0.0, low_speed = INF, max_height = y, min_height = y, modes = [], wall_ticks = 0}
 
 
 func _step(step_name: String, seconds: float, apply := Callable(), until := Callable()) -> Dictionary:

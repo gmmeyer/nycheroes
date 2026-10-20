@@ -4,7 +4,8 @@ extends Node
 ## what their game sends 20 times a second (drawn a little in the past, so it
 ## moves smoothly in between), and sends our hero's state to them: 20 times a
 ## second to players near our hero (or whose thugs are), 4 times to those far
-## off, who only show where we are. Copies far from the camera aren't drawn
+## off, who only show where we are (once a second in the big relayed public
+## room, where far off is most of the room). Copies far from the camera aren't drawn
 ## (the HUD's markers show where those players are). In a private game the
 ## host (whoever it is now: see Net) also places players who join next to its
 ## hero; in the public game everyone keeps their own start.
@@ -19,6 +20,11 @@ const SEND_INTERVAL := 0.05
 ## THUG_NEAR of our hero (their game needs to know where it is).
 const FAR := 1000.0
 const FAR_SEND_EVERY := 5
+const RELAYED_FAR_SEND_EVERY := 20
+## Our costume goes to everyone this often (s), besides to each player who
+## comes; less often in a relayed room, where nothing gets lost on the way.
+const APPEARANCE_INTERVAL := 3.0
+const RELAYED_APPEARANCE_INTERVAL := 30.0
 const THUG_NEAR := 150.0
 ## Copies further than this from the camera aren't drawn (m), and past
 ## ANIMATE_DISTANCE they hold their pose: each animated character costs GPU
@@ -62,15 +68,16 @@ func _physics_process(delta: float) -> void:
 		return
 	_appearance_cooldown -= delta
 	if _appearance_cooldown <= 0.0:
-		_appearance_cooldown = 3.0
+		_appearance_cooldown = RELAYED_APPEARANCE_INTERVAL if Net.is_relayed else APPEARANCE_INTERVAL
 		_broadcast_appearance()
 	_send_cooldown -= delta
 	if _send_cooldown <= 0.0:
 		_send_cooldown = SEND_INTERVAL
 		_sends += 1
 		var state := _encode(hero)
+		var far_every := RELAYED_FAR_SEND_EVERY if Net.is_relayed else FAR_SEND_EVERY
 		for id in Net.peers():
-			if _sends % FAR_SEND_EVERY == 0 or _is_near(id):
+			if _sends % far_every == 0 or _is_near(id):
 				_hero_state.rpc_id(id, state)
 	for id: int in remote_heroes:
 		_follow(remote_heroes[id], _snapshots[id])

@@ -1,5 +1,6 @@
 // Signaling server for co-op: introduces players so their browsers can connect
-// to each other directly over WebRTC. Game traffic never passes through here.
+// to each other directly over WebRTC. In private rooms game traffic never
+// passes through here; public rooms are relayed (below).
 //
 // The host asks for a room and gets a short code; friends join with the code.
 // Every player connects to every other (a full mesh), so the server relays
@@ -15,6 +16,18 @@
 // asking for the public game (games that can't play together have different
 // ones); joining a room of another version with its code is turned away.
 // Games from before public rooms never ask for one, and send no version.
+//
+// Relayed public rooms: a game that can ("public" with `relay: true`) is put in
+// one big public room instead, whose game traffic goes through this server
+// rather than a mesh: each player sends its packets here as binary messages
+// and the server passes them on to the players they're for. Everyone online
+// then plays in one room (up to RELAY_PUBLIC_PLAYERS by matchmaking, plus
+// RELAY_EXTRA friends with the code), not rooms of six. Their WebRTC signals
+// aren't needed. Binary messages:
+//   player -> server  [channel u8][mode u8][count u16][count x player id u16][packet]
+//                     (count 0: every other player in the room)
+//   server -> player  [from u16][channel u8][mode u8][packet]
+// (numbers little-endian; channel and mode are Godot's, passed on as they are).
 //
 // One player is the room's host (the one whose game runs the thugs): first
 // the one who opened it. When the host leaves, the player who has been in the
@@ -48,14 +61,17 @@
 //                     [{"urls":"stun:stun.l.google.com:19302"},
 //                      {"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}]
 //   ALLOWED_ORIGINS   comma-separated page origins allowed to connect (default: any)
+//   RELAY_PUBLIC_PLAYERS  players a relayed public room takes by matchmaking (default 64)
 //
 // Protocol (JSON text messages, plus "ping"/"pong" as plain text):
 //   player -> server  {type: "host", version}      server -> {type: "hosted", code, id: 1, key, ice}
 //   player -> server  {type: "join", code, version}
 //                                                  server -> {type: "joined", code, id, key, host, peers, ice, public}
 //                                                  others <- {type: "peer_joined", id}
-//   player -> server  {type: "public", version}    server -> {type: "joined", ..., public: true} (as for "join"),
+//   player -> server  {type: "public", version, relay}
+//                                                  server -> {type: "joined", ..., public: true} (as for "join"),
 //                                                            or {type: "hosted", ..., public: true} (a new room)
+//                                                            (with relay: true too, for a relayed room)
 //   player -> server  {type: "rejoin", code, id, key, host, players, public, version}
 //                                                  server -> {type: "rejoined", code, id, host, players, back, ice, public}
 //                                                  then   <- {type: "peer_joined", id, back} for each player who
@@ -65,7 +81,8 @@
 //   player -> server  {type: "lost", id}           (drops player id if it stopped pinging, or isn't back)
 //   others <- {type: "peer_left", id, host}        anyone <- {type: "error", message, reason}
 // `peers` and `players` are in the order the players came (`players` includes
-// the player itself); `public` is true in public rooms (left out in others);
+// the player itself); `public` is true in public rooms (left out in others),
+// and `relay` in relayed ones (hosted, joined and rejoined say so; rejoin too);
 // games from before public rooms send no `version` (and no `public`). An error
 // with reason "no_room" answers a join for a code with no room: after a
 // restart, perhaps not yet; "full", a room with no place free; "version", a
@@ -84,6 +101,13 @@ const MAX_PLAYERS = 8;
 // Public rooms take this many players by matchmaking, leaving places for
 // friends joining with the code.
 const PUBLIC_PLAYERS = 6;
+// Relayed public rooms (no mesh): this many by matchmaking, RELAY_EXTRA more
+// with the code. Player numbers are 16 bits in relayed messages.
+const RELAY_PUBLIC_PLAYERS = Math.min(Number(process.env.RELAY_PUBLIC_PLAYERS ?? 64), 1000);
+const RELAY_EXTRA = 8;
+const RELAY_MAX_PLAYERS = RELAY_PUBLIC_PLAYERS + RELAY_EXTRA;
+// Highest player number in any room.
+const MAX_ID = Math.max(MAX_PLAYERS, RELAY_MAX_PLAYERS);
 const FIRST_HOST = 1;
 // No 0/O, 1/I/L: codes get read out loud and typed.
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -96,7 +120,7 @@ const PING_TIMEOUT_MS = 25000;
 const AWAY_TIMEOUT_MS = 10000;
 
 /**
- * code -> {code, host, players: Map<id, player>, public, version, opened},
+ * code -> {code, host, players: Map<id, player>, public, relay, version, opened},
  * players in the order they came: their sockets ({room, id, key, since, seen,
  * back}), or, after a restart, places kept for those not back yet ({away: true,
  * id, since, at}). `version` is the game's (null from games before public rooms).
@@ -121,10 +145,11 @@ wss.on('connection', (socket) => {
   socket.on('pong', () => { socket.alive = true; });
   socket.on('message', (raw, isBinary) => {
     socket.seen = Date.now();
-    if (!isBinary && raw.toString() === 'ping') return socket.send('pong');
+    if (isBinary) return relay(socket, raw);
+    if (raw.toString() === 'ping') return socket.send('pong');
     let message;
     try {
-      message = JSON.parse(isBinary ? '' : raw.toString());
+      message = JSON.parse(raw.toString());
     } catch {
       return send(socket, { type: 'error', message: 'Bad message' });
     }
@@ -137,7 +162,7 @@ function handle(socket, message) {
   switch (message?.type) {
     case 'host':
       if (socket.room) return send(socket, { type: 'error', message: 'Already in a game' });
-      open(socket, { public: false, version: versionOf(message) });
+      open(socket, { public: false, relay: false, version: versionOf(message) });
       break;
     case 'join': {
       if (socket.room) return send(socket, { type: 'error', message: 'Already in a game' });
@@ -154,9 +179,10 @@ function handle(socket, message) {
     case 'public': {
       if (socket.room) return send(socket, { type: 'error', message: 'Already in a game' });
       const version = versionOf(message);
-      const room = publicRoom(version);
+      const relayed = message.relay === true;
+      const room = publicRoom(version, relayed);
       if (room) admit(socket, room);
-      else open(socket, { public: true, version });
+      else open(socket, { public: true, relay: relayed, version });
       break;
     }
     case 'rejoin':
@@ -185,15 +211,15 @@ function handle(socket, message) {
 const OTHER_VERSION = 'That game is on another version of NYC Heroes. Reload the page (or get the new version), then try again.';
 
 /** Opens a room with this player as its host. */
-function open(socket, { public: isPublic, version }) {
+function open(socket, { public: isPublic, relay: relayed, version }) {
   const room = {
-    code: newCode(), host: FIRST_HOST, players: new Map([[FIRST_HOST, socket]]), public: isPublic, version,
-    opened: Date.now(),
+    code: newCode(), host: FIRST_HOST, players: new Map([[FIRST_HOST, socket]]), public: isPublic, relay: relayed,
+    version, opened: Date.now(),
   };
   rooms.set(room.code, room);
   Object.assign(socket, { room, id: FIRST_HOST, key: randomUUID(), since: Date.now() });
   send(socket, { type: 'hosted', code: room.code, id: FIRST_HOST, key: socket.key, ice: ICE_SERVERS, ...publicFlag(room) });
-  log(`${room.public ? 'public ' : ''}room ${room.code} opened`);
+  log(`${room.relay ? 'relayed ' : ''}${room.public ? 'public ' : ''}room ${room.code} opened`);
 }
 
 /** Puts a player in a room, as its lowest free number; everyone there sends it an offer. */
@@ -201,7 +227,7 @@ function admit(socket, room) {
   // The lowest free number, so player numbers (and colors) stay small.
   let id = FIRST_HOST;
   while (room.players.has(id)) id++;
-  if (id > MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full', reason: 'full' });
+  if (id > capacity(room)) return send(socket, { type: 'error', message: 'That game is full', reason: 'full' });
   const peers = [...room.players.keys()];
   room.players.set(id, socket);
   Object.assign(socket, { room, id, key: randomUUID(), since: Date.now() });
@@ -217,10 +243,11 @@ function admit(socket, room) {
  * free, the one with the most players (places kept for players not back since
  * a restart count too), the oldest of those. Null if there's none.
  */
-function publicRoom(version) {
+function publicRoom(version, relayed) {
   let best = null;
   for (const room of rooms.values()) {
-    if (!room.public || room.version !== version || room.players.size >= PUBLIC_PLAYERS) continue;
+    if (!room.public || room.relay !== relayed || room.version !== version) continue;
+    if (room.players.size >= (relayed ? RELAY_PUBLIC_PLAYERS : PUBLIC_PLAYERS)) continue;
     if (!best || room.players.size > best.players.size
       || (room.players.size === best.players.size && room.opened < best.opened)) best = room;
   }
@@ -228,7 +255,37 @@ function publicRoom(version) {
 }
 
 function publicFlag(room) {
-  return room.public ? { public: true } : {};
+  return { ...(room.public && { public: true }), ...(room.relay && { relay: true }) };
+}
+
+/** How many players a room can have: a mesh's limit, or a relayed room's. */
+function capacity(room) {
+  return room.relay ? RELAY_MAX_PLAYERS : MAX_PLAYERS;
+}
+
+/**
+ * A packet from a player in a relayed room (see the top), passed on to the
+ * players it's for, saying who it's from.
+ */
+function relay(socket, data) {
+  const room = socket.room;
+  if (!room?.relay || !Buffer.isBuffer(data) || data.length < 4) return;
+  const count = data.readUInt16LE(2);
+  const start = 4 + count * 2;
+  if (data.length < start) return;
+  const out = Buffer.allocUnsafe(data.length - start + 4);
+  out.writeUInt16LE(socket.id, 0);
+  out[2] = data[0];
+  out[3] = data[1];
+  data.copy(out, 4, start);
+  if (count === 0) {
+    for (const player of room.players.values()) if (player !== socket) sendBinary(player, out);
+    return;
+  }
+  for (let i = 0; i < count; i++) {
+    const target = room.players.get(data.readUInt16LE(4 + i * 2));
+    if (target && target !== socket) sendBinary(target, out);
+  }
 }
 
 /** The game's version a message gives, or null (games from before public rooms send none). */
@@ -242,13 +299,14 @@ function rejoin(socket, message) {
   const code = String(message.code ?? '').trim().toUpperCase();
   const id = Number(message.id);
   const key = String(message.key ?? '');
-  if (!isCode(code) || !Number.isInteger(id) || id < FIRST_HOST || id > MAX_PLAYERS) {
+  if (!isCode(code) || !Number.isInteger(id) || id < FIRST_HOST || id > MAX_ID) {
     return send(socket, { type: 'error', message: 'Bad message' });
   }
   const room = rooms.get(code) ?? rebuild(code, id, message);
   // Any player back may know better than the first (a game from before public
   // rooms doesn't say).
   if (message.public === true) room.public = true;
+  if (message.relay === true) room.relay = true;
   room.version ??= versionOf(message);
   const there = room.players.get(id);
   let since = Date.now();
@@ -266,7 +324,7 @@ function rejoin(socket, message) {
     missed = [...room.players.values()].filter((player) => !player.away && player.since >= there.at);
   } else {
     // The room let them go meanwhile: everyone connects to them again.
-    if (room.players.size >= MAX_PLAYERS) return send(socket, { type: 'error', message: 'That game is full', reason: 'full' });
+    if (room.players.size >= capacity(room)) return send(socket, { type: 'error', message: 'That game is full', reason: 'full' });
     back = true;
   }
   room.players.set(id, socket); // (in their old place, if they had one)
@@ -292,10 +350,13 @@ function rejoin(socket, message) {
 function rebuild(code, id, message) {
   const claimed = Array.isArray(message.players) ? message.players : [];
   const ids = [...new Set([...claimed, id].map(Number))]
-    .filter((n) => Number.isInteger(n) && n >= FIRST_HOST && n <= MAX_PLAYERS);
+    .filter((n) => Number.isInteger(n) && n >= FIRST_HOST && n <= MAX_ID);
   const host = ids.includes(Number(message.host)) ? Number(message.host) : id;
   const now = Date.now();
-  const room = { code, host, players: new Map(), public: message.public === true, version: versionOf(message), opened: now };
+  const room = {
+    code, host, players: new Map(), public: message.public === true, relay: message.relay === true,
+    version: versionOf(message), opened: now,
+  };
   ids.forEach((n, i) => room.players.set(n, { away: true, id: n, since: now - ids.length + i, at: now }));
   rooms.set(code, room);
   log(`${room.public ? 'public ' : ''}room ${code} rebuilt: players ${ids.join(', ')}, player ${host} hosting`);
@@ -345,6 +406,10 @@ function isCode(code) {
 
 function send(socket, message) {
   if (socket && !socket.away && socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
+}
+
+function sendBinary(socket, data) {
+  if (socket && !socket.away && socket.readyState === socket.OPEN) socket.send(data, { binary: true });
 }
 
 function log(text) {

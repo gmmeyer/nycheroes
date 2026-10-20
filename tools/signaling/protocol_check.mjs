@@ -8,7 +8,9 @@
 // (players asking for one fill a room up to its public places, the next opens
 // another, friends join a full one with its code up to the mesh's limit, a
 // place freed goes to the next player asking, versions kept apart, a room
-// closing with its last player, a rebuilt room staying public), and (with
+// closing with its last player, a rebuilt room staying public), relayed
+// public games (one big room past the mesh's limit, packets passed on to the
+// players they're for and to everyone, none from other rooms), and (with
 // --slow, half a minute more) players who stop pinging: passed over for host,
 // and dropped when another player says it lost them (but not one that kept
 // pinging). With --restart, it also holds a room while you restart the server
@@ -36,10 +38,12 @@ function check(ok, text, detail = '') {
 /** A fake player: a socket with a queue of what the server said. */
 function player(name) {
   const ws = new WebSocket(url);
+  ws.binaryType = 'arraybuffer';
   const queue = [];
   let wake = null;
   ws.addEventListener('message', (event) => {
-    queue.push(event.data === 'pong' ? { type: 'pong' } : JSON.parse(event.data));
+    if (event.data instanceof ArrayBuffer) queue.push({ type: 'binary', bytes: new Uint8Array(event.data) });
+    else queue.push(event.data === 'pong' ? { type: 'pong' } : JSON.parse(event.data));
     wake?.();
   });
   const closed = new Promise((resolve) => ws.addEventListener('close', resolve));
@@ -48,7 +52,7 @@ function player(name) {
     ws.addEventListener('open', () => resolve({
       name,
       closed,
-      send: (message) => ws.send(typeof message === 'string' ? message : JSON.stringify(message)),
+      send: (message) => ws.send(typeof message === 'string' || message instanceof Uint8Array ? message : JSON.stringify(message)),
       close: () => ws.close(),
       /** The next message (or null after `ms`), skipping none. */
       next: async (ms = 5000) => {
@@ -212,6 +216,7 @@ try {
 
   await rebuildCheck();
   await publicCheck();
+  await relayCheck();
   if (restart) await restartCheck();
 } catch (error) {
   check(false, String(error));
@@ -485,4 +490,87 @@ async function restartCheck() {
   check(leftAnswers.every((m) => m?.type === 'peer_left' && m.id === 1 && m.host === 2),
     'A leaves: B hosts', leftAnswers.map(describe).join(' '));
   for (const p of [b2, c2, d]) p.close();
+}
+
+/** A relayed packet as a player sends it: to `targets` (none: everyone else). */
+function packet(targets, channel, mode, payload) {
+  const bytes = new Uint8Array(4 + targets.length * 2 + payload.length);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = channel;
+  bytes[1] = mode;
+  view.setUint16(2, targets.length, true);
+  targets.forEach((id, i) => view.setUint16(4 + i * 2, id, true));
+  bytes.set(payload, 4 + targets.length * 2);
+  return bytes;
+}
+
+/** Whether a message is a relayed packet from `from` with this channel, mode and payload. */
+function relayed(message, from, channel, mode, payload) {
+  if (message?.type !== 'binary') return false;
+  const b = message.bytes;
+  return b.length === payload.length + 4 && (b[0] | (b[1] << 8)) === from && b[2] === channel && b[3] === mode
+    && payload.every((x, i) => b[4 + i] === x);
+}
+
+/**
+ * Relayed public games: past the mesh's limit, everyone asking joins one room;
+ * packets go to the players they're for, or everyone else, saying who sent
+ * them; a mesh public game isn't put in a relayed room, and packets from it go
+ * nowhere.
+ */
+async function relayCheck() {
+  const v = 900000 + Math.floor(Math.random() * 90000);
+  const ask = async (name) => {
+    const p = await player(name);
+    p.send({ type: 'public', version: v, relay: true });
+    p.answer = await p.next();
+    return p;
+  };
+  const first = await ask('R1');
+  check(first.answer?.type === 'hosted' && first.answer.public === true && first.answer.relay === true,
+    'the first player asking for a relayed public game opens one', describe(first.answer));
+  const code = first.answer?.code;
+  const room = [first];
+  const COUNT = 10;
+  for (let n = 2; n <= COUNT; n++) {
+    const p = await ask(`R${n}`);
+    room.push(p);
+    await Promise.all(room.slice(0, -1).map((q) => q.next()));  // (peer_joined)
+  }
+  check(room.every((p, i) => i === 0 || (p.answer?.type === 'joined' && p.answer.code === code && p.answer.id === i + 1
+    && p.answer.relay === true)), `${COUNT} players asking all join the one relayed room`,
+    room.map((p) => describe(p.answer)).join(' '));
+
+  const mesh = await player('M');
+  mesh.send({ type: 'public', version: v });
+  mesh.answer = await mesh.next();
+  check(mesh.answer?.type === 'hosted' && mesh.answer.code !== code && mesh.answer.relay === undefined,
+    'a game asking for a mesh public game gets a room of its own', describe(mesh.answer));
+
+  const hello = new Uint8Array([7, 8, 9]);
+  room[0].send(packet([2, 5], 0, 2, hello));
+  const [to2, to5] = [await room[1].next(), await room[4].next()];
+  check(relayed(to2, 1, 0, 2, hello) && relayed(to5, 1, 0, 2, hello), 'a packet goes to the players it is for, from player 1');
+  check(await quiet([room[2]], 300), 'the others in the room get nothing');
+
+  const all = new Uint8Array([1, 2, 3, 4]);
+  room[2].send(packet([], 1, 0, all));
+  const heard = await Promise.all(room.filter((_, i) => i !== 2).map((p) => p.next()));
+  check(heard.every((m) => relayed(m, 3, 1, 0, all)), 'a packet to everyone reaches everyone else, from player 3');
+  check(await quiet([room[2]], 300), 'not the sender itself');
+
+  mesh.send(packet([], 0, 2, all));
+  check(await quiet([room[0]], 300), 'packets from a mesh room go nowhere');
+
+  room[3].close();
+  const left = await Promise.all(room.filter((_, i) => i !== 3).map((p) => p.next()));
+  check(left.every((m) => m?.type === 'peer_left' && m.id === 4), 'a player leaving the relayed room: everyone hears of it',
+    left.map(describe).join(' '));
+  room[0].send(packet([4], 0, 2, hello));
+  check(await quiet([room[1]], 300), 'packets for a player who left go nowhere');
+
+  const back = await ask('R4again');
+  check(back.answer?.type === 'joined' && back.answer.code === code && back.answer.id === 4 && back.answer.relay === true,
+    'the next player asking takes the free place', describe(back.answer));
+  for (const p of [...room, back, mesh]) p.close();
 }
