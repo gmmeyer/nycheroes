@@ -32,8 +32,11 @@ const KNOB_RADIUS := 26.0
 ## Share of the screen's width, from the left, where a touch grabs the stick.
 const STICK_ZONE := 0.42
 ## Camera turn per UI pixel of drag (radians). UI pixels are CSS pixels on
-## touch screens, about the same size on every phone.
-const LOOK_SPEED := 0.0055
+## touch screens, about the same size on every phone: a drag across half of a
+## phone held sideways (400) turns about 60 degrees, up and down a little less
+## (LOOK_PITCH_SHARE). The options menu's look speed scales it.
+const LOOK_SPEED := 0.0025
+const LOOK_PITCH_SHARE := 0.8
 ## A finger on WEB or JUMP that slides this far also turns the camera.
 const BUTTON_LOOK_SLOP := 14.0
 ## Taps count this far outside a button's circle (the nearest button wins).
@@ -257,7 +260,7 @@ func _touch_drag(index: int, at: Vector2, relative: Vector2) -> void:
 func _look(relative: Vector2) -> void:
 	var turn := LOOK_SPEED * _look_scale
 	camera_rig.yaw -= relative.x * turn
-	camera_rig.pitch = clampf(camera_rig.pitch - relative.y * turn * _look_y, MIN_PITCH, MAX_PITCH)
+	camera_rig.pitch = clampf(camera_rig.pitch - relative.y * turn * LOOK_PITCH_SHARE * _look_y, MIN_PITCH, MAX_PITCH)
 
 
 func _read_look_settings() -> void:
