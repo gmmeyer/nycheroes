@@ -16,6 +16,8 @@ run/main_scene="res://scenes/world.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/use_custom_user_dir.desktop=true
 config/custom_user_dir_name.desktop="NYC Heroes"
+boot_splash/bg_color=Color(0.05, 0.06, 0.09, 1)
+boot_splash/show_image=false
 
 [audio]
 
