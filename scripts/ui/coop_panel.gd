@@ -14,6 +14,8 @@ extends Control
 ## (download.html, next to the game's page; tools/build_web.ps1 puts it there).
 
 signal toggled(open: bool)
+## Change name was pressed (Game opens the NamePrompt).
+signal rename_requested
 
 const WIDTH := 460.0
 const ERROR_COLOR := Color(1.0, 0.55, 0.45)
@@ -37,6 +39,8 @@ var _column: VBoxContainer
 var _close_button: Button
 var _hint: Label
 var _download: LinkButton
+var _name_label: Label
+var _rename_button: Button
 
 
 func _ready() -> void:
@@ -49,6 +53,7 @@ func _ready() -> void:
 	Net.player_left.connect(func(_id: int) -> void: _refresh())
 	Net.host_changed.connect(func(_id: int) -> void: _refresh())
 	Net.reconnecting_changed.connect(_refresh)
+	Net.player_named.connect(func(_id: int) -> void: _refresh())
 	_refresh()
 
 
@@ -85,7 +90,7 @@ func use_touch_layout() -> void:
 	_download.visible = false  # (no use on a phone or tablet)
 	_column.add_theme_constant_override("separation", 9)
 	(_panel.get_theme_stylebox("panel") as StyleBoxFlat).set_content_margin_all(16.0)
-	var tappable: Array = [_close_button, _public_button, _host_button, _leave_button]
+	var tappable: Array = [_close_button, _public_button, _host_button, _leave_button, _rename_button]
 	tappable.append_array(_join_row.get_children())
 	tappable.append_array(_link_edit.get_parent().get_children())
 	for control: Control in tappable:
@@ -121,6 +126,7 @@ func _draw() -> void:
 func _refresh() -> void:
 	if _status == null:
 		return
+	_name_label.text = "You're %s" % Net.player_name(Net.local_id())
 	var state := Net.state
 	var offline := state == Net.State.OFFLINE
 	var public := Net.wants_public()  # (also looking for it, or waiting to try again)
@@ -206,6 +212,18 @@ func _build() -> void:
 	_close_button.visible = false  # touch screens only (no M or Esc there)
 	_close_button.pressed.connect(close)
 	title_row.add_child(_close_button)
+
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 8)
+	column.add_child(name_row)
+	_name_label = Label.new()
+	_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_name_label.add_theme_font_size_override("font_size", 18)
+	name_row.add_child(_name_label)
+	_rename_button = Button.new()
+	_rename_button.text = "Change name"
+	_rename_button.pressed.connect(func() -> void: rename_requested.emit())
+	name_row.add_child(_rename_button)
 
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

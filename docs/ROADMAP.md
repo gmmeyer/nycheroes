@@ -290,6 +290,14 @@ peer can drive one later. Nearby tiles get collision.
     everyone, none from a mesh room or to a player gone; local server and
     the Durable Object under `wrangler dev`), and `coop_public_test` and
     `coop_test` pass.
+  - **Names (2026-10-20):** the first time the game starts it asks for a
+    hero name (NamePrompt, a made-up one filled in; kept as the setting
+    `player_name`), and the co-op menu's "Change name" asks again. Games
+    tell each other their names (PlayerSync, `NET_VERSION` 3), shown on
+    the heroes' tags, HUD markers, the menu's players and "X joined" (a
+    second after they come, for the name to arrive). Names are printable,
+    single-spaced and at most 16 characters; `--name=NAME` sets one for a
+    game only (`coop_public_test` checks six games see each other's).
   - **Who runs the thugs (host load):** with the host running every thug
     and loading the streets around every hero, players spread across the
     city made the host's game do the city's work. Measured with

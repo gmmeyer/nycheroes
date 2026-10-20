@@ -5,7 +5,8 @@ extends Node
 ## (Godot's experimental virtual keyboard focuses a hidden text box a frame
 ## after the tap, which iOS ignores: browsers only open the keyboard for a box
 ## focused during the tap itself.) What's typed goes to the LineEdit, in
-## capitals; Enter (the keyboard's Go) submits it.
+## capitals unless `capitals` is off; Enter (the keyboard's Go) submits it.
+## One box serves every WebTextField: show one LineEdit with one at a time.
 
 const SETUP_JS := """
 (function () {
@@ -22,8 +23,11 @@ const SETUP_JS := """
 		+ 'background:#1d2029;color:#fff;font-family:sans-serif;text-transform:uppercase;'
 		+ '-webkit-user-select:text;user-select:text;touch-action:manipulation';
 	document.body.appendChild(el);
-	var api = { el: el, onInput: null, onEnter: null };
-	api.show = function (x, y, w, h, fontSize, value, placeholder, maxLength) {
+	var api = { el: el, onInput: null, onEnter: null, upper: true };
+	api.show = function (x, y, w, h, fontSize, value, placeholder, maxLength, upper) {
+		api.upper = upper !== false;
+		el.style.textTransform = api.upper ? 'uppercase' : 'none';
+		el.setAttribute('autocapitalize', api.upper ? 'characters' : 'words');
 		el.style.left = x + 'px';
 		el.style.top = y + 'px';
 		el.style.width = w + 'px';
@@ -39,9 +43,11 @@ const SETUP_JS := """
 		el.style.display = 'none';
 	};
 	el.addEventListener('input', function () {
-		var caret = el.selectionStart;
-		el.value = el.value.toUpperCase();
-		el.setSelectionRange(caret, caret);
+		if (api.upper) {
+			var caret = el.selectionStart;
+			el.value = el.value.toUpperCase();
+			el.setSelectionRange(caret, caret);
+		}
 		if (api.onInput) api.onInput(el.value);
 	});
 	el.addEventListener('keydown', function (e) {
@@ -60,6 +66,8 @@ const SETUP_JS := """
 """
 
 var line_edit: LineEdit
+## Whether what's typed goes in capitals (room codes do; names don't).
+var capitals := true
 
 var _api: JavaScriptObject
 var _input_callback: JavaScriptObject
@@ -67,18 +75,19 @@ var _enter_callback: JavaScriptObject
 var _shown := false
 var _shown_rect := Rect2()
 
+static var _owner: WebTextField  # the one showing in the box
+
 
 func _ready() -> void:
 	JavaScriptBridge.eval(SETUP_JS, true)
 	_api = JavaScriptBridge.get_interface("nycTextField")
 	_input_callback = JavaScriptBridge.create_callback(_on_input)
 	_enter_callback = JavaScriptBridge.create_callback(_on_enter)
-	_api.onInput = _input_callback
-	_api.onEnter = _enter_callback
 
 
 func _exit_tree() -> void:
-	if _api:
+	if _api and _owner == self:
+		_owner = null
 		_api.hide()
 
 
@@ -86,21 +95,27 @@ func _process(_delta: float) -> void:
 	if not line_edit.is_visible_in_tree():
 		if _shown:
 			_shown = false
-			_api.hide()
+			if _owner == self:  # (unless another shows in it now)
+				_owner = null
+				_api.hide()
 		return
 	# The LineEdit's box in CSS pixels: UI units, then screen pixels, then CSS.
 	var to_screen := get_viewport().get_final_transform() * line_edit.get_global_transform_with_canvas()
 	var rect := to_screen * Rect2(Vector2.ZERO, line_edit.size)
 	var ratio := Device.pixel_ratio()
 	rect = Rect2(rect.position / ratio, rect.size / ratio)
-	if _shown and rect.is_equal_approx(_shown_rect):
+	if _shown and _owner == self and rect.is_equal_approx(_shown_rect):
 		return
 	_shown = true
 	_shown_rect = rect
+	# (The box is shared: what's typed in it is this one's while it shows.)
+	_owner = self
+	_api.onInput = _input_callback
+	_api.onEnter = _enter_callback
 	# 16 px or more, or iPhones zoom the page in on the box.
 	var font_size := maxf(16.0, line_edit.get_theme_font_size("font_size") * to_screen.get_scale().y / ratio)
 	_api.show(rect.position.x, rect.position.y, rect.size.x, rect.size.y, font_size,
-		line_edit.text, line_edit.placeholder_text, line_edit.max_length)
+		line_edit.text, line_edit.placeholder_text, line_edit.max_length, capitals)
 
 
 func _on_input(args: Array) -> void:

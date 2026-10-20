@@ -72,6 +72,9 @@ signal reconnecting_changed
 ## We're back in the room after the signaling server let us go meanwhile (our
 ## socket dropped): the others took us for gone, and connect to us again.
 signal readmitted
+## A player's name (player_name) changed: another player's game told us it,
+## or we picked ours (the setting "player_name").
+signal player_named(id: int)
 
 enum State { OFFLINE, CONNECTING, HOSTING, JOINED }
 
@@ -84,7 +87,7 @@ const MAX_PLAYERS := 8
 ## which matches public games only with games of the same number, and turns
 ## away room codes of another. Raise it whenever what games send each other
 ## changes (RPCs), so games that can't play together never meet.
-const NET_VERSION := 2
+const NET_VERSION := 3
 const ENET_VERSION := 1000000
 ## After failing to reach the public game, try again after this long
 ## (seconds), twice as long after each try that fails, up to PUBLIC_RETRY_MAX.
@@ -138,6 +141,8 @@ const ENET_TIMEOUT := Vector2i(15000, 30000)
 ## The signaling socket's buffers (bytes): a relayed room's traffic goes
 ## through it too.
 const SOCKET_BUFFER := 4 * 1024 * 1024
+## Players' names are at most this long (characters).
+const NAME_LENGTH := 16
 ## One color per player number (1 is the first host), used for their hero's suit.
 const PLAYER_COLORS: Array[Color] = [
 	Color(0.72, 0.06, 0.08), Color(0.1, 0.3, 0.85), Color(0.1, 0.6, 0.2), Color(0.9, 0.7, 0.05),
@@ -187,6 +192,7 @@ var _wants_public := false  # we're in the public game, or looking for it (quiet
 var _public_at := 0  # when to look for a public room again (msec; 0: not waiting to)
 var _public_retry := PUBLIC_RETRY
 var _setting_on := true  # the "online_public" setting, as we last followed it
+var _names := {}  # player number -> the name their game told us
 
 static var _webrtc := -1  # whether a WebRTC library loaded (desktop): -1 not checked yet, else 1 or 0
 
@@ -285,8 +291,37 @@ func local_id() -> int:
 	return multiplayer.get_unique_id()
 
 
+## A player's name: the one they picked (ours: local_name()), else "Player N".
 func player_name(id: int) -> String:
-	return "Player %d" % (id if id <= 99 else id % 100)
+	var picked: String = local_name() if id == local_id() else _names.get(id, "")
+	return picked if picked else "Player %d" % (id if id <= 99 else id % 100)
+
+
+## The name we picked (the setting "player_name"; --name=NAME for this game
+## only, as the tests do), or "" if none yet.
+func local_name() -> String:
+	if LaunchOptions.has("name"):
+		return clean_name(LaunchOptions.get_string("name"))
+	return clean_name(str(Settings.get_value("player_name", "")))
+
+
+## Another player's game told us their name (PlayerSync).
+func set_remote_name(id: int, value: String) -> void:
+	value = clean_name(value)
+	if _names.get(id, "") != value:
+		_names[id] = value
+		player_named.emit(id)
+
+
+## A name as players may have one: printable, single spaces, NAME_LENGTH at most.
+static func clean_name(text: String) -> String:
+	var kept := ""
+	for c in text:
+		var code := c.unicode_at(0)
+		kept += " " if code < 32 or (code >= 127 and code < 160) else c
+	while kept.contains("  "):
+		kept = kept.replace("  ", " ")
+	return kept.strip_edges().left(NAME_LENGTH).strip_edges()
 
 
 func player_color(id: int) -> Color:
@@ -399,6 +434,8 @@ func _stop_public() -> void:
 ## Once the public game is allowed (start_public), follows the player's
 ## "online_public" setting (the options menu's switch).
 func _on_setting_changed(key: String) -> void:
+	if key == "player_name":
+		player_named.emit(local_id())
 	var on := bool(Settings.get_value("online_public", true))
 	if key != "online_public" or not _auto_public or on == _setting_on:
 		return
@@ -438,6 +475,7 @@ func _reset() -> void:
 	room_code = ""
 	is_public = false
 	is_relayed = false
+	_names.clear()
 	state = State.OFFLINE
 	if _reconnecting:
 		_reconnecting = false
@@ -688,6 +726,7 @@ func _forget(id: int) -> void:
 	_lost.erase(id)
 	_reconnect_at.erase(id)
 	left_room.emit(id)
+	_names.erase(id)  # (after left_room: the "left" notice names them)
 	_drop(id)
 
 

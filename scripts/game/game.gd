@@ -11,6 +11,9 @@ extends Node3D
 ## own start. Not with ?solo=1 (play alone), a free camera or a screenshot,
 ## nor when nobody's playing (headless runs, browsers driven by scripts) unless
 ## ?public=1, nor where the player turned it off (the "online_public" setting).
+## The first time the game starts, it asks for the player's name (NamePrompt;
+## not with ?demo, a free camera, a screenshot or headless), which the others
+## see; the co-op menu's Change name asks again.
 ## M opens the co-op menu; ?host hosts a private game and ?join=CODE joins one
 ## (invite links use it). Players who join a private game start next to the
 ## host's hero.
@@ -55,6 +58,7 @@ var _drop_to_ground := false
 var _drop_tries := 0
 var _touch_controls: TouchControls
 var _options: OptionsPanel
+var _name_prompt: NamePrompt
 
 
 func _enter_tree() -> void:
@@ -79,6 +83,7 @@ func _ready() -> void:
 	quality.apply(time_of_day.sun, get_world_3d().environment, city, get_node("Crowd") as CrowdManager, encounters,
 		get_node_or_null("Traffic") as Traffic, get_node_or_null("Trains") as Trains, time_of_day)
 	_add_options(quality)
+	_add_name_prompt()
 	if not Device.is_web() and bool(Settings.get_value("fullscreen", false)) and not LaunchOptions.has("screenshot"):
 		Device.set_fullscreen(true)
 	if Device.wants_touch_controls() and not LaunchOptions.has("demo"):
@@ -131,6 +136,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and _touch_controls == null and Device.touch_allowed() \
 			and not LaunchOptions.has("demo"):
 		_add_touch_controls(true)  # a touch screen the browser didn't tell us about
+	if _name_prompt.is_typing():
+		return
 	if event.is_action_pressed("options_menu") and not coop_panel.is_typing() and not LaunchOptions.has("demo"):
 		coop_panel.close()
 		_options.toggle(true)
@@ -230,7 +237,22 @@ func _set_free_camera(on: bool) -> void:
 
 
 func _update_controls() -> void:
-	player_input.enabled = not _free_camera_on and not coop_panel.visible and not (_options and _options.visible)
+	player_input.enabled = not _free_camera_on and not coop_panel.visible and not (_options and _options.visible) \
+		and not (_name_prompt and _name_prompt.visible)
+
+
+## The name prompt (see the top), over every other menu.
+func _add_name_prompt() -> void:
+	_name_prompt = NamePrompt.new()
+	_name_prompt.name = "NamePrompt"
+	hud.add_child(_name_prompt)
+	_name_prompt.toggled.connect(func(_open: bool) -> void: _update_controls())
+	coop_panel.rename_requested.connect(func() -> void:
+		coop_panel.close()
+		_name_prompt.open())
+	if NamePrompt.needs_name() and not LaunchOptions.has("demo") and not LaunchOptions.has("cam") \
+			and not LaunchOptions.has("screenshot") and DisplayServer.get_name() != "headless":
+		_name_prompt.open()
 
 
 ## The options menu, over the co-op menu in the HUD (only one shows at a time).
@@ -269,6 +291,7 @@ func _add_touch_controls(started_by_touch: bool) -> void:
 		game_hud.touch_controls = _touch_controls
 	coop_panel.use_touch_layout()
 	_options.use_touch_layout()
+	_name_prompt.use_touch_layout()
 	var debug_label := hud.get_node_or_null("DebugLabel") as Label
 	if debug_label:
 		# Small, under the health bar (shown with ?stats or the options menu's switch).
