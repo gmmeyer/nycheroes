@@ -94,6 +94,16 @@ func _ready() -> void:
 				_world.place_hero(OPEN_AVENUE, 0.0, true),
 			func() -> bool: return _time > 1.0 and not _hero.frozen),
 		_step("run up the curb", 2.0, func(i: HeroInput, _t: float) -> void: _move(i, AVENUE)),
+		# A dive called off by holding forward: back to flying, high above the street.
+		_step("fly up again", 2.5, func(i: HeroInput, t: float) -> void:
+			i.fly_toggle_pressed = t < 0.02
+			i.vertical = 1.0),
+		_step("dive, then hold forward", 1.0, func(i: HeroInput, t: float) -> void:
+			i.attack_held = t < 0.1
+			i.aim = AVENUE
+			if t > 0.1:
+				i.stick = Vector2(0.0, -1.0)
+				i.move = AVENUE),
 	]
 
 
