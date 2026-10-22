@@ -84,7 +84,10 @@ function proxyTile(req, res, pathname, search) {
     up.pipe(res);
   });
   upstream.setTimeout(30000, () => upstream.destroy(new Error('timeout')));
+  // A page that goes away mid-download leaves nothing to send it to.
+  res.on('close', () => upstream.destroy());
   upstream.on('error', (err) => {
+    if (res.destroyed) return;
     log('tile proxy failed', target.href, err.message);
     if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
     res.end('Tile proxy failed\n');
