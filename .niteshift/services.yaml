@@ -7,7 +7,8 @@ services:
   # AGENT_BROWSER_ARGS="--use-angle=swiftshader,--enable-unsafe-swiftshader,--ignore-gpu-blocklist"
   # (else Godot reports WebGL2 missing), and open e.g.
   # /?quality=low&name=Agent&peds=0&traffic=0&gangs=0 so the city builds in a
-  # few minutes on software rendering (?name= skips the name prompt).
+  # few minutes on software rendering (?name= skips the name prompt; add
+  # &public=1 to join co-op, which script-driven browsers otherwise skip).
   - name: web
     command: node .niteshift/files/serve-web.mjs
     port: 8060
