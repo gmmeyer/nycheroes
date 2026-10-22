@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Prepares a sandbox for NYC Heroes, a Godot 4.7.2 game played in the browser.
+#   - Godot 4.7.2 (Linux) as `godot` on PATH, plus only the web export
+#     templates (the full template pack is 1.3 GB; web_nothreads is what the
+#     "Web" preset in export_presets.cfg uses).
+#   - the signaling server's npm packages (tools/signaling).
+#   - tools/citygen's Python (3.14) in .venv (numpy etc., also used by tools/audio).
+#   - Wrangler 4 in /opt/wrangler, for .niteshift/files/deploy-cloudflare.
+#   - a first web export into build/web (.niteshift/files/build-web).
+# City tiles aren't built here: tools/citygen needs many GB of downloads and
+# hours. The preview server (.niteshift/files/serve-web.mjs) proxies /tiles/
+# to the public site instead. Safe to rerun; each step skips work already done.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+GODOT_VERSION=4.7.2
+GODOT_DIR=/opt/godot/$GODOT_VERSION
+GODOT_BIN=$GODOT_DIR/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+TEMPLATES=$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+RELEASE=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
+
+fetch() { curl -fsSL --retry 5 --retry-delay 3 -o "$2" "$1"; }
+
+if [ ! -x "$GODOT_BIN" ]; then
+  echo "Installing Godot $GODOT_VERSION"
+  mkdir -p "$GODOT_DIR"
+  tmp=$(mktemp -d)
+  fetch "$RELEASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" "$tmp/godot.zip"
+  unzip -q -o "$tmp/godot.zip" -d "$GODOT_DIR"
+  rm -rf "$tmp"
+fi
+ln -sf "$GODOT_BIN" /usr/local/bin/godot
+
+if [ ! -f "$TEMPLATES/web_nothreads_release.zip" ] || [ ! -f "$TEMPLATES/web_nothreads_debug.zip" ]; then
+  echo "Installing Godot $GODOT_VERSION web export templates"
+  mkdir -p "$TEMPLATES"
+  tmp=$(mktemp -d)
+  fetch "$RELEASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" "$tmp/templates.tpz"
+  unzip -q -o -j "$tmp/templates.tpz" templates/version.txt \
+    templates/web_nothreads_release.zip templates/web_nothreads_debug.zip -d "$TEMPLATES"
+  rm -rf "$tmp"
+fi
+
+# Signaling server (co-op): one dependency, ws.
+if [ ! -d tools/signaling/node_modules/ws ] || [ tools/signaling/package-lock.json -nt tools/signaling/node_modules/.package-lock.json ]; then
+  npm ci --prefix tools/signaling --no-fund --no-audit
+fi
+
+# Wrangler, for .niteshift/files/deploy-cloudflare (and `wrangler dev`).
+if [ ! -x /opt/wrangler/node_modules/.bin/wrangler ]; then
+  npm install --prefix /opt/wrangler --no-fund --no-audit --loglevel=error wrangler@4
+fi
+
+# tools/citygen and tools/audio's Python (unit tests, tile building), on
+# Python 3.14: build_tiles.py uses its compression.zstd; the sandbox has 3.12.
+if [ ! -x .venv/bin/python ] || ! .venv/bin/python -c 'import sys; sys.exit(sys.version_info < (3, 14))'; then
+  rm -rf .venv
+  uv venv -q --python 3.14 .venv
+  rm -f .venv/.requirements-installed
+fi
+if [ ! -f .venv/.requirements-installed ] || [ tools/citygen/requirements.txt -nt .venv/.requirements-installed ]; then
+  uv pip install -q --python .venv/bin/python -r tools/citygen/requirements.txt
+  touch .venv/.requirements-installed
+fi
+
+# Import the project and export the web build the preview serves.
+"$ROOT/.niteshift/files/build-web"

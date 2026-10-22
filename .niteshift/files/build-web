@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Exports the "Web" preset to build/web, the Linux counterpart of
+# tools/build_web.ps1 without the tile copy (the preview server proxies
+# /tiles/ to the public site). Rerun it after changing the game, then reload
+# the preview; `ns services restart web` isn't needed.
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+# Sandboxes run as root; Godot warns about it on every start.
+export GODOT_SILENCE_ROOT_WARNING=1
+
+mkdir -p build/web
+# Godot must not import what's in build/ (see tools/build_web.ps1).
+touch build/.gdignore
+# A fresh checkout has no .godot/ yet; import once so the export finds every
+# resource (exporting straight away can miss class_name scripts).
+if [ ! -d .godot/imported ]; then
+  godot --headless --path . --import >/dev/null 2>&1 || true
+fi
+godot --headless --path . --export-release "Web" build/web/index.html
+# Native sample loops avoid gaps in 4.7.2's web audio (see the .ps1).
+node tools/web/fix_audio_loops.mjs build/web/index.js
+cp tools/web/download.html build/web/download.html
+echo "Web build ready in build/web"
