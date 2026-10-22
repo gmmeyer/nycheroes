@@ -113,5 +113,28 @@ class MidtownLandmarks(unittest.TestCase):
             np.testing.assert_allclose(bounds[0], bounds[2], atol=0.5, err_msg=lm.name)
 
 
+class StatueOfLiberty(unittest.TestCase):
+    def test_statue_at_every_lod(self):
+        lm = next(lm for lm in landmarks.LANDMARKS if lm.name == "Statue of Liberty")
+        tops, bounds = [], []
+        for detail in range(3):
+            model, frame = landmarks.build(lm, shapely.box(-50, -45, 50, 45), None, detail)
+            pos = np.concatenate(model.pos)
+            codes = np.concatenate(model.code).astype(int) % landmarks.FLAG_SCALE
+            self.assertTrue(np.isfinite(pos).all())
+            self.assertTrue(np.isfinite(np.concatenate(model.normals)).all())
+            statue = pos[np.isin(codes, [landmarks.LIBERTY, landmarks.GOLD])]
+            self.assertLess(len(statue), (6000, 2500, 900)[detail])
+            # The torch's flame tops out 46.05 m above her feet, on the 46.94 m pedestal.
+            tops.append(pos[codes == landmarks.GOLD][..., 2].max())
+            bounds.append(np.stack([statue.min(axis=(0, 1)), statue.max(axis=(0, 1))]))
+            buildings = MeshBuilder()
+            landmarks.place(model, buildings, frame, 3.0, MeshBuilder(), MeshBuilder())
+            self.assertTrue(buildings.pos)
+        np.testing.assert_allclose(tops, 92.99, atol=0.01)
+        np.testing.assert_allclose(bounds[0], bounds[1], atol=0.5)
+        np.testing.assert_allclose(bounds[0], bounds[2], atol=0.8)
+
+
 if __name__ == "__main__":
     unittest.main()

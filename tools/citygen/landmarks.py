@@ -64,7 +64,8 @@ WTC_SPIRE = 28       # the spire, white, with a beacon
 FLATIRON = 29        # limestone and terracotta; variant 1 the cornice
 WOOLWORTH = 30       # cream gothic terracotta
 COPPER = 31          # green copper roofs
-LIBERTY = 32         # the statue's copper
+LIBERTY = 32         # the statue's copper; 1 the tablet's face, 2 the diadem's band (uv = (m around from
+                     # her right, m up it))
 GOLD = 33            # the torch's flame
 PEDESTAL = 34        # granite; variant 1 the loggias' back walls
 FORT = 35            # Fort Wood's granite walls
@@ -854,67 +855,180 @@ def _liberty(m: Model, ctx: Context) -> None:
     _statue(m, 46.94, d)
 
 
+# The robe's outline (superellipses): z above her feet, half width, half
+# depth, and its center's y and x.
+LIBERTY_ROBE = np.array([(1.3, 5.2, 4.3, 0.3, 0.0), (3.0, 5.0, 4.15, 0.4, 0.0), (8.0, 4.75, 3.8, 0.6, 0.0),
+                 (13.0, 4.5, 3.45, 0.8, -0.1), (17.0, 4.3, 3.15, 0.95, -0.15), (21.0, 4.2, 2.9, 1.1, -0.1),
+                 (24.3, 4.5, 2.65, 1.2, 0.0), (26.3, 3.6, 2.25, 1.3, 0.0), (27.2, 1.7, 1.55, 1.4, 0.0)])
+# Rings up the stola (her feet to inside the mantle) and up the mantle above
+# its lowest hem, per detail level.
+LIBERTY_STOLA = ((1.3, 2.0, 3.0, 4.5, 6.0, 7.5, 9.0, 10.5, 12.0, 13.5, 15.5), (1.3, 3.0, 6.0, 9.5, 13.0, 15.5))
+LIBERTY_MANTLE = ((15.5, 17.0, 18.5, 20.0, 21.5, 23.0, 24.3, 25.3, 26.3, 26.9, 27.2), (15.5, 18.5, 21.5, 24.3, 26.3, 27.2))
+# A fold's four vertices around: ridge, side, valley, side (times its depth).
+LIBERTY_FOLD = np.array([1.0, 0.25, -0.9, 0.25])
+LIBERTY_TWIST = 0.07  # radians a meter: the mantle's folds rise toward her left shoulder
+# The head: z above her feet, half width, half depth, center y (chin to
+# cranium 5.26 m, ear to ear 3.05 m), and its rings per detail level.
+LIBERTY_HEAD = np.array([(28.3, 0.45, 0.45, 2.85), (28.6, 0.9, 0.95, 2.35), (29.0, 1.2, 1.3, 2.0), (29.5, 1.4, 1.6, 1.75),
+                 (30.1, 1.5, 1.76, 1.65), (30.7, 1.53, 1.82, 1.6), (31.3, 1.52, 1.84, 1.58), (31.9, 1.47, 1.78, 1.55),
+                 (32.5, 1.33, 1.62, 1.52), (33.0, 1.06, 1.3, 1.5), (33.35, 0.66, 0.85, 1.5), (33.55, 0.15, 0.2, 1.5)])
+LIBERTY_HEAD_RINGS = ((28.3, 28.55, 28.8, 29.05, 29.3, 29.5, 29.7, 29.95, 30.25, 30.55, 30.85, 31.15, 31.5, 31.9, 32.5, 33.0,
+               33.35, 33.55),
+              (28.3, 28.8, 29.3, 29.6, 30.2, 30.7, 31.3, 32.2, 33.0, 33.55),
+              (28.3, 29.3, 30.7, 32.2, 33.55))
+LIBERTY_CROWN_Y = 1.55  # the diadem's center
+LIBERTY_RAY_TILT = 60.0  # degrees: the rays fan up from her brow, the middle one this far above level
+
+
 def _statue(m: Model, base: float, d: int) -> None:
-    """The statue, low-poly but unmistakable: robe, raised torch, crown of
-    seven rays, tablet. x right, y forward, z from the top of the pedestal."""
-    n = (16, 10, 7)[d]
-    t = np.arange(n) * (2 * np.pi / n) + np.pi / n
-
-    def section(z, hw, hd, cy=0.0, cx=0.0, folds=0.0, phase=0.0, power=2.4):
-        # A superellipse around (cx, cy), with vertical folds.
-        c, s = np.cos(t), np.sin(t)
-        r = (np.abs(c) ** power + np.abs(s) ** power) ** (-1.0 / power)
-        r = r * (1.0 + folds * np.sin(7 * t + phase))
-        return np.column_stack([cx + hw * r * c, cy + hd * r * s, np.full(n, base + z)])
-
-    # Her plinth, then the robe from the hem to the shoulders.
-    m.prism(chamfered(0, 0.2, 5.6, 4.8, 1.2), base, base + 1.3, LIBERTY, roof=LIBERTY)
-    folds = 0.06 if d < 2 else 0.0
-    robe = [(1.3, 5.2, 4.4, 0.3, 0.0, folds), (3.0, 5.0, 4.2, 0.4, 0.0, folds), (8.0, 4.6, 3.7, 0.6, 0.0, folds * 0.8),
-            (13.0, 4.25, 3.25, 0.8, -0.1, folds * 0.6), (17.0, 4.1, 3.0, 0.95, -0.15, folds * 0.4),
-            (21.0, 4.05, 2.85, 1.1, -0.1, folds * 0.2), (24.3, 4.45, 2.65, 1.2, 0.0, 0.0),
-            (26.3, 3.6, 2.25, 1.3, 0.0, 0.0), (27.2, 1.7, 1.55, 1.4, 0.0, 0.0)]
-    if d == 2:
-        robe = [robe[0], robe[2], robe[4], robe[6], robe[8]]
-    m.loft([section(z, hw, hd, cy, cx, f, 0.7) for z, hw, hd, cy, cx, f in robe], LIBERTY)
-    # Neck and head (chin to cranium 5.26 m, 3.05 m wide).
-    neck = [(27.2, 1.25), (28.7, 1.2)]
-    head = [(28.3, 1.0), (28.9, 1.42), (30.0, 1.6), (31.4, 1.6), (32.5, 1.42), (33.2, 1.0), (33.55, 0.35)]
-    hn = (10, 8, 6)[d]
-    tower(m, 0.0, 1.45, [(base + z, r) for z, r in neck], hn, LIBERTY, close_top=False)
-    rings = [circle(0.0, 1.7, r, hn, base + z) * [1.0, 1.0, 1.0] for z, r in head]
-    for ring in rings:  # a little deeper than wide (the face and nose)
-        ring[:, 1] = 1.7 + (ring[:, 1] - 1.7) * 1.15
-    m.loft(rings, LIBERTY, close_top=True)
-    # The crown: a band, and seven rays fanned over her brow.
-    tower(m, 0.0, 1.7, [(base + 31.6, 1.78), (base + 32.6, 1.78)], hn, LIBERTY, close_top=False)
-    rays = 7
-    for k in range(rays):
-        a = math.radians(-78 + 26 * k) if d < 2 else math.radians(-75 + 25 * k)
-        direction = np.array([math.sin(a), math.cos(a), 0.0])
-        up = np.array([0.0, 0.0, 1.0])
-        root = np.array([0.0, 1.7, base + 32.3]) + direction * 1.6
-        tip = root + (direction * math.cos(math.radians(20)) + up * math.sin(math.radians(20))) * 3.6
-        side = np.cross(direction, up) * 0.42
-        m.tri_plate(root - side, root + side, tip, 0.3, LIBERTY)
-    # The raised right arm (12.8 m), with the sleeve hanging from it.
-    shoulder = np.array([3.7, 1.2, base + 25.2])
-    hand = np.array([5.2, 3.0, base + 37.3])
-    _limb(m, shoulder, hand, 1.95, 1.05, (12, 8, 6)[d], LIBERTY)
-    m.tri_plate(shoulder + [0.3, -0.2, -1.0], shoulder + (hand - shoulder) * 0.6 + [0.2, 0.0, 0.0],
-                np.array([4.2, 0.9, base + 20.5]), 1.9, LIBERTY)
-    # The torch: handle, the balcony's cup, the gold flame.
-    handle_top = np.array([5.45, 3.45, base + 41.3])
-    _limb(m, hand + [0.0, 0.0, -0.6], handle_top, 0.75, 0.6, (8, 6, 4)[d], LIBERTY)
-    tn = (12, 8, 6)[d]
-    tower(m, handle_top[0], handle_top[1], [(base + 41.0, 0.9), (base + 41.7, 1.75), (base + 42.6, 1.85)], tn,
-          LIBERTY, close_top=True)
-    tower(m, handle_top[0], handle_top[1], [(base + 42.6, 1.15), (base + 43.4, 1.3), (base + 44.4, 1.0),
-                                            (base + 45.3, 0.45), (base + 46.05, 0.02)], tn, GOLD)
-    # The left arm, down and forward, and the tablet against her side.
-    _limb(m, np.array([-3.5, 1.1, base + 25.0]), np.array([-4.2, 0.9, base + 19.5]), 1.5, 1.2, (10, 6, 4)[d], LIBERTY)
-    _limb(m, np.array([-4.2, 0.9, base + 19.5]), np.array([-4.3, 2.4, base + 19.2]), 1.15, 0.9, (8, 6, 4)[d], LIBERTY)
+    """The statue at the NPS's measurements: heel to the top of the head 33.86
+    m, chin to cranium 5.26 m, ear to ear 3.05 m, nose 1.37 m, the right arm
+    12.8 m long and 3.66 m thick, the tablet 7.19 x 4.14 x 0.61 m, the crown's
+    seven rays about 2.7 m (photos). The stola falls in folds to her feet
+    under the mantle, draped from her left shoulder: its hem runs down from
+    her right hip to the back of her left knee and its folds rise toward that
+    shoulder. Her right sleeve falls back from the elbow; the crown's rays fan
+    up and out from her brow, the outer ones level (from behind only those
+    show). x right, y forward, z from the top of the pedestal; angles around
+    her from her right, counter-clockwise (pi/2 her front)."""
+    m.prism(chamfered(0, 0.2, 5.6, 4.8, 1.2), base, base + 1.3, LIBERTY, roof=LIBERTY)  # her plinth
+    _robe(m, base, d)
+    _head(m, base, d)
+    _right_arm(m, base, d)
+    # The left arm, down and forward under the mantle, and the tablet.
+    b = np.array([0.0, 0.0, base])
+    elbow = np.array([-4.3, 0.8, 19.4]) + b
+    _limb(m, np.array([-3.5, 1.0, 25.0]) + b, elbow, 1.55, 1.2, (12, 8, 4)[d], LIBERTY)
+    _limb(m, elbow, np.array([-4.35, 2.4, 19.2]) + b, 1.15, 0.9, (10, 6, 4)[d], LIBERTY)
     _tablet(m, np.array([-4.75, 2.3, base + 21.2]), d)
+
+
+def _robe_ring(t, z, out, base):
+    """Points on the robe at angles t and heights z (arrays), `out` m outside
+    its outline."""
+    hw, hd, cy, cx = (np.interp(z, LIBERTY_ROBE[:, 0], LIBERTY_ROBE[:, k]) for k in range(1, 5))
+    c, s = np.cos(t), np.sin(t)
+    r = (np.abs(c) ** 2.4 + np.abs(s) ** 2.4) ** (-1.0 / 2.4)
+    return np.column_stack([cx + (hw * r + out) * c, cy + (hd * r + out) * s, base + z])
+
+
+def _robe(m, base, d):
+    """The stola in deep folds, and over it the mantle, whose hem stands out
+    from the stola. Folds are four vertices around each, so they never alias."""
+    n = (48, 24, 12)[d]
+    t = np.arange(n) * (2 * np.pi / n)
+    if d == 2:
+        m.loft([_robe_ring(t, np.full(n, z), 0.0, base) for z in (1.3, 8.0, 17.0, 24.3, 26.3, 27.2)], LIBERTY)
+        return
+    # Each fold a little deeper or shallower than the next.
+    fold = np.tile(LIBERTY_FOLD, n // 4) * np.repeat(0.95 + 0.35 * np.sin(np.arange(n // 4) * 2.4), 4)
+
+    def stola_depth(z):
+        return np.interp(z, (1.3, 3.0, 14.0), (0.32, 0.26, 0.08))
+
+    m.loft([_robe_ring(t, np.full(n, z), fold * stola_depth(z), base) for z in LIBERTY_STOLA[d]], LIBERTY)
+    # The mantle's hem: highest at her right hip, lowest behind her left knee,
+    # hanging lower where a fold does.
+    hem = 10.4 + 4.0 * np.cos(t - np.pi / 4) - 0.35 * np.maximum(fold, 0.0)
+
+    def mantle_out(z):
+        return np.interp(z, (21.0, 26.3), (0.3, 0.0)) + fold * np.interp(z, (10.0, 21.0, 25.0), (0.22, 0.2, 0.0))
+
+    rings = [_robe_ring(t, hem + 0.05, fold * stola_depth(hem) - 0.05, base)]  # the hem's underside
+    rings += [_robe_ring(t, z, mantle_out(z), base) for z in (hem, hem + (15.5 - hem) * 0.3, hem + (15.5 - hem) * 0.65)]
+    rings += [_robe_ring(t + LIBERTY_TWIST * (z - 15.5), np.full(n, z), mantle_out(z), base) for z in LIBERTY_MANTLE[d]]
+    m.loft(rings, LIBERTY)
+
+
+def _head(m, base, d):
+    """Neck, head (face, hair over the ears, the knot at her nape), the locks
+    down to her shoulders, the diadem with its 25 windows and the seven rays."""
+    n = (32, 16, 8)[d]
+    t = np.arange(n) * (2 * np.pi / n)
+    face = (t - np.pi / 2 + np.pi) % (2 * np.pi) - np.pi  # 0 at her face
+
+    def g(x, w):
+        return np.exp(-(x / w) ** 2)
+
+    tower(m, 0.0, 1.45, [(base + 26.9, 1.3), (base + 29.2, 1.15)], n, LIBERTY, close_top=False)
+    rings = []
+    for z in LIBERTY_HEAD_RINGS[d]:
+        hw, hd, cy = (np.interp(z, LIBERTY_HEAD[:, 0], LIBERTY_HEAD[:, k]) for k in (1, 2, 3))
+        out = 0.25 * (1.0 - g(face, 1.0)) * g(z - 30.3, 1.1)  # hair
+        out = out + 0.7 * g(np.abs(face) - np.pi, 0.55) * g(z - 29.5, 0.65)  # the knot
+        if d < 2:
+            out = out + np.interp(z, (29.2, 29.5, 29.7, 30.2, 30.75), (0.0, 0.3, 0.4, 0.22, 0.04)) * g(face, 0.16)
+            out = out + 0.1 * g(face, 0.45) * g(z - 28.55, 0.25)  # chin
+            out = out - 0.16 * g(np.abs(face) - 0.42, 0.18) * g(z - 30.55, 0.28)  # eyes
+            out = out + 0.08 * g(face, 0.75) * g(z - 30.95, 0.2)  # brow
+        c, s = np.cos(t), np.sin(t)
+        rings.append(np.column_stack([(hw + out) * c, cy + (hd + out) * s, np.full(n, base + z)]))
+    m.loft(rings, LIBERTY, close_bottom=True, close_top=True)
+    if d < 2:
+        for side in (-1.0, 1.0):
+            _limb(m, np.array([side * 1.35, 1.0, base + 30.2]), np.array([side * 1.6, 0.6, base + 27.4]), 0.45, 0.3,
+                  (8, 6)[d], LIBERTY)
+    # The diadem: its underside, the band with the windows (uv = (m around
+    # from her right, m up the band)) and its top.
+    nd = (40, 20, 10)[d]
+    td = np.arange(nd) * (2 * np.pi / nd)
+
+    def oval(hw, hd, z):
+        return np.column_stack([hw * np.cos(td), LIBERTY_CROWN_Y + hd * np.sin(td), np.full(nd, base + z)])
+
+    rings = [oval(1.45, 1.72, 31.25), oval(1.98, 2.22, 31.15), oval(2.08, 2.32, 32.3), oval(1.25, 1.5, 32.55)]
+    m.loft(rings[:2], LIBERTY)
+    m.loft(rings[1:3], LIBERTY, variant=2, along=True)
+    m.loft(rings[2:], LIBERTY)
+    tilt = math.radians(LIBERTY_RAY_TILT)
+    level = np.array([0.0, math.cos(tilt), math.sin(tilt)])
+    for k in range(7):
+        a = math.radians(30.0 * (k - 3))
+        direction = math.cos(a) * level + math.sin(a) * np.array([1.0, 0.0, 0.0])
+        theta = math.atan2(direction[1], direction[0])
+        root = np.array([2.0 * math.cos(theta), LIBERTY_CROWN_Y + 2.25 * math.sin(theta), base + 32.1])
+        _spike(m, root - direction * 0.3, root + direction * 2.75, 0.42 if d < 2 else 0.6, LIBERTY)
+
+
+def _right_arm(m, base, d):
+    """The raised right arm: the sleeve gathered from shoulder to elbow and
+    hanging below it down her side, the bare forearm, her fist round the
+    torch's handle; the torch's cup, the balcony's railing and the gold flame
+    (its top 46.05 m above her feet)."""
+    b = np.array([0.0, 0.0, base])
+    shoulder, elbow = np.array([3.6, 1.0, 25.0]) + b, np.array([4.45, 2.1, 31.2]) + b
+    wrist, fist = np.array([5.05, 2.85, 35.7]) + b, np.array([5.3, 3.2, 38.4]) + b
+    handle_top = np.array([5.45, 3.45, 41.0]) + b
+    k = (12, 8, 5)[d]
+    _limb(m, shoulder, elbow, 1.85, 1.25, k, LIBERTY)
+    _limb(m, elbow - (elbow - shoulder) * 0.08, wrist, 1.15, 0.82, k, LIBERTY)
+    _limb(m, wrist - [0.0, 0.0, 0.3], fist, 1.0, 0.85, k, LIBERTY)
+    _limb(m, fist - [0.0, 0.0, 0.4], handle_top, 0.62, 0.58, (8, 6, 4)[d], LIBERTY)
+    # The sleeve hanging from her upper arm, flattened against her side.
+    ns = (16, 8, 6)[d]
+    ts = np.arange(ns) * (2 * np.pi / ns)
+    folds = np.tile(LIBERTY_FOLD, ns // 4) * 0.12 if d == 0 else np.zeros(ns)
+    hang = []
+    for (x, y, z), across, thick in (((4.75, 1.0, 21.5), 1.0, 0.45), ((4.7, 1.15, 23.5), 1.25, 0.6),
+                                     ((4.6, 1.3, 26.0), 1.35, 0.7), ((4.3, 1.7, 29.5), 1.2, 0.7)):
+        hang.append(np.column_stack([x + (thick + folds) * np.cos(ts), y + (across + folds) * np.sin(ts),
+                                     np.full(ns, base + z)]))
+    m.loft(hang, LIBERTY, close_bottom=True)
+    # The torch.
+    tn = (16, 10, 6)[d]
+    cx, cy = handle_top[0], handle_top[1]
+    tower(m, cx, cy, [(base + 40.8, 0.62), (base + 41.3, 0.95), (base + 41.8, 1.5), (base + 42.0, 1.95)], tn, LIBERTY)
+    rail = [circle(cx, cy, r, tn, base + z, np.pi / tn) for r, z in ((1.95, 42.0), (1.95, 42.75), (1.8, 42.75), (1.8, 42.0))]
+    m.loft(rail, LIBERTY)
+    # The flame's tongues (five lobes, twisting as they rise).
+    nf = (20, 10, 6)[d]
+    tf = np.arange(nf) * (2 * np.pi / nf)
+    lobes = 0.18 if d == 0 else 0.0
+    flame = [np.column_stack([cx + r * (1.0 + lobes * np.cos(5 * (tf + twist))) * np.cos(tf),
+                              cy + r * (1.0 + lobes * np.cos(5 * (tf + twist))) * np.sin(tf), np.full(nf, base + z)])
+             for z, r, twist in ((42.3, 0.9, 0.0), (43.0, 1.3, 0.15), (44.0, 1.15, 0.4), (45.0, 0.6, 0.7),
+                                 (46.05, 0.02, 1.0))]
+    m.loft(flame, GOLD)
 
 
 def _limb(m, a, b, ra, rb, n, material):
@@ -930,9 +1044,29 @@ def _limb(m, a, b, ra, rb, n, material):
     m.loft([a + ra * circle_, b + rb * circle_], material, along=True, close_bottom=True, close_top=True)
 
 
+def _spike(m, root, tip, width, material):
+    """A four-sided spike from a square base `width` across at root to a
+    point at tip (the base left open)."""
+    axis = tip - root
+    axis = axis / np.linalg.norm(axis)
+    ref = np.array([0.0, 0.0, 1.0]) if abs(axis[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
+    u = np.cross(axis, ref)
+    u /= np.linalg.norm(u)
+    v = np.cross(axis, u)
+    corners = [root + (u * cu + v * cv) * (width / 2) for cu, cv in ((1, 1), (-1, 1), (-1, -1), (1, -1))]
+    for p, q in zip(corners, corners[1:] + corners[:1]):
+        tri = np.array([p, q, tip])
+        normal = np.cross(q - p, tip - p)
+        normal /= np.linalg.norm(normal)
+        if normal @ ((p + q) / 2 - root) < 0:
+            tri, normal = tri[[1, 0, 2]], -normal
+        m.add(tri[None], tri[None][..., [0, 2]], material, 0.0, normal)
+
+
 def _tablet(m, center, d):
-    """The tablet (7.19 x 4.14 x 0.61 m), held upright against her left side,
-    leaning back a little, its face toward her front and left."""
+    """The tablet (7.19 x 4.14 x 0.61 m), a keystone narrowing toward its foot,
+    held upright against her left side, leaning back a little, its face
+    toward her front and left."""
     length, width, thick = 7.19, 4.14, 0.61
     yaw = math.radians(28)   # its face turned this far to her left
     tilt = math.radians(14)  # its top leaning in toward her
@@ -944,7 +1078,8 @@ def _tablet(m, center, d):
     for sx in (-1, 1):
         for sy in (-1, 1):
             for sz in (-1, 1):
-                corners.append(center + across * (sx * width / 2) + up * (sz * length / 2) + face * (sy * thick / 2))
+                half = width / 2 * (1.0 if sz > 0 else 0.86)
+                corners.append(center + across * (sx * half) + up * (sz * length / 2) + face * (sy * thick / 2))
     c = np.array(corners).reshape(2, 2, 2, 3)  # [x][y][z]
     quads = [  # (corners, outward)
         ([c[0, 1, 0], c[1, 1, 0], c[1, 1, 1], c[0, 1, 1]], face),
