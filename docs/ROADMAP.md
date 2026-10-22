@@ -1930,6 +1930,45 @@ Comes after step 6 because it needs step 6's real ground heights.
   went from 33 to 1, raised road ends less than 4.5 m over a street from 534
   to 1, ramps steeper than 20% from 4.3 to 2.0 km. Cost: the viaducts' near
   tiles about +1%, mid +3%; no new draw calls.
+- **Bridges meet their roads (2026-10-22):** the RFK's deck stood 43 m up
+  over its whole Y-shaped outline (Wards and Randalls Islands too, as the
+  islands it crosses), over the toll plaza's ramps at 15-25 m, so its lanes
+  dropped 20-38 m where they left it; the Verrazzano's, Queensboro's,
+  Brooklyn's, Manhattan's and Henry Hudson's ends had the like. Now:
+  - The survey's decks count up to 100 m over the street on bridge outlines
+    (it was 40 m, which dropped every big span: the RFK's at 47 m over Hell
+    Gate), but no more than 12 m over a major bridge's published deck (not
+    its trusses or towers: the Queensboro's roadways run inside them), and
+    the major bridges' published heights stand in over the water where the
+    survey sees nothing (`bridges.over_water`).
+  - Bridges' decks follow the raised roads on them (`Network.on_bridge`)
+    over land, and over the water within 40 m of a station where the survey
+    saw them; elsewhere over the water they come round to the published
+    height within 150 m of the shore. Towers and cables stand on the deck
+    where it is. The RFK's viaduct now comes down from 47 m over Hell Gate
+    across Wards Island (33, then 27 m) to the toll plaza at 21 m.
+  - Double-deckers' lower roadways (the Verrazzano's), which the survey
+    can't see under the upper ones, sit 7 m under them.
+  - Bridges at street level in the data that cross the water (drawbridges
+    and causeways: the North Channel and Cross Bay bridges, Hamilton Avenue)
+    are fitted to the survey too, held at the streets at their ends; their
+    lanes follow their own deck from point to point, not a deck passing
+    overhead (the Brooklyn Bridge's over the streets at its Manhattan end).
+  - Raised roads' lanes on land keep to their own height where the nearest
+    deck is more than 2-4 m off (a bridge carrying ramps under its roadway).
+  - Non-vehicular centerlines (bridges' walkways and bikeways) keep their
+    decks but get no driving lanes or paint (as on the streets), and the
+    bridges' decks don't follow them: cars drove the RFK's walkway up its
+    cables.
+  Over the 1,563 near tiles with raised roads, lanes meeting at a node (or a
+  lane's next point) more than 2 m apart went from 3,414 to 1,689; over 10 m
+  from 335 to 33, over 20 m from 133 to none. Left: streets dipping into the
+  sunken roads' cuts where they cross them, the elevation model's 10 m blur
+  at bluffs (the Washington Bridge's Manhattan end), and 26 new small ones
+  (at most 7 m) at street-level bridges over the cuts. Rebuilding: delete
+  `data/cache/overpasses.pkl` and `deck_heights.pkl` first (the survey now
+  also measures the street-level bridges: 500 more point tiles, a few
+  minutes).
 - **The BQE's triple cantilever** (`tools/citygen/cantilever.py`), Remsen to
   Orange Street under the Brooklyn Heights Promenade: the Staten
   Island-bound roadway on the lower deck, the Queens-bound one on the middle

@@ -376,8 +376,8 @@ def _build_bridges(ground) -> dict:
     # at the heights the lidar survey has them (lidar.py), with the roadways
     # the BQE's triple cantilever carries (cantilever.py) and the roads below
     # street level (trenches.py).
-    network = _network(terrain)
-    buckets = bridges.build(ground["land"], terrain, sizes, approach=network.approach)
+    network = _network(terrain, land=ground["land"])
+    buckets = bridges.build(ground["land"], terrain, sizes, approach=network.approach, roads=network.on_bridge)
     overpasses.build(network, ground["land"], buckets, sizes)
     cantilever.build(network, buckets, sizes)
     # The sunken roads' cuts, walls and bridges (after the decks: they add to street_decks).
@@ -405,12 +405,14 @@ def _structure(terrain):
                                 prepare.load("overpasses"))
 
 
-def _network(terrain, structure=None):
+def _network(terrain, structure=None, land=None):
     """The raised roads, the triple cantilever's and the sunken roads
-    (overpasses.Network), with the sunken roads' cuts (trenches.py)."""
+    (overpasses.Network), with the sunken roads' cuts (trenches.py), and the
+    bridges over the water (`land`: the prepared ground's, before the piers
+    are added; bridges.over_water)."""
     return overpasses.Network(prepare.load("overpasses"), prepare.load("centerline"), terrain,
                               structure if structure is not None else _structure(terrain),
-                              prepare.load("deck_heights"), trenches.Sunken(prepare.load("trenches")))
+                              prepare.load("deck_heights"), trenches.Sunken(prepare.load("trenches")), land)
 
 
 def _rebuild(only: list[str], workers: int) -> None:
@@ -473,6 +475,7 @@ def _init_worker() -> None:
     # The piers out over the water are land (landmarks.piers()).
     _W["piers"] = landmarks.piers()
     shapely.prepare(_W["piers"])
+    prepared_land = ground["land"]  # (the raised roads' network is built from it, as in _build_bridges)
     ground["land"] = shapely.union(ground["land"], _W["piers"])
     for name in ("land", "beaches", "marsh"):
         shapely.prepare(ground[name])
@@ -486,7 +489,7 @@ def _init_worker() -> None:
     # The ground cut away under the triple cantilever and filled up behind it
     # (cantilever.py), and cut down along the sunken roads (trenches.py).
     _W["structure"] = _structure(_W["terrain"])
-    _W["overpasses"] = _network(_W["terrain"], _W["structure"])
+    _W["overpasses"] = _network(_W["terrain"], _W["structure"], prepared_land)
     _W["trenches"] = _W["overpasses"].trenches
     _W["ground"] = {level: _W["structure"].ground(_W["terrain"].lattice(settings["ground_cell"]))
                     for level, settings in LEVELS.items()}

@@ -67,15 +67,24 @@ MAX_LEVEL = 30       # higher codes are unknowns, taken as street level
 LEVEL_RISE = 7.0     # meters from the road below to the deck's top, per level
 # The lidar survey's deck heights (lidar.py), fitted over the raised roads
 # (Network._fit): a deck is at least MIN_DECK and at most MAX_DECK over the
-# street under it, climbs from the street at most MAX_GRADE (within
+# street under it (MAX_BRIDGE_DECK on a bridge outline: the big bridges' decks
+# stand 45-80 m over the water), climbs from the street at most MAX_GRADE (within
 # PICK_TOLERANCE); one under another road keeps COVER_GAP below it, one over a
 # road or street UNDER_CLEAR above the street (4.5 m clear under a 1 m deck).
 MIN_DECK = 2.5
 MAX_DECK = 40.0
+MAX_BRIDGE_DECK = 100.0
+TRUSS_CLEAR = 12.0  # but on a major bridge no more than this over its published deck (not its trusses or towers)
 UNDER_CLEAR = 5.5
 COVER_GAP = 4.5
 MAX_GRADE = 0.08
 PICK_TOLERANCE = 2.5
+# A double-decker's lower roadway: a raised road with at least STACKED_SHARE
+# of its stations under another road running along it (within STACKED_COS),
+# which hides it from the survey, is taken STACK_DROP under that road's deck.
+STACKED_SHARE = 0.6
+STACKED_COS = 0.9
+STACK_DROP = 7.0
 # Fitting heights to the survey (Network._fit): each station's pull toward
 # its surface (MEASURE, softening past FIT_SOFT off it, none past FIT_REACH),
 # toward the level codes' height (PRIOR), toward the next station's along the
@@ -97,6 +106,12 @@ LOW_RINGS = (15.0, 30.0)
 # Heights along each segment at least this often (meters).
 STATION_STEP = 10.0
 FIELD_BLEND = 20.0  # decks blend the heights of the roads on them this close
+# Bridges' decks over the water follow the roads on them (on_bridge) out to
+# the first of these past a road's edge, fading out by the second (meters).
+ROAD_REACH = (2.0, 20.0)
+# ... where the survey saw them, within the first of these along the road of
+# a station it saw, fading out by the second (meters).
+SEEN_GAP = (40.0, 120.0)
 # Widths when the data has none (meters): per lane, plus shoulders.
 LANE_WIDTH, SHOULDERS = 3.6, 2.0
 PATH_WIDTH = 4.0
@@ -126,6 +141,11 @@ WATER_FOOTING_Y = -8.0
 PARAPET_HEIGHT = 1.1
 AT_GRADE_GAP = 0.25  # decks closer than this to the street are left out
 GRADE_DECK = 3.0     # street-level roads on land take decks at most this far from the street
+SNAP_GAP = (2.0, 4.0)  # raised roads on land take decks this close to their own height, easing off by the second
+# Bridges at street level in the data follow their deck from point to point
+# along a lane (_tracked) while it's within this much (m), plus this grade, of
+# the height before.
+TRACK_STEP, TRACK_GRADE = 1.0, 0.2
 PARAPET_FROM = 1.0   # parapets where the deck is at least this high
 SOLID_BELOW = 2.5    # under a lower gap, the deck's sides go down to the ground
 COLUMN_SPACING = 36.0
@@ -169,7 +189,7 @@ def prepare() -> dict:
     """Raised road segments (any end above street level), street-level ramps
     and bridges (which link them and the bridges over water to the streets),
     and the bridge outlines."""
-    lines, rows = [], []
+    lines, rows, walkway = [], [], []
     for feat in load_features("centerline"):
         p = feat["properties"]
         rw = int(p.get("rw_type") or 0)
@@ -182,13 +202,14 @@ def prepare() -> dict:
         geom = shapely.line_merge(shape(feat["geometry"]))
         for part in shapely.get_parts(geom):
             lines.append(part)
+            walkway.append(p.get("trafdir") == "NV")
             rows.append((rw, trafdir, int(float(p.get("number_travel_lanes") or 0)),
                          int(float(p.get("number_park_lanes") or 0)), float(p.get("streetwidth") or 0) * FEET,
                          levels[0], levels[1]))
     lines = project(np.array(lines, dtype=object))
     attrs = np.array(rows, dtype=np.float64)
     keep = shapely.length(lines) > 1.0
-    lines, attrs = lines[keep], attrs[keep]
+    lines, attrs, walkway = lines[keep], attrs[keep], np.array(walkway, dtype=bool)[keep]
 
     outlines = [f for f in load_features("transport_structures") if str(f["properties"].get("feat_code")) == BRIDGE_CODE]
     geoms = shapely.make_valid(project(np.array([shape(f["geometry"]) for f in outlines], dtype=object)))
@@ -200,6 +221,9 @@ def prepare() -> dict:
         "parking": attrs[:, 3].astype(np.int16),
         "width": attrs[:, 4].astype(np.float32),
         "levels": attrs[:, 5:7].astype(np.int8),  # (from, to)
+        # Non-vehicular (trafdir NV): bridges' walkways and bikeways, which get
+        # decks but no driving lanes or paint (the streets skip them too).
+        "walkway": walkway,
         "outlines": geoms,
         "outline_names": [f["properties"].get("name") or "NO NAME" for f in outlines],
     }
@@ -256,6 +280,15 @@ def _inward(lines: np.ndarray) -> np.ndarray:
     return inward / np.maximum(np.linalg.norm(inward, axis=1, keepdims=True), 1e-9)
 
 
+def _directions(line, s: np.ndarray) -> np.ndarray:
+    """Unit directions along a line at distances s along it (N, 2)."""
+    length = line.length
+    ahead = shapely.get_coordinates(shapely.line_interpolate_point(line, np.minimum(s + 1.0, length)))
+    behind = shapely.get_coordinates(shapely.line_interpolate_point(line, np.maximum(s - 1.0, 0.0)))
+    d = ahead - behind
+    return d / np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-9)
+
+
 class Network:
     """The raised roads (and the street-level ramps and bridges that link them
     to the streets): their heights, their decks' groups, and their attributes
@@ -267,9 +300,13 @@ class Network:
     roadways below street level it carries, their heights, and its ground;
     `decks` the lidar survey's deck heights (lidar.prepare); `sunken` (a
     trenches.Sunken) the streets and highways below street level elsewhere,
-    their heights (self.sunken) and their cuts (self.trenches)."""
+    their heights (self.sunken) and their cuts (self.trenches). With `land`
+    (the prepared ground's), the bridges at street level in the data that
+    cross the water are fitted to the survey too, and the roads on the big
+    bridges lean on their published heights over the water where the survey
+    doesn't see them (bridges.over_water)."""
 
-    def __init__(self, data: dict, streets: dict, terrain, structure=None, decks=None, sunken=None):
+    def __init__(self, data: dict, streets: dict, terrain, structure=None, decks=None, sunken=None, land=None):
         self.structure = structure
         stacked = np.zeros(len(data["lines"]), dtype=bool)
         surveyed = data["lines"]  # as the survey's stations were laid out (lidar.py)
@@ -282,6 +319,9 @@ class Network:
         self.data = data
         self.lines = data["lines"]
         self.count = len(self.lines)
+        # Walkways and bikeways (prepare's; none among the roads added above).
+        self.walkway = np.zeros(self.count, dtype=bool)
+        self.walkway[:len(data.get("walkway", []))] = data.get("walkway", [])
         self.terrain = terrain
         self.ground_lattice = terrain.lattice(20.0)  # the lod0 ground (build_tiles.LEVELS)
         if structure is not None:
@@ -299,6 +339,8 @@ class Network:
         if structure is not None:
             self.over = np.array([structure.bridge(line) for line in self.lines])
         self.width = self._widths()
+        self.published, self.wet = bridges.over_water(land, terrain) if land is not None else ([], shapely.Polygon())
+        self.under = np.zeros(self.count, dtype=bool)  # double-deckers' lower roadways (_surveyed)
         self.tree = shapely.STRtree(self.lines)
         self._stations = [None] * self.count
         self.attrs = self._attributes(streets)
@@ -458,7 +500,9 @@ class Network:
         """What the lidar survey has along each of these raised segments
         (lidar.py), and the limits on their heights: {segment: (distances
         along, surfaces (S, L) NaN-padded, floors, ceilings)}. A deck is
-        MIN_DECK to MAX_DECK over the street. Where a road (or street) at
+        MIN_DECK to MAX_DECK over the street (MAX_BRIDGE_DECK on a bridge
+        outline, but at most TRUSS_CLEAR over a major bridge's published
+        deck). Where a road (or street) at
         least half a level down by the level codes there passes under a
         station, the deck is at least UNDER_CLEAR over the street; where one
         at least half a level up passes over it, COVER_GAP below that one
@@ -474,6 +518,8 @@ class Network:
         # (Not roads that go below street level: in cuts, or the triple
         # cantilever's ramps, what the survey sees is over them.)
         below = self.levels.min(axis=1) < int(AT_GRADE)
+        bridges_area = shapely.union_all(self.data["outlines"])
+        shapely.prepare(bridges_area)
         for k in members:
             length = self.lines[k].length
             found = lidar.heights(decks, surveyed[k]) if k < len(surveyed) and not below[k] else None
@@ -486,8 +532,11 @@ class Network:
             en = shapely.get_coordinates(shapely.line_interpolate_point(self.lines[k], s))
             points = shapely.points(en)
             street = self.street(en)
-            layers = np.where((layers >= street[:, None] + MIN_DECK) & (layers <= street[:, None] + MAX_DECK),
-                              layers, np.nan)
+            top = street + np.where(shapely.contains_xy(bridges_area, en[:, 0], en[:, 1]), MAX_BRIDGE_DECK, MAX_DECK)
+            for _, height, outline in self.published:
+                on = shapely.contains_xy(outline, en[:, 0], en[:, 1])
+                top[on] = np.minimum(top[on], height + TRUSS_CLEAR)
+            layers = np.where((layers >= street[:, None] + MIN_DECK) & (layers <= top[:, None]), layers, np.nan)
             highest = np.nanmax(np.where(np.isnan(layers), -np.inf, layers), axis=1)
             # The level codes here, and the other roads' over and under the
             # stations (half a level or more apart).
@@ -498,15 +547,34 @@ class Network:
             along = shapely.line_locate_point(under_lines[other], points[point], normalized=True)
             theirs = under_levels[other, 0] + (under_levels[other, 1] - under_levels[other, 0]) * along
             covered = np.zeros(len(s), dtype=bool)
-            covered[point[theirs >= mine[point] + LEVEL_STEP / 2]] = True
+            over = theirs >= mine[point] + LEVEL_STEP / 2
+            covered[point[over]] = True
             passing = np.zeros(len(s), dtype=bool)
             passing[point[theirs <= mine[point] - LEVEL_STEP / 2]] = True
             floor = np.where(passing, street + UNDER_CLEAR, -np.inf)
             layers[covered] = np.where(layers[covered] <= highest[covered, None] - COVER_GAP, layers[covered], np.nan)
             ceiling = np.where(covered & np.isfinite(highest), highest - COVER_GAP, np.inf)
+            # Under a road running along it most of the way: a double-decker's
+            # lower roadway, which the survey can't see. Where it sees nothing
+            # of its own, STACK_DROP under the deck over it.
+            if over.any() and min(self.levels[k]) > int(AT_GRADE):
+                along_line = _directions(self.lines[k], s)
+                theirs_at = shapely.line_locate_point(under_lines[other[over]], points[point[over]])
+                theirs_line = np.array([_directions(under_lines[o], np.array([a]))[0]
+                                        for o, a in zip(other[over], theirs_at)])
+                parallel = np.abs((along_line[point[over]] * theirs_line).sum(axis=1)) >= STACKED_COS
+                stacked = np.zeros(len(s), dtype=bool)
+                stacked[point[over][parallel]] = True
+                if stacked.mean() >= STACKED_SHARE:
+                    self.under[k] = True
+                    blind = stacked & np.isnan(layers).all(axis=1) & np.isfinite(highest)
+                    layers[blind, 0] = highest[blind] - STACK_DROP
             layers = np.where(layers >= floor[:, None], layers, np.nan)
             for i, level in ((0, self.levels[k, 0]), (-1, self.levels[k, 1])):
-                if level <= int(AT_GRADE):
+                # (A bridge at street level in the data climbs from the streets
+                # at its ends, not from where it's cut into pieces on the way.)
+                if level <= int(AT_GRADE) and (max(self.levels[k]) > int(AT_GRADE)
+                                               or self.attrs["nodes"][k, i] < NODE_BASE):
                     reach = street[i] + MAX_GRADE * np.abs(s - s[i]) + PICK_TOLERANCE
                     layers = np.where(layers <= reach[:, None], layers, np.nan)
             out[int(k)] = (s, layers, floor, ceiling)
@@ -524,15 +592,24 @@ class Network:
         an iteratively reweighted least squares fit over FIT_ROUNDS. Then
         stations under their floors or over their ceilings are held there,
         until none are (or LIMIT_ROUNDS)."""
+        self.followed = {}
         if not decks:
             return {}
         top = self.levels.max(axis=1)
-        members = np.flatnonzero((top > int(AT_GRADE)) & ~self.stacked & ~self.over)
+        # Raised roads, and the bridges at street level in the data
+        # (drawbridges, causeways), which rise over the water between the
+        # streets at their ends.
+        level_bridge = (top <= int(AT_GRADE)) & (self.data["rw"] == BRIDGE) & ~self.added
+        level_bridge[level_bridge] = shapely.length(shapely.intersection(self.lines[level_bridge], self.wet)) >= 1.0
+        members = np.flatnonzero(((top > int(AT_GRADE)) | level_bridge) & ~self.stacked & ~self.over)
         survey = self._surveyed(decks, surveyed, streets, members)
         nodes = self.attrs["nodes"]
         inside = np.zeros(self.count, dtype=bool)
         inside[members] = True
-        held = set(nodes[~inside].reshape(-1).tolist()) | set(nodes[inside][self.levels[inside] <= int(AT_GRADE)].tolist())
+        raised_in = inside & ~level_bridge
+        held = (set(nodes[~inside].reshape(-1).tolist())
+                | set(nodes[raised_in][self.levels[raised_in] <= int(AT_GRADE)].tolist())
+                | {n for n in nodes[inside & level_bridge].reshape(-1).tolist() if n < NODE_BASE})
         node_var = {}
         count = 0
         index = {}
@@ -558,7 +635,15 @@ class Network:
                 idx[1:-1] = new_vars(len(s) - 2)
             t = s / max(self.lines[k].length, 1e-6)
             prior_w.append(idx)
-            prior_v.append(self.ends[k, 0] + (self.ends[k, 1] - self.ends[k, 0]) * (0.5 * t + 0.5 * t * t * (3.0 - 2.0 * t)))
+            prior = self.ends[k, 0] + (self.ends[k, 1] - self.ends[k, 0]) * (0.5 * t + 0.5 * t * t * (3.0 - 2.0 * t))
+            if self.published:
+                # On a big bridge over the water, its published deck height
+                # (a lower roadway STACK_DROP under it).
+                en = shapely.get_coordinates(shapely.line_interpolate_point(self.lines[k], s))
+                for area, height, _ in self.published:
+                    on = shapely.contains_xy(area, en[:, 0], en[:, 1])
+                    prior[on] = height - (STACK_DROP if self.under[k] else 0.0)
+            prior_v.append(prior)
             ds = np.maximum(np.diff(s), 0.5)
             edges.append(np.column_stack([idx[:-1], idx[1:], SMOOTH / ds]))
             index[k] = idx
@@ -610,9 +695,14 @@ class Network:
                 limit_idx = np.concatenate([limit_idx, low, high])
                 limit_val = np.concatenate([limit_val, floor[low], ceiling[high]])
         out = {}
-        for k in members:
+        # Which stations follow the survey (bridges.py's decks take their
+        # heights over the water only where they do).
+        followed = np.split(obs_weight > 0, np.cumsum([len(index[k]) for k in members])[:-1])
+        self.followed = {}
+        for k, seen in zip(members, followed):
             h = x[index[k]]
             out[int(k)] = (survey[k][0], h)
+            self.followed[int(k)] = seen
             self.ends[k] = (h[0], h[-1])
         self.surveyed_share = float((obs_weight > 0).mean()) if len(obs_weight) else 0.0
         return out
@@ -687,7 +777,7 @@ class Network:
                 h = self.structure.level(int(l0), en) * (1.0 - t) + self.structure.level(int(l1), en) * t
             elif self.over[k]:
                 h = ends[0] + (ends[1] - ends[0]) * t  # straight across, over the structure
-            elif max(l0, l1) <= int(AT_GRADE) and np.allclose(ends, street[[0, -1]]):
+            elif max(l0, l1) <= int(AT_GRADE) and k not in self.fitted and np.allclose(ends, street[[0, -1]]):
                 h = street
             else:
                 # Half straight, half eased: ramps climb steadily but round
@@ -734,6 +824,73 @@ class Network:
         weight = 1.0 / (shapely.distance(self.lines[segments][j], points[point]) + 1.0) ** 2
         total = np.bincount(point, weights=weight, minlength=len(en))
         return np.bincount(point, weights=weight * heights, minlength=len(en)) / total
+
+    def on_bridge(self, poly):
+        """The raised roads (and bridges at street level in the data, as
+        fitted) running on a bridge outline (at least MIN_INSIDE of them, or
+        half), for bridges.py's decks to follow: a function of
+        (N, 2) points giving their heights (field()) and how much those count
+        over the water (0..1: near the roads, where the survey saw them), or
+        None if none run on it. Not paths and walkways, nor roads under another
+        one on the bridge (a double-decker's lower roadways: the deck is the
+        top one)."""
+        found = self.tree.query(poly, predicate="intersects")
+        d = self.data
+        fitted = np.isin(found, list(self.fitted))
+        found = found[(self.raised[found] | fitted) & ~self.stacked[found] & (d["rw"][found] != PATH)
+                      & ~self.walkway[found]]
+        if not len(found):
+            return None
+        inside = shapely.length(shapely.intersection(self.lines[found], poly))
+        found = found[inside >= np.minimum(MIN_INSIDE, 0.5 * shapely.length(self.lines[found]))]
+        if not len(found):
+            return None
+        tree = shapely.STRtree(self.lines[found])
+        keep = []
+        for k in found:
+            s, h = self.stations(int(k))
+            en = shapely.get_coordinates(shapely.line_interpolate_point(self.lines[k], s))
+            points = shapely.points(en)
+            point, other = tree.query(points, predicate="dwithin", distance=MAX_WIDTH)
+            other_k = found[other]
+            near = (other_k != k) & (shapely.distance(self.lines[other_k], points[point]) <= self.width[other_k] / 2.0)
+            covered = np.zeros(len(s), dtype=bool)
+            for i, j in zip(point[near], other_k[near]):
+                if not covered[i] and self.along(int(j), en[i:i + 1])[0] >= h[i] + COVER_GAP:
+                    covered[i] = True
+            if covered.mean() < 0.5:
+                keep.append(int(k))
+        if not keep:
+            return None
+        keep = np.array(keep)
+        lines = self.lines[keep]
+        tree = shapely.STRtree(lines)
+
+        def heights(en):
+            en = np.asarray(en, np.float64).reshape(-1, 2)
+            if len(en) == 0:
+                return np.zeros(0), np.zeros(0)
+            points = shapely.points(en)
+            nearest = tree.query_nearest(points, return_distance=False, all_matches=False)[1]
+            gap = shapely.distance(lines[nearest], points) - self.width[keep][nearest] / 2.0
+            seen = np.zeros(len(en))
+            for one in np.unique(nearest):
+                mask = nearest == one
+                k = int(keep[one])
+                if k not in self.followed:
+                    continue
+                s = self.fitted[k][0]
+                followed = s[self.followed[k]]
+                if not len(followed):
+                    continue
+                # (Between stations the survey saw, the fit holds over a gap
+                # of a few misses.)
+                at = shapely.line_locate_point(lines[one], points[mask])
+                miss = np.abs(at[:, None] - followed[None, :]).min(axis=1)
+                seen[mask] = 1.0 - np.clip((miss - SEEN_GAP[0]) / (SEEN_GAP[1] - SEEN_GAP[0]), 0.0, 1.0)
+            near = 1.0 - np.clip((gap - ROAD_REACH[0]) / (ROAD_REACH[1] - ROAD_REACH[0]), 0.0, 1.0)
+            return self.field(en, keep), seen * near
+        return heights
 
     def approach(self, en: np.ndarray) -> np.ndarray:
         """Where a bridge's approach (bridges.py) meets the land: the street,
@@ -1031,7 +1188,7 @@ def _add_deck(poly, deck_y, network: Network, builders: dict, top_kind: int):
         if detailed:
             builders[level].add(top - np.array([0.0, DECK_THICKNESS, 0.0]), uv, (STRUCTURE_CONCRETE, 0.0),
                                 (0.0, -1.0, 0.0))
-        for ring in (dense.exterior, *dense.interiors):
+        for ring in (r for part in polygons_of(dense) for r in (part.exterior, *part.interiors)):
             coords = np.asarray(ring.coords)[:, :2]
             ring_y = deck_y(coords)
             ground = network.street(coords)
@@ -1404,6 +1561,14 @@ class DeckSurface:
         w2 = (d00 * d21 - d01 * d20) / denom
         return self.tris[tri, 0, 1] * (1 - w1 - w2) + self.tris[tri, 1, 1] * w1 + self.tris[tri, 2, 1] * w2
 
+    def candidates(self, en: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Every deck top under (N, 2) points: (point index, height) pairs."""
+        en = np.asarray(en, np.float64).reshape(-1, 2)
+        if self.tree is None or len(en) == 0:
+            return np.zeros(0, dtype=np.int64), np.zeros(0)
+        point, tri = self.tree.query(shapely.points(en), predicate="intersects")
+        return point, self.interpolate(en[point], tri)
+
     def height(self, en: np.ndarray, expected: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """(heights, found) at (N, 2) points: the deck top nearest `expected`
         (N,) where a deck is there."""
@@ -1485,14 +1650,63 @@ def road_height(network: Network, surface: DeckSurface, k: int, en: np.ndarray, 
     there: the deck under them nearest the road's own height, else the road's
     own height (Network.along). Street-level roads on land (except bridges,
     which their decks carry) only take decks within GRADE_DECK of the street,
-    not one passing overhead."""
+    not one passing overhead. Raised roads on land (and double-deckers' lower
+    roadways anywhere) keep to their own height where the nearest deck is
+    further off than SNAP_GAP (another road's deck over or under them, as on
+    a bridge carrying ramps below its roadway), easing onto the deck closer
+    in, so their lanes meet the roads they lead to; `found` is then False
+    (no paint)."""
     expected = network.along(k, en)
     y, found = surface.height(en, expected)
-    if not network.raised[k] and network.data["rw"][k] != BRIDGE and found.any():
-        on_land = shapely.contains_xy(land, en[:, 0], en[:, 1])
+    if not found.any():
+        return y, found
+    on_land = shapely.contains_xy(land, en[:, 0], en[:, 1])
+    if not network.raised[k] and network.data["rw"][k] != BRIDGE:
         overhead = found & on_land & (np.abs(y - expected) > GRADE_DECK)
         y[overhead], found[overhead] = expected[overhead], False
+    elif network.raised[k]:
+        off = np.abs(y - expected)
+        take = np.clip((SNAP_GAP[1] - off) / (SNAP_GAP[1] - SNAP_GAP[0]), 0.0, 1.0)
+        take = np.where(found & (on_land | network.under[k]), take, 1.0)
+        y = expected + (y - expected) * take
+        found &= take > 0.0
     return y, found
+
+
+def _tracked(network: Network, surface: DeckSurface, k: int, en: np.ndarray, land) -> np.ndarray:
+    """Heights along a lane (points (N, 2) in driving order) of segment k, a
+    bridge at street level in the data: from the road's own height at an end
+    (Network.along, where it meets the streets), on along the deck it's on
+    (the deck under each point nearest the height before, if within
+    TRACK_STEP and TRACK_GRADE of it), else at its own height on land (not
+    onto a deck passing overhead); over the water, the deck nearest, if it's
+    within UNDER_CLEAR. Tracked from both ends, the steadier way wins."""
+    own = network.along(k, en)
+    point, decks = surface.candidates(en)
+    wet = ~shapely.contains_xy(land, en[:, 0], en[:, 1])
+    under = [decks[point == i] for i in range(len(en))]
+
+    def walk(order):
+        y = np.empty(len(en))
+        before, last = own[order[0]], order[0]
+        for i in order:
+            reach = TRACK_STEP + TRACK_GRADE * float(np.hypot(*(en[i] - en[last])))
+            last = i
+            options = under[i]
+            close = options[np.abs(options - before) <= reach]
+            if len(close):
+                y[i] = close[np.argmin(np.abs(close - before))]
+            else:
+                # Over the water, the deck nearest, unless it's well over or
+                # under (another road's: then its own height, as if on a low
+                # deck the data folds into that road's outline).
+                nearest = options[np.argmin(np.abs(options - before))] if len(options) else np.inf
+                y[i] = nearest if wet[i] and abs(nearest - before) <= UNDER_CLEAR else own[i]
+            before = y[i]
+        return y
+    forward = walk(np.arange(len(en)))
+    backward = walk(np.arange(len(en))[::-1])
+    return forward if np.abs(np.diff(forward)).sum() <= np.abs(np.diff(backward)).sum() else backward
 
 
 def lanes(network: Network, buckets: dict, bounds, land) -> list:
@@ -1502,21 +1716,26 @@ def lanes(network: Network, buckets: dict, bounds, land) -> list:
     them (bridges left out of the world) are dropped, and so are footpaths
     the data codes as bridges (no lanes, no width) along a hand-made bridge's
     walkways (bridge_landmarks: the Brooklyn Bridge's promenade, the
-    Manhattan Bridge's walkway and bikeway, the High Bridge)."""
+    Manhattan Bridge's walkway and bikeway, the High Bridge), and walkways
+    and bikeways (non-vehicular in the data). Bridges at street level in the
+    data follow the deck they're on (_tracked)."""
     surface = surface_for(buckets, bounds)
     walkways = surface_for(buckets, bounds, (STRUCTURE_WALKWAY,))
     out = []
     attrs = network.attrs
     for k in network.tree.query(bounds, predicate="intersects"):
         k = int(k)
-        if network.data["rw"][k] == PATH:
+        if network.data["rw"][k] == PATH or network.walkway[k]:
             continue
         footpath = network.data["lanes"][k] == 0 and network.data["width"][k] == 0
 
         def height(en, k=k):
             return road_height(network, surface, k, en, land)[0]
+        tracked = not network.raised[k] and network.data["rw"][k] == BRIDGE
         for lane, info in traffic.lanes(attrs, np.array([k]), bounds, height):
-            _, found = road_height(network, surface, k, lane[:, :2], land)
+            if tracked:
+                lane[:, 2] = _tracked(network, surface, k, lane[:, :2], land)
+            _, found = surface.height(lane[:, :2], lane[:, 2])  # a deck at all (not a bridge left out)
             wet = ~shapely.contains_xy(land, lane[:, 0], lane[:, 1])
             if (wet & ~found).any():
                 continue
@@ -1538,7 +1757,7 @@ def add_paint(builder: MeshBuilder, network: Network, buckets: dict, bounds, cel
     halves = [[0, 1, 2], [0, 2, 3]]
     for k in network.tree.query(shapely.buffer(bounds, 30.0, join_style="mitre"), predicate="intersects"):
         k = int(k)
-        if network.data["rw"][k] == PATH:
+        if network.data["rw"][k] == PATH or network.walkway[k]:
             continue
 
         def height(en, k=k):
