@@ -2368,12 +2368,13 @@ const vec3 FLATIRON_STONE = vec3(0.73, 0.71, 0.66);
 const vec3 WOOLWORTH_CREAM = vec3(0.94, 0.90, 0.80);
 const vec3 GC_LIMESTONE = vec3(0.88, 0.84, 0.75);
 const vec3 ROCK_LIMESTONE = vec3(0.87, 0.83, 0.74);
-const vec3 STONY_CREEK = vec3(0.82, 0.74, 0.68);   // the pedestal's pink granite
+const vec3 STONY_CREEK = vec3(0.76, 0.68, 0.56);   // the pedestal's granite, weathered beige-gray
 const vec3 FORT_GRANITE = vec3(0.64, 0.63, 0.60);
 const vec3 PAVING_STONE = vec3(0.70, 0.69, 0.66);
-// Copper gone green, the statue's lighter verdigris, the torch's gold leaf.
+// Copper gone green, the statue's paler, bluer patina (photos: green 1.4 times
+// red, blue nearly as much as green), the torch's gold leaf.
 const vec3 VERDIGRIS = vec3(0.40, 0.68, 0.58);
-const vec3 LIBERTY_GREEN = vec3(0.47, 0.74, 0.64);
+const vec3 LIBERTY_GREEN = vec3(0.55, 0.72, 0.69);
 const vec3 GOLD_LEAF = vec3(1.00, 0.78, 0.30);
 // Grand Central's Tiffany clock: opalescent face, colored ring.
 const vec3 CLOCK_FACE = vec3(0.98, 0.94, 0.80);
@@ -2684,11 +2685,18 @@ Surface landmark_wall(int material, int variant, vec2 p, vec2 fp, float width, v
 		color = srgb(VERDIGRIS) * (0.9 + 0.18 * value_noise(vec2(p.x * 0.8, p.y * 0.15))) * (1.0 - 0.15 * seams);
 		s.glass = 0.1;
 	} else if (material == LM_LIBERTY) {
-		color = srgb(LIBERTY_GREEN) * (0.9 + 0.14 * value_noise(p * vec2(0.7, 0.12)) + 0.05 * value_noise(p * 3.0));
+		// Streaked darker where rain runs down the folds.
+		color = srgb(LIBERTY_GREEN) * (0.8 + 0.24 * value_noise(p * vec2(0.9, 0.07)) + 0.05 * value_noise(p * 3.0));
 		if (variant == 1) {
 			// The tablet: JULY IV MDCCLXXVI.
 			float text = text_line(vec2(p.x - 0.4, p.y - 3.25), 0.62, 0.15, 17.0, fp) * band(p.x, 0.4, 3.75, fp.x);
 			color = mix(color, color * 0.55, text);
+		} else if (variant == 2) {
+			// The crown's 25 windows across the diadem's front (uv: m around from
+			// her right, m up the band), lit at night.
+			float windows = stripes(p.x / 0.19, 0.6, fp.x / 0.19) * band(p.x, 1.0, 5.7, fp.x) * band(p.y, 0.25, 0.9, fp.y);
+			color = mix(color, srgb(LM_GLASS) * 0.5, windows);
+			s.emission = srgb(LAMP_SOFT) * (windows * window_glow * city_lights);
 		}
 		s.glass = 0.08;
 	} else if (material == LM_GOLD) {

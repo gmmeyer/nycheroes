@@ -1453,9 +1453,10 @@ and 29):**
   triangles glow, and the statue is floodlit with a blazing torch.
 - Cost: 9,160 / 5,141 / 3,022 triangles (near / mid / far); tiles 70 kB
   smaller in total.
-- Next: Liberty Island's lawns (federal land, missing from the parks data),
-  more detail (the statue's face and drape, gargoyles, crown fins); more
-  landmarks in the second batch (below).
+- Next: more detail (gargoyles, crown fins); more landmarks in the second
+  batch (below). Liberty Island's lawns came with the ground details (the
+  Publicly Owned Waterfront's national monument), the statue's face and
+  drape with "The Statue of Liberty, sculpted" (below).
 
 **Landmark bridges (done, 2026-10-16):**
 - `tools/citygen/bridge_landmarks.py` builds four bridges by hand at their
@@ -1599,7 +1600,8 @@ and 29):**
   copper muted now, its openings showing the flights across the bowl); the
   Met's column pairs stood flat against the wall (shadow behind each pair);
   the rest read as intended. The Statue of Liberty's mint green and its
-  low-poly statue are painted by building.gdshader: left for later.
+  low-poly statue were left for later ("The Statue of Liberty, sculpted",
+  below).
 - Compile time: landmark.gdshader's tables indexed per pixel went from
   seven to two (the made-up letters and the three words in one table,
   looked up once, so glyph() is compiled once; the ad colors and the
@@ -1612,6 +1614,35 @@ and 29):**
   (near / mid / far), the Guggenheim 1,820 / 1,048 / 109 to 3,386 / 1,686 /
   127; St. Patrick's near tile +180 kB, the Guggenheim's +23 kB; no new draw
   calls. Still at the 145 FPS cap in both views.
+
+**The Statue of Liberty, sculpted (done, 2026-10-22):**
+- Was a smooth mint cone with a stick arm, a round head and seven flat rays
+  laid level around it, on a pink pedestal. Now (`landmarks._statue`), from
+  the NPS's statistics and photos (front, back, both sides): the stola in
+  deep folds to her feet (four vertices a fold, so they never alias, each a
+  little deeper or shallower than the next); over it the mantle, its hem
+  standing out from the stola and running down from her right hip to the
+  back of her left knee, its folds twisting up toward her left shoulder; the
+  raised arm's sleeve gathered to the elbow and hanging down her side, the
+  bare forearm, her fist round the handle; the torch's cup, balcony railing
+  and a flame in five twisting tongues; a head with nose, brow, eyes and
+  chin, hair over the ears, the knot at her nape and locks to her
+  shoulders; the diadem with its 25 windows (lit at night); the rays 2.75 m
+  (were 3.6), fanned up from her brow 60 degrees in the middle and level at
+  the ends, so from behind only the outer two show, as in photos; the tablet
+  a keystone.
+- Patina (`LIBERTY_GREEN`) paler and bluer, streaked down the folds: lit
+  robe red/green 0.65 to 0.73 and blue/green 0.83 to 0.95 (photos 0.73-0.80
+  and 0.94-0.97). The pedestal's granite was pink (blue/green 0.90, photos
+  0.80), now beige-gray (0.76).
+- Checked without the city's data: `build/`-only scripts rebuilt the
+  committed model into the live site's three tiles that hold it (it matched
+  them triangle for triangle), swapped in the new one, and the desktop game
+  showed it from four sides, by day and night.
+- Cost: the landmark (fort, pedestal and statue) 1,268 / 835 / 589
+  triangles to 5,054 / 1,921 / 791 (near / mid / far); its tiles +67 / +20
+  / +4 kB; no new draw calls. building.gdshader gains the diadem's windows
+  (six lines in the statue's branch).
 
 **Waterfront landmarks (done; reference round 3's 28):**
 - Piers: the city's pier outlines (Planimetric hydrography structures,
