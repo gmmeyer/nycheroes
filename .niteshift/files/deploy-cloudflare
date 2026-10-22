@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# Publishes the web build to https://nycheroes.party, the Linux counterpart of
+# tools/deploy_cloudflare.ps1 (tools/cloudflare): the game and city tiles as
+# Worker static assets, index.wasm in the R2 bucket, co-op signaling in the
+# Durable Object.
+# Usage: .niteshift/files/deploy-cloudflare [--build] [--tiles DIR] [--dry-run]
+#   --build    runs .niteshift/files/build-web first
+#   --tiles    the tiles to publish (a folder holding nyc/manifest.json).
+#              Default: data/tiles when tools/citygen built tiles there, else
+#              a copy of the live site's tiles (build/live-tiles, refreshed
+#              when the live manifest's build changes).
+#   --dry-run  stages and checks everything, uploads nothing
+# A deploy replaces the Worker's whole set of static assets, so it stops
+# unless every file the manifest lists is staged: a deploy without the tiles
+# would take them off the site. The Windows and Mac zips (-Desktop in the
+# .ps1) aren't built on Linux, so they're left as they are in R2.
+# Needs the repository variables CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
+# (run through `ns secrets exec`, below, when they aren't in the environment).
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+ROOT=$PWD
+
+SITE=https://nycheroes.party
+BUCKET=nyc-hero-files
+CONFIG=tools/cloudflare/wrangler.jsonc
+WEB=build/web
+STAGE=build/cloudflare
+WRANGLER=/opt/wrangler/node_modules/.bin/wrangler
+
+args=("$@")
+build=0 dry=0 tiles=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --build) build=1 ;;
+    --dry-run) dry=1 ;;
+    --tiles) tiles="$2"; shift ;;
+    *) echo "unknown option $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] && [ "$dry" = 0 ]; then
+  exec ns secrets exec --env CLOUDFLARE_API_TOKEN=CLOUDFLARE_API_TOKEN \
+    --env CLOUDFLARE_ACCOUNT_ID=CLOUDFLARE_ACCOUNT_ID -- "$0" "${args[@]}"
+fi
+
+[ "$build" = 1 ] && .niteshift/files/build-web
+[ -f "$WEB/index.wasm" ] || { echo "No web build in $WEB. Run .niteshift/files/build-web first." >&2; exit 1; }
+# Also covers builds made some other way; the fix is idempotent.
+node tools/web/fix_audio_loops.mjs "$WEB/index.js"
+
+# The files a tile set must have: its manifest, the canopy map and every tile.
+tile_files() {
+  python3 -c '
+import json, sys
+m = json.load(open(sys.argv[1]))
+print("nyc/manifest.json")
+print("nyc/" + m["canopy"]["file"])
+for level in m["levels"]:
+    for t in level["tiles"]:
+        print("nyc/%s/%d_%d.nyct" % (level["name"], t["i"], t["j"]))
+' "$1"
+}
+
+if [ -z "$tiles" ]; then
+  if [ -f data/tiles/nyc/manifest.json ]; then
+    tiles=data/tiles
+  else
+    tiles=build/live-tiles
+    live_build=$(curl -fsSL --retry 3 "$SITE/tiles/nyc/manifest.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["build"])')
+    have_build=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["build"])' "$tiles/nyc/manifest.json" 2>/dev/null || true)
+    if [ "$live_build" != "$have_build" ] || [ ! -f "$tiles/.complete" ]; then
+      echo "Copying the live site's tiles (build $live_build) into $tiles"
+      rm -rf "$tiles.tmp"
+      mkdir -p "$tiles.tmp/nyc"
+      curl -fsSL --retry 3 -o "$tiles.tmp/nyc/manifest.json" "$SITE/tiles/nyc/manifest.json"
+      tile_files "$tiles.tmp/nyc/manifest.json" | grep -v '^nyc/manifest.json$' \
+        | xargs -P 32 -I{} curl -fsSL --retry 5 --retry-delay 2 --create-dirs -o "$tiles.tmp/{}" "$SITE/tiles/{}"
+      touch "$tiles.tmp/.complete"
+      rm -rf "$tiles"
+      mv "$tiles.tmp" "$tiles"
+    fi
+  fi
+fi
+[ -f "$tiles/nyc/manifest.json" ] || { echo "No tiles in $tiles (no nyc/manifest.json)" >&2; exit 1; }
+
+# Stage the game (without the engine) and the tiles (without aerial photos).
+# Rebuilt each time; the tiles are hard links (same disk), so it's instant.
+rm -rf "$STAGE"
+mkdir -p "$STAGE/tiles"
+for f in "$WEB"/*; do
+  case "$(basename "$f")" in tiles|index.wasm) ;; *) cp -a "$f" "$STAGE/" ;; esac
+done
+cp -al "$tiles/." "$STAGE/tiles/" 2>/dev/null || cp -a "$tiles/." "$STAGE/tiles/"
+rm -rf "$STAGE/tiles/nyc/aerial" "$STAGE/tiles/.complete"
+missing=$(tile_files "$STAGE/tiles/nyc/manifest.json" | while read -r f; do [ -s "$STAGE/tiles/$f" ] || echo "$f"; done)
+if [ -n "$missing" ]; then
+  echo "Not deploying: $(wc -l <<<"$missing") files the manifest lists aren't staged, e.g.:" >&2
+  head -5 <<<"$missing" >&2
+  exit 1
+fi
+echo "Staged $(find "$STAGE" -type f | wc -l) files ($(du -sh "$STAGE" | cut -f1)) in $STAGE, tiles build" \
+  "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["build"])' "$STAGE/tiles/nyc/manifest.json")"
+
+# The engine goes to R2 only when it changed: the Worker serves it with R2's
+# etag, the file's MD5.
+local_md5=$(md5sum "$WEB/index.wasm" | cut -d' ' -f1)
+live_md5=$(curl -fsSI "$SITE/index.wasm" | tr -d '\r"' | awk 'tolower($1)=="etag:" {print $2}')
+wasm=0
+[ "$local_md5" != "$live_md5" ] && wasm=1
+echo "index.wasm: $([ "$wasm" = 1 ] && echo "changed ($live_md5 -> $local_md5), uploading" || echo "unchanged")"
+
+if [ "$dry" = 1 ]; then
+  echo "Dry run: nothing uploaded."
+  exit 0
+fi
+
+[ "$wasm" = 1 ] && "$WRANGLER" r2 object put "$BUCKET/index.wasm" --file "$WEB/index.wasm" \
+  --content-type application/wasm --remote --config "$CONFIG"
+# Wrangler uploads only the assets Cloudflare doesn't have yet; a long first
+# upload can fail partway, and a retry carries on from there.
+for try in 1 2 3; do
+  "$WRANGLER" deploy --config "$CONFIG" && break
+  [ "$try" = 3 ] && { echo "wrangler deploy failed" >&2; exit 1; }
+done
+echo "Deployed to $SITE"

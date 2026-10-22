@@ -5,6 +5,7 @@
 #     "Web" preset in export_presets.cfg uses).
 #   - the signaling server's npm packages (tools/signaling).
 #   - tools/citygen's Python (3.14) in .venv (numpy etc., also used by tools/audio).
+#   - Wrangler 4 in /opt/wrangler, for .niteshift/files/deploy-cloudflare.
 #   - a first web export into build/web (.niteshift/files/build-web).
 # City tiles aren't built here: tools/citygen needs many GB of downloads and
 # hours. The preview server (.niteshift/files/serve-web.mjs) proxies /tiles/
@@ -45,6 +46,11 @@ fi
 # Signaling server (co-op): one dependency, ws.
 if [ ! -d tools/signaling/node_modules/ws ] || [ tools/signaling/package-lock.json -nt tools/signaling/node_modules/.package-lock.json ]; then
   npm ci --prefix tools/signaling --no-fund --no-audit
+fi
+
+# Wrangler, for .niteshift/files/deploy-cloudflare (and `wrangler dev`).
+if [ ! -x /opt/wrangler/node_modules/.bin/wrangler ]; then
+  npm install --prefix /opt/wrangler --no-fund --no-audit --loglevel=error wrangler@4
 fi
 
 # tools/citygen and tools/audio's Python (unit tests, tile building), on
