@@ -4,7 +4,7 @@
 #     templates (the full template pack is 1.3 GB; web_nothreads is what the
 #     "Web" preset in export_presets.cfg uses).
 #   - the signaling server's npm packages (tools/signaling).
-#   - tools/citygen's Python in .venv (numpy etc., also used by tools/audio).
+#   - tools/citygen's Python (3.14) in .venv (numpy etc., also used by tools/audio).
 #   - a first web export into build/web (.niteshift/files/build-web).
 # City tiles aren't built here: tools/citygen needs many GB of downloads and
 # hours. The preview server (.niteshift/files/serve-web.mjs) proxies /tiles/
@@ -47,12 +47,15 @@ if [ ! -d tools/signaling/node_modules/ws ] || [ tools/signaling/package-lock.js
   npm ci --prefix tools/signaling --no-fund --no-audit
 fi
 
-# tools/citygen and tools/audio's Python (unit tests, tile building).
-if [ ! -x .venv/bin/python ]; then
-  python3 -m venv .venv
+# tools/citygen and tools/audio's Python (unit tests, tile building), on
+# Python 3.14: build_tiles.py uses its compression.zstd; the sandbox has 3.12.
+if [ ! -x .venv/bin/python ] || ! .venv/bin/python -c 'import sys; sys.exit(sys.version_info < (3, 14))'; then
+  rm -rf .venv
+  uv venv -q --python 3.14 .venv
+  rm -f .venv/.requirements-installed
 fi
 if [ ! -f .venv/.requirements-installed ] || [ tools/citygen/requirements.txt -nt .venv/.requirements-installed ]; then
-  .venv/bin/pip install -q --disable-pip-version-check -r tools/citygen/requirements.txt
+  uv pip install -q --python .venv/bin/python -r tools/citygen/requirements.txt
   touch .venv/.requirements-installed
 fi
 

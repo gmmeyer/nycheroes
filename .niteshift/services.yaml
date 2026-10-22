@@ -3,6 +3,11 @@ services:
   # .niteshift/files/build-web after changing the game, then reload). City
   # tiles come from the public site and /signal goes to the signaling server
   # below; see .niteshift/files/serve-web.mjs.
+  # Sandbox browsers have no GPU: launch agent-browser with
+  # AGENT_BROWSER_ARGS="--use-angle=swiftshader,--enable-unsafe-swiftshader,--ignore-gpu-blocklist"
+  # (else Godot reports WebGL2 missing), and open e.g.
+  # /?quality=low&name=Agent&peds=0&traffic=0&gangs=0 so the city builds in a
+  # few minutes on software rendering (?name= skips the name prompt).
   - name: web
     command: node .niteshift/files/serve-web.mjs
     port: 8060
