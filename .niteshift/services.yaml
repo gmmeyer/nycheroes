@@ -1,0 +1,17 @@
+services:
+  # The game's web build (build/web, exported by .niteshift/setup; rerun
+  # .niteshift/files/build-web after changing the game, then reload). City
+  # tiles come from the public site and /signal goes to the signaling server
+  # below; see .niteshift/files/serve-web.mjs.
+  - name: web
+    command: node .niteshift/files/serve-web.mjs
+    port: 8060
+    environment:
+      - name: SIGNALING_PORT
+        value: "8070"
+  # Co-op signaling (tools/signaling/server.mjs). The game reaches it through
+  # the web service's /signal, so it needs no preview of its own.
+  - name: signaling
+    # PORT is set inline: a service without `port` can't declare it.
+    command: PORT=8070 exec node server.mjs
+    cwd: tools/signaling
