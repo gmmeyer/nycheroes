@@ -9,7 +9,8 @@
 #              Default: data/tiles when tools/citygen built tiles there, else
 #              a copy of the live site's tiles (build/live-tiles, refreshed
 #              when the live manifest's build changes).
-#   --dry-run  stages and checks everything, uploads nothing
+#   --dry-run  stages and checks everything (and wrangler deploy --dry-run),
+#              uploads nothing
 # A deploy replaces the Worker's whole set of static assets, so it stops
 # unless every file the manifest lists is staged: a deploy without the tiles
 # would take them off the site. The Windows and Mac zips (-Desktop in the
@@ -111,6 +112,8 @@ wasm=0
 echo "index.wasm: $([ "$wasm" = 1 ] && echo "changed ($live_md5 -> $local_md5), uploading" || echo "unchanged")"
 
 if [ "$dry" = 1 ]; then
+  # Bundles the Worker and reads the staged assets, without uploading.
+  "$WRANGLER" deploy --dry-run --config "$CONFIG"
   echo "Dry run: nothing uploaded."
   exit 0
 fi
