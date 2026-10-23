@@ -56,7 +56,9 @@ MAJOR_BRIDGES = {
     # Queens bank, 27 m over Newtown Creek: main span 190 m across the creek,
     # back span 115 m into Queens (NYSDOT; Roads & Bridges).
     "Kosciuszko Bridge": ("cable_stayed", 30.0, 90.0, 190.0),
-    "HENRY HUDSON BRIDGE": ("girder", 43.0, 0.0, 0.0),
+    # A double-decker over its arch (43 m clear over Spuyten Duyvil): the upper
+    # roadway 55 m up, as the lidar survey has it.
+    "HENRY HUDSON BRIDGE": ("girder", 55.0, 0.0, 0.0),
     "Washington Bridge": ("girder", 46.0, 0.0, 0.0),
     "ALEXANDER HAMILTON BRIDGE": ("girder", 31.0, 0.0, 0.0),
     "Gil Hodges Memorial Bridge": ("girder", 17.0, 0.0, 0.0),
@@ -92,6 +94,10 @@ TOWERS = {
                                   (40.7564098, -73.9534525), (40.7550719, -73.9503566)),
     "Kosciuszko Bridge": ((40.72802, -73.92858),),
 }
+# Bridges built since the lidar survey (May 2017; overpasses.Network takes
+# their roads' heights from MAJOR_BRIDGES instead): the Kosciuszko's second
+# span (2019) stands where the survey saw the old bridge, 38 m over the creek.
+NEWER_THAN_SURVEY = {"Kosciuszko Bridge"}
 # The Kosciuszko's back span (m), on the far side of its tower from the main span.
 BACK_SPAN = {"Kosciuszko Bridge": 115.0}
 
@@ -162,8 +168,9 @@ def build(land, terrain, level_sizes: dict, approach=None, roads=None) -> dict:
 def over_water(land, terrain) -> tuple:
     """The bridges' parts over the water, for the raised roads on them
     (overpasses.Network): (the major bridges' (MAJOR_BRIDGES) published deck
-    heights there, [(part, height, the whole outline)], where the survey
-    doesn't see their roads; and every bridge's parts, as one shape)."""
+    heights there, [(part, height, the whole outline, built since the
+    survey)], where the survey doesn't see their roads; and every bridge's
+    parts, as one shape)."""
     published, wet = [], []
     for feat in load_features("transport_structures"):
         name = feat["properties"].get("name")
@@ -182,7 +189,7 @@ def over_water(land, terrain) -> tuple:
             level = max(0.0, float(terrain.raw(shapely.get_coordinates(shapely.point_on_surface(main_span)))[0]))
             shapely.prepare(water)
             shapely.prepare(poly)
-            published.append((water, level + MAJOR_BRIDGES[named][1], poly))
+            published.append((water, level + MAJOR_BRIDGES[named][1], poly, named in NEWER_THAN_SURVEY))
     wet = shapely.union_all(wet) if wet else shapely.Polygon()
     shapely.prepare(wet)
     return published, wet

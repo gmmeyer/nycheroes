@@ -1960,12 +1960,45 @@ Comes after step 6 because it needs step 6's real ground heights.
     decks but get no driving lanes or paint (as on the streets), and the
     bridges' decks don't follow them: cars drove the RFK's walkway up its
     cables.
+  - The Henry Hudson Bridge's deck height is its upper roadway's, 55 m (43
+    m was its clearance), and on bridges a roadway with one a level up
+    running along it edge to edge is a double-decker's lower roadway too
+    (the Henry Hudson's are drawn side by side): 7 m under, from the running
+    median of what the survey sees over it.
+  - The Kosciuszko's second span (2019) stands where the 2017 survey saw the
+    old bridge, 38 m over the creek: on bridges built since the survey
+    (`bridges.NEWER_THAN_SURVEY`) the roads take the published height, and
+    within 800 m nothing more than 4 m over it counts.
+  - Street-level roads ease off decks between 2 and 3 m from their own
+    height (a hard cutoff had their lanes flicking on and off the sunken
+    roads' blended road surface).
+  - Nodes off the streets where street-level roads meet, in a dip or on a
+    hump of the elevation model that the roads don't have 20 m in, by 3 m or
+    more, are at those roads' height (the Washington Bridge's ramps met at
+    the Manhattan bluff's blurred edge, 9 m down).
+  - The sunken roads' cuts: streets crossing a cut are measured through
+    their nodes (a street on a bridge that ramps meet comes in short
+    segments, which were left in the cut's floor), and the ground over the
+    tunnels is at least their lid as the survey sees it, up to the street
+    around (bare earth without bridges, the elevation model has a hole where
+    a wide bridge the data has no outline for crosses a cut).
+  - Mounds over street-level highways (`trenches.Mounds`): the Cross Bronx is
+    at street level in the data through long stretches of its cut, and the
+    elevation model takes the wide overpasses over it (Jerome Avenue and the
+    Grand Concourse) for ground, 22 m up. Mounds the road couldn't climb (8%)
+    rising 3 m over it and both feet, with sides steeper than 30%, at most
+    300 m across, with a bridge outline or a raised road crossing them, are
+    cut through like the sunken roads' cuts, the road level from foot to
+    foot; the highways' lanes and paint there are on that road (8 mounds,
+    1.1 km).
   Over the 1,563 near tiles with raised roads, lanes meeting at a node (or a
-  lane's next point) more than 2 m apart went from 3,414 to 1,689; over 10 m
-  from 335 to 33, over 20 m from 133 to none. Left: streets dipping into the
-  sunken roads' cuts where they cross them, the elevation model's 10 m blur
-  at bluffs (the Washington Bridge's Manhattan end), and 26 new small ones
-  (at most 7 m) at street-level bridges over the cuts. Rebuilding: delete
+  lane's next point) more than 2 m apart went from 3,414 to 1,174; over 5 m
+  from 1,303 to 287, over 10 m from 335 to 9, over 20 m from 133 to none
+  (the worst now 12 m). Left: streets meeting the sunken roads where the
+  elevation model blurs the cuts' edges (the FDR at 42nd Street, the Cross
+  Bronx at Amsterdam Avenue and the Major Deegan), a few double-deckers'
+  ends (the Manhattan Bridge's Brooklyn approach), and steep spots in the
+  elevation model on the streets themselves. Rebuilding: delete
   `data/cache/overpasses.pkl` and `deck_heights.pkl` first (the survey now
   also measures the street-level bridges: 500 more point tiles, a few
   minutes).

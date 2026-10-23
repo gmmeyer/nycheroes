@@ -490,6 +490,10 @@ def _init_worker() -> None:
     # (cantilever.py), and cut down along the sunken roads (trenches.py).
     _W["structure"] = _structure(_W["terrain"])
     _W["overpasses"] = _network(_W["terrain"], _W["structure"], prepared_land)
+    mounds = _W["overpasses"].mounds
+    _W["mound_streets"] = mounds.carries(_W["centerline"]["lines"], _W["centerline"]["rw"],
+                                                         _W["centerline"]["width"]) if mounds is not None \
+        else np.zeros(len(_W["centerline"]["lines"]), dtype=bool)
     _W["trenches"] = _W["overpasses"].trenches
     _W["ground"] = {level: _W["structure"].ground(_W["terrain"].lattice(settings["ground_cell"]))
                     for level, settings in LEVELS.items()}
@@ -1255,16 +1259,21 @@ def _add_markings(builder: MeshBuilder, bounds, i: int, j: int) -> None:
     if not len(segments) or _W["streets"].is_empty:
         return
     terrain = _W["ground"]["lod0"]
-
-    def height(en):
-        return terrain.height(en) - CURB_HEIGHT + MARKING_LIFT
     halves = [[0, 1, 2], [0, 2, 3]]
-    for kind, (quads, uv, check) in markings.quads(_W["centerline"], segments, bounds.bounds, _W["streets"]).items():
-        ok = ~check
-        ok[check] = markings.keep(quads[check], _W["streets"])
-        triangles = quads[ok][:, halves].reshape(-1, 3, 2)
-        builder.add_draped_triangles(triangles, LEVELS["lod0"]["ground_cell"], height, (kind, 0.0),
-                                     uv=uv[ok][:, halves].reshape(-1, 3, 2))
+    through = _W["mound_streets"][segments]
+    for group, street in ((segments[~through], lambda en: terrain.height(en) - CURB_HEIGHT),
+                          (segments[through], _W["overpasses"].mounds.street(terrain) if through.any() else None)):
+        if not len(group):
+            continue
+
+        def height(en, street=street):
+            return street(en) + MARKING_LIFT
+        for kind, (quads, uv, check) in markings.quads(_W["centerline"], group, bounds.bounds, _W["streets"]).items():
+            ok = ~check
+            ok[check] = markings.keep(quads[check], _W["streets"])
+            triangles = quads[ok][:, halves].reshape(-1, 3, 2)
+            builder.add_draped_triangles(triangles, LEVELS["lod0"]["ground_cell"], height, (kind, 0.0),
+                                         uv=uv[ok][:, halves].reshape(-1, 3, 2))
 
 
 def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
@@ -1563,7 +1572,11 @@ def _build_traffic(bounds, origin):
     or None."""
     segments = _W["centerline_tree"].query(shapely.buffer(bounds, 1.0, join_style="mitre"))
     terrain = _W["ground"]["lod0"]
-    found = traffic.lanes(_W["centerline"], segments, bounds, lambda en: terrain.height(en) - CURB_HEIGHT)
+    # (The highways through the mounds over them run on the cut's road, trenches.Mounds.)
+    through = _W["mound_streets"][segments]
+    found = traffic.lanes(_W["centerline"], segments[~through], bounds, lambda en: terrain.height(en) - CURB_HEIGHT)
+    if through.any():
+        found += traffic.lanes(_W["centerline"], segments[through], bounds, _W["overpasses"].mounds.street(terrain))
     found += overpasses.lanes(_W["overpasses"], _W["bridges"]["lod0"], bounds, _W["g"]["land"])
     if not found:
         return None
