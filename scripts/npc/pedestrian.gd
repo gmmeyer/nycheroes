@@ -182,9 +182,12 @@ func _tangent() -> Vector3:
 	return (_lane[_segment + 1] - _lane[_segment]).normalized()
 
 
+## Level and a meter long, so the step to the side stays the same on steep
+## bits of lane: the TKTS steps' risers (18 cm up over 10 cm) shrank it by
+## half, and people walking up or down jumped sideways at every step.
 func _across() -> Vector3:
 	var tangent := _tangent()
-	return Vector3(-tangent.z, 0.0, tangent.x)
+	return Vector3(-tangent.z, 0.0, tangent.x).normalized()
 
 
 func _travel_yaw() -> float:
