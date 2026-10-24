@@ -46,6 +46,7 @@ MAX_LAYERS = 4
 # Classes that can be a deck: unclassified, road surface, bridge deck (ASPRS).
 DECK_CLASSES = (1, 11, 17)
 BRIDGE_DECK, GROUND = 17, 2
+BRIDGE_RW = 3  # the centerlines' roadway type for bridges (overpasses.BRIDGE)
 # Deck heights are the bridge deck points' median, or this percentile of the
 # layer's points (cars stand on the deck).
 DECK_PERCENTILE = 30.0
@@ -70,9 +71,11 @@ SUNKEN_GATHER = 45.0
 def prepare(roads: dict, terrain) -> dict:
     """{(start, end) keys (to 0.5 m): (distances along, layers (S, MAX_LAYERS)
     in the elevation model's heights, highest first, NaN where none)} for the
-    raised segments in overpasses.prepare's `roads`."""
+    raised segments in overpasses.prepare's `roads`, and the bridges the data
+    has at street level (drawbridges and causeways: they rise over the water
+    between their ends)."""
     started = time.time()
-    raised = np.flatnonzero(roads["levels"].max(axis=1) > int(AT_GRADE))
+    raised = np.flatnonzero((roads["levels"].max(axis=1) > int(AT_GRADE)) | (roads["rw"] == BRIDGE_RW))
     stations, owners, along = [], [], []
     for k in raised:
         line = roads["lines"][k]
