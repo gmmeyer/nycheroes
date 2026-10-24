@@ -4,8 +4,9 @@ extends Control
 ## a gamepad's Start), and so do the gear button on touch screens and the
 ## HUD's Options button. Four pages:
 ##   Hero      saved costume, hair, headgear and colors with a live preview
-##   Game      graphics quality (Auto, Low, Medium, High), time of day, full
-##             screen, FPS and stats, joining the public game automatically
+##   Game      going to an address, graphics quality (Auto, Low, Medium,
+##             High), time of day, full screen, FPS and stats, joining the
+##             public game automatically
 ##   Sound     Master, Effects and Ambience volumes, and the sound switch (N)
 ##   Controls  look speed (mouse, or fingers on touch screens), up and down
 ##             swapped, and what the keys (or touch buttons) do
@@ -25,6 +26,9 @@ extends Control
 ## is too short to show all of it.
 
 signal toggled(open: bool)
+## The Go to box found a place on the map (world position, y 0); the menu
+## has closed. Game takes the hero there (Game.travel_to).
+signal place_chosen(world_position: Vector3)
 
 const WIDTH := 690.0
 const NOTE_COLOR := Color(1.0, 1.0, 1.0, 0.55)
@@ -71,6 +75,8 @@ const TOUCH_HELP: Array[Array] = [
 var coop_panel: CoopPanel
 var quality: Quality
 var time_of_day: TimeOfDay
+## For the Go to box: whether a place found is on the map.
+var city: CityStreamer
 ## The ?stats text (DebugHud): "Show FPS and stats" shows and hides it.
 var debug_label: Control
 
@@ -90,6 +96,10 @@ var _stats: Button
 var _public: Button
 var _sound: Button
 var _invert: Button
+var _address: LineEdit
+var _address_go: Button
+var _address_note: Label
+var _search: AddressSearch
 var _sliders := {}  # setting key -> HSlider
 var _resume: Button
 var _paused_game := false
@@ -124,6 +134,10 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	process_mode = Node.PROCESS_MODE_ALWAYS  # (it pauses the game)
 	visible = false
+	_search = AddressSearch.new()
+	_search.found.connect(_on_place_found)
+	_search.failed.connect(_show_address_note)
+	add_child(_search)
 	_build()
 	resized.connect(_fit)
 	Net.state_changed.connect(func() -> void:
@@ -162,6 +176,11 @@ func close(by_pointer := false, recapture := true) -> void:
 	toggled.emit(false)
 
 
+## True while typing in the Go to box, so its keys aren't game controls.
+func is_typing() -> bool:
+	return visible and get_viewport().gui_get_focus_owner() is LineEdit
+
+
 func toggle(by_key := false) -> void:
 	if visible:
 		close()
@@ -176,7 +195,8 @@ func use_touch_layout() -> void:
 		return
 	_touch = true
 	for child in get_children():
-		child.free()
+		if child != _search:
+			child.free()
 	_pages.clear()
 	_tabs.clear()
 	_quality_buttons.clear()
@@ -189,7 +209,7 @@ func use_touch_layout() -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if not visible:
+	if not visible or is_typing():
 		return
 	if event.is_action_pressed(&"options_menu") or event.is_action_pressed(&"ui_cancel"):
 		close()
@@ -415,6 +435,31 @@ func _build() -> void:
 
 func _game_page() -> VBoxContainer:
 	var page := _page_box()
+	var go_to := HBoxContainer.new()
+	go_to.add_theme_constant_override("separation", 8)
+	_address = LineEdit.new()
+	_address.placeholder_text = "Address, place or ZIP code"
+	_address.max_length = 120
+	_address.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_address.text_submitted.connect(func(_text: String) -> void: _go_to_address())
+	go_to.add_child(_address)
+	_address_go = Button.new()
+	_address_go.text = "Go"
+	_address_go.custom_minimum_size.x = 64.0
+	_address_go.pressed.connect(_go_to_address)
+	go_to.add_child(_address_go)
+	if _touch:
+		_address.custom_minimum_size.y = 44.0
+		_address_go.custom_minimum_size.y = 44.0
+		if Device.is_web():
+			var field := WebTextField.new()
+			field.line_edit = _address
+			field.capitals = false
+			go_to.add_child(field)
+	_row(page, "Go to", go_to)
+	_address_note = _note("A street address in the five boroughs, like 350 5th Ave, Manhattan.")
+	_address_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	page.add_child(_address_note)
 	var levels := HBoxContainer.new()
 	levels.add_theme_constant_override("separation", 6)
 	var group := ButtonGroup.new()
@@ -454,6 +499,27 @@ func _game_page() -> VBoxContainer:
 	_public = _switch(func(on: bool) -> void: Settings.set_value("online_public", on))
 	_row(page, "Join the public game automatically", _public)
 	return page
+
+
+func _go_to_address() -> void:
+	_show_address_note("Looking it up...")
+	_address_go.disabled = true
+	_search.search(_address.text)
+
+
+func _on_place_found(world_position: Vector3, label: String) -> void:
+	_address_go.disabled = false
+	if city and not city.covers(world_position):
+		_show_address_note("%s isn't on the city's map." % label)
+		return
+	_show_address_note("Went to %s." % label)
+	close()
+	place_chosen.emit(world_position)
+
+
+func _show_address_note(text: String) -> void:
+	_address_go.disabled = false
+	_address_note.text = text
 
 
 func _sound_page() -> VBoxContainer:

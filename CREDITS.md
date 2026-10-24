@@ -34,6 +34,10 @@ lines below wherever a license asks for one (the aerial photos do).
 - **Bridge tower positions and some towers' massing** (placement and setback
   heights for towers newer than the city's 3-D model): © OpenStreetMap
   contributors (ODbL), https://www.openstreetmap.org/copyright.
+- **Address search** (the options menu's Go to box, looked up while
+  playing): NYC Planning Labs GeoSearch (https://geosearch.planninglabs.nyc,
+  from the city's Property Address Directory), and for ZIP codes
+  OpenStreetMap's Nominatim (data © OpenStreetMap contributors, ODbL).
 - **Ground elevation:** USGS 3D Elevation Program, 1/3 arc-second DEM
   (public domain, U.S. Government work).
 - **Heights of raised and sunken roads:** the 2017 New York City
