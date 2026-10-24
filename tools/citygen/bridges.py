@@ -26,6 +26,7 @@ import bridge_landmarks
 import props
 from common import (CURB_HEIGHT, GROUND_ROAD, STRUCTURE_CABLE, STRUCTURE_CONCRETE, STRUCTURE_RAIL, STRUCTURE_STONE,
                     MeshBuilder, lines_of, load_features, polygons_of, project, triangles_of)
+from common import segmentize_polygon
 
 BRIDGE_CODE = "2300"
 # Name in the data -> (style, deck height above the water, tower top above the
@@ -422,7 +423,7 @@ def _add_deck(poly, deck_y, builders: dict, sides=None, ballast=None, stone=None
     uv2 pair) makes the sides masonry."""
     for level, spacing in DECK_SPACING.items():
         for part in polygons_of(poly, 1.0):
-            _add_deck_part(level, shapely.segmentize(part, spacing), deck_y, builders, sides, ballast, stone)
+            _add_deck_part(level, segmentize_polygon(part, spacing), deck_y, builders, sides, ballast, stone)
 
 
 def _add_deck_part(level, dense, deck_y, builders: dict, sides, ballast, stone) -> None:

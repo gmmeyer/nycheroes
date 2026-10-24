@@ -55,6 +55,7 @@ import props
 import traffic
 from common import (CURB_HEIGHT, FEET, GROUND_PAVERS, GROUND_ROAD, MARKING_LIFT, STRUCTURE_CONCRETE, STRUCTURE_RAIL,
                     STRUCTURE_STEEL, STRUCTURE_WALKWAY, MeshBuilder, lines_of, load_features, polygons_of, project)
+from common import segmentize_polygon
 from markings import AT_GRADE, BOTH, HIGHWAY, STREET
 
 BRIDGE_CODE = "2300"
@@ -1009,7 +1010,7 @@ def _add_deck(poly, deck_y, network: Network, builders: dict, top_kind: int):
     for level, spacing in DECK_SPACING.items():
         if level not in builders or (level == "lod2" and poly.area < FAR_MIN_AREA):
             continue
-        dense = shapely.segmentize(poly, spacing)
+        dense = segmentize_polygon(poly, spacing)
         tris = _grid_triangles(dense, spacing)
         if tris is None:
             continue

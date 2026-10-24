@@ -94,7 +94,8 @@ def prepare() -> dict:
         for part in shapely.get_parts(geom):
             lines.append(part)
             rows.append((rw, trafdir, int(float(p.get("number_travel_lanes") or 0)),
-                         int(float(p.get("number_park_lanes") or 0)), float(p.get("streetwidth") or 0) * FEET))
+                         int(float(p.get("number_park_lanes") or 0)), float(p.get("streetwidth") or 0) * FEET,
+                         int(p.get("physicalid") or 0)))
     lines = project(np.array(lines, dtype=object))
     attrs = np.array(rows, dtype=np.float64)
     keep = shapely.length(lines) > 1.0
@@ -176,6 +177,8 @@ def prepare() -> dict:
         "lanes": lanes.astype(np.int16),
         "parking": attrs[:, 3].astype(np.int16),
         "width": width.astype(np.float32),
+        # CSCL's id of each segment's street (street_signs.py looks up its name).
+        "physicalid": attrs[:, 5].astype(np.int64),
         "setback": setback.reshape(2, count).T.astype(np.float32),  # (start, end)
         "major": (major[node] & is_crossing).reshape(2, count).T,
         "signal": (signal[node] & is_crossing).reshape(2, count).T,
@@ -210,11 +213,13 @@ def quads(data: dict, segments: np.ndarray, center_box, road) -> dict:
     return result
 
 
-def signals(data: dict, segments: np.ndarray, center_box, road) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def signals(data: dict, segments: np.ndarray, center_box, road) -> tuple[np.ndarray, np.ndarray, np.ndarray,
+                                                                         np.ndarray]:
     """Traffic signal poles for these segments inside center_box: positions
     (N, 2), the directions (N, 2) they face (toward the drivers they
-    control) and their phases (N,; see prepare)."""
-    points, facing, phases = [], [], []
+    control), their phases (N,; see prepare) and the segment ends whose
+    traffic they control (N, 2: segment, 0 its start or 1 its end)."""
+    points, facing, phases, ends = [], [], [], []
     for k in segments:
         k = int(k)
         if int(data["rw"][k]) != STREET:
@@ -245,12 +250,13 @@ def signals(data: dict, segments: np.ndarray, center_box, road) -> tuple[np.ndar
             points.append(point[0] + normal[0] * offset)
             facing.append(tangent if at_start else -tangent)
             phases.append(float(data["phase"][k][end]))
+            ends.append((k, end))
     if not points:
-        return np.zeros((0, 2)), np.zeros((0, 2)), np.zeros(0)
-    points, facing, phases = np.array(points), np.array(facing), np.array(phases)
+        return np.zeros((0, 2)), np.zeros((0, 2)), np.zeros(0), np.zeros((0, 2), dtype=np.int64)
+    points, facing, phases, ends = np.array(points), np.array(facing), np.array(phases), np.array(ends)
     min_e, min_n, max_e, max_n = center_box
     inside = (points[:, 0] >= min_e) & (points[:, 0] < max_e) & (points[:, 1] >= min_n) & (points[:, 1] < max_n)
-    return points[inside], facing[inside], phases[inside]
+    return points[inside], facing[inside], phases[inside], ends[inside]
 
 
 def keep(q: np.ndarray, road) -> np.ndarray:

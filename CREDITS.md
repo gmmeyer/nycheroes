@@ -74,6 +74,10 @@ lines below wherever a license asks for one (the aerial photos do).
   invented (`tools/citygen/sign_names.py`), drawn in Anton, Lilita One, Alfa
   Slab One and Pacifico (Google Fonts, SIL Open Font License 1.1; the game
   holds only a texture of the names, not the fonts).
+- **Street name signs:** the streets' names from the city's street
+  centerlines (CSCL, above), drawn in Overpass Bold (Google Fonts, SIL Open
+  Font License 1.1; `tools/citygen/street_signs.py`: the game holds only a
+  texture of its letters, not the font).
 
 `tools/citygen/fetch_data.py` and `tools/citygen/aerial.py` list exactly
 what is downloaded from where.

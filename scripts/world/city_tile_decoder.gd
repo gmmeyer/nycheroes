@@ -160,7 +160,15 @@ const PROP_UTILITY_POLE := 24
 ## guy to the ground): normal (the pole's height, the span's length along the
 ## ground, yaw), uv (WIRE_* bits, how far the far end is above the pole's top).
 const PROP_WIRE := 25
-const PROP_TYPE_COUNT := 26
+## A street name sign (tools/citygen/street_signs.py): a blade at a corner,
+## or a sign on a traffic signal's mast arm. Position its post's foot (the
+## spot under it on the arm), normal (height of its top m, its length m,
+## yaw: it runs along the yaw's +x, its faces toward (sin yaw, 0, cos yaw)
+## and back), uv (variant STREET_SIGN_* + 4 x (name >> 10), name & 1023: an
+## id in assets/signs/street_names.txt, split so both parts survive half
+## floats).
+const PROP_STREET_SIGN := 26
+const PROP_TYPE_COUNT := 27
 ## Trees' foliage tones (uv.x of the props surface).
 const TONE_GREEN := 0
 const TONE_LIGHT := 1  ## yellow-green: honeylocust, ginkgo, birch, willow
@@ -199,6 +207,9 @@ const DOCKS := 0              ## a section of docks, with bikes in most
 const DOCK_KIOSK := 1         ## the station's kiosk (pay, map)
 const DOCKS_PER_SECTION := 4
 const DOCK_SPACING := 0.8     ## m between docks
+const STREET_SIGN_POST := 0      ## a corner's lower blade, on its post
+const STREET_SIGN_BLADE := 1     ## a corner's upper blade, over the lower one
+const STREET_SIGN_OVERHEAD := 2  ## on a traffic signal's mast arm, naming the street ahead
 ## Car models (uv.x of a parked car; traffic's cars use the same numbers),
 ## length x width x height (m) in brackets (PropMeshes.CAR_SIZES). Buses only
 ## drive, they never park.

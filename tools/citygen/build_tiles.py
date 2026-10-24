@@ -57,6 +57,7 @@ import poles
 import prepare
 import props
 import shade
+import street_signs
 import times_square
 import towers
 import traffic
@@ -65,8 +66,8 @@ import trenches
 from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND_PARK, GROUND_PAVEMENT,
                     GROUND_ROAD, GROUND_SAND, GROUND_SEAWALL, GROUND_SHRUBS, GROUND_YARD, LANE_BREAK, MARKING_LIFT,
                     ORIGIN_LAT, ORIGIN_LON, PROJECTION, PROP_BIKE_DOCK, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR,
-                    PROP_PARKING_METER, PROP_SUBWAY_ENTRANCE, PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, PROP_WIRE,
-                    SEAWALL_BOTTOM_Y, SIGNAL_ON_COLUMN,
+                    PROP_PARKING_METER, PROP_STREET_SIGN, PROP_SUBWAY_ENTRANCE, PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, PROP_WIRE,
+                    SEAWALL_BOTTOM_Y, SIGNAL_ON_COLUMN, STREET_SIGN_OVERHEAD,
                     STRUCTURE_CONCRETE, SURFACE_CHURCHES, SURFACE_FRONTS, SURFACE_LANDMARKS, SURFACE_WATERFRONT,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
                     SURFACE_STRUCTURES, SURFACE_TRAFFIC, SURFACE_TRAINS, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
@@ -311,7 +312,7 @@ def main() -> None:
                     totals[f"{level}_{key}"] += entry.pop(key)
                 for key in ("lane_points", "props", "trees", "water_towers", "street_lights", "furniture",
                             "parked_cars", "canopy_clumps", "shop_fronts", "shed_sections", "bike_docks",
-                            "plaza_furniture", "utility_poles", "wires", "traffic_lanes", "train_tracks"):
+                            "plaza_furniture", "utility_poles", "wires", "street_signs", "traffic_lanes", "train_tracks"):
                     totals[key] += entry.pop(key, 0)
             if n % 250 == 0 or n == len(tasks):
                 print(f"  {n:,}/{len(tasks):,} tiles ({time.time() - started:.0f} s)", flush=True)
@@ -483,6 +484,9 @@ def _init_worker() -> None:
     _W["terrain"] = Terrain()
     _W["centerline"] = prepare.load("centerline")
     _W["centerline_tree"] = shapely.STRtree(_W["centerline"]["lines"])
+    # Each segment's name on street signs, and the names' widths (street_signs.py).
+    _W["sign_names"] = street_signs.segment_names(_W["centerline"]["physicalid"])
+    _W["sign_widths"] = street_signs.load_names()[1]
     # The ground cut away under the triple cantilever and filled up behind it
     # (cantilever.py), and cut down along the sunken roads (trenches.py).
     _W["structure"] = _structure(_W["terrain"])
@@ -1278,7 +1282,9 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
     shops, sheds = _shop_fronts(indices)
     docks = _bike_docks(i, j)
     plaza = _plaza_furniture(bounds, np.concatenate([p["en"] for p in (street, canopy, lamps, furniture, docks)]))
-    parts = [street, canopy, towers, lamps, furniture, cars, clumps, shops, sheds, docks, plaza, utility_poles, wires]
+    signs = _street_signs(bounds)
+    parts = [street, canopy, towers, lamps, furniture, cars, clumps, shops, sheds, docks, plaza, utility_poles, wires,
+             signs]
     en = np.concatenate([p["en"] for p in parts])
     if len(en) == 0:
         return None, {}
@@ -1311,13 +1317,22 @@ def _build_props(i: int, j: int, bounds, indices: np.ndarray, origin):
         uv[moved, 0] = SIGNAL_ON_COLUMN
         keep[moved] = overpasses.clear_of_decks(_W["bridges"]["lod0"], bounds, en[moved], y[moved],
                                                 np.full(len(moved), els.SIGNAL_HEADROOM))
+    # Mast arm signs only on signals still on their poles, with their arms.
+    overhead = np.flatnonzero((kinds == PROP_STREET_SIGN) & (np.mod(uv[:, 0], 4) == STREET_SIGN_OVERHEAD) & keep)
+    if len(overhead):
+        armed = en[keep & (kinds == PROP_TRAFFIC_SIGNAL) & (uv[:, 0] != SIGNAL_ON_COLUMN)]
+        poles = street_signs.arm_poles(en[overhead], yaw[overhead])
+        near = np.zeros(len(overhead), dtype=bool)
+        if len(armed):
+            near = (np.linalg.norm(poles[:, None, :] - armed[None, :, :], axis=2) < 0.05).any(axis=1)
+        keep[overhead[~near]] = False
     surface = _props_surface(en, y, normals, uv, kinds, seed, origin, keep)
     return surface, {"props": len(en), "trees": trees, "water_towers": len(towers["en"]),
                      "street_lights": len(lamps["en"]), "furniture": len(furniture["en"]),
                      "parked_cars": len(cars["en"]), "canopy_clumps": len(clumps["en"]),
                      "shop_fronts": len(shops["en"]), "shed_sections": len(sheds["en"]), "bike_docks": len(docks["en"]),
                      "plaza_furniture": len(plaza["en"]), "utility_poles": len(utility_poles["en"]),
-                     "wires": len(wires["en"])}
+                     "wires": len(wires["en"]), "street_signs": len(signs["en"])}
 
 
 def _build_clumps(level: str, bounds, origin, indices: np.ndarray):
@@ -1389,10 +1404,8 @@ def _furniture(i: int, j: int, bounds) -> dict:
         parts.append(found)
     if not _W["streets"].is_empty:
         segments = _W["centerline_tree"].query(shapely.buffer(bounds, MARKING_REACH, join_style="mitre"))
-        points, facing, phases = markings.signals(_W["centerline"], segments, bounds.bounds, _W["streets"])
+        points, facing, phases, _ = _signal_poles(bounds, segments)
         if len(points):
-            ok = _on_open_ground(points) & ~shapely.contains_xy(_W["streets"], points[:, 0], points[:, 1])
-            points, facing, phases = points[ok], facing[ok], phases[ok]
             height, width = props.TRAFFIC_SIGNAL_SIZE
             parts.append({"en": points, "type": np.full(len(points), PROP_TRAFFIC_SIGNAL, dtype=np.int8),
                           "tone": np.zeros(len(points), dtype=np.int8), "height": np.full(len(points), height),
@@ -1403,6 +1416,37 @@ def _furniture(i: int, j: int, bounds) -> dict:
     out = {key: np.concatenate([p[key] for p in parts]) for key in parts[0]}
     out["y"] = _W["ground"]["lod0"].height(out["en"])
     return out
+
+
+def _signal_poles(bounds, segments: np.ndarray) -> tuple:
+    """The traffic signals of the tile (markings.signals) that have room to
+    stand: positions, facing, phases and segment ends."""
+    points, facing, phases, ends = markings.signals(_W["centerline"], segments, bounds.bounds, _W["streets"])
+    if len(points):
+        ok = _on_open_ground(points) & ~shapely.contains_xy(_W["streets"], points[:, 0], points[:, 1])
+        points, facing, phases, ends = points[ok], facing[ok], phases[ok], ends[ok]
+    return points, facing, phases, ends
+
+
+def _street_signs(bounds) -> dict:
+    """The tile's street name signs (street_signs.py): posts at the corners
+    of its intersections, and a sign on every traffic signal's mast arm
+    naming the street ahead."""
+    if _W["streets"].is_empty:
+        return _no_props()
+    segments = _W["centerline_tree"].query(shapely.buffer(bounds, MARKING_REACH, join_style="mitre"))
+    names, widths = _W["sign_names"], _W["sign_widths"]
+    corners = street_signs.corner_signs(_W["centerline"], names, widths, segments, bounds.bounds, _W["streets"])
+    ok = _on_open_ground(corners["en"]) if len(corners["en"]) else np.zeros(0, dtype=bool)
+    corners = {key: value[ok] for key, value in corners.items()}
+    corners["y"] = _W["ground"]["lod0"].height(corners["en"])
+    points, facing, _, ends = _signal_poles(bounds, segments)
+    cross = street_signs.cross_streets(_W["centerline"], names, segments, ends)
+    named = cross >= 0
+    overhead = street_signs.overhead_signs(points[named], facing[named], cross[named], widths)
+    # They hang from the pole's arm: measured from the pole's foot.
+    overhead["y"] = _W["ground"]["lod0"].height(points[named])
+    return {key: np.concatenate([corners[key], overhead[key]]) for key in corners}
 
 
 def _parked_cars(bounds) -> dict:

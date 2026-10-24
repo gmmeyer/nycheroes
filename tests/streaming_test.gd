@@ -31,6 +31,7 @@ const FURNITURE_GROUPS := {
 		CityTileDecoder.PROP_KIOSK],
 	"UtilityPoles": [CityTileDecoder.PROP_UTILITY_POLE],
 	"Wires": [CityTileDecoder.PROP_WIRE],
+	"StreetSigns": [CityTileDecoder.PROP_STREET_SIGN],
 }
 
 ## [name, world position of the camera]

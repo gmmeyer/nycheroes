@@ -67,7 +67,7 @@ const int SIGNAL_HEAD = 26;
 const int SIGNAL_FACE = 27;
 const int SIGNAL_LAMP = 28;
 const int WALK_LAMP = 29;
-const int STREET_SIGN = 30;
+const int STREET_SIGN = 30;  // unused: street name signs are props of their own
 const int NEWSSTAND = 31;
 const int NEWSSTAND_ROOF = 32;
 const int MAGAZINES = 33;
@@ -553,16 +553,6 @@ void fragment() {
 		}
 		color = mix(srgb(SIGNAL_BLACK), lamp, symbol);
 		glow += lamp * symbol * mix(signal_glow.x, signal_glow.y, city_lights) * 0.8;
-	} else if (part == STREET_SIGN) {
-		// Green, white border, a street name in white.
-		color = srgb(SIGN_GREEN);
-		float border = 1.0 - band(p.x, 0.03, face_size.x - 0.03, footprint.x) * band(p.y, 0.03, face_size.y - 0.03, footprint.y);
-		float letter = floor(p.x / 0.11);
-		float letters = band(p.y, 0.09, 0.21 + 0.03 * step(0.7, rnd(seed + letter, 8.0)), footprint.y)
-				* band(fract(p.x / 0.11), 0.15, 0.8, footprint.x / 0.11)
-				* band(p.x, 0.2, 0.2 + 0.11 * floor(8.0 + rnd(seed, 9.0) * 5.0), footprint.x)
-				* step(0.12, rnd(seed + letter, 10.0));
-		color = mix(color, vec3(0.95), max(border, letters * visible(0.1, pixel)));
 	} else if (part == NEWSSTAND) {
 		// Stainless panels with seams.
 		color = srgb(STAINLESS) * (1.0 - 0.2 * centered_stripes(p.x / 0.6, 0.03, footprint.x / 0.6));
