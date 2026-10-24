@@ -439,6 +439,12 @@ func has_collision_at(world_position: Vector3) -> bool:
 	return tile == null or tile.node != null
 
 
+## True if the city's map has streets at this world position: a lod0 tile
+## (false before the manifest is in, and out on the water or past the city).
+func covers(world_position: Vector3) -> bool:
+	return not _levels.is_empty() and _tile_at(LEVEL_NEAR, world_position) != null
+
+
 ## Sidewalk lanes (world-space polylines) of loaded tiles that come within
 ## about `radius` of a world position (their bounds do).
 func lanes_near(world_position: Vector3, radius: float) -> Array[PackedVector3Array]:

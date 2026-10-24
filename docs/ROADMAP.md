@@ -2276,7 +2276,14 @@ deployed); in a computer's browser the co-op menu links to it.
   does. One menu at a time: M swaps it for the co-op menu, and so does its
   "Co-op..." button; O swaps back; Esc closes the co-op menu. The HUD's help
   line says "O options". `scripts/ui/options_panel.gd`, made by Game.
-- **Pages:** Game: graphics quality (Auto, Low, Medium, High; a note says
+- **Pages:** Game: "Go to", a box for a street address, a place's name, a
+  ZIP code or a latitude and longitude: Go (or Enter) looks it up (NYC
+  Planning Labs GeoSearch for addresses and places, OpenStreetMap's
+  Nominatim for ZIP codes; `scripts/util/address_search.gd`), projects it
+  the way the tiles are built (`scripts/util/geo.gd`), closes the menu and
+  holds the hero 60 m over it while the streets load, then sets it on the
+  nearest sidewalk facing the address (Game.travel_to); somewhere off the
+  map keeps the menu open and says so. Then graphics quality (Auto, Low, Medium, High; a note says
   what Auto is on this device), time of day (dawn, day, dusk, night, as T
   steps through them; at once while paused), full screen (desktop, and
   browsers that can: not iPhones), "Show FPS and stats" (the debug text: on
@@ -2447,7 +2454,10 @@ deployed); in a computer's browser the co-op menu links to it.
   `res://tests/coop_load_test.tscn` (not a pass/fail test: what 3 and 7
   players far off cost a host's frames, physics and memory),
   `res://tests/audio_test.tscn`, `res://tests/options_test.tscn` (the
-  options menu and the settings, with a settings file of its own) and
+  options menu and the settings, with a settings file of its own),
+  `res://tests/address_test.tscn` (the Go to box: the projection against
+  pyproj's, then the hero sent to the Empire State Building lands on its
+  sidewalk facing it; `--online` tries the real searches too) and
   `res://tests/traffic_test.tscn` (75 s of
   midtown traffic: no red light run, no overlaps, cars stop for the hero,
   and leave with their tiles) and `res://tests/trains_test.tscn` (the 7 at

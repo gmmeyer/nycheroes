@@ -25,6 +25,8 @@ extends Node3D
 ## Sound is the Audio node's (GameAudio): N switches it off and on.
 ## O opens the options menu (OptionsPanel; Esc too in the desktop builds), as
 ## do the HUD's Options button and the touch gear; one menu shows at a time.
+## Its Go to box takes the hero to an address (travel_to): onto the sidewalk
+## nearest it, facing it.
 ##
 ## Phones and tablets: touch screens get on-screen controls (TouchControls;
 ## ?touch=1 or ?touch=0 forces them on or off, see Device), and a graphics
@@ -42,6 +44,10 @@ const DEFAULT_SPAWN := Vector3(0.0, 15.0, 0.0)
 ## Physics ticks to wait for new collision to show up before giving up on
 ## finding the ground (over open water there is none).
 const DROP_TRIES := 30
+## travel_to holds the hero this high over the address while the streets
+## there load (m), and looks this far around it for a sidewalk.
+const ARRIVAL_HEIGHT := 60.0
+const STREET_SEARCH := 80.0
 ## --screenshot waits this long after the city has loaded (s).
 const SCREENSHOT_DELAY := 5.0
 
@@ -59,6 +65,8 @@ const SCREENSHOT_DELAY := 5.0
 var _free_camera_on := false
 var _drop_to_ground := false
 var _drop_tries := 0
+## travel_to's address, until the hero has stepped onto the street by it.
+var _arrival := Vector3.INF
 var _touch_controls: TouchControls
 var _options: OptionsPanel
 var _name_prompt: NamePrompt
@@ -112,6 +120,9 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	if not hero.frozen or not city.has_collision_at(hero.world_position()):
 		return
+	if _arrival != Vector3.INF:
+		_step_onto_street(_arrival)
+		_arrival = Vector3.INF
 	if _drop_to_ground:
 		var ground := city.ground_height_at(hero.world_position())
 		_drop_tries += 1
@@ -135,6 +146,42 @@ func place_hero(world_position: Vector3, facing: float, drop := false) -> void:
 	hero_camera.yaw = facing
 	_drop_to_ground = drop
 	_drop_tries = 0
+	_arrival = Vector3.INF
+
+
+## Takes our hero to an address (a world position on the map, any height):
+## held over it until the streets there have loaded, then onto the nearest
+## sidewalk, facing it (addresses mostly lie inside their buildings), or
+## dropped onto whatever is there if no sidewalk is near.
+func travel_to(world_position: Vector3) -> void:
+	place_hero(Vector3(world_position.x, ARRIVAL_HEIGHT, world_position.z), hero.facing, true)
+	_arrival = world_position
+
+
+func _step_onto_street(address: Vector3) -> void:
+	var spot := Vector2(address.x, address.z)
+	var best := INF
+	var street := Vector3.INF
+	for lane in city.lanes_near(address, STREET_SEARCH):
+		for n in lane.size() - 1:
+			var a := Vector2(lane[n].x, lane[n].z)
+			var b := Vector2(lane[n + 1].x, lane[n + 1].z)
+			var point := Geometry2D.get_closest_point_to_segment(spot, a, b)
+			var distance := point.distance_squared_to(spot)
+			if distance < best:
+				best = distance
+				var along := 0.0 if a.is_equal_approx(b) else (point - a).length() / (b - a).length()
+				street = Vector3(point.x, lerpf(lane[n].y, lane[n + 1].y, along), point.y)
+	if street == Vector3.INF:
+		return  # (dropped from the sky instead)
+	# From just above the sidewalk, not the sky: under scaffolding or an el.
+	var ground := city.ground_height_at(street, 1.5)
+	hero.global_position = WorldOrigin.to_local(Vector3(street.x, (street.y if is_nan(ground) else ground) + 0.05, street.z))
+	_drop_to_ground = false
+	var toward := Vector2(address.x - street.x, address.z - street.z)
+	if toward.length() > 0.5:
+		hero.facing = atan2(-toward.x, -toward.y)
+		hero_camera.yaw = hero.facing
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -143,6 +190,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_add_touch_controls(true)  # a touch screen the browser didn't tell us about
 	if _name_prompt.is_typing() or is_instance_valid(_loading):
 		return  # (menus would open under the loading screen)
+	if _options.is_typing():
+		return
 	if event.is_action_pressed("options_menu") and not coop_panel.is_typing() and not LaunchOptions.has("demo"):
 		coop_panel.close()
 		_options.toggle(true)
@@ -279,9 +328,11 @@ func _add_options(quality: Quality) -> void:
 	_options.coop_panel = coop_panel
 	_options.quality = quality
 	_options.time_of_day = time_of_day
+	_options.city = city
 	_options.debug_label = hud.get_node_or_null("DebugLabel") as Control
 	hud.add_child(_options)
 	_options.toggled.connect(func(_open: bool) -> void: _update_controls())
+	_options.place_chosen.connect(travel_to)
 	var game_hud := hud.get_node_or_null("GameHud") as GameHud
 	if game_hud:
 		game_hud.options_requested.connect(func() -> void:
