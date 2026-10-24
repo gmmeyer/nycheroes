@@ -68,7 +68,8 @@ extends RefCounted
 ## share's docks and kiosks with plaza furniture (cafe tables, planters, food
 ## kiosks).
 ## Shop fronts (shaders/shop_sign.gdshader), signs and awnings on one mesh, the
-## same way again: see shop_fronts().
+## same way again: see shop_fronts(). Street name signs
+## (shaders/street_sign.gdshader) too: see street_sign().
 ## Cars (shaders/car.gdshader), parked and moving, one mesh for every model
 ## (CityTileDecoder.CAR_*): the shader builds each model from its own table,
 ## so the mesh only says which point of a car each vertex is. Cars face +z
@@ -192,6 +193,10 @@ const SHOP_BY_REACH := 2
 ## A blade sign's panel starts this share of its width out from the wall
 ## (its bracket bridges the gap).
 const BLADE_GAP := 0.14
+
+## Street name signs' parts (UV.x); shaders/street_sign.gdshader has the same
+## numbers.
+enum SignPart { FACE, BACK, EDGE, POST, BRACKET, HANGER }
 
 ## Cars' parts (UV.x); shaders/car.gdshader has the same numbers.
 enum Car {
@@ -674,8 +679,8 @@ static func _subway_entrances(k: _Kit) -> void:
 
 ## A traffic signal on the corner, facing the drivers it controls (+z): a
 ## pole with a mast arm over the road (to its right, -x) carrying a signal
-## head and a street name sign, a second head on the pole, and a pedestrian
-## signal facing across the road. Each head's lit lens is a quad of its own.
+## head (and a street name sign, a prop of its own), a second head on the
+## pole, and a pedestrian signal facing across the road. Each head's lit lens is a quad of its own.
 ## Under an el (variant SIGNAL_ON_COLUMN) only the heads on the pole are
 ## drawn, mounted on a column of the el.
 static func _traffic_signal(k: _Kit) -> void:
@@ -699,8 +704,7 @@ static func _traffic_signal(k: _Kit) -> void:
 	k.extra = Vector4(-0.39, 2.43, 0.0, 0.18)
 	_panel(k, Vector3(-0.39, 2.25, -0.18), Vector3(0.0, 0.0, 0.36), Vector3(0.0, 0.36, 0.0), Furniture.WALK_LAMP)
 	k.extra = Vector4.ZERO
-	k.shape.y = on_pole
-	_panel(k, Vector3(-2.7, 5.4, 0.0), Vector3(1.7, 0.0, 0.0), Vector3(0.0, 0.3, 0.0), Furniture.STREET_SIGN)
+	# (The street name sign on the arm is a prop of its own, PROP_STREET_SIGN.)
 
 
 ## A newsstand: a steel box under a green roof that overhangs the sidewalk
@@ -740,6 +744,36 @@ static func street_furniture_extra() -> ArrayMesh:
 	_plaza_table(k)
 	_planters(k)
 	_food_kiosk(k)
+	return k.build()
+
+
+## Street name signs (CityTileDecoder.PROP_STREET_SIGN), one mesh for every
+## variant, which the shader sizes: the blade, a unit box (x and z -0.5..0.5,
+## y 0..1) stretched to the sign's length, its height and thickness, its
+## faces toward +z (FACE) and -z (BACK), both carrying the name; a corner
+## blade's post (STREET_SIGN_POST, y 0..1 up to the blade); the bracket
+## under the upper blade (STREET_SIGN_BLADE, y -1..0 down to the lower one);
+## and a mast arm sign's two hangers (STREET_SIGN_OVERHEAD, y 1..2 up to the
+## arm, x at the blade's ends, which the shader moves in).
+##   UV = (part (SignPart), 0), CUSTOM0 = (type, variant bits, 1, 1)
+## 84 vertices, 48 triangles.
+static func street_sign() -> ArrayMesh:
+	var k := _Kit.new()
+	var post := 1 << CityTileDecoder.STREET_SIGN_POST
+	var blade := 1 << CityTileDecoder.STREET_SIGN_BLADE
+	var overhead := 1 << CityTileDecoder.STREET_SIGN_OVERHEAD
+	k.shape = Vector4(CityTileDecoder.PROP_STREET_SIGN, post | blade | overhead, 1.0, 1.0)
+	var faces := _faces(SignPart.EDGE)
+	faces["+z"] = SignPart.FACE
+	faces["-z"] = SignPart.BACK
+	_box(k, Vector3(-0.5, 0.0, -0.5), Vector3(0.5, 1.0, 0.5), faces)
+	k.shape.y = post
+	_turned(k, 6, [Vector2(0.0, 0.032), Vector2(1.0, 0.03)], SignPart.POST)
+	k.shape.y = blade
+	_box(k, Vector3(-0.025, -1.0, -0.025), Vector3(0.025, 0.0, 0.025), _faces(SignPart.BRACKET, "+y -y"))
+	k.shape.y = overhead
+	for x: float in [-0.5, 0.5]:
+		_box(k, Vector3(x - 0.015, 1.0, -0.012), Vector3(x + 0.015, 2.0, 0.012), _faces(SignPart.HANGER, "+y -y"))
 	return k.build()
 
 

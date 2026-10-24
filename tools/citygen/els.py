@@ -64,6 +64,7 @@ import overpasses
 import trains
 from common import (GROUND_MARKING_YELLOW, MARKING_LIFT, RAW_DIR, STRUCTURE_CONCRETE, STRUCTURE_RAIL, STRUCTURE_STEEL,
                     MeshBuilder, lines_of, load_features, polygons_of, project)
+from common import segmentize_polygon
 
 EL_CODES = ("2410", "2430")              # railroad lines: elevated, viaduct centerline
 GROUND_CODES = ("2400", "2420", "2440")  # at grade, on an embankment, in an open cut
@@ -729,7 +730,7 @@ def _add_deck(poly, chains: np.ndarray, tracks: Tracks, network, builders: dict,
         if level not in builders or (level == "lod2" and poly.area < FAR_MIN_AREA):
             continue
         builder = builders[level]
-        dense = shapely.segmentize(poly, spacing)
+        dense = segmentize_polygon(poly, spacing)
         if level == "lod0":
             parts = [(z, c) for z, c in zones] + [(shapely.difference(dense, shapely.union_all([z for z, _ in zones]))
                                                    if zones else dense, None)]
@@ -810,7 +811,7 @@ def _track_zones(poly, chains: np.ndarray, tracks: Tracks) -> list:
         zone = shapely.MultiPolygon(polygons_of(zone, 0.5)) if not zone.is_empty else zone
         if zone.is_empty:
             continue
-        out.append((shapely.segmentize(zone, DECK_SPACING["lod0"]), c))
+        out.append((segmentize_polygon(zone, DECK_SPACING["lod0"]), c))
         claimed = shapely.union(claimed, zone)
     return out
 
@@ -1219,12 +1220,12 @@ def _add_platform(platform, lines, tracks: Tracks, builders: dict, edges: MeshBu
         if level not in builders:
             continue
         builder = builders[level]
-        tris = _triangles(shapely.segmentize(platform, spacing), spacing)
+        tris = _triangles(segmentize_polygon(platform, spacing), spacing)
         if tris is not None:
             y = floor(tris.reshape(-1, 2)).reshape(-1, 3)
             top = np.stack([tris[..., 0], y, -tris[..., 1]], axis=-1)
             builder.add(top, np.stack([tris[..., 0], -tris[..., 1]], axis=-1), PLATFORM, (0.0, 1.0, 0.0))
-        dense = shapely.segmentize(platform, spacing)
+        dense = segmentize_polygon(platform, spacing)
         for ring in (dense.exterior, *dense.interiors):
             coords = np.asarray(ring.coords)[:, :2]
             y = floor(coords)
@@ -1498,7 +1499,7 @@ def _add_edges(platform, lines, floor, edges: MeshBuilder) -> None:
     """The yellow strip along a platform's edges at the tracks: EDGE_WIDTH
     in from the edge, MARKING_LIFT over the floor, painted as the markings'
     solid yellow (uv.y clear of the double line's gap)."""
-    dense = shapely.segmentize(platform, DECK_SPACING["lod0"])
+    dense = segmentize_polygon(platform, DECK_SPACING["lod0"])
     for ring in (dense.exterior, *dense.interiors):
         coords = np.asarray(ring.coords)[:, :2]
         a, b = coords[:-1], coords[1:]
@@ -1527,7 +1528,7 @@ def _add_canopy(platform, floor, spacing: float, builder: MeshBuilder, parts: _P
     roof = shapely.buffer(platform, -CANOPY_INSET, join_style="mitre")
     for piece in polygons_of(roof, 2.0):
         piece = shapely.orient_polygons(piece)
-        tris = _triangles(shapely.segmentize(piece, spacing), spacing)
+        tris = _triangles(segmentize_polygon(piece, spacing), spacing)
         if tris is None:
             continue
         y = (floor(tris.reshape(-1, 2)) + CANOPY_HEIGHT).reshape(-1, 3)
@@ -1537,7 +1538,7 @@ def _add_canopy(platform, floor, spacing: float, builder: MeshBuilder, parts: _P
         if not detailed:
             continue
         builder.add(top - np.array([0.0, CANOPY_THICKNESS, 0.0]), uv, LIT_STEEL, (0.0, -1.0, 0.0))
-        dense = shapely.segmentize(piece, spacing)
+        dense = segmentize_polygon(piece, spacing)
         for ring in (dense.exterior, *dense.interiors):
             coords = np.asarray(ring.coords)[:, :2]
             y_ring = floor(coords) + CANOPY_HEIGHT

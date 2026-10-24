@@ -182,9 +182,20 @@ PREPARERS = {"buildings": prepare_buildings, "ground": prepare_ground, "water": 
              "trenches": trenches.prepare}
 
 
+# Keys a cached dataset must have, else it's from before they were added and
+# is prepared again.
+REQUIRED_KEYS = {"centerline": ("physicalid",)}
+
+
 def load(name: str) -> dict:
     """The prepared dataset `name`, building and caching it if needed."""
     path = CACHE_DIR / f"{name}.pkl"
+    if path.exists() and name in REQUIRED_KEYS:
+        with open(path, "rb") as f:
+            cached = pickle.load(f)
+        if all(key in cached for key in REQUIRED_KEYS[name]):
+            return cached
+        path.unlink()
     if not path.exists():
         started = time.time()
         print(f"preparing {name}...", flush=True)

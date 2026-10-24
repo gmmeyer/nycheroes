@@ -941,6 +941,33 @@ reference round 3's 23, 24 and 31):**
   photo's), back-lot pole lines (common in Queens and Staten Island), and
   trimming street trees round the wires.
 
+**Street name signs (done):**
+- Every intersection of two or more named streets gets the city's green
+  blades with the real names (`tools/citygen/street_signs.py`), written as
+  the mixed-case signs write them from the centerlines' abbreviations
+  ("W 42 ST" -> "W 42 St", "BCH 116 ST" -> "Beach 116 St"; ramps,
+  connectors and airport roads get none): a post at every other corner
+  (two diagonally opposite corners of a crossing, one of a T), CURB_SETBACK
+  onto the sidewalk from both curb lines and further in at rounded curbs,
+  with a blade along each of the two streets meeting there, the wider one's
+  on top. Every traffic signal's mast arm carries a bigger sign naming the
+  street its drivers are coming up to (the widest one crossing theirs);
+  it replaces the arm's old placeholder sign, which had letter-like bars.
+- Names: 8,483 of them. Two textures (`assets/signs`): the letters of
+  Overpass Bold (after the signs' Highway Gothic) as a distance field
+  (1024 x 432, 52 kB), and a table of every name's characters and pen
+  positions (2048 x 133 RGBA, 185 kB); `street_names.txt` gives the ids the
+  tiles use, so it and the textures are rebuilt together (`python
+  street_signs.py build`). `shaders/street_sign.gdshader` finds the
+  character under each point by bisection over its name's positions and
+  samples it and its neighbors: any name, crisp at any distance, no texture
+  per name. Long names are squeezed onto blades up to 2.2 m long.
+- New prop type 26 (PROP_STREET_SIGN; uv = variant + 4 x (name >> 10),
+  name & 1023, since instance data arrives as half floats), one more
+  MultiMesh per near tile (84-vertex mesh), shrinking away with the small
+  furniture. `markings.prepare` keeps each segment's CSCL physicalid
+  (`prepare.py` rebuilds an older `centerline.pkl` by itself).
+
 **Ground details (done):**
 - Planted medians and malls (`tools/citygen/ground_details.py`): of the
   city's 8,048 raised medians (Planimetric Database), 3,727 are planted:

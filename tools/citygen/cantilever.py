@@ -48,6 +48,7 @@ import markings
 import overpasses
 from common import (CURB_HEIGHT, FEET, GROUND_PARK, GROUND_PAVERS, GROUND_ROAD, RAW_DIR, STRUCTURE_CONCRETE,
                     STRUCTURE_STEEL, MeshBuilder, lines_of, load_features, polygons_of, project)
+from common import segmentize_polygon
 from markings import AT_GRADE, BOTH
 
 # Atlantic Avenue to Old Fulton Street (west, south, east, north).
@@ -985,7 +986,7 @@ def _add_top(poly, deck_y, uv2, builders: dict):
     for level, spacing in DECK_SPACING.items():
         if level not in builders or poly.is_empty:
             continue
-        tris = overpasses._grid_triangles(shapely.segmentize(poly, spacing), spacing)
+        tris = overpasses._grid_triangles(segmentize_polygon(poly, spacing), spacing)
         if tris is None:
             continue
         y = deck_y(tris.reshape(-1, 2)).reshape(-1, 3)
@@ -1003,7 +1004,7 @@ def _add_underside(poly, deck_y, builders: dict, depth: float = DECK_ROOT) -> No
         if level not in builders or poly.is_empty:
             continue
         spacing = DECK_SPACING[level]
-        tris = overpasses._grid_triangles(shapely.segmentize(poly, spacing), spacing)
+        tris = overpasses._grid_triangles(segmentize_polygon(poly, spacing), spacing)
         if tris is None:
             continue
         y = deck_y(tris.reshape(-1, 2)).reshape(-1, 3) - depth
@@ -1021,7 +1022,7 @@ def _add_soffit(poly, deck_y, tips, roots, builders: dict) -> None:
         if level not in builders:
             continue
         spacing = DECK_SPACING[level] / 2
-        tris = overpasses._grid_triangles(shapely.segmentize(poly, spacing), spacing)
+        tris = overpasses._grid_triangles(segmentize_polygon(poly, spacing), spacing)
         if tris is None:
             continue
         en = tris.reshape(-1, 2)

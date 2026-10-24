@@ -188,6 +188,17 @@ PROP_WIRE = 25
 WIRE_DROP = 1          # a service drop to a house
 WIRE_THREE_PHASE = 2
 WIRE_GUY = 4           # a down guy from a line's end pole to an anchor in the sidewalk
+# A street name sign (street_signs.py): a blade at a corner, or a sign on a
+# traffic signal's mast arm. Position its post's foot (the spot under it on
+# the arm); normal = (height of its top m, its length m, yaw: it runs along
+# (cos yaw, 0, -sin yaw), its faces toward (sin yaw, 0, cos yaw) and back);
+# uv = (variant STREET_SIGN_* + 4 x (name >> 10), name & 1023), the name an
+# id in assets/signs/street_names.txt, split so both parts survive the
+# game's half floats.
+PROP_STREET_SIGN = 26
+STREET_SIGN_POST = 0      # the lower blade on its post (the post up to it)
+STREET_SIGN_BLADE = 1     # the upper blade, over the lower one
+STREET_SIGN_OVERHEAD = 2  # on a mast arm, facing the drivers
 # Trees' foliage tones (uv.x of the props surface).
 PROP_TONE_GREEN = 0
 PROP_TONE_LIGHT = 1   # yellow-green: honeylocust, ginkgo, birch, willow
@@ -244,6 +255,23 @@ def project(geoms):
 def load_features(name: str) -> list[dict]:
     with open(RAW_DIR / f"{name}.geojson", encoding="utf-8") as f:
         return [feat for feat in json.load(f)["features"] if feat.get("geometry")]
+
+
+def segmentize_polygon(poly, spacing: float):
+    """shapely.segmentize for a polygon that stays the polygon it was: GEOS
+    repairs a densified polygon it finds invalid (holes that nearly touch its
+    shell), which can split off slivers as a MultiPolygon or leave nothing
+    (seen on macOS). Then the biggest polygon of the result, or the polygon
+    as it was if that lost any of it."""
+    dense = shapely.segmentize(poly, spacing)
+    if dense.geom_type == poly.geom_type and not dense.is_empty:
+        return dense
+    parts = polygons_of(dense, 0.0)
+    if poly.geom_type == "Polygon" and parts:
+        biggest = max(parts, key=lambda part: part.area)
+        if biggest.area >= poly.area * 0.999:
+            return biggest
+    return poly
 
 
 def polygons_of(geom, min_area: float = 0.01) -> list:

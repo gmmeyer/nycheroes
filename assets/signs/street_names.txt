@@ -1,0 +1,8483 @@
+1 Av	1.9271
+1 Av Loop	4.4583
+1 Ct	1.6823
+1 Division Av	5.9479
+1 Dr	1.7812
+1 Pl	1.5833
+1 St	1.6562
+10 Av	2.5833
+10 St	2.3125
+100 Av	3.2396
+100 Dr	3.0938
+100 Rd	3.2344
+100 St	2.9688
+101 Av	2.9844
+101 Rd	2.9792
+101 St	2.7135
+102 Av	3.1927
+102 Rd	3.1875
+102 St	2.9219
+102 Street Crossing	9.1615
+103 Av	3.1823
+103 Dr	3.0365
+103 Rd	3.1771
+103 St	2.9115
+104 Av	3.2240
+104 Rd	3.2188
+104 St	2.9531
+105 Av	3.1927
+105 Pl	2.8490
+105 St	2.9219
+106 Av	3.1979
+106 Rd	3.1927
+106 St	2.9271
+107 Av	3.1198
+107 Rd	3.1146
+107 St	2.8490
+108 Av	3.2083
+108 Dr	3.0625
+108 Rd	3.2031
+108 St	2.9375
+109 Av	3.1979
+109 Dr	3.0521
+109 Rd	3.1927
+109 St	2.9271
+11 Av	2.3281
+11 Pl	1.9844
+11 St	2.0573
+110 Av	2.9844
+110 Rd	2.9792
+110 St	2.7135
+111 Av	2.7292
+111 Rd	2.7240
+111 St	2.4583
+112 Av	2.9375
+112 Pl	2.5938
+112 Rd	2.9323
+112 St	2.6667
+113 Av	2.9271
+113 Dr	2.7812
+113 Rd	2.9219
+113 St	2.6562
+114 Av	2.9688
+114 Dr	2.8229
+114 Pl	2.6250
+114 Rd	2.9635
+114 St	2.6979
+114 Ter	3.2656
+115 Av	2.9375
+115 Ct	2.6927
+115 Dr	2.7917
+115 Rd	2.9323
+115 St	2.6667
+115 Ter	3.2344
+116 Av	2.9427
+116 Dr	2.7969
+116 Rd	2.9375
+116 St	2.6719
+117 Rd	2.8594
+117 St	2.5938
+118 Av	2.9531
+118 Rd	2.9479
+118 St	2.6823
+119 Av	2.9427
+119 Dr	2.7969
+119 Rd	2.9375
+119 St	2.6719
+12 Av	2.5365
+12 Rd	2.5312
+12 St	2.2656
+12 St Extension	7.1979
+120 Av	3.1927
+120 Rd	3.1875
+120 St	2.9219
+121 Av	2.9375
+121 St	2.6667
+122 Av	3.1458
+122 Pl	2.8021
+122 St	2.8750
+123 Av	3.1354
+123 St	2.8646
+124 Av	3.1771
+124 Pl	2.8333
+124 St	2.9062
+125 Av	3.1458
+125 St	2.8750
+126 Av	3.1510
+126 Ln	3.0365
+126 Pl	2.8073
+126 St	2.8802
+127 Av	3.0729
+127 Pl	2.7292
+127 St	2.8021
+128 Av	3.1615
+128 Dr	3.0156
+128 Rd	3.1562
+128 St	2.8906
+129 Av	3.1510
+129 Rd	3.1458
+129 St	2.8802
+13 Av	2.5260
+13 Rd	2.5208
+13 St	2.2552
+130 Av	3.1823
+130 Dr	3.0365
+130 Pl	2.8385
+130 Rd	3.1771
+130 St	2.9115
+131 Av	2.9271
+131 Rd	2.9219
+131 St	2.6562
+132 Av	3.1354
+132 Rd	3.1302
+132 St	2.8646
+133 Av	3.1250
+133 Dr	2.9792
+133 Pl	2.7812
+133 Rd	3.1198
+133 St	2.8542
+134 Av	3.1667
+134 Pl	2.8229
+134 Rd	3.1615
+134 St	2.8958
+135 Av	3.1354
+135 Dr	2.9896
+135 Pl	2.7917
+135 Rd	3.1302
+135 St	2.8646
+136 Av	3.1406
+136 Rd	3.1354
+136 St	2.8698
+137 Av	3.0625
+137 Pl	2.7188
+137 Rd	3.0573
+137 St	2.7917
+138 Av	3.1510
+138 Pl	2.8073
+138 Rd	3.1458
+138 St	2.8802
+139 Av	3.1406
+139 Rd	3.1354
+139 St	2.8698
+14 Av	2.5677
+14 Pl	2.2240
+14 Rd	2.5625
+14 St	2.2969
+14 St Loop	4.8281
+140 Av	3.2240
+140 St	2.9531
+141 Av	2.9688
+141 Pl	2.6250
+141 Rd	2.9635
+141 St	2.6979
+142 Av	3.1771
+142 Pl	2.8333
+142 Rd	3.1719
+142 St	2.9062
+143 Av	3.1667
+143 Pl	2.8229
+143 Rd	3.1615
+143 St	2.8958
+144 Av	3.2083
+144 Dr	3.0625
+144 Pl	2.8646
+144 Rd	3.2031
+144 St	2.9375
+144 Ter	3.5052
+145 Av	3.1771
+145 Dr	3.0312
+145 Pl	2.8333
+145 Rd	3.1719
+145 St	2.9062
+146 Av	3.1823
+146 Dr	3.0365
+146 Pl	2.8385
+146 Rd	3.1771
+146 St	2.9115
+146 Ter	3.4792
+147 Av	3.1042
+147 Dr	2.9583
+147 Pl	2.7604
+147 Rd	3.0990
+147 St	2.8333
+148 Av	3.1927
+148 Dr	3.0469
+148 Pl	2.8490
+148 Rd	3.1875
+148 St	2.9219
+149 Av	3.1823
+149 Dr	3.0365
+149 Pl	2.8385
+149 Rd	3.1771
+149 St	2.9115
+15 Av	2.5365
+15 Dr	2.3906
+15 Rd	2.5312
+15 St	2.2656
+150 Av	3.1927
+150 Dr	3.0469
+150 Pl	2.8490
+150 Rd	3.1875
+150 St	2.9219
+151 Av	2.9375
+151 Pl	2.5938
+151 St	2.6667
+152 Av	3.1458
+152 St	2.8750
+153 Av	3.1354
+153 Ct	2.8906
+153 Ln	3.0208
+153 Pl	2.7917
+153 St	2.8646
+154 Pl	2.8333
+154 St	2.9062
+155 Av	3.1458
+155 St	2.8750
+156 Av	3.1510
+156 St	2.8802
+157 Av	3.0729
+157 St	2.8021
+158 Av	3.1615
+158 St	2.8906
+159 Av	3.1510
+159 Dr	3.0052
+159 Rd	3.1458
+159 St	2.8802
+16 Av	2.5417
+16 Dr	2.3958
+16 Rd	2.5365
+16 St	2.2708
+160 Av	3.1979
+160 St	2.9271
+161 Av	2.9427
+161 Pl	2.5990
+161 St	2.6719
+162 Av	3.1510
+162 St	2.8802
+163 Av	3.1406
+163 Dr	2.9948
+163 Pl	2.7969
+163 Rd	3.1354
+163 St	2.8698
+164 Av	3.1823
+164 Dr	3.0365
+164 Pl	2.8385
+164 Rd	3.1771
+164 St	2.9115
+165 Av	3.1510
+165 St	2.8802
+166 Pl	2.8125
+166 St	2.8854
+167 St	2.8073
+168 Pl	2.8229
+168 St	2.8958
+169 Pl	2.8125
+169 St	2.8854
+17 Av	2.4635
+17 Ct	2.2188
+17 Rd	2.4583
+17 St	2.1927
+170 Pl	2.7760
+170 St	2.8490
+171 Pl	2.5208
+171 St	2.5938
+172 St	2.8021
+173 St	2.7917
+174 Pl	2.7604
+174 St	2.8333
+175 Pl	2.7292
+175 St	2.8021
+176 Pl	2.7344
+176 St	2.8073
+177 Pl	2.6562
+177 St	2.7292
+178 Pl	2.7448
+178 St	2.8177
+179 Pl	2.7344
+179 St	2.8073
+18 Av	2.5521
+18 St	2.2812
+180 St	2.9375
+181 Pl	2.6094
+181 St	2.6823
+182 Pl	2.8177
+182 St	2.8906
+183 Pl	2.8073
+183 St	2.8802
+184 Pl	2.8490
+184 St	2.9219
+185 St	2.8906
+186 Ln	3.0521
+186 St	2.8958
+187 Pl	2.7448
+187 St	2.8177
+188 St	2.9062
+189 St	2.8958
+19 Av	2.5417
+19 Dr	2.3958
+19 Ln	2.4271
+19 Rd	2.5365
+19 St	2.2708
+190 Ln	3.0833
+190 Pl	2.8542
+190 St	2.9271
+191 St	2.6719
+192 St	2.8802
+193 Ln	3.0260
+193 St	2.8698
+194 Ln	3.0677
+194 St	2.9115
+195 Ln	3.0365
+195 Pl	2.8073
+195 St	2.8802
+196 Pl	2.8125
+196 St	2.8854
+197 St	2.8073
+198 St	2.8958
+199 St	2.8854
+2 Av	2.1354
+2 Ct	1.8906
+2 Dr	1.9896
+2 Pl	1.7917
+2 St	1.8646
+20 Av	2.7917
+20 Dr	2.6458
+20 Ln	2.6771
+20 Rd	2.7865
+20 St	2.5208
+20 St Loop	5.0521
+200 St	3.1771
+201 Pl	2.8490
+201 St	2.9219
+202 St	3.1302
+203 Pl	3.0469
+203 St	3.1198
+204 St	3.1615
+205 Pl	3.0573
+205 St	3.1302
+206 St	3.1354
+207 St	3.0573
+208 Pl	3.0729
+208 St	3.1458
+209 Pl	3.0625
+209 St	3.1354
+21 Av	2.5365
+21 Dr	2.3906
+21 Ln	2.4219
+21 Rd	2.5312
+21 St	2.2656
+210 Pl	2.8490
+210 St	2.9219
+211 Pl	2.5938
+211 St	2.6667
+212 Pl	2.8021
+212 St	2.8750
+213 Pl	2.7917
+213 St	2.8646
+214 Ln	3.0625
+214 Pl	2.8333
+214 St	2.9062
+215 Pl	2.8021
+215 St	2.8750
+216 St	2.8802
+217 Ln	2.9583
+217 Pl	2.7292
+217 St	2.8021
+218 Pl	2.8177
+218 St	2.8906
+219 St	2.8802
+22 Av	2.7448
+22 Dr	2.5990
+22 Rd	2.7396
+22 St	2.4740
+220 Pl	3.0573
+220 St	3.1302
+221 Pl	2.8021
+221 St	2.8750
+222 St	3.0833
+223 Pl	3.0000
+223 St	3.0729
+224 St	3.1146
+225 St	3.0833
+226 Dr	3.2135
+226 St	3.0885
+227 St	3.0104
+228 St	3.0990
+229 Dr N	4.1823
+229 Dr S	4.0781
+229 St	3.0885
+23 Av	2.7344
+23 Dr	2.5885
+23 Rd	2.7292
+23 St	2.4635
+23 Ter	3.0312
+230 Pl	3.0469
+230 St	3.1198
+231 St	2.8646
+232 St	3.0729
+233 Pl	2.9896
+233 St	3.0625
+234 Pl	3.0312
+234 St	3.1042
+235 Ct	3.0990
+235 St	3.0729
+236 St	3.0781
+237 St	3.0000
+238 St	3.0885
+239 St	3.0781
+24 Av	2.7760
+24 Dr	2.6302
+24 Rd	2.7708
+24 St	2.5052
+240 Pl	3.0885
+240 St	3.1615
+241 St	2.9062
+242 St	3.1146
+243 St	3.1042
+244 St	3.1458
+245 Pl	3.0417
+245 St	3.1146
+246 Cres	4.2240
+246 Pl	3.0469
+246 St	3.1198
+247 St	3.0417
+248 St	3.1302
+249 St	3.1198
+25 Av	2.7448
+25 Dr	2.5990
+25 Rd	2.7396
+25 St	2.4740
+250 St	3.1302
+251 Pl	2.8021
+251 St	2.8750
+252 St	3.0833
+253 Pl	3.0000
+253 St	3.0729
+254 St	3.1146
+255 St	3.0833
+256 St	3.0885
+257 St	3.0104
+258 St	3.0990
+259 St	3.0885
+26 Av	2.7500
+26 Rd	2.7448
+26 St	2.4792
+260 Pl	3.0625
+260 St	3.1354
+261 St	2.8802
+262 Pl	3.0156
+262 St	3.0885
+263 St	3.0781
+264 St	3.1198
+265 St	3.0885
+266 St	3.0938
+267 St	3.0156
+268 St	3.1042
+269 St	3.0938
+27 Av	2.6719
+27 Rd	2.6667
+27 St	2.4010
+270 St	3.0573
+271 St	2.8021
+28 Av	2.7604
+28 Rd	2.7552
+28 St	2.4896
+29 Av	2.7500
+29 Rd	2.7448
+29 St	2.4792
+3 Av	2.1250
+3 Ct	1.8802
+3 Dr	1.9792
+3 Pl	1.7812
+3 St	1.8542
+30 Av	2.7812
+30 Dr	2.6354
+30 Pl	2.4375
+30 Rd	2.7760
+30 St	2.5104
+31 Av	2.5260
+31 Dr	2.3802
+31 Pl	2.1823
+31 Rd	2.5208
+31 St	2.2552
+32 Av	2.7344
+32 Dr	2.5885
+32 Pl	2.3906
+32 Rd	2.7292
+32 St	2.4635
+33 Av	2.7240
+33 Rd	2.7188
+33 St	2.4531
+34 Av	2.7656
+34 Rd	2.7604
+34 St	2.4948
+35 Av	2.7344
+35 Rd	2.7292
+35 St	2.4635
+36 Av	2.7396
+36 Rd	2.7344
+36 St	2.4688
+37 Av	2.6615
+37 Dr	2.5156
+37 Rd	2.6562
+37 St	2.3906
+38 Av	2.7500
+38 Dr	2.6042
+38 Rd	2.7448
+38 St	2.4792
+39 Av	2.7396
+39 Dr	2.5938
+39 Pl	2.3958
+39 Rd	2.7344
+39 St	2.4688
+4 Av	2.1667
+4 Ct	1.9219
+4 Dr	2.0208
+4 Pl	1.8229
+4 St	1.8958
+40 Av	2.8229
+40 Dr	2.6771
+40 Rd	2.8177
+40 St	2.5521
+41 Av	2.5677
+41 Dr	2.4219
+41 Rd	2.5625
+41 St	2.2969
+42 Av	2.7760
+42 Pl	2.4323
+42 Rd	2.7708
+42 St	2.5052
+43 Av	2.7656
+43 Rd	2.7604
+43 St	2.4948
+44 Av	2.8073
+44 Dr	2.6615
+44 Rd	2.8021
+44 St	2.5365
+45 Av	2.7760
+45 Dr	2.6302
+45 Rd	2.7708
+45 St	2.5052
+46 Av	2.7812
+46 Rd	2.7760
+46 St	2.5104
+47 Av	2.7031
+47 Rd	2.6979
+47 St	2.4323
+48 Av	2.7917
+48 St	2.5208
+49 Av	2.7812
+49 Pl	2.4375
+49 Rd	2.7760
+49 St	2.5104
+5 Av	2.1354
+5 Dr	1.9896
+5 St	1.8646
+50 Av	2.7917
+50 St	2.5208
+51 Av	2.5365
+51 Dr	2.3906
+51 Rd	2.5312
+51 St	2.2656
+52 Av	2.7448
+52 Ct	2.5000
+52 Dr	2.5990
+52 Rd	2.7396
+52 St	2.4740
+53 Av	2.7344
+53 Dr	2.5885
+53 Pl	2.3906
+53 Rd	2.7292
+53 St	2.4635
+54 Av	2.7760
+54 Dr	2.6302
+54 Pl	2.4323
+54 Rd	2.7708
+54 St	2.5052
+55 Av	2.7448
+55 Dr	2.5990
+55 Rd	2.7396
+55 St	2.4740
+56 Av	2.7500
+56 Dr	2.6042
+56 Pl	2.4062
+56 Rd	2.7448
+56 St	2.4792
+56 Ter	3.0469
+57 Av	2.6719
+57 Dr	2.5260
+57 Pl	2.3281
+57 Rd	2.6667
+57 St	2.4010
+58 Av	2.7604
+58 Dr	2.6146
+58 Ln	2.6458
+58 Pl	2.4167
+58 Rd	2.7552
+58 St	2.4896
+59 Av	2.7500
+59 Dr	2.6042
+59 Pl	2.4062
+59 Rd	2.7448
+59 St	2.4792
+6 Av	2.1406
+6 Dr	1.9948
+6 Rd	2.1354
+6 St	1.8698
+60 Av	2.7969
+60 Ct	2.5521
+60 Dr	2.6510
+60 Ln	2.6823
+60 Pl	2.4531
+60 Rd	2.7917
+60 St	2.5260
+61 Av	2.5417
+61 Dr	2.3958
+61 Rd	2.5365
+61 St	2.2708
+62 Av	2.7500
+62 Dr	2.6042
+62 Rd	2.7448
+62 St	2.4792
+63 Av	2.7396
+63 Dr	2.5938
+63 Pl	2.3958
+63 Rd	2.7344
+63 St	2.4688
+64 Av	2.7812
+64 Cir	2.8438
+64 Ln	2.6667
+64 Pl	2.4375
+64 Rd	2.7760
+64 St	2.5104
+65 Av	2.7500
+65 Cres	3.5833
+65 Dr	2.6042
+65 Ln	2.6354
+65 Pl	2.4062
+65 Rd	2.7448
+65 St	2.4792
+65 St Transverse	7.9740
+66 Av	2.7552
+66 Dr	2.6094
+66 Pl	2.4115
+66 Rd	2.7500
+66 St	2.4844
+67 Av	2.6771
+67 Dr	2.5312
+67 Pl	2.3333
+67 Rd	2.6719
+67 St	2.4062
+68 Av	2.7656
+68 Dr	2.6198
+68 Pl	2.4219
+68 Rd	2.7604
+68 St	2.4948
+69 Av	2.7552
+69 Dr	2.6094
+69 Ln	2.6406
+69 Pl	2.4115
+69 Rd	2.7500
+69 St	2.4844
+7 Av	2.0625
+7 Av S	2.9271
+7 Dr	1.9167
+7 St	1.7917
+70 Av	2.7188
+70 Dr	2.5729
+70 Rd	2.7135
+70 St	2.4479
+71 Av	2.4635
+71 Cres	3.2969
+71 Dr	2.3177
+71 Pl	2.1198
+71 Rd	2.4583
+71 St	2.1927
+72 Av	2.6719
+72 Cres	3.5052
+72 Ct	2.4271
+72 Dr	2.5260
+72 Pl	2.3281
+72 Rd	2.6667
+72 St	2.4010
+73 Av	2.6615
+73 Pl	2.3177
+73 Rd	2.6562
+73 St	2.3906
+73 Ter	2.9583
+74 Av	2.7031
+74 Pl	2.3594
+74 St	2.4323
+75 Av	2.6719
+75 Pl	2.3281
+75 Rd	2.6667
+75 St	2.4010
+76 Av	2.6771
+76 Dr	2.5312
+76 Rd	2.6719
+76 St	2.4062
+77 Av	2.5990
+77 Cres	3.4323
+77 Pl	2.2552
+77 Rd	2.5938
+77 St	2.3281
+78 Av	2.6875
+78 Cres	3.5208
+78 Dr	2.5417
+78 Rd	2.6823
+78 St	2.4167
+79 Av	2.6771
+79 Ln	2.5625
+79 Pl	2.3333
+79 St	2.4062
+79 St Transverse	7.9010
+8 Av	2.1510
+8 Dr	2.0052
+8 Rd	2.1458
+8 St	1.8802
+80 Av	2.8073
+80 Dr	2.6615
+80 Rd	2.8021
+80 St	2.5365
+81 Av	2.5521
+81 Rd	2.5469
+81 St	2.2812
+82 Av	2.7604
+82 Dr	2.6146
+82 Pl	2.4167
+82 Rd	2.7552
+82 St	2.4896
+83 Av	2.7500
+83 Dr	2.6042
+83 Pl	2.4062
+83 Rd	2.7448
+83 St	2.4792
+84 Av	2.7917
+84 Dr	2.6458
+84 Pl	2.4479
+84 Rd	2.7865
+84 St	2.5208
+85 Av	2.7604
+85 Dr	2.6146
+85 Rd	2.7552
+85 St	2.4896
+86 Av	2.7656
+86 Cres	3.5990
+86 Dr	2.6198
+86 Rd	2.7604
+86 St	2.4948
+86 St Transverse	7.9896
+87 Av	2.6875
+87 Dr	2.5417
+87 Rd	2.6823
+87 St	2.4167
+87 Ter	2.9844
+88 Av	2.7760
+88 Dr	2.6302
+88 Ln	2.6615
+88 Pl	2.4323
+88 Rd	2.7708
+88 St	2.5052
+89 Av	2.7656
+89 Rd	2.7604
+89 St	2.4948
+9 Av	2.1406
+9 Rd	2.1354
+9 St	1.8698
+90 Av	2.7969
+90 Ct	2.5521
+90 Pl	2.4531
+90 Rd	2.7917
+90 St	2.5260
+91 Av	2.5417
+91 Dr	2.3958
+91 Pl	2.1979
+91 Rd	2.5365
+91 St	2.2708
+92 Av	2.7500
+92 Rd	2.7448
+92 St	2.4792
+93 Av	2.7396
+93 Rd	2.7344
+93 St	2.4688
+94 Av	2.7812
+94 Dr	2.6354
+94 Pl	2.4375
+94 Rd	2.7760
+94 St	2.5104
+95 Av	2.7500
+95 Pl	2.4062
+95 St	2.4792
+96 Av	2.7552
+96 Pl	2.4115
+96 St	2.4844
+97 Av	2.6771
+97 Pl	2.3333
+97 St	2.4062
+97 St Transverse	7.9010
+98 Av	2.7656
+98 Pl	2.4219
+98 St	2.4948
+99 Av	2.7552
+99 Pl	2.4115
+99 Rd	2.7500
+99 St	2.4844
+A New St	4.2500
+A Rd	2.2396
+A St	1.9740
+Aaron Ln	4.2656
+Abbey Ct	4.2812
+Abbey Rd	4.5208
+Abbot St	4.0885
+Abbott Rd	4.7448
+Abbott St	4.4792
+Abby Pl	3.6250
+Aberdeen Rd	6.0781
+Aberdeen St	5.8125
+Abingdon Av	6.0156
+Abingdon Ct	5.7708
+Abingdon Rd	6.0104
+Abraham Kazan St	8.7656
+Acacia Av	4.7240
+Academy Av	5.9271
+Academy Park Pl	8.0052
+Academy Pl	5.5833
+Academy St	5.6562
+Ackerman St	6.0781
+Acorn Ct	4.1198
+Acorn Pl	4.0208
+Acorn St	4.0938
+Ada Dr	3.2344
+Ada Pl	3.0365
+Adair St	3.8073
+Adam Clayton Powell Jr Blvd	13.5365
+Adam Ct	4.0156
+Adams Av	4.7552
+Adams Pl	4.4115
+Adams St	4.4844
+Addison Av	5.3385
+Adee Av	3.9375
+Adelaide Av	5.6458
+Adelaide Rd	5.6406
+Adele Ct	3.9844
+Adele St	3.9583
+Adelphi Av	5.1250
+Adelphi St	4.8542
+Adlai Cir	4.0156
+Adler Pl	3.7448
+Adlers Ln	4.4688
+Adlers Way	5.2812
+Administration Hl	8.2917
+Admiral Av	5.2500
+Admiral Ct	5.0052
+Admiral Ln	5.1354
+Admiralty Loop	7.2135
+Adrian Av	4.6719
+Adrianne Ln	5.7083
+Adrienne Pl	5.4792
+Agar Pl	3.4531
+Agate Ct	4.0833
+Agnes Pl	4.1250
+Agrig Ct	3.8542
+Aguilar Av	4.9635
+Ainslie St	4.4740
+Ainsworth Av	6.3333
+Aitken Pl	4.2812
+Akron St	4.1094
+Alabama Av	5.6667
+Alabama Pl	5.3229
+Alafia Ln	4.1823
+Alameda Av	5.6667
+Alan Loop	4.6927
+Alan Pl	3.3438
+Alaska Pl	4.3594
+Alaska St	4.4323
+Alban St	3.9948
+Albany Av	4.8333
+Albany Cres	5.6667
+Albany St	4.5625
+Albee Av	4.2292
+Albee Sq	4.1458
+Albemarle Rd	6.3698
+Albemarle Ter	6.6719
+Albert Ct	4.2344
+Albert Rd	4.4740
+Albert St	4.2083
+Alberta Av	5.0365
+Albion Av	4.5573
+Albion Pl	4.2135
+Albourne Av	5.8438
+Albourne Av E	6.7188
+Albright St	5.1042
+Alcott Pl	4.0833
+Alcott St	4.1562
+Alden Pl	3.9219
+Alder Walk	5.0677
+Alderbrook Rd	6.7708
+Alderton St	5.3698
+Alderwood Pl	6.2083
+Aldrich St	4.6771
+Aldus St	3.9323
+Alecia Av	4.4740
+Alex Cir	3.7344
+Alexander Av	6.3750
+Alexandra Ct	6.1302
+Alexandra Pl	6.0312
+Algonkin St	5.4375
+Alice Ct	3.6719
+Allegro St	4.6771
+Allen Av	3.9792
+Allen Ct	3.7344
+Allen Dr	3.8333
+Allen Pl	3.6354
+Allen St	3.7083
+Allendale Rd	5.9583
+Allendale St	5.6927
+Allentown Ln	6.1667
+Allerton Av	5.3542
+Alley Pond Park Service Rd	12.7760
+Allison Av	4.7656
+Allison Pl	4.4219
+Almeda Av	5.1094
+Almond St	4.8854
+Almont Rd	4.9635
+Alonzo Rd	4.8021
+Alpine Av	4.5469
+Alpine Ct	4.3021
+Alston Pl	4.2396
+Alstyne Av	5.1406
+Altamont St	5.6458
+Altavista Ct	5.5208
+Alter Av	3.9010
+Alton Pl	3.7448
+Altoona Av	5.2135
+Alumnae Cir	5.7812
+Alverson Av	5.7240
+Alverson Loop	6.7292
+Alvine Av	4.5260
+Alwick Rd	4.6615
+Alysia Ct	4.1927
+Amador St	4.9740
+Amanda Ct	5.1667
+Amaron Ln	5.1458
+Amazon Ct	5.1406
+Ambassador Ln	7.2552
+Amber St	4.4062
+Amboy Ln	4.7240
+Amboy Rd	4.8333
+Amboy St	4.5677
+Amelia Ct	4.5677
+Amelia Rd	4.8073
+Amersfort Pl	5.9896
+Ames Ln	4.0625
+Amethyst St	5.8490
+Amherst Av	5.5781
+Amherst St	5.3073
+Amity Pl	4.0208
+Amity St	4.0938
+Amory Ct	4.4323
+Ampere Av	5.2344
+Amstel Blvd	5.7031
+Amsterdam Av	7.0000
+Amsterdam Pl	6.6562
+Amundson Av	6.5469
+Amy Ct	3.4479
+Amy Ln	3.5781
+Anaconda St	5.9635
+Anaya Pl	4.1771
+Anchor Dr	4.8125
+Anchor Pl	4.6146
+Anderson Av	6.0469
+Anderson Rd	6.0417
+Anderson St	5.7760
+Andes Pl	4.1250
+Andes Rd	4.4635
+Andrea Ct	4.7031
+Andrea Pl	4.6042
+Andrease St	5.7292
+Andrews Av	5.6354
+Andrews Av N	6.6042
+Andrews Av S	6.5000
+Andrews St	5.3646
+Andros Av	4.8958
+Androvette Av	6.8542
+Androvette St	6.5833
+Angela Dr	4.6771
+Angelas Pl	4.9740
+Anita St	3.7969
+Anjali Loop	5.2552
+Ankener Av	5.5208
+Ann St	3.1615
+Anna Ct	3.7448
+Annadale Ln	5.8594
+Annadale Rd	5.9688
+Annapolis St	5.9323
+Annfield Ct	5.2604
+Anthony Av	5.5521
+Anthony J Griffin Pl	9.2500
+Anthony St	5.2812
+Antin Pl	3.7604
+Apex Pl	3.6146
+Apollo St	4.2708
+Appleby Av	5.3958
+Applegate Ct	6.0885
+Apricot Ct	4.7760
+Aquatic Dr	5.0417
+Aquatic Pl	4.8438
+Aqueduct Av E	6.9531
+Aqueduct Av W	7.1771
+Arbor Ct	3.9792
+Arbutus Av	5.3125
+Arbutus Way	6.0104
+Arc Pl	2.8594
+Arcade Av	4.8958
+Arcade Pl	4.5521
+Arcadia Pl	4.8333
+Arch St	3.5260
+Archer Av	4.7708
+Archer Rd	4.7656
+Archer St	4.5000
+Archway Pl	5.3281
+Archwood Av	6.2604
+Arden Av	4.3906
+Arden St	4.1198
+Ardmore Av	5.6615
+Ardsley Loop	6.1562
+Ardsley Rd	5.1458
+Ardsley St	4.8802
+Area Pl	3.4323
+Argonne St	5.2812
+Argyle Rd	4.6510
+Arielle Ln	4.5260
+Arion Pl	3.7604
+Arion Rd	4.0990
+Arkansas Av	5.9167
+Arkansas Dr	5.7708
+Arleigh Rd	4.9583
+Arlene Ct	4.4167
+Arlene St	4.3906
+Arlington Av	5.9583
+Arlington Ct	5.7135
+Arlington Pl	5.6146
+Arlington Ter	6.2552
+Arlo Rd	3.5156
+Armand Pl	4.9271
+Armand St	5.0000
+Armour Pl	4.7760
+Armstrong Av	6.5833
+Arnold Av	4.6927
+Arnold St	4.4219
+Arnow Av	4.5729
+Arnow Pl	4.2292
+Arnprior St	5.2448
+Arrowood Ct	5.8646
+Arthur Av	4.6562
+Arthur Ct	4.4115
+Arthur Kill Rd	6.4740
+Arthur St	4.3854
+Artillery Rd	5.4531
+Arverne Blvd	6.1875
+Arverne Mews Dr	8.0625
+Ascan Av	4.4323
+Asch Loop	4.8802
+Ascot Av	4.2396
+Ash Av	3.3333
+Ash Pl	2.9896
+Ash St	3.0625
+Ashby Av	4.4792
+Ashford St	4.9896
+Ashland Av	5.3542
+Ashland Av E	6.2292
+Ashland Pl	5.0104
+Ashley Ln	4.6354
+Ashton Dr	4.7396
+Ashwood Ct	5.5521
+Ashworth Av	6.0521
+Aske St	3.5833
+Aspen Knolls Way	8.3646
+Aspen Pl	4.1250
+Aspinwall St	5.8125
+Asquith Cres	6.0104
+Assembly Rd	6.1042
+Aster Ct	3.8594
+Aster Pl	3.7604
+Astor Av	4.1146
+Astor Pl	3.7708
+Astoria Blvd	5.7969
+Astoria Blvd N	6.7656
+Astoria Blvd S	6.6615
+Astoria Park S	6.7135
+Atari Ln	3.7760
+Athena Pl	4.5938
+Athlone Ct	4.9948
+Atkins Av	4.5625
+Atlantic Av	5.2917
+Atlantic Cmns	6.6250
+Atlantic Walk	6.2708
+Atmore Pl	4.7135
+Attorney St	5.4583
+Atwater Ct	5.0625
+Aubrey Av	4.9583
+Auburn Av	5.0208
+Auburn Pl	4.6771
+Auburndale Ln	6.8906
+Audley St	4.5625
+Audubon Av	5.7500
+Auerback Ln	5.9323
+Augusta Av	5.4531
+Augusta Ct	5.2083
+Augustina Av	6.3281
+Aultman Av	5.5521
+Aurelia Ct	4.6979
+Ausable Av	5.3177
+Austell Pl	4.5208
+Austin Av	4.5990
+Austin Pl	4.2552
+Austin St	4.3281
+Autumn Av	5.2969
+Autumn Ln	5.1823
+Av A	2.2448
+Av B	2.2188
+Av C	2.1667
+Av C Loop	4.6979
+Av D	2.2396
+Av E	2.1510
+Av F	2.0990
+Av G	2.2083
+Av H	2.2500
+Av I	1.8229
+Av J	2.0833
+Av K	2.2344
+Av L	2.0938
+Av M	2.3385
+Av N	2.2448
+Av O	2.2500
+Av P	2.1667
+Av R	2.2188
+Av S	2.1406
+Av St John	5.0938
+Av T	2.1250
+Av U	2.2396
+Av V	2.2083
+Av W	2.3750
+Av X	2.2031
+Av Y	2.2083
+Av Z	2.1667
+Av of Science	6.3958
+Av of the Americas	8.9479
+Av of the Finest	7.3906
+Ava Pl	3.0156
+Avalon Ct	4.5677
+Avenue A	4.5469
+Avenue C	4.4688
+Averill Pl	4.2969
+Avery Av	4.3438
+Aviation Rd	5.4688
+Aviston St	4.8594
+Aviva Ct	3.9531
+Avon Green	5.4948
+Avon Ln	3.8490
+Avon Pl	3.6198
+Avon Rd	3.9583
+Avon St	3.6927
+Aye Ct	3.1250
+Ayers Rd	4.2760
+Aymar Av	4.6667
+Azalea Ct	4.5052
+Aztec Pl	3.9323
+B Rd	2.2135
+B St	1.9479
+Babbage St	5.3542
+Babylon Av	5.3750
+Bache Av	4.4688
+Bache St	4.1979
+Baden Pl	4.1615
+Bagley Av	4.7708
+Bailey Av	4.4740
+Bailey Ct	4.2292
+Bailey Pl	4.1302
+Bainbridge Av	6.6406
+Bainbridge St	6.3698
+Baisley Av	4.9688
+Baisley Blvd	5.8125
+Baker Av	4.3073
+Baker Pl	3.9635
+Balcom Av	5.0573
+Baldwin St	5.0000
+Balfour Pl	4.6667
+Balfour St	4.7396
+Ballard Av	4.9115
+Balsam Ct	4.7552
+Balsam Pl	4.6562
+Baltic Av	4.2812
+Baltic St	4.0104
+Baltimore St	5.8906
+Bamberger Ln	6.6458
+Bancroft Av	5.6510
+Bancroft Pl	5.3073
+Banes Ct	4.1771
+Bang Ter	4.2448
+Bangor St	4.6615
+Bank Pl	3.5833
+Bank St	3.6562
+Banker St	4.6302
+Banner 3 Rd	5.7812
+Banner 3 Ter	6.0833
+Banner Av	4.9375
+Bantam Pl	4.8542
+Banyer Pl	4.5677
+Bar Ct	2.9479
+Barb St	3.5000
+Barbadoes Dr	6.3802
+Barbara St	5.0312
+Barberry Ct	5.4844
+Barbey St	4.6250
+Barclay Av	5.1510
+Barclay Cir	5.2135
+Barclay St	4.8802
+Bard Av	3.7708
+Bardwell Av	5.6615
+Baring Pl	4.3021
+Barker Av	4.7240
+Barker St	4.4531
+Barkley Av	5.1667
+Barlow Av	4.8021
+Barlow Ct	4.5573
+Barlow Dr N	5.6250
+Barlow Dr S	5.5208
+Barnard Av	5.3385
+Barnell St	4.6562
+Barnes Av	4.8385
+Barnett Av	5.1250
+Barnett Pl	4.7812
+Barnwell Av	5.6771
+Baron Blvd	5.1979
+Barret Rd	4.5521
+Barrett Av	4.9479
+Barrett Ln	4.8333
+Barretto St	5.2448
+Barrington St	6.3438
+Barron St	4.5000
+Barrow Pl	4.5833
+Barrow St	4.6562
+Barrows Ct	5.1771
+Barry Ct	3.9323
+Barry Rd	4.1719
+Barry St	3.9062
+Bartholdi St	5.6250
+Bartlett Av	5.2135
+Bartlett Pl	4.8698
+Bartlett St	4.9427
+Barton Av	4.7448
+Bartow Av	4.9010
+Bartow Cir	4.9635
+Bartow St	4.6302
+Baruch Dr	4.7760
+Baruch Pl	4.5781
+Bascom Av	5.2604
+Bascom Pl	4.9167
+Bass St	3.4948
+Bassett Av	5.1042
+Bassford Av	5.6927
+Batchelder St	6.4323
+Bates Rd	4.2135
+Bath Av	3.7604
+Bath Walk	4.7396
+Bathgate Av	5.8438
+Bathgate St	5.5729
+Battery Av	5.0990
+Battery Pl	4.7552
+Battery Rd	5.0938
+Baughman Pl	6.2292
+Baxter Av	4.7188
+Baxter St	4.4479
+Bay 10 St	4.3802
+Bay 11 St	4.1250
+Bay 13 St	4.3229
+Bay 14 St	4.3646
+Bay 16 St	4.3385
+Bay 17 St	4.2604
+Bay 19 St	4.3385
+Bay 20 St	4.5885
+Bay 22 St	4.5417
+Bay 23 St	4.5312
+Bay 24 St	4.5729
+Bay 25 St	4.5417
+Bay 26 St	4.5469
+Bay 27 St	4.4688
+Bay 28 St	4.5573
+Bay 29 St	4.5469
+Bay 30 St	4.5781
+Bay 31 St	4.3229
+Bay 32 Pl	4.4583
+Bay 32 St	4.5312
+Bay 34 St	4.5625
+Bay 35 St	4.5312
+Bay 37 St	4.4583
+Bay 38 St	4.5469
+Bay 40 St	4.6198
+Bay 41 St	4.3646
+Bay 43 St	4.5625
+Bay 44 St	4.6042
+Bay 46 St	4.5781
+Bay 47 St	4.5000
+Bay 48 St	4.5885
+Bay 49 St	4.5781
+Bay 50 St	4.5885
+Bay 52 St	4.5417
+Bay 53 St	4.5312
+Bay 54 St	4.5729
+Bay 7 St	3.8594
+Bay 8 St	3.9479
+Bay Av	3.3438
+Bay Cliff Ter	5.8333
+Bay Ct	3.0990
+Bay Ln	3.2292
+Bay Park Dr	5.6198
+Bay Park Pl	5.4219
+Bay Pkwy	4.5833
+Bay Ridge Av	6.2812
+Bay Ridge Pkwy	7.5208
+Bay Ridge Pl	5.9375
+Bay Shore Av	6.3438
+Bay St	3.0729
+Bay St Landing	7.0729
+Bay Ter	3.6406
+Bay View Av	5.8646
+Bay View Pl	5.5208
+Bayard St	4.6250
+Baychester Av	6.8958
+Bayfield Av	5.4167
+Bayonne Bridge	7.4844
+Bayonne Ct	5.4115
+Bayport Pl	4.9531
+Bayside	3.7292
+Bayside Av	5.2552
+Bayside Dr	5.1094
+Bayside Ln	5.1406
+Bayside St	4.9844
+Bayside Walk	6.2344
+Bayswater Av	6.5104
+Bayview Av	5.4896
+Bayview Ln	5.3750
+Bayview Pl	5.1458
+Bayview Ter	5.7865
+Bayview Walk	6.4688
+Baywater Ct	5.7708
+Bayway Walk	6.1979
+Beach 100 St	6.1615
+Beach 101 St	5.9062
+Beach 102 Ln	6.2708
+Beach 102 St	6.1146
+Beach 104 St	6.1458
+Beach 105 St	6.1146
+Beach 106 St	6.1198
+Beach 108 St	6.1302
+Beach 109 St	6.1198
+Beach 11 St	5.2500
+Beach 110 St	5.9062
+Beach 111 St	5.6510
+Beach 112 St	5.8594
+Beach 113 St	5.8490
+Beach 114 St	5.8906
+Beach 115 St	5.8594
+Beach 116 St	5.8646
+Beach 117 St	5.7865
+Beach 118 St	5.8750
+Beach 119 St	5.8646
+Beach 12 St	5.4583
+Beach 120 St	6.1146
+Beach 121 St	5.8594
+Beach 122 St	6.0677
+Beach 123 St	6.0573
+Beach 124 St	6.0990
+Beach 125 St	6.0677
+Beach 126 St	6.0729
+Beach 127 St	5.9948
+Beach 128 St	6.0833
+Beach 129 St	6.0729
+Beach 13 St	5.4479
+Beach 130 St	6.1042
+Beach 131 St	5.8490
+Beach 132 St	6.0573
+Beach 133 St	6.0469
+Beach 134 St	6.0885
+Beach 135 St	6.0573
+Beach 136 St	6.0625
+Beach 137 St	5.9844
+Beach 138 St	6.0729
+Beach 139 St	6.0625
+Beach 14 St	5.4896
+Beach 140 St	6.1458
+Beach 141 St	5.8906
+Beach 142 St	6.0990
+Beach 143 St	6.0885
+Beach 144 St	6.1302
+Beach 145 St	6.0990
+Beach 146 St	6.1042
+Beach 147 St	6.0260
+Beach 148 St	6.1146
+Beach 149 St	6.1042
+Beach 15 St	5.4583
+Beach 16 St	5.4635
+Beach 169 St	6.0781
+Beach 169 Street Greenway	12.9323
+Beach 17 St	5.3854
+Beach 18 St	5.4740
+Beach 184 St	6.1146
+Beach 19 St	5.4635
+Beach 193 St	6.0625
+Beach 20 St	5.7135
+Beach 201 St	6.1146
+Beach 203 St	6.3125
+Beach 204 St	6.3542
+Beach 207 St	6.2500
+Beach 208 St	6.3385
+Beach 209 St	6.3281
+Beach 21 St	5.4583
+Beach 210 St	6.1146
+Beach 212 St	6.0677
+Beach 213 St	6.0573
+Beach 214 St	6.0990
+Beach 215 St	6.0677
+Beach 216 St	6.0729
+Beach 217 St	5.9948
+Beach 218 St	6.0833
+Beach 219 St	6.0729
+Beach 22 St	5.6667
+Beach 220 St	6.3229
+Beach 221 St	6.0677
+Beach 222 St	6.2760
+Beach 227 St	6.2031
+Beach 24 St	5.6979
+Beach 25 St	5.6667
+Beach 26 St	5.6719
+Beach 27 St	5.5938
+Beach 28 St	5.6823
+Beach 29 St	5.6719
+Beach 3 St	5.0469
+Beach 30 St	5.7031
+Beach 31 St	5.4479
+Beach 32 St	5.6562
+Beach 33 St	5.6458
+Beach 34 St	5.6875
+Beach 35 St	5.6562
+Beach 36 St	5.6615
+Beach 37 St	5.5833
+Beach 38 St	5.6719
+Beach 39 St	5.6615
+Beach 4 St	5.0885
+Beach 40 St	5.7448
+Beach 41 St	5.4896
+Beach 42 St	5.6979
+Beach 43 St	5.6875
+Beach 44 St	5.7292
+Beach 45 St	5.6979
+Beach 46 St	5.7031
+Beach 47 St	5.6250
+Beach 48 St	5.7135
+Beach 49 St	5.7031
+Beach 5 St	5.0573
+Beach 50 St	5.7135
+Beach 51 St	5.4583
+Beach 52 St	5.6667
+Beach 53 St	5.6562
+Beach 54 St	5.6979
+Beach 56 Pl	5.5990
+Beach 56 St	5.6719
+Beach 57 St	5.5938
+Beach 58 St	5.6823
+Beach 59 St	5.6719
+Beach 6 St	5.0625
+Beach 60 St	5.7188
+Beach 61 St	5.4635
+Beach 62 St	5.6719
+Beach 63 St	5.6615
+Beach 64 St	5.7031
+Beach 65 St	5.6719
+Beach 66 St	5.6771
+Beach 67 St	5.5990
+Beach 68 St	5.6875
+Beach 69 St	5.6771
+Beach 7 St	4.9844
+Beach 70 St	5.6406
+Beach 72 St	5.5938
+Beach 73 St	5.5833
+Beach 74 St	5.6250
+Beach 75 St	5.5938
+Beach 77 St	5.5208
+Beach 79 St	5.5990
+Beach 8 St	5.0729
+Beach 80 St	5.7292
+Beach 81 St	5.4740
+Beach 83 St	5.6719
+Beach 84 St	5.7135
+Beach 85 St	5.6823
+Beach 86 St	5.6875
+Beach 87 St	5.6094
+Beach 88 St	5.6979
+Beach 89 St	5.6875
+Beach 9 St	5.0625
+Beach 90 St	5.7188
+Beach 91 St	5.4635
+Beach 92 St	5.6719
+Beach 93 St	5.6615
+Beach 94 St	5.7031
+Beach 95 St	5.6719
+Beach 96 St	5.6771
+Beach 97 St	5.5990
+Beach 98 St	5.6875
+Beach 99 St	5.6771
+Beach Av	4.4688
+Beach Breeze Dr	7.8958
+Beach Breeze Ln	7.9271
+Beach Breeze Pl	7.6979
+Beach Channel Dr	8.4010
+Beach Front Rd	7.2552
+Beach Pl	4.1250
+Beach Rd	4.4635
+Beach St	4.1979
+Beach Way	5.1667
+Beachview Av	6.6146
+Beacon Av	5.0365
+Beacon Cir	5.0990
+Beacon Ct	4.7917
+Beacon Ln	4.9219
+Beacon Pl	4.6927
+Beadel St	4.4896
+Beak St	3.6198
+Beamer Ct	4.9427
+Bear St	3.4792
+Beard St	4.0573
+Beatrice Ct	5.2760
+Beaumont Av	6.3594
+Beaumont St	6.0885
+Beaver Rd	4.8594
+Beaver St	4.5938
+Beck Rd	3.8698
+Beck St	3.6042
+Bedell Av	4.4948
+Bedell Ln	4.3802
+Bedell St	4.2240
+Bedford Av	5.2812
+Bedford Park Blvd	8.5469
+Bedford Park Blvd W	9.6458
+Bedford Pl	4.9375
+Bedford St	5.0104
+Bee Ct	3.0885
+Beebe St	4.1979
+Beech Av	4.4688
+Beech Ct Circle	7.2031
+Beech Pl	4.1250
+Beech Ter	4.7656
+Beech Tree Ln	6.7344
+Beechknoll Av	6.7708
+Beechknoll Rd	6.7656
+Beechwood Av	6.9323
+Beechwood Pl	6.5885
+Beekman Av	5.9219
+Beekman Cir	5.9844
+Beekman Pl	5.5781
+Beekman St	5.6510
+Beethoven St	6.3229
+Behan Ct	4.2760
+Beirbower Ln	6.2292
+Belair Ln	4.2083
+Belair Rd	4.3177
+Belden St	4.5260
+Belfast Av	4.8750
+Belfield Av	5.1406
+Belknap St	5.0833
+Bell Av	3.3594
+Bell Blvd	4.2031
+Bell Point Dr	5.9375
+Bell Slip	3.8490
+Bell St	3.0885
+Bellaire Pl	4.8281
+Bellamy Loop	6.3698
+Bellavista Ct	5.9531
+Bellhaven Pl	5.8750
+Belmar Dr E	5.6510
+Belmar Dr W	5.8750
+Belmont Av	5.5000
+Belmont Pl	5.1562
+Belvedere Ct	6.0469
+Belvidere St	5.7448
+Belwood Loop	6.5365
+Bement Av	5.1979
+Bement Ct	4.9531
+Benchley Pl	5.5781
+Benedict Av	5.7188
+Benedict Rd	5.7135
+Benham St	5.1302
+Benjamin Dr	5.8177
+Benjamin Pl	5.6198
+Bennett Av	5.3021
+Bennett Ct	5.0573
+Bennett Pl	4.9583
+Bennett St	5.0312
+Bennington St	6.6979
+Benson Av	5.0260
+Benson Pl	4.6823
+Benson St	4.7552
+Bent St	3.4896
+Bentley Ln	5.0625
+Bentley Rd	5.1719
+Bentley St	4.9062
+Benton Av	4.9219
+Benton Ct	4.6771
+Benton St	4.6510
+Benziger Av	5.7448
+Beresford Av	6.1719
+Bergen Av	4.9219
+Bergen Beach Pl	7.7708
+Bergen Ct	4.6771
+Bergen Cv	4.8438
+Bergen Pl	4.5781
+Bergen Rd	4.9167
+Bergen St	4.6510
+Berglund Av	5.8281
+Berkeley Pl	5.3802
+Berkley St	4.8958
+Berkshire Ln	5.9792
+Berkwit Ter	5.4688
+Berrian Blvd	5.8854
+Berriman St	5.6510
+Berry Av	4.1771
+Berry Av W	5.2760
+Berry Ct	3.9323
+Berry Pl	3.8333
+Berry St	3.9062
+Bert Rd	3.5781
+Bertha Pl	4.3906
+Bertram Av	5.4375
+Berwick Pl	4.9792
+Berwin Ln	4.7031
+Bessemer St	5.9062
+Bessemund Av	6.9688
+Beth Pl	3.4167
+Bethel Av	4.6094
+Bethel Loop	5.6146
+Bethesda Ter Underpass	11.4792
+Bethune St	5.2344
+Betts Av	4.0521
+Betty Ct	3.8802
+Beverley Rd	5.7188
+Beverly Av	5.1667
+Beverly Rd	5.1615
+Bevy Ct	3.6562
+Bevy Pl	3.5573
+Bialystoker Pl	6.5573
+Bianca Ct	4.5052
+Bidwell Av	4.9688
+Bijou Av	3.9427
+Billings Pl	4.6875
+Billings St	4.7604
+Billingsley Ter	6.7448
+Billiou St	4.2552
+Billop Av	4.2292
+Bills Pl	3.2344
+Bionia Av	4.5000
+Birch Av	4.0521
+Birch Ln	3.9375
+Birch Rd	4.0469
+Birchall Av	5.1927
+Birchard Av	5.6042
+Birdsall Av	5.1302
+Birmington Pkwy	8.0417
+Bishop St	4.4635
+Bismark Av	5.4062
+Bivona St	4.5052
+Blackford Av	6.0938
+Blackhorse Ct	6.5521
+Blackrock Av	6.2500
+Blackstone Av	6.7708
+Blackstone Pl	6.4271
+Blackwells Ln	6.4375
+Blaine Ct	4.2552
+Blair Av	3.7656
+Blaise Ct	4.1562
+Blake Av	4.1823
+Blake Ct	3.9375
+Bland Pl	3.8958
+Bleecker St	5.4271
+Bleeker Pl	4.8125
+Bliss Ter	4.0781
+Block St	3.9062
+Blondell Av	5.3906
+Bloomfield Av	6.5990
+Bloomfield Rd	6.5938
+Bloomfield St	6.3281
+Bloomingdale Rd	7.9583
+Blossom Av	5.5156
+Blossom Ln	5.4010
+Blue Heron Ct	6.5260
+Blue Heron Dr	6.6250
+Blue Slip	4.1510
+Blueberry Ln	6.0833
+Blythe Pl	4.2760
+Boat Basin Pl	6.2604
+Bocce Ct	4.1823
+Bodine St	4.5260
+Boelsen Cres	6.1146
+Boerum Pl	4.8906
+Boerum St	4.9635
+Bogardus Pl	5.6615
+Bogart Av	4.7292
+Bogart St	4.4583
+Bogert Av	4.7292
+Bogota St	4.6094
+Bokee Ct	4.2135
+Boker Ct	4.0729
+Bolivar St	4.6198
+Boller Av	4.3438
+Bolton Av	4.6302
+Bolton Rd	4.6250
+Bolton St	4.3594
+Bombay St	5.0990
+Bond St	3.6875
+Bonner Pl	4.6042
+Bonnie Ln	4.6979
+Boody St	4.2292
+Boone Av	4.5052
+Boone St	4.2344
+Booth Av	4.3385
+Booth Memorial Av	8.9531
+Booth St	4.0677
+Borage Pl	4.5521
+Borden Av	4.9323
+Borg Ct	3.5365
+Borinquen Pl	6.0573
+Borkel Pl	4.2656
+Borman Av	5.2344
+Borough Pl	5.1927
+Boscobel Pl	5.4740
+Boscombe Av	6.4062
+Boss St	3.5052
+Boston Rd	4.8281
+Bosworth St	5.7292
+Botanical Garden Rd	9.6302
+Botanical Sq N	6.8854
+Botanical Sq S	6.7812
+Bouck Av	4.4792
+Bouck Ct	4.2344
+Boulder St	4.9531
+Boulevard	4.8125
+Boundary Av	6.0938
+Boundary Rd	6.0885
+Bourton St	5.0781
+Bouton Ln	4.8177
+Bovanizer St	6.0208
+Bow St	3.2656
+Bowden St	4.9948
+Bowdoin St	5.2865
+Bowen St	4.4167
+Bower Ct	4.2656
+Bowery	3.5521
+Bowery Bay Blvd	7.9896
+Bowles Av	4.8802
+Bowling Green Place	9.6510
+Bowne St	4.4167
+Box St	3.0938
+Boyce Av	4.4531
+Boyd Av	3.9323
+Boyd St	3.6615
+Boylan St	4.5260
+Boyle Pl	3.8594
+Boyle St	3.9323
+Boynton Av	5.5000
+Boynton Pl	5.1562
+Boynton St	5.2292
+Brabant St	5.0417
+Brad Ln	3.6562
+Braddock Av	6.0156
+Bradford Av	5.6979
+Bradford St	5.4271
+Bradhurst Av	6.2604
+Bradley Av	5.1875
+Bradley Ct	4.9427
+Bradley St	4.9167
+Brady Av	4.3385
+Bragg St	4.0781
+Braisted Av	5.4948
+Brandis Av	5.1406
+Brandis Ln	5.0260
+Brandt Pl	4.4115
+Brant Walk	5.1562
+Branton St	5.0677
+Brattle Av	4.8229
+Breezy Ct	4.6146
+Breezy Point Blvd	8.4271
+Brehaut Av	5.3281
+Brenton Pl	4.9948
+Brentwood Av	6.6406
+Brevoort Pl	5.3490
+Brevoort St	5.4219
+Brewster St	5.5312
+Brian Cres	4.9010
+Briar Pl	3.5469
+Briarcliff Rd	5.7292
+Briarwood Rd	6.3490
+Brick Ct	3.7708
+Bricktown Way	7.0156
+Bridge Ct	4.3854
+Bridge Park Dr	6.9062
+Bridge Plaza Ct	7.2240
+Bridge St	4.3594
+Bridgeton St	5.9115
+Bridgetown St	6.6615
+Bridgewater Av	7.3021
+Bridgewater St	7.0312
+Brielle Av	4.6146
+Brienna Ct	4.9740
+Briggins Ln	5.3281
+Briggs Av	4.5677
+Brigham St	5.2552
+Brighton 1 Pl	5.9479
+Brighton 1 Rd	6.2865
+Brighton 1 St	6.0208
+Brighton 10 Ct	6.7031
+Brighton 10 Ln	6.8333
+Brighton 10 St	6.6771
+Brighton 10 Ter	7.2448
+Brighton 11 St	6.4219
+Brighton 12 St	6.6302
+Brighton 13 St	6.6198
+Brighton 14 St	6.6615
+Brighton 15 St	6.6302
+Brighton 2 Ln	6.3854
+Brighton 2 Pl	6.1562
+Brighton 2 St	6.2292
+Brighton 3 Ln	6.3750
+Brighton 3 Rd	6.4844
+Brighton 3 St	6.2188
+Brighton 4 Rd	6.5260
+Brighton 4 St	6.2604
+Brighton 4 Ter	6.8281
+Brighton 5 St	6.2292
+Brighton 6 St	6.2344
+Brighton 7 St	6.1562
+Brighton 8 Ct	6.2708
+Brighton 8 St	6.2448
+Brighton Av	5.6406
+Brighton Beach Av	8.8333
+Brighton Ct	5.3958
+Brighton St	5.3698
+Brightwater Av	7.1510
+Brightwater Ct	6.9062
+Brinkerhoff Av	6.9323
+Brinsmade Av	6.5781
+Brisbin St	4.5938
+Bristol Av	4.6615
+Bristol St	4.3906
+Bristow St	4.8490
+Britton Av	4.8594
+Britton St	4.5885
+Broad St	4.0677
+Broadway	4.6875
+Broadway Alley	7.3646
+Broadway Ter	6.5104
+Brocher Rd	5.3073
+Broken Shell Rd	7.5052
+Bronx Blvd	5.2188
+Bronx Park Av	6.7969
+Bronx Park E	6.1458
+Bronx Park S	6.1354
+Bronx River Av	7.1302
+Bronx Shore Rd	7.3698
+Bronx St	4.1042
+Bronxdale Av	6.3594
+Bronxwood Av	6.8385
+Brook Av	4.3281
+Brook St	4.0573
+Brookdale Hospital Dy	10.4531
+Brookfield Av	6.4010
+Brookhaven Av	7.1875
+Brooklyn Av	5.7812
+Brooklyn Bridge	7.6094
+Brooklyn Queens Expy	10.6250
+Brooklyn Queens Expy Service Rd	15.9219
+Brooklyn Queens Expy W	11.7240
+Brooklyn Rd	5.7760
+Brooks Pl	4.4792
+Brooks Pond Pl	7.1094
+Brookside Av	6.2396
+Brookside Loop	7.2448
+Brookside St	5.9688
+Brookville Blvd	7.1510
+Broome St	4.9375
+Broun Pl	4.0469
+Brower Ct	4.6823
+Brown Av	4.5469
+Brown Blvd	5.3906
+Brown Ln	4.4323
+Brown Pl	4.2031
+Brown St	4.2760
+Brownell St	5.4167
+Browning Av	6.0000
+Browns Blvd	5.8854
+Browvale Ln	5.8021
+Bruckner Av	5.8958
+Bruckner Blvd	6.7396
+Bruner Av	4.7969
+Brunn St	4.1458
+Bruno Ln	4.2760
+Brunswick Av	6.4479
+Brunswick St	6.1771
+Brush Av	4.3177
+Bryan St	4.0833
+Bryant Av	4.7448
+Bryant St	4.4740
+Bryson Av	4.8594
+Buchanan Av	6.2500
+Buchanan Pl	5.9062
+Buck St	3.6406
+Buckingham Rd	7.3906
+Buckley St	5.0573
+Bucky Dr	4.3333
+Bud Pl	3.0469
+Buel Av	3.6615
+Buell St	3.6823
+Buffalo Av	4.9583
+Buffalo St	4.6875
+Buffington Av	6.5469
+Buhre Av	4.3802
+Bullard Av	4.9479
+Bulova Av	4.7865
+Bulwer Pl	4.4844
+Bunnecke Ct	5.9688
+Bunnell Ct	4.8958
+Burbank Av	5.5156
+Burchard Ct	5.6719
+Burchell Av	5.5052
+Burchell Rd	5.5000
+Burden Av	4.9583
+Burden Cres	5.7917
+Burdette Pl	5.3594
+Burgher Av	5.3750
+Burgundy Loop	7.1458
+Burke Av	4.3438
+Burling St	4.7031
+Burnett Pl	4.8177
+Burnett St	4.8906
+Burns St	4.0469
+Burnside Av	5.7344
+Burr Av	3.6458
+Burton Av	4.7812
+Burton Ct	4.5365
+Burton St	4.5104
+Bush Av	3.9010
+Bush St	3.6302
+Bushwick Av	6.0312
+Bushwick Ct	5.7865
+Bushwick Pl	5.6875
+Bussing Av	5.2552
+Bussing Pl	4.9115
+Butler Av	4.4688
+Butler Blvd	5.3125
+Butler Pl	4.1250
+Butler St	4.1979
+Butler Ter	4.7656
+Butterworth Av	7.2865
+Buttonwood Rd	7.2135
+Buttrick Av	5.3906
+Bye St	3.0729
+Byrd St	3.5104
+Byrne Av	4.3542
+Byron Av	4.3646
+C Rd	2.1615
+C St	1.8958
+Cable Way	4.8490
+Cabot Pl	3.9167
+Cabot Rd	4.2552
+Cabrini Blvd	5.7188
+Cadman Plaza E	7.5208
+Cadman Plaza W	7.7448
+Caesar Pl	4.4062
+Caffrey Av	4.9948
+Calamus Av	5.5417
+Calamus Cir	5.6042
+Calcagno Ct	5.6094
+Calder Pl	4.2240
+Caldera Pl	4.7812
+Caldwell Av	5.4844
+Calhoun Av	5.3646
+Callahan Ln	5.4948
+Callan Av	4.4583
+Calloway St	5.4792
+Calvanico Ln	6.0000
+Calvin Pl	4.1042
+Calyer St	4.2865
+Cambreleng Av	7.1771
+Cambria Av	5.4375
+Cambria St	5.1667
+Cambridge Av	6.5938
+Cambridge Pl	6.2500
+Cambridge Rd	6.5885
+Camden Av	5.3333
+Camden Ct	5.0885
+Camden St	5.0625
+Cameron Av	5.7396
+Cameron Ct	5.4948
+Cameron Pl	5.3958
+Cammarata Av	6.9635
+Camp Rd	4.1771
+Camp St	3.9115
+Campbell Av	5.9010
+Campbell Dr	5.7552
+Campus Pl	4.9271
+Campus Rd	5.2656
+Canal Av	4.1667
+Canal Pl	3.8229
+Canal St	3.8958
+Canal St W	4.9948
+Canarsie Ln	5.5104
+Canarsie Rd	5.6198
+Canarsie Veterans Cir	10.1875
+Candon Av	5.0573
+Candon Ct	4.8125
+Caney Ln	4.3281
+Caney Rd	4.4375
+Cannon Av	5.0729
+Cannon Blvd	5.9167
+Cannon Pl	4.7292
+Cannon St	4.8021
+Canon Dr	4.3333
+Canterbury Av	6.8385
+Canterbury Ct	6.5938
+Canton Av	4.8698
+Canton Ct	4.6250
+Capellan St	5.3229
+Capstan Ct	5.0938
+Capuchin Way	6.6042
+Carder Rd	4.6875
+Cardiff St	4.4583
+Cardinal Hayes Pl	8.2500
+Cardinal Ln	5.3281
+Cargo Plaza	5.5990
+Cargo Service Rd	8.0573
+Carl Lee Pl	5.0208
+Carlin St	4.0365
+Carlisle Pl	4.7135
+Carlisle St	4.7865
+Carlton Av	4.9844
+Carlton Blvd	5.8281
+Carlton Ct	4.7396
+Carlton Pl	4.6406
+Carlton St	4.7135
+Carly Ct	3.7552
+Carlyle Green	6.3802
+Carlyle St	4.5781
+Carmel Av	4.8698
+Carmel Ct	4.6250
+Carmine St	5.1823
+Carnegie Av	5.7083
+Carnesecca Plaza	8.2969
+Caro St	3.4375
+Carol Ct	3.7552
+Carol Pl	3.6562
+Carolina Ct	5.1875
+Carolina Pl	5.0885
+Carolina Rd	5.4271
+Caroline St	5.1615
+Caroll St	4.0208
+Carolyn Ct	4.9167
+Carpenter Av	6.2344
+Carreau Av	5.2656
+Carriage Ct	5.2865
+Carroll Pl	4.3646
+Carroll St	4.4375
+Carroll St Pedestrian Opas	12.3594
+Carson St	4.5260
+Carter Av	4.5052
+Carteret St	5.1823
+Cartigan Rd	5.5365
+Carver Loop	5.6771
+Cary Av	3.7083
+Cary Ct	3.4635
+Casals Pl	4.2188
+Casanova St	5.7812
+Cascade St	5.1823
+Case Av	3.7760
+Case St	3.5052
+Casey Stengel Plaza	9.4896
+Casler Pl	4.1406
+Cass Pl	3.3698
+Cassidy Pl	4.7969
+Castle Hill Av	6.2969
+Castleton Av	6.0104
+Castor Pl	4.2500
+Caswell Av	5.1094
+Caswell Ln	4.9948
+Catalpa Av	5.0990
+Catalpa Pl	4.7552
+Catamaran Way	7.3750
+Cathedral Pkwy	7.3490
+Cathedral Pl	5.7656
+Catherine Ct	5.8698
+Catherine Ln	6.0000
+Catherine Pl	5.7708
+Catherine Slip	6.6042
+Catherine St	5.8438
+Catlin Av	4.2812
+Caton Av	4.2760
+Caton Pl	3.9323
+Cattaraugus St	7.0260
+Cauldwell Av	6.0781
+Cayuga Av	5.0208
+Cebra Av	4.2760
+Cecil Ct	3.5938
+Cedar Av	4.2760
+Cedar Grove Av	7.3073
+Cedar Grove Ct	7.0625
+Cedar Hill Rd	6.1094
+Cedar Lawn Av	6.9948
+Cedar Ln	4.1615
+Cedar Pl	3.9323
+Cedar St	4.0052
+Cedar Ter	4.5729
+Cedarcliff Rd	6.1146
+Cedarcroft Rd	6.5521
+Cedarview Av	6.4219
+Cedarwood Ct	6.4948
+Cedric Rd	4.5365
+Celebration Ln	6.8438
+Celeste Ct	4.7708
+Celina Ln	4.3333
+Celtic Av	4.2292
+Celtic Pl	3.8854
+Center Blvd	5.5260
+Center Dr	4.5365
+Center Pl	4.3385
+Center Rd	4.6771
+Center St	4.4115
+Central Av	4.9740
+Central Park Great Hl	9.9896
+Central Park N	6.8385
+Central Park S	6.7344
+Central Park W	6.9688
+Central Rd	4.9688
+Centre Av	4.6823
+Centre Edgewater Park Dr	12.2188
+Centre Mall	5.3594
+Centre Market Pl	7.8802
+Centre St	4.4115
+Centreville St	6.3906
+Chaffee Av	5.1615
+Challenger Dr	6.4583
+Chambers St	5.9740
+Champlain Av	6.5000
+Chandler Av	5.7552
+Chandler St	5.4844
+Channel Av	5.3542
+Channel Rd	5.3490
+Channel View Rd	7.8698
+Channing Rd	5.9531
+Chapel Rd	4.7396
+Chapel St	4.4740
+Chapin Av	4.7708
+Chapin Ct	4.5260
+Chapin Pkwy	6.0104
+Chappell St	5.3438
+Charlecote Rdg	7.2135
+Charles Av	5.0781
+Charles Ct	4.8333
+Charles Gay Loop	8.1406
+Charles J Crimi Rd	8.6302
+Charles Ln	4.9635
+Charles Pl	4.7344
+Charles St	4.8073
+Charleston Av	6.6302
+Charlotte St	5.6615
+Charlton St	5.3073
+Chart Loop	5.1302
+Charter Oak Rd	7.1823
+Charter Rd	5.0938
+Chase Ct	4.1250
+Chatham Sq	5.6562
+Chatham St	5.4688
+Chatterton Av	6.6250
+Chauncey Av	6.1719
+Chauncey St	5.9010
+Cheever Pl	5.0625
+Cheevers Ln	5.7865
+Chelsea Rd	5.2135
+Chelsea St	4.9479
+Chemical Ln	5.7552
+Cheney St	4.7656
+Cherokee Pl	5.6302
+Cherokee St	5.7031
+Cherry Av	4.7188
+Cherry Pl	4.3750
+Cherry St	4.4479
+Cherrywood Ct	6.9375
+Cheryl Av	4.5938
+Chesbrough Av	7.1406
+Chesebrough St	7.4271
+Cheshire Pl	5.3177
+Chess Loop	5.3125
+Chester Av	5.1771
+Chester Ct	4.9323
+Chester Pl	4.8333
+Chester St	4.9062
+Chester Walk	6.1562
+Chesterfield Ln	7.1354
+Chesterton Av	6.7292
+Chestnut Av	5.7812
+Chestnut Cir	5.8438
+Chestnut Ct	5.5365
+Chestnut Dr N	6.6042
+Chestnut Pl	5.4375
+Chestnut St	5.5104
+Cheves Av	4.9271
+Chevy Chase St	7.2656
+Chianti Ct	4.6198
+Chicago Alley	6.4375
+Chicago Av	5.2865
+Chicot Rd	4.5365
+Childrens Ln	5.8594
+Chipperfield Ct	7.0000
+Chisholm St	5.5990
+Chisum Pl	4.6667
+Chittenden Av	6.7031
+Choctaw Pl	5.2240
+Chrissy Ct	4.7708
+Christie Av	5.1823
+Christine Ct	5.5312
+Christopher Av	7.0573
+Christopher Ln	6.9427
+Christopher St	6.7865
+Chrystie St	5.1979
+Church Av	4.9062
+Church Ln	4.7917
+Church Rd	4.9010
+Church St	4.6354
+Churchill Av	5.7708
+Ciarcia Ct	4.5573
+Cicero Av	4.5312
+Cincinnatus Av	7.0885
+Circle Dr	4.1094
+Circle Loop	5.2604
+Circle Rd	4.2500
+City Blvd	4.2500
+City Is Bridge	6.2760
+City Island Av	6.4688
+City Island Rd	6.4635
+Claflin Av	4.5469
+Claire Ct	4.0260
+Clara St	3.7188
+Claradon Ln	5.6146
+Claran Ct	4.3385
+Claremont Av	6.4219
+Claremont Pkwy	7.6615
+Claremont Ter	6.7188
+Clarence Av	5.6823
+Clarence Pl	5.3385
+Clarendon Rd	6.3177
+Clarion Ct	4.6302
+Clark Ln	3.8750
+Clark Pl	3.6458
+Clark St	3.7188
+Clarke Av	4.5469
+Clarkson Av	5.6458
+Clarkson St	5.3750
+Clason Point Ln	7.2812
+Classon Av	5.1667
+Claude Av	4.7448
+Claudia Ct	4.7812
+Claver Pl	4.2031
+Clawson St	5.1510
+Clay Av	3.5833
+Clay Pit Rd	5.1406
+Clay St	3.3125
+Clayboard St	6.0104
+Clayton Rd	5.1302
+Clayton St	4.8646
+Clear Water Rd	7.0052
+Clearmont Av	6.4219
+Clearview Expy	7.2083
+Clemente Ct	5.7500
+Clementine St	6.5990
+Clermont Av	5.8646
+Clermont Pl	5.5208
+Cletus St	4.2240
+Cleveland Alley	7.3021
+Cleveland Av	6.1510
+Cleveland Pl	5.8073
+Cleveland St	5.8802
+Cliff Ct	3.2240
+Cliff St	3.1979
+Clifford Pl	4.6875
+Cliffside Av	5.3802
+Cliffwood Av	5.9323
+Clifton Av	4.6562
+Clifton Pl	4.3125
+Clifton Rd	4.6510
+Clifton St	4.3854
+Clinton Av	4.8854
+Clinton B Fisk Av	7.9844
+Clinton Ct	4.6406
+Clinton Pl	4.5417
+Clinton Rd	4.8802
+Clinton St	4.6146
+Clinton Ter	5.1823
+Clinton Walk	5.8646
+Clinton Wharf	6.3906
+Clintonville St	6.5938
+Clio St	3.0365
+Cloister Pl	4.8229
+Close Av	4.0781
+Clove Lake Pl	6.2865
+Clove Rd	4.1354
+Clove Way	4.8385
+Clover Hill Rd	6.3906
+Clover Pl	4.2135
+Cloverdale Av	6.5417
+Cloverdale Blvd	7.3854
+Cloverdale Ln	6.4271
+Clovis Rd	4.3542
+Clyde Pl	3.8177
+Clyde St	3.8906
+Clymer St	4.6094
+Co-Op City Blvd	7.4271
+Coale Av	4.1406
+Coast Guard Dr	7.1094
+Cobblers Ln	5.5365
+Cobeck Ct	4.7240
+Coco Ct	3.5990
+Coddington Av	6.8958
+Codwise Pl	5.0521
+Cody Av	3.8802
+Cody Pl	3.5365
+Coenties Alley	6.7604
+Coffey St	4.3177
+Cohancy St	5.3177
+Colby Ct	3.9271
+Cold Spring Rd	6.9115
+Colden Av	4.7552
+Colden St	4.4844
+Coldspring Ct	6.3021
+Cole St	3.3125
+Coleman Sq	5.5312
+Coleman St	5.3438
+Coleridge St	5.7240
+Coles St	3.8073
+Colfax Av	4.5260
+Colfax St	4.2552
+Colgate Av	5.1094
+Colgate Pl	4.7656
+Colin Pl	3.5573
+Colita Ct	4.0104
+College Av	5.0104
+College Ct	4.7656
+College Pl	4.6667
+College Point Blvd	8.5781
+College Rd	5.0052
+Collfield Av	5.3906
+Collier Av	4.5729
+Collins Pl	4.3438
+Collis Pl	3.7500
+Collister St	5.1875
+Collyer Av	4.8594
+Colon Av	4.1875
+Colon St	3.9167
+Colonial Av	5.3177
+Colonial Ct	5.0729
+Colonial Gdns	6.3906
+Colonial Rd	5.3125
+Colony Av	4.7552
+Colorado St	5.4427
+Colton St	4.3073
+Columbia Av	5.9167
+Columbia Hts	6.2500
+Columbia Pl	5.5729
+Columbia St	5.6458
+Columbia Street Espl	9.8073
+Columbus Av	6.1667
+Columbus Cir	6.2292
+Columbus Pl	5.8229
+Combs Av	4.6875
+Comely St	4.7604
+Comfort Ct	5.1094
+Comfort Rd	5.3490
+Commerce Av	6.5677
+Commerce St	6.2969
+Commercial St	6.8698
+Commercial Wharf	8.6458
+Commissary Rd	7.3021
+Commodore Cir E	8.1198
+Commodore Cir W	8.3438
+Commodore Dr	7.0365
+Commonwealth Av	8.7969
+Commonwealth Blvd	9.6406
+Como Av	4.1823
+Compass Pl	5.3958
+Compass Rd	5.7344
+Compound Way	7.2240
+Compton Av	5.7448
+Comstock Av	6.1667
+Conch Dr	4.3177
+Conch Pl	4.1198
+Conch Rd	4.4583
+Concord Av	5.4323
+Concord Ln	5.3177
+Concord Pl	5.0885
+Concord St	5.1615
+Concourse Village E	9.3385
+Concourse Village W	9.5625
+Conduit Blvd	6.0156
+Coney Island Av	7.5156
+Confederation Pl	7.8490
+Conference Ct	6.6719
+Conger St	4.6094
+Congress St	5.5990
+Conklin Av	5.0521
+Connecticut St	6.9479
+Connell Pl	4.7188
+Conner St	4.6250
+Connor Av	4.9062
+Conover St	5.1562
+Conrad Av	4.8802
+Conselyea St	6.0833
+Constant Av	5.7552
+Constitution Pl	6.9688
+Constitution Row	8.0469
+Continental Av	6.9844
+Continental Pl	6.6406
+Convent Av	5.4271
+Conway St	4.9323
+Conyingham Av	7.3802
+Cook Av	3.8594
+Cook St	3.5885
+Cooke Ct	4.1719
+Cooke St	4.1458
+Coolidge Av	5.5885
+Coombs St	4.9844
+Coonley Ct	5.0677
+Cooper Av	4.8542
+Cooper Pl	4.5104
+Cooper Sq	4.7708
+Cooper St	4.5833
+Cooper Ter	5.1510
+Copley St	4.4583
+Copperflagg Ln	7.1198
+Copperleaf Ter	6.9323
+Coral Ct	3.7552
+Coral Reef Way	7.1198
+Corbett Rd	5.0625
+Corbin Av	4.6042
+Corbin Ct	4.3594
+Corbin Pl	4.2604
+Cordelia Av	5.4167
+Corlear Av	4.9740
+Cornaga Av	5.4375
+Cornaga Ct	5.1927
+Cornelia Av	5.4323
+Cornelia St	5.1615
+Cornell Av	4.8854
+Cornell Ln	4.7708
+Cornell Pl	4.5417
+Cornell St	4.6146
+Cornish Av	5.1146
+Cornish St	4.8438
+Cornwall Av	5.6354
+Corona Av	4.8698
+Corporal Kennedy St	9.6979
+Corporal Stone St	8.2656
+Correll Av	4.7083
+Corsa Av	4.2031
+Corso Ct	3.9688
+Corson Av	4.8073
+Cortelyou Av	6.1198
+Cortelyou Pl	5.7760
+Cortelyou Rd	6.1146
+Cortlandt Alley	7.1042
+Cortlandt St	5.6823
+Cortlandt Way	6.6510
+Coryllos Ln	5.2500
+Coryn Ct	4.0677
+Coster St	4.3229
+Cottage Av	5.2083
+Cottage Pl	4.8646
+Cottage Row	5.9427
+Cotter Av	4.4896
+Cottontail Ct	5.9531
+Cottonwood Ct	6.8958
+Couch Pl	4.1198
+Coughlan Av	5.9427
+Country Club Rd	7.6458
+Country Dr E	6.0260
+Country Dr N	6.1198
+Country Dr S	6.0156
+Country Dr W	6.2500
+Country Ln	5.1823
+Country Pointe Cir	8.6406
+Country Woods Ln	8.4896
+County House Rd	8.0625
+Coursen Ct	5.1458
+Coursen Pl	5.0469
+Court Sq	4.0521
+Court Sq W	5.1510
+Court St	3.8646
+Courtlandt Av	6.5469
+Courtney Av	5.8542
+Courtney Ln	5.7396
+Courtney Loop	6.8594
+Cove Ct	3.6042
+Cove Ln	3.7344
+Coventry Loop	6.8229
+Coventry Rd	5.8125
+Coverly Av	5.1250
+Coverly St	4.8542
+Covert St	4.3854
+Covington Cir	6.3594
+Cowen Pl	4.2917
+Cowles Ct	4.5833
+Cox Pl	2.9688
+Coyle St	3.8802
+Cozine Av	4.7083
+Crabbs Ln	4.6771
+Crabtree Av	5.6406
+Crabtree Ln	5.5260
+Craft Av	3.8958
+Crafton Av	5.0573
+Craig Av	4.0000
+Craig Rd N	4.9635
+Craig Rd S	4.8594
+Cranberry Ct	6.0260
+Cranberry St	6.0000
+Crandall Av	5.4531
+Crane St	4.0208
+Cranford Av	5.6615
+Cranford Ct	5.4167
+Cranford St	5.3906
+Cranston St	5.5104
+Craven St	4.5781
+Crawford Av	5.8177
+Crawford Ct	5.5729
+Creamer St	5.2812
+Creekside Av	6.1667
+Crescent Av	5.7188
+Crescent St	5.4479
+Cresskill Pl	5.2083
+Crest Loop	5.0312
+Crest Rd	4.0208
+Cresthaven Ln	6.7708
+Creston Av	5.1875
+Creston Pl	4.8438
+Creston St	4.9167
+Crestwater Ct	6.4531
+Crimmins Av	5.9948
+Crispi Ln	4.1042
+Crist St	3.4792
+Crittenden Pl	6.1823
+Croak Av	4.2656
+Crocheron Av	6.4219
+Croes Av	4.2031
+Croes Pl	3.8594
+Croft Ct	3.6615
+Croft Pl	3.5625
+Cromer St	4.7344
+Crommelin St	6.3646
+Cromwell Av	5.9219
+Cromwell Cir	5.9844
+Cromwell Cres	6.7552
+Cronston Av	5.7917
+Crooke Av	4.8333
+Crookes Point Rd	8.0469
+Cropsey Av	5.3490
+Crosby Av	4.7917
+Crosby St	4.5208
+Cross Bay Blvd	7.0521
+Cross Bay Pkwy	7.4479
+Cross Bronx Expy	8.3125
+Cross Island Pkwy	8.4427
+Cross St	3.8698
+Crossfield Av	6.2135
+Crosshill St	5.3281
+Croton Av	4.7031
+Croton Loop	5.7083
+Croton Pl	4.3594
+Crotona Av	5.2604
+Crotona Park E	7.0312
+Crotona Park N	7.1250
+Crotona Park S	7.0208
+Crotona Pkwy	6.5000
+Crotona Pl	4.9167
+Crowell Av	5.0417
+Crown Av	4.4948
+Crown Ct	4.2500
+Crown Pl	4.1510
+Crown St	4.2240
+Crowninshield St	7.8958
+Croydon Rd	5.4531
+Cruger Av	4.7292
+Cryders Ln	5.0833
+Crystal Av	4.8854
+Crystal Ln	4.7708
+Crystal St	4.6146
+Ctr Cargo Rd	5.9792
+Ctr Market St	6.2448
+Cuba Av	3.8958
+Cubberly Pl	5.4062
+Cullman Av	5.3750
+Culloden Pl	5.2969
+Culotta Ln	4.8438
+Cumberland St	6.9427
+Cumming St	5.7031
+Cunard Av	4.9062
+Cunard Pl	4.5625
+Cunningham Park Service Rd	13.6250
+Cunningham Rd	7.4271
+Currie Av	4.4323
+Curtis Av	4.3438
+Curtis Ct	4.0990
+Curtis Pl	4.0000
+Curtis St	4.0729
+Curzon Rd	4.8750
+Cuthbert Rd	5.6823
+Cypress Av	5.2760
+Cypress Crest Ln	7.9115
+Cypress Ct	5.0312
+Cypress Hills St	7.3385
+Cypress Loop	6.2812
+Cypress Pl	4.9323
+Cyrus Av	4.2396
+Cyrus Pl	3.8958
+D Rd	2.2344
+D St	1.9688
+D'Auria St	4.7812
+Daffodil Ct	5.0000
+Daffodil Ln	5.1302
+Dahill Rd	4.2500
+Dahl Ct	3.4375
+Dahlgren Pl	5.4844
+Dahlia Av	4.5208
+Dahlia St	4.2500
+Daisy Pl	3.7969
+Dakota Pl	4.5260
+Dale Av	3.6458
+Daleham St	5.4062
+Dalemere Rd	6.0521
+Dalian Ct	4.2760
+Dallas St	4.1615
+Dalny Rd	4.2448
+Dalton Av	4.6406
+Daly Av	3.6562
+Dana Ct	3.7031
+Dana St	3.6771
+Dane Pl	3.6042
+Danforth St	5.4531
+Daniel Low Ter	6.9531
+Daniel Rey Sq	6.5052
+Daniel St	4.2500
+Daniella Ct	5.1250
+Daniels St	4.7448
+Dank Ct	3.7031
+Danny Ct	4.3073
+Darcey Av	4.8802
+Dare Ct	3.5260
+Dare Pl	3.4271
+Dark St	3.5000
+Darlington Av	6.5104
+Darnell Ln	4.8333
+Darren Dr	4.6354
+Darrow Pl	4.6042
+Dartmouth Loop	7.6354
+Dartmouth St	6.3594
+Dash Pl	3.5417
+Davenport Av	6.4583
+Davenport Ct	6.2135
+David Pl	3.8698
+David Sheridan Plaza	9.9688
+David St	3.9427
+Davidson Av	5.8698
+Davidson Ct	5.6250
+Davidson St	5.5990
+Davies Rd	4.6823
+Davis Av	4.1302
+Davis Ct	3.8854
+Davis Rd	4.1250
+Davis St	3.8594
+Davit Ct	3.7812
+Dawn Ct	3.8958
+Dawson Cir	5.2656
+Dawson Ct	4.9583
+Dawson Pl	4.8594
+Dawson St	4.9323
+Dayna Dr	4.3698
+De Costa Av	5.6979
+De Groot Pl	5.3281
+De Hart Av	5.1354
+De Kruif Pl	5.0677
+De Lavall Av	5.8698
+De Pew Pl	4.6510
+De Reimer Av	6.4323
+De Russy Dr	5.7448
+De Ruyter Pl	5.9219
+De Sales Pl	5.2188
+De Sota Rd	5.1719
+De Witt Av	4.9583
+Dea Ct	3.1094
+Deal Ct	3.4010
+Dean Av	3.9479
+Dean St	3.6771
+Dearborn Ct	5.6823
+Deauville Walk	6.9062
+Debbie St	4.5208
+Debevoise Av	6.3906
+Debevoise St	6.1198
+Deborah Loop	6.5156
+Debs Pl	3.5260
+Decatur Av	5.2969
+Decatur St	5.0260
+Decker Av	4.8698
+Deems Av	4.7292
+Deep Water Way	7.6510
+Deepdale Av	5.9167
+Deepdale Pl	5.5729
+Deepdene Rd	6.2135
+Deere Park Pl	6.4062
+Deerfield Rd	5.8385
+Defoe Pl	3.9427
+Defoe St	4.0156
+Degraw St	4.8281
+Deirdre Ct	4.8021
+Deisius St	4.6719
+Dekalb Av	4.7812
+Dekalb St	4.5104
+Dekay St	4.2083
+Dekoven Ct	5.3854
+Del Ray Ct	4.9115
+Delafield Av	5.7188
+Delafield Pl	5.3750
+Delafield Way	6.4167
+Delancey Pl	5.5625
+Delancey St	5.6354
+Delanoy Av	5.3750
+Delavan St	5.0833
+Delaware Av	5.9271
+Delaware Pl	5.5833
+Delaware St	5.6562
+Delevan St	5.0833
+Delford St	4.7448
+Delia Ct	3.6823
+Dell Ct	3.1354
+Dellwood Rd	5.8385
+Delmar Av	4.9427
+Delmar Loop	5.9479
+Delmonico Pl	6.1771
+Delmore St	5.2396
+Delong St	4.5573
+Delphine Ter	5.9896
+Delwit Av	4.5104
+Demerest Rd	6.0885
+Demeyer St	5.5052
+Demond Ct	5.1719
+Demopolis Av	6.4583
+Demorest Av	6.1042
+Denis St	3.8958
+Denise Ct	4.4792
+Denker Pl	4.5781
+Denman St	5.1510
+Dennett Pl	4.9792
+Dennis Torricelli Service Rd St	14.2812
+Denoble Ln	5.2708
+Dent Rd	3.7760
+Denton Pl	4.5990
+Depew Av	4.6823
+Depew Pl	4.3385
+Depot Pl	3.9896
+Depot Pl Approach	8.7917
+Depot Rd	4.3281
+Deppe Pl	4.1667
+Derby Ct	4.1146
+Derick Ct	4.3490
+Desarc Rd	4.8021
+Desbrosses St	6.6250
+Deserre Av	5.2396
+Desmond Ct	5.6667
+Destiny Ct	4.8802
+Detroit Av	4.8438
+Devens St	4.7292
+Devoe Av	4.4792
+Devoe St	4.2083
+Devoe Ter	4.7760
+Devon Av	4.5156
+Devon Loop	5.5208
+Devon Pl	4.1719
+Devon Walk	5.4948
+Devonshire Rd	6.8542
+Dewey Av	4.6719
+Dewey Pl	4.3281
+Dewhurst St	5.7656
+Dewitt Pl	4.2656
+Dexter Av	4.7396
+Dexter Ct	4.4948
+Dey St	3.0938
+Deyo St	3.6615
+Di Marco Pl	5.3229
+Diamond St	5.4271
+Diana Trl	4.2604
+Diane Pl	3.8854
+Diaz Pl	3.2760
+Diaz St	3.3490
+Dickens St	4.9948
+Dickie Av	4.4583
+Dickinson Av	6.1510
+Dictum Ct	4.6823
+Dierauf St	4.7396
+Dieterle Cres	6.1250
+Digby Pl	3.9010
+Digney Av	4.8177
+Dikeman St	5.3958
+Dill Pl	2.7604
+Dillon St	3.9948
+Dina Ct	3.4271
+Dinsmore Av	6.0312
+Dinsmore Pl	5.6875
+Dinsmore St	5.7604
+Dintree Ln	4.9219
+Direnzo Ct	4.9531
+Discala Ln	4.8490
+Disosway Pl	5.6094
+Ditmars Blvd	6.1042
+Ditmars Blvd Square	9.6719
+Ditmars St	4.9896
+Ditmas Av	4.8438
+Ditson St	4.2969
+Divine St	4.2396
+Division Av	5.2969
+Division Pl	4.9531
+Division Rd	5.2917
+Division St	5.0260
+Dix Av	3.0990
+Dix Pl	2.7552
+Dixon Av	4.2604
+Doane Av	4.5156
+Dobbin St	4.5677
+Dobbs Pl	4.1146
+Dock 72 Way	6.0000
+Dock Av	3.9062
+Dock Rd	3.9010
+Dock St	3.6354
+Dockside Ln	5.7031
+Dodgewood Rd	6.9792
+Dodworth St	5.8333
+Doe Ct	3.1198
+Doe Pl	3.0208
+Dogwood Dr	5.7031
+Dogwood Ln	5.7344
+Dole St	3.3854
+Dolson Pl	4.4115
+Domain St	4.8490
+Dominick Ln	5.8281
+Dominick St	5.6719
+Don Ct	3.1562
+Donald Pl	4.4844
+Doncaster Pl	6.0156
+Dongan Av	5.1302
+Dongan Hills Av	7.4635
+Dongan Pl	4.7865
+Dongan St	4.8594
+Donizetti Pl	5.5000
+Donley Av	4.8177
+Donna Ct	4.3073
+Donnellon Sq	6.2135
+Dooley St	4.5208
+Doone Ct	4.2812
+Dora St	3.5104
+Doran Av	4.3750
+Dorchester Rd	6.7708
+Dore Ct	3.5365
+Doreen Dr	4.7865
+Dorian Ct	4.4115
+Doris Ln	3.8854
+Doris St	3.7292
+Dorit Ct	3.6510
+Dormans Ct	5.5052
+Dormans Rd	5.7448
+Dorothea Pl	5.5469
+Dorothy Pl	5.0000
+Dorothy St	5.0729
+Dorset St	4.3958
+Dorsey St	4.5729
+Dorval Av	4.6302
+Dorval Pl	4.2865
+Doscher St	5.1406
+Doty Av	3.7656
+Doubleday Cir	6.5938
+Doubleday Ln	6.4167
+Doughty St	5.2604
+Douglas Av	5.3229
+Douglas Ct	5.0781
+Douglas Rd	5.3177
+Douglass St	5.5469
+Douglaston Pkwy	8.1146
+Dover Green	5.8698
+Dover St	4.0677
+Dovetree Ln	5.7292
+Downes Av	5.2031
+Downey Pl	4.9323
+Downing St	5.3333
+Doxsey Pl	4.6615
+Doyers St	4.5729
+Dr Ed Williams Way	8.9844
+Dr M L King Jr Expy	9.2448
+Drake Av	4.3281
+Drake Park S	6.0885
+Drake St	4.0573
+Draper Pl	4.4219
+Dreiser Loop	5.9688
+Dresden Pl	5.0938
+Dresden St	5.1667
+Drew Ct	3.7188
+Drew St	3.6927
+Dreyer Av	4.7552
+Driggs Av	4.5885
+Driggs St	4.3177
+Driprock St	5.3281
+Drum Rd	4.1250
+Drumgoole Rd E	7.5625
+Drumgoole Rd W	7.7865
+Drury Av	4.2344
+Dry Harbor Rd	6.7292
+Dryden Ct	4.7083
+Drysdale St	5.4323
+Dsny Marine Transfer Station Rp	15.2552
+Duane Ct	4.2969
+Duane Rd	4.5365
+Duane St	4.2708
+Dublin Pl	4.2344
+Dubois Av	4.7552
+Dubons Ln	4.9531
+Dudley Av	4.8281
+Duer Av	3.8073
+Duer Ln	3.6927
+Duffield St	5.0000
+Dugdale St	5.1250
+Duke Pl	3.6042
+Dulancey Ct	5.6979
+Dumfries Pl	5.4844
+Dumont Av	5.2656
+Dunbar St	4.7083
+Duncan Rd	5.1146
+Duncan St	4.8490
+Duncomb Av	5.9948
+Dune Ct	3.7396
+Dune St	3.7135
+Dunham Pl	5.1146
+Dunham St	5.1875
+Dunhill Ln	4.7708
+Dunkirk Dr	5.0938
+Dunkirk St	4.9688
+Dunlop Av	4.8646
+Dunne Ct	4.3333
+Dunton Av	4.9792
+Dunton Ct	4.7344
+Dunton St	4.7083
+Dupont St	4.6927
+Durant Av	4.7917
+Durgess St	5.1042
+Durland Pl	4.9271
+Duryea Av	4.9323
+Duryea Ct	4.6875
+Duryea Pl	4.5885
+Dustan St	4.5990
+Dutch Kills St	6.4062
+Dutch St	4.0885
+Dutchess Av	5.9062
+Dwarf St	4.0573
+Dwight Av	4.8333
+Dwight Pl	4.4896
+Dwight St	4.5625
+Dyckman St	5.6667
+Dyer Av	3.7812
+Dyer Avenue Underpass 31 St	13.8229
+Dyker Pl	3.9948
+Dylan Way	4.9479
+Dyre Av	3.7812
+Dyson St	4.1927
+E 1 Rd	2.7969
+E 1 St	2.5312
+E 10 Rd	3.4531
+E 10 St	3.1875
+E 100 St	3.8438
+E 101 St	3.5885
+E 102 St	3.7969
+E 103 St	3.7865
+E 104 St	3.8281
+E 105 St	3.7969
+E 106 St	3.8021
+E 107 St	3.7240
+E 108 St	3.8125
+E 109 St	3.8021
+E 11 St	2.9323
+E 110 St	3.5885
+E 111 St	3.3333
+E 112 St	3.5417
+E 113 St	3.5312
+E 114 St	3.5729
+E 115 St	3.5417
+E 116 St	3.5469
+E 117 St	3.4688
+E 118 St	3.5573
+E 119 St	3.5469
+E 12 Rd	3.4062
+E 12 St	3.1406
+E 120 St	3.7969
+E 121 St	3.5417
+E 122 St	3.7500
+E 123 St	3.7396
+E 124 St	3.7812
+E 125 St	3.7500
+E 126 St	3.7552
+E 127 St	3.6771
+E 128 St	3.7656
+E 129 St	3.7552
+E 13 St	3.1302
+E 130 St	3.7865
+E 131 St	3.5312
+E 132 St	3.7396
+E 133 St	3.7292
+E 134 St	3.7708
+E 135 St	3.7396
+E 136 St	3.7448
+E 137 St	3.6667
+E 138 St	3.7552
+E 139 St	3.7448
+E 14 Rd	3.4375
+E 14 St	3.1719
+E 140 St	3.8281
+E 141 St	3.5729
+E 142 St	3.7812
+E 143 St	3.7708
+E 144 St	3.8125
+E 145 St	3.7812
+E 146 St	3.7865
+E 147 St	3.7083
+E 148 St	3.7969
+E 149 St	3.7865
+E 15 St	3.1406
+E 150 St	3.7969
+E 151 St	3.5417
+E 152 St	3.7500
+E 153 St	3.7396
+E 154 St	3.7812
+E 155 St	3.7500
+E 156 St	3.7552
+E 157 St	3.6771
+E 158 St	3.7656
+E 159 St	3.7552
+E 16 Rd	3.4115
+E 16 St	3.1458
+E 160 St	3.8021
+E 161 St	3.5469
+E 162 St	3.7552
+E 163 St	3.7448
+E 164 St	3.7865
+E 165 St	3.7552
+E 166 St	3.7604
+E 167 St	3.6823
+E 168 St	3.7708
+E 169 St	3.7604
+E 17 St	3.0677
+E 170 St	3.7240
+E 171 St	3.4688
+E 172 St	3.6771
+E 173 St	3.6667
+E 174 St	3.7083
+E 175 St	3.6771
+E 176 St	3.6823
+E 177 St	3.6042
+E 178 St	3.6927
+E 179 St	3.6823
+E 18 Rd	3.4219
+E 18 St	3.1562
+E 180 St	3.8125
+E 181 St	3.5573
+E 182 St	3.7656
+E 183 St	3.7552
+E 184 St	3.7969
+E 185 St	3.7656
+E 186 St	3.7708
+E 187 St	3.6927
+E 188 St	3.7812
+E 189 St	3.7708
+E 19 St	3.1458
+E 190 St	3.8021
+E 191 St	3.5469
+E 192 St	3.7552
+E 193 St	3.7448
+E 194 St	3.7865
+E 195 St	3.7552
+E 196 St	3.7604
+E 197 St	3.6823
+E 198 St	3.7708
+E 199 St	3.7604
+E 2 St	2.7396
+E 20 Rd	3.6615
+E 20 St	3.3958
+E 201 St	3.7969
+E 202 St	4.0052
+E 203 St	3.9948
+E 204 St	4.0365
+E 205 St	4.0052
+E 206 St	4.0104
+E 207 St	3.9323
+E 208 St	4.0208
+E 209 St	4.0104
+E 21 Rd	3.4062
+E 21 St	3.1406
+E 210 St	3.7969
+E 211 St	3.5417
+E 212 St	3.7500
+E 213 St	3.7396
+E 214 St	3.7812
+E 215 St	3.7500
+E 216 St	3.7552
+E 217 St	3.6771
+E 218 St	3.7656
+E 219 St	3.7552
+E 22 St	3.3490
+E 220 St	4.0052
+E 221 St	3.7500
+E 222 St	3.9583
+E 223 St	3.9479
+E 224 St	3.9896
+E 225 St	3.9583
+E 226 St	3.9635
+E 227 St	3.8854
+E 228 St	3.9740
+E 229 St	3.9635
+E 23 St	3.3385
+E 230 St	3.9948
+E 231 St	3.7396
+E 232 St	3.9479
+E 233 St	3.9375
+E 234 St	3.9792
+E 235 St	3.9479
+E 236 St	3.9531
+E 237 St	3.8750
+E 238 St	3.9635
+E 239 St	3.9531
+E 24 St	3.3802
+E 240 St	4.0365
+E 241 St	3.7812
+E 242 St	3.9896
+E 243 St	3.9792
+E 25 St	3.3490
+E 26 St	3.3542
+E 27 St	3.2760
+E 28 St	3.3646
+E 29 St	3.3542
+E 3 Rd	2.9948
+E 3 St	2.7292
+E 30 St	3.3854
+E 31 St	3.1302
+E 32 St	3.3385
+E 33 St	3.3281
+E 34 St	3.3698
+E 35 St	3.3385
+E 36 St	3.3438
+E 37 St	3.2656
+E 38 St	3.3542
+E 39 St	3.3438
+E 4 Rd	3.0365
+E 4 St	2.7708
+E 40 St	3.4271
+E 41 St	3.1719
+E 42 St	3.3802
+E 43 St	3.3698
+E 44 St	3.4115
+E 45 St	3.3802
+E 46 St	3.3854
+E 47 St	3.3073
+E 48 St	3.3958
+E 49 St	3.3854
+E 5 St	2.7396
+E 5 Walk	3.9896
+E 50 St	3.3958
+E 51 St	3.1406
+E 52 St	3.3490
+E 53 Pl	3.2656
+E 53 St	3.3385
+E 54 St	3.3802
+E 55 St	3.3490
+E 56 St	3.3542
+E 57 Pl	3.2031
+E 57 St	3.2760
+E 58 St	3.3646
+E 59 Pl	3.2812
+E 59 St	3.3542
+E 6 Rd	3.0104
+E 6 St	2.7448
+E 60 Pl	3.3281
+E 60 St	3.4010
+E 61 St	3.1458
+E 62 St	3.3542
+E 63 St	3.3438
+E 64 St	3.3854
+E 65 St	3.3542
+E 66 St	3.3594
+E 67 St	3.2812
+E 68 St	3.3698
+E 69 St	3.3594
+E 7 Rd	2.9323
+E 7 St	2.6667
+E 70 St	3.3229
+E 71 St	3.0677
+E 72 St	3.2760
+E 73 St	3.2656
+E 74 St	3.3073
+E 75 St	3.2760
+E 76 St	3.2812
+E 77 St	3.2031
+E 78 St	3.2917
+E 79 St	3.2812
+E 8 Rd	3.0208
+E 8 St	2.7552
+E 80 St	3.4115
+E 81 St	3.1562
+E 82 St	3.3646
+E 83 St	3.3542
+E 84 St	3.3958
+E 85 St	3.3646
+E 86 St	3.3698
+E 87 St	3.2917
+E 88 St	3.3802
+E 89 St	3.3698
+E 9 Rd	3.0104
+E 9 St	2.7448
+E 90 St	3.4010
+E 91 St	3.1458
+E 92 St	3.3542
+E 93 St	3.3438
+E 94 St	3.3854
+E 95 St	3.3542
+E 96 St	3.3594
+E 97 St	3.2812
+E 98 St	3.3698
+E 99 St	3.3594
+E Augusta Av	6.3281
+E Bay Av	4.2188
+E Brandis Av	6.0156
+E Broadway	5.5625
+E Buchanan St	6.8542
+E Burnside Av	6.6094
+E Cheshire Pl	6.1927
+E Clarke Pl	5.0781
+E End Av	4.1979
+E Figurea Av	5.9583
+E Fordham Rd	6.5625
+E Gun Hill Rd	6.1042
+E Hampton Blvd	7.5365
+E Hangar Rd	5.8229
+E Houston St	6.0625
+E Kingsbridge Rd	8.0417
+E Lake Dr	4.4948
+E Loop Rd	4.6771
+E Macon Av	5.4740
+E Main St	4.3750
+E Market St	5.4219
+E Mosholu Pkwy N	8.5312
+E Mosholu Pkwy S	8.4271
+E Mount Eden Av	7.9635
+E New York Av	6.9010
+E Perkiomen Av	7.4531
+E Raleigh Av	5.9531
+E Rd	2.1458
+E Reading Av	6.2396
+E River Espl	5.6198
+E Scranton Av	6.6771
+E Service Rd	5.9219
+E Stroud Av	5.5625
+E Tenafly Av	5.9323
+E Tremont Av	6.4062
+E Williston Av	6.4427
+Eadie Pl	3.7812
+Eagan Av	4.4375
+Eagle Av	4.1354
+Eagle Nest Ln	6.4323
+Eagle Rd	4.1302
+Eagle St	3.8646
+Eames Pl	4.2969
+Earhart Ln	4.9688
+Earley Av	4.5417
+Earley Pl	4.1979
+Earley St	4.2708
+Earlybird Rd	5.8333
+East Av	3.5938
+East Dr	3.4479
+East Loop	4.5990
+East Rd	3.5885
+East River Ln	6.2344
+Eastburn Av	5.7760
+Eastchester Pl	6.8021
+Eastchester Rd	7.1406
+Eastentry Rd	6.1146
+Eastern Pkwy	6.4010
+Eastern Rd	5.1562
+Eastgate Plaza	6.9896
+Eastman St	5.3542
+Eastway	3.9427
+Eastwood Av	6.0573
+Eaton Ct	4.0156
+Eaton Pl	3.9167
+Ebbitts Av	4.8646
+Ebbitts St	4.5938
+Ebey Ln	3.7396
+Ebony Ct	4.2135
+Ebony St	4.1875
+Echo Pl	3.5104
+Eckford Av	5.1771
+Eckford St	4.9062
+Ed Koch Queensboro Bridge	13.1198
+Eddy St	3.6042
+Eden Ct	3.6354
+Edenwald Av	6.0573
+Ederle Prom	5.7812
+Edgar Pl	3.9375
+Edgar St	4.0104
+Edgar Ter	4.5781
+Edge St	3.5938
+Edgecombe Av	6.9896
+Edgegrove Av	6.5417
+Edgehill Av	5.3229
+Edgemere Av	6.2760
+Edgemere Dr	6.1302
+Edgemere St	6.0052
+Edgerton Blvd	6.6771
+Edgerton Rd	5.8281
+Edgeview Ln	5.8958
+Edgewater Rd	6.5312
+Edgewater St	6.2656
+Edgewood Av	6.3281
+Edgewood Rd	6.3229
+Edgewood St	6.0573
+Edinboro Rd	5.7292
+Edison Av	4.6667
+Edison St	4.3958
+Edith Av	3.9948
+Edmore Av	5.1510
+Edsall Av	4.3646
+Edson Av	4.3854
+Edstone Dr	5.1875
+Edward Ct	4.7865
+Edward Curry Av	7.9167
+Edward L Grant Hwy	9.5052
+Edward M Morgan Pl	9.5260
+Edwards Av	5.5260
+Edwin St	4.0833
+Effingham Av	6.3646
+Effington Av	5.8854
+Egan St	3.6094
+Egbert Av	4.6719
+Egbert Pl	4.3281
+Eger Pl	3.3594
+Eggert Pl	4.3281
+Egmont Pl	4.8177
+Egrit Ct	3.5729
+Einstein Loop E	7.2240
+Einstein Loop N	7.3177
+Einstein Loop S	7.2135
+El Camino Loop	7.2188
+Elaine Ct	4.1875
+Elbe Av	3.5781
+Elbertson St	5.7708
+Elder Av	3.9948
+Eldert Ln	4.2708
+Eldert St	4.1146
+Eldridge Av	5.4323
+Eldridge St	5.1615
+Eleanor Ct	4.8906
+Eleanor Ln	5.0208
+Eleanor Pl	4.7917
+Eleanor St	4.8646
+Elgar Pl	3.6510
+Elias Pl	3.4323
+Elie Ct	3.0365
+Eliot Av	3.6823
+Elise Ct	3.5312
+Elizabeth Av	5.9427
+Elizabeth Ct	5.6979
+Elizabeth Grove Rd	8.9688
+Elizabeth Pl	5.5990
+Elizabeth Rd	5.9375
+Elizabeth St	5.6719
+Elk Ct	2.7552
+Elk Dr	2.8542
+Elk St	2.7292
+Elkhart St	4.6875
+Elkmont Av	5.4323
+Elks Pl	3.1510
+Elks Rd	3.4896
+Ella Pl	2.9479
+Ellery St	4.0052
+Ellicott Pl	4.5625
+Ellington St	5.4688
+Elliot Pl	3.6302
+Ellis Av	3.5104
+Ellis Pl	3.1667
+Ellis Rd	3.5052
+Ellis St	3.2396
+Ellison Av	4.6719
+Ellsworth Av	5.9479
+Ellsworth Pl	5.6042
+Ellwell Cres	5.4583
+Ellwood St	4.9271
+Elm Av	3.3229
+Elm Dr	3.1771
+Elm Pl	2.9792
+Elm St	3.0521
+Elmbank St	5.3385
+Elmhurst Av	5.8125
+Elmira Av	4.5781
+Elmira Loop	5.5833
+Elmira St	4.3073
+Elmtree Av	5.2448
+Elmwood Av	5.7865
+Elmwood Park Dr	8.0625
+Elsmere Pl	5.0052
+Elson Ct	3.8542
+Elson St	3.8281
+Eltinge St	4.5729
+Eltingville Blvd	7.1094
+Elton Av	3.9948
+Elton St	3.7240
+Elverton Av	5.5260
+Elvin St	3.6042
+Elvira Av	4.2552
+Elvira Ct	4.0104
+Elwood Av	4.9062
+Elwood Pl	4.5625
+Ely Av	3.0104
+Ely Ct	2.7656
+Ely St	2.7396
+Emerald Ct	5.1875
+Emerald St	5.1615
+Emeric Ct	4.5833
+Emerson Av	5.6615
+Emerson Ct	5.4167
+Emerson Dr	5.5156
+Emerson Pl	5.3177
+Emily Ct	3.9271
+Emily Ln	4.0573
+Emily Rd	4.1667
+Emmet Av	4.8594
+Emmons Av	5.5677
+Empire Av	4.8646
+Empire Blvd	5.7083
+End Pl	2.9792
+Endeavor Pl	5.6354
+Endor Av	4.3073
+Endview St	5.1979
+Enfield Pl	4.4740
+Engert Av	4.6875
+Engert St	4.4167
+Englewood Av	6.6354
+Enright Rd	5.0000
+Epsom Crse	5.5052
+Erasmus St	5.3177
+Erastina Pl	5.0990
+Erben Av	4.2969
+Erdman Pl	4.8333
+Eric Ln	3.2760
+Ericson Pl	4.7031
+Ericsson Pl	5.1979
+Ericsson St	5.2708
+Erie St	3.1354
+Erik Pl	3.0625
+Erika Loop	4.9688
+Errington Pl	5.6458
+Erskine Pl	4.7083
+Erskine St	4.7812
+Erwin Ct	3.9479
+Escanaba Av	6.0312
+Esmac Ct N	5.3490
+Esmac Ct W	5.4792
+Esplanade	4.8333
+Esplanade Gardens Plaza	11.8021
+Essex Dr	4.1302
+Essex St	4.0052
+Essex Walk	5.2552
+Estates Dr	4.8906
+Estates Ln	4.9219
+Estelle Pl	4.3906
+Esther Depew St	7.7396
+Etna St	3.4219
+Eton Pl	3.3594
+Eton St	3.4323
+Euclid Av	4.4375
+Eugene Pl	4.6875
+Eugene St	4.7604
+Eunice Pl	4.3750
+Eva Av	3.2656
+Evan Pl	3.5156
+Evans Rd	4.3490
+Evans St	4.0833
+Eveleth Rd	5.0938
+Evelyn Pl	4.3750
+Everdell Av	5.4010
+Everett Av	5.0208
+Everett Pl	4.6771
+Evergreen Av	6.3854
+Evergreen St	6.1146
+Everit St	4.0833
+Everitt Pl	4.4010
+Everton Av	5.2344
+Everton Pl	4.8906
+Everton St	4.9635
+Excelsior Av	5.8802
+Exchange Alley	7.3021
+Exchange Pl	5.8073
+Executive Rd	6.2031
+Executive Way	6.9062
+Exeter St	4.3802
+Exterior St	5.0885
+Eylandt St	4.8594
+F Rd	2.0938
+Faber St	3.9375
+Faber Ter	4.5052
+Fabian St	4.3958
+Fahy Av	3.8177
+Faile St	3.5156
+Fairbanks Av	6.1354
+Fairbury Av	5.5104
+Fairchild Av	5.6406
+Fairfax Av	4.8542
+Fairfield Av	5.4271
+Fairfield Pl	5.0833
+Fairfield St	5.1562
+Fairlawn Av	5.5469
+Fairlawn Loop	6.5521
+Fairmount Av	6.3802
+Fairmount Pl	6.0365
+Fairview Av	5.5000
+Fairview Pl	5.1562
+Fairway Av	5.2292
+Fairway Clos	5.9479
+Fairway Ln	5.1146
+Faith Ct	3.6771
+Falcon Av	4.6510
+Falmouth St	5.7031
+Fancher Pl	5.0156
+Fanchon Pl	5.2031
+Fane Ct	3.5625
+Fane Ct S	4.4271
+Fanning St	5.0260
+Far Rockaway Blvd	8.9583
+Faraday Av	5.3333
+Farmers Blvd	6.2656
+Farraday St	5.4792
+Farragut Av	5.6094
+Farragut Pl	5.2656
+Farragut Rd	5.6042
+Farragut St	5.3385
+Farrell Ct	4.3854
+Farrington St	6.2240
+Farview Pl	4.8750
+Father Capodanno Blvd	10.9427
+Father Zeiser Pl	7.4688
+Fawn Ln	3.8854
+Fayann Ln	4.8542
+Fayette Av	5.1198
+Fayette St	4.8490
+Fearn Pl	3.8802
+Featherbed Ln	6.7708
+Federal Cir	5.1198
+Federal Pl	4.7135
+Feldmeyers Ln	6.8854
+Felton St	4.2292
+Fenimore St	5.6823
+Fenton Av	4.8021
+Fenway Cir	5.1875
+Ferguson Ct	5.6562
+Fern Av	3.6667
+Fern Pl	3.3229
+Ferndale Av	5.6510
+Ferndale Ct	5.4062
+Fernside Pl	5.2344
+Ferris Pl	3.9219
+Ferris St	3.9948
+Ferry Line Rd	6.3021
+Ferry St	3.7865
+Ficarelle Dr	5.4479
+Fiedler Av	4.7812
+Field Dr	3.6615
+Field Pl	3.4635
+Field St	3.5365
+Fielding St	4.9896
+Fields Av	4.3021
+Fieldston Rd	5.8490
+Fieldston Ter	6.1510
+Fieldstone Rd	6.4062
+Fieldway Av	5.6823
+Figurea Av	5.0833
+Filbert Av	4.6146
+Filipe Ln	3.9740
+Fillat St	3.6406
+Fillmore Av	5.3854
+Fillmore Pl	5.0417
+Fillmore St	5.1146
+Findlay Av	4.9688
+Fine Blvd	4.3750
+Fingal St	4.1302
+Fingerboard Rd	7.2188
+Fink Av	3.5312
+Finlay Av	4.3906
+Finlay St	4.1198
+Finley Av	4.3906
+Finley Pl	4.0469
+Finley Rd	4.3854
+Fiorello Ln	4.9583
+Firth Rd	3.7760
+Firwood Pl	4.9167
+Fish Av	3.4688
+Fisher Av	4.4427
+Fiske Pl	3.6458
+Fitchett St	4.9740
+Fitzgerald Av	6.2917
+Flagg Ct	3.8594
+Flagg Pl	3.7604
+Flagship Cir	5.5365
+Flatbush Av	5.5990
+Flatbush Av Extension	10.5312
+Flatlands 1 St	6.2344
+Flatlands 10 St	6.8906
+Flatlands 2 St	6.4427
+Flatlands 3 St	6.4323
+Flatlands 4 St	6.4740
+Flatlands 5 St	6.4427
+Flatlands 6 St	6.4479
+Flatlands 7 St	6.3698
+Flatlands 8 St	6.4583
+Flatlands 9 St	6.4479
+Flatlands Av	5.8542
+Fleet Alley	5.0469
+Fleet Ct	3.6510
+Fleet Pl	3.5521
+Fleet St	3.6250
+Fletcher Pl	5.1042
+Fletcher St	5.1771
+Flint Av	3.6562
+Flint St	3.3854
+Florence Av	5.6250
+Florence Pl	5.2812
+Florence St	5.3542
+Florida Av	4.7917
+Florida Ter	5.0885
+Flower Av	4.6823
+Floyd St	3.8333
+Flushing Av	5.5260
+Foam Pl	3.7604
+Foch Av	3.8021
+Foch Blvd	4.6458
+Folin St	3.5625
+Folsom Pl	4.5573
+Fonda Av	4.3958
+Fonda Pl	4.0521
+Food Center Dr	7.0729
+Foote Av	4.1823
+Foothill Av	5.0833
+Foothill Ct	4.8385
+Forbell St	4.5312
+Force Tube Av	6.7604
+Ford Pl	3.3177
+Ford St	3.3906
+Fordham Hill Oval	8.3854
+Fordham Pl	5.3490
+Fordham St	5.4219
+Forest Av	4.5260
+Forest Ct	4.2812
+Forest Green	6.0573
+Forest Hill Rd	6.3594
+Forest Ln	4.4115
+Forest Park Dr	6.8021
+Forest Pkwy	5.7656
+Forest Pl	4.1823
+Forest Rd	4.5208
+Forest St	4.2552
+Forley St	4.2292
+Fornes Pl	4.3854
+Forrest St	4.6719
+Forrestal Av	5.7917
+Forrestal Ct	5.5469
+Forster Pl	4.5990
+Forsyth St	4.8594
+Fort Charles Pl	6.9323
+Fort George Av	7.0833
+Fort George Hl	6.8229
+Fort Greene Pl	6.7448
+Fort Hamilton Pkwy	9.2500
+Fort Hill Cir	5.3750
+Fort Hill Park	6.2083
+Fort Hill Pl	4.9688
+Fort Independence St	10.0365
+Fort Pl	3.1302
+Fort Tryon Pl	6.1250
+Fort Washington Av	9.2240
+Foster Av	4.5260
+Foster Rd	4.5208
+Fountain Av	5.6771
+Four Corners Rd	7.6094
+Fowler Av	4.6823
+Fox Beach Av	6.4375
+Fox Hill Ter	5.3802
+Fox Hunt Ct	5.5521
+Fox Ln	3.1302
+Fox St	2.9740
+Fox Ter	3.5417
+Foxholm St	5.3073
+Frame Pl	4.1667
+Francesca Ln	6.2448
+Francine Ct	5.3958
+Francine Ln	5.5260
+Francis Lewis Blvd	8.7292
+Francis Pl	4.6406
+Frank Ct	3.9792
+Frankfort St	5.6927
+Franklin Av	5.3906
+Franklin D Roosevelt Dr	11.1354
+Franklin Ln	5.2760
+Franklin Pl	5.0469
+Franklin St	5.1198
+Frankton St	5.5052
+Fraser St	4.2708
+Frawley Cir	5.3021
+Frean St	3.9531
+Frederick Douglass Blvd	11.3906
+Frederick Douglass Cir	10.6094
+Frederick St	5.7344
+Freeborn St	5.5156
+Freedom Av	5.6562
+Freedom Dr	5.5104
+Freedom Pl	5.3125
+Freedom Pl S	6.1771
+Freeman Alley	6.8125
+Freeman Pl	5.3177
+Freeman St	5.3906
+Freeport Loop	6.5885
+Fremont Av	5.5052
+Fremont St	5.2344
+Fresh Direct Dr	7.1667
+Fresh Meadow Ln	8.1198
+Fresh Pond Rd	6.7865
+Friel Pl	3.3021
+Friendship Ln	6.3594
+Frisby Av	4.4375
+Frisco Av	4.4010
+Front Av	4.0677
+Front St	3.7969
+Frosinone Ln	6.0573
+Frost St	3.6979
+Fteley Av	4.4635
+Fuller Ct	4.0052
+Fuller Pl	3.9062
+Fuller St	3.9792
+Fulton Av	4.5365
+Fulton St	4.2656
+Fulton Walk	5.5156
+Furman Av	5.1406
+Furman St	4.8698
+Furmanville Av	7.1198
+Furness Pl	4.9062
+Futurity Pl	4.9896
+G Rd	2.2031
+G St	1.9375
+Gabriel Dr	4.7448
+Gabrielle Ct	5.4948
+Gadsen Pl	4.6458
+Gail Ct	3.0938
+Gain Ct	3.3958
+Galanaugh Ln	6.4167
+Galasso Pl	4.8281
+Gale Av	3.6146
+Gale Pl	3.2708
+Gales Ln	3.9948
+Galesville Ct	5.8438
+Gallatin Pl	4.8281
+Galloway Av	5.7917
+Galvaston Loop	7.2240
+Galvin Av	4.4896
+Galway Av	4.9323
+Gansevoort Blvd	7.7552
+Gansevoort St	6.6406
+Gantry Rd	4.7292
+Garden Ct	4.6667
+Garden Pl	4.5677
+Garden St	4.6406
+Garden Way	5.6094
+Gardenia Ln	5.6354
+Gardner Av	5.3281
+Garfield Av	5.2552
+Garfield Pl	4.9115
+Garfield St	4.9844
+Garibaldi Av	5.7500
+Garland Ct	4.9583
+Garland Dr	5.0573
+Garnet St	4.4531
+Garretson Av	6.2031
+Garretson Ln	6.0885
+Garrett Pl	4.5938
+Garrett St	4.6667
+Garrison Av	5.5365
+Garson Av	4.8385
+Garth Ct	3.9219
+Gary Ct	3.5052
+Gary Pl	3.4062
+Gary St	3.4792
+Gaskell Rd	4.9531
+Gates Av	4.2083
+Gates Pl	3.8646
+Gateway Blvd	6.4323
+Gateway Dr	5.4427
+Gatling Pl	4.5573
+Gaton St	4.0469
+Gauldy Av	4.7969
+Gay St	3.0625
+Gaylord Dr N	6.0104
+Gaylord Dr S	5.9062
+Gaynor St	4.6406
+Gazebo Ln	4.8958
+Gazebo Rd	5.0052
+Gee Av	3.3229
+Geldner Av	5.2031
+Gelston Av	5.1042
+Gem St	3.3750
+General Aviation Way	10.0781
+General Berry Rd	8.0781
+Genesee Av	5.5260
+Genesee St	5.2552
+Geneva Loop	6.0365
+Gentile Ct	4.6354
+Geo Ct	3.0885
+George St	4.6146
+Georges Ln	5.2656
+Georgetown Ln	7.0729
+Georgia Av	5.1667
+Georgia Ct	4.9219
+Georgia Rd	5.1615
+Gerald Ct	4.3646
+Gerald H Chambers Sq	10.4688
+Geranium Av	6.0885
+Geranium Pl	5.7448
+Gerard Av	4.7344
+Gerard Pl	4.3906
+Gerber Pl	4.3906
+Gerritsen Av	5.9167
+Gerry St	3.8958
+Gerson Ct	4.5938
+Gertners Ct	5.3906
+Gervil St	4.0417
+Gettysburg St	6.5052
+Getz Av	3.6979
+Geyser Dr	4.6562
+Giacomo Ln	5.4896
+Gianna Ct	4.5469
+Gibson Av	4.7240
+Giegerich Av	6.0156
+Giegerich Pl	5.6719
+Gifford Av	4.7812
+Giffords Gln	5.5677
+Giffords Ln	5.1615
+Gil Ct	2.5365
+Gilbert Pl	4.3802
+Gilbert St	4.4531
+Gildersleeve Av	7.3490
+Giles Pl	3.4896
+Gillard Av	4.6250
+Gillespie Av	5.5417
+Gillmore St	5.2240
+Gilmore Ct	4.9583
+Gilroy St	4.0625
+Gina Ct	3.3958
+Giordan Ct	4.9583
+Gipson St	4.4531
+Girard St	4.1875
+Givan Av	4.1979
+Gladwin Av	5.2604
+Gladwin St	4.9896
+Glascoe Av	5.2188
+Glassboro Av	6.1771
+Gleane St	4.4948
+Gleason Av	5.2708
+Glebe Av	4.1927
+Glen Av	3.6510
+Glen St	3.3802
+Glendale Av	5.6354
+Glendale Ct	5.3906
+Glenmore Av	6.0729
+Glenn Rd	4.2396
+Glennon Pl	5.0625
+Glenwood Av	6.1146
+Glenwood Pl	5.7708
+Glenwood Rd	6.1094
+Glenwood St	5.8438
+Globe Av	4.2031
+Gloria Ct	4.0781
+Glover St	4.3281
+Goble Pl	3.8594
+Godwin Ter	5.2760
+Goethals Av	5.6615
+Goethals Bridge	7.4896
+Goethals Community A-B Row	14.1198
+Goethals Community C-D Row	14.0625
+Goethals Community E-F Row	13.9062
+Goethals Community G-H Row	14.1146
+Goethals Rd N	6.6250
+Goff Av	3.5052
+Gold Av	3.6458
+Gold Rd	3.6406
+Gold St	3.3750
+Goldington Ct	6.4062
+Goldsmith St	6.0156
+Golf View Ct	5.7083
+Goller Pl	3.9896
+Goodall St	4.7917
+Goodell Av	5.0625
+Goodridge Av	6.3333
+Goodwin Av	5.5469
+Goodwin Pl	5.2031
+Goodwood Rd	6.3802
+Gordon Pl	4.5885
+Gordon St	4.6615
+Gorge Rd	4.3229
+Gorsline St	5.1406
+Gotham Av	5.1979
+Gotham Rd	5.1927
+Gotham Walk	6.1771
+Gothic Dr	4.4375
+Goulden Av	5.3906
+Gouverneur Av	7.0625
+Gouverneur Ln	6.9479
+Gouverneur Pl	6.7188
+Gouverneur Slip E	8.4271
+Gouverneur Slip W	8.6510
+Gouverneur St	6.7917
+Governor Rd	5.8802
+Gowanus Exwpy Overpass 79 St	14.8750
+Gower St	4.2292
+Grace Av	4.2812
+Grace Ct	4.0365
+Grace Ct Alley	6.7135
+Grace Ln	4.1667
+Grace Rd	4.2760
+Gracie Sq	4.4792
+Gracie Ter	4.8594
+Grafe St	3.8333
+Graff Av	3.9115
+Grafton St	4.8281
+Graham Av	5.2135
+Graham Blvd	6.0573
+Graham Ct	4.9688
+Graham Pl	4.8698
+Graham St	4.9427
+Gramercy Park E	7.9167
+Gramercy Park N	8.0104
+Gramercy Park S	7.9062
+Gramercy Park W	8.1406
+Granada Pl	5.1250
+Grand Army Plaza	8.5000
+Grand Army Plaza Oval	10.8802
+Grand Av	4.3542
+Grand Central Pkwy	9.2917
+Grand Conc	5.4219
+Grand St	4.0833
+Grandview Av	6.5000
+Grandview Pl	6.1562
+Grandview Ter	6.7969
+Granger St	5.0573
+Granite Av	5.0052
+Granite St	4.7344
+Grant Av	4.1667
+Grant Pl	3.8229
+Grant St	3.8958
+Grantwood Av	6.6302
+Grasmere Av	6.0885
+Grasmere Ct	5.8438
+Grasmere Dr	5.9427
+Grassmere Ter	6.8802
+Grattan St	4.8438
+Graves St	4.5208
+Gravesend Neck Rd	9.1406
+Gravett Rd	5.0729
+Gray Ct	3.5052
+Gray St	3.4792
+Grayson St	5.1354
+Great Jones Alley	8.3021
+Great Jones St	6.8802
+Great Kills Rd	6.4427
+Greaves Av	5.3490
+Greaves Ct	5.1042
+Greaves Ln	5.2344
+Greeley Av	5.1562
+Green St	4.0625
+Green Valley Rd	7.5260
+Greenberger Ln	7.3229
+Greencroft Av	6.6146
+Greencroft Ln	6.5000
+Greene Av	4.8906
+Greene Pl	4.5469
+Greene St	4.6198
+Greenfield Av	6.4062
+Greenfield Ct	6.1615
+Greenleaf Av	6.1042
+Greenpoint Av	6.7448
+Greenport St	6.0156
+Greentree Ln	6.1406
+Greenway Av	6.2083
+Greenway Cir	6.2708
+Greenway Dr	6.0625
+Greenway N	5.6510
+Greenway S	5.5469
+Greenway Ter	6.5052
+Greenwich Av	6.5000
+Greenwich Mews	7.8385
+Greenwich St	6.2292
+Greenwood Av	6.7969
+Greenwood Ct	6.5521
+Gregg Pl	3.9948
+Gregory Ln	5.1979
+Gregory Pl	4.9688
+Grenada Pl	5.1250
+Grenfell St	5.0104
+Gresham Rd	5.7031
+Greta Pl	3.7865
+Greystone Av	6.3542
+Gridley Av	4.9010
+Grille Ct	3.8021
+Grimes Rd	4.8333
+Grimes Rd N	5.8021
+Grimes Rd W	5.9323
+Grimsby St	5.1562
+Grinnell Pl	4.8906
+Grissom Av	5.3438
+Griswold Av	5.5885
+Griswold Ct	5.3438
+Grosvenor Av	6.3802
+Grosvenor Ln	6.2656
+Grosvenor Rd	6.3750
+Grosvenor St	6.1094
+Grote St	3.8698
+Groton St	4.4740
+Grove Av	4.3073
+Grove Pl	3.9635
+Grove St	4.0365
+Grymes Hill Rd	6.9583
+Guerlain St	5.2292
+Guernsey St	5.7188
+Guider Av	4.6354
+Guilford St	5.0312
+Guinevere Ln	6.2083
+Guinzburg Rd	6.3802
+Guion Pl	3.9010
+Gulf Av	3.4583
+Gull Ct	3.1406
+Gulli Ct	3.4219
+Gunther Av	5.3542
+Gunther Pl	5.0104
+Gunton Pl	4.6042
+Gurdon St	4.6875
+Gurino Dr	4.5156
+Gurley Av	4.6354
+Guy R Brewer Blvd	8.7969
+Guyon Av	4.5312
+Gwenn Loop	5.7083
+H Rd	2.2448
+Haddon St	4.8542
+Hadley Av	4.8021
+Hafstrom St	5.6510
+Hagaman Pl	5.6302
+Haight Av	4.6510
+Haight St	4.3802
+Hale Av	3.6562
+Hale St	3.3854
+Hales Av	4.1510
+Half Moon Rd	6.2500
+Hall Av	3.3906
+Hall Pl	3.0469
+Hall St	3.1198
+Hall of Fame Ter	7.6875
+Halleck St	4.7760
+Hallister St	5.2604
+Halperin Av	5.5260
+Halpin Av	4.5521
+Halsey St	4.4479
+Hamden Av	5.4167
+Hamilton Av	5.8125
+Hamilton Cir	5.8750
+Hamilton Mnr	6.3594
+Hamilton Pl	5.4688
+Hamilton St	5.5417
+Hamilton Ter	6.1094
+Hamlin Pl	4.5104
+Hammerhead Av	7.8281
+Hammersley Av	7.4531
+Hammock Ln	6.1198
+Hampden Pl	5.6510
+Hampton Av	5.8177
+Hampton Green	7.3490
+Hampton Pl	5.4740
+Hampton St	5.5469
+Hancock Pl	5.2656
+Hancock St	5.3385
+Hand Rd	3.9740
+Hanford St	5.0573
+Hank Pl	3.6146
+Hannah St	4.8750
+Hannibal St	5.4323
+Hanover Av	5.5000
+Hanover Pl	5.1562
+Hanover Sq	5.4167
+Hanover St	5.2292
+Hanson Ct	4.8125
+Hanson Pl	4.7135
+Hantz Rd	4.3281
+Hanus St	4.2188
+Harbor Ct	4.5417
+Harbor Dr	4.6406
+Harbor Lights Ct	7.6979
+Harbor Ln	4.6719
+Harbor Loop	5.7917
+Harbor Rd	4.7812
+Harbor View Ct	7.0625
+Harbor View Pl S	7.8281
+Harbor View Ter	7.6042
+Harbour Ct	5.1354
+Harden St	4.6823
+Hardin Av	4.6771
+Harding Av	5.2552
+Hardy Pl	4.0260
+Hardy St	4.0990
+Hargold Av	5.2396
+Haring St	4.4062
+Harkness Av	5.9219
+Harlem River Dr	7.5625
+Harlem River Dy	7.7135
+Harman St	4.9844
+Harmony Rd	5.8281
+Harold Av	4.6615
+Harold St	4.3906
+Harper Av	4.7760
+Harper Ct	4.5312
+Harper St	4.5052
+Harrington Av	6.6458
+Harris Av	4.4167
+Harris Ln	4.3021
+Harris St	4.1458
+Harrison Alley	6.7292
+Harrison Av	5.5781
+Harrison Pl	5.2344
+Harrison St	5.3073
+Harrod Av	4.7865
+Harrod Pl	4.4427
+Harrow St	4.6875
+Hart Av	3.6146
+Hart Blvd	4.4583
+Hart Loop	4.6198
+Hart Pl	3.2708
+Hart St	3.3438
+Hartford Av	5.5417
+Hartford St	5.2708
+Hartland Av	5.6354
+Hartman Ln	5.5312
+Harvard Av	5.3333
+Harvest Av	5.2240
+Harvey Av	4.9062
+Harvey St	4.6354
+Harway Av	5.0990
+Harwood Pl	5.3438
+Hasbrouck Rd	6.5521
+Haskin St	4.4635
+Haspel St	4.4583
+Hassock St	5.1927
+Hastings Ct	5.3958
+Hastings St	5.3698
+Hatfield Pl	4.9271
+Hattie Jones Pl	7.1042
+Hatting Pl	4.6979
+Haughwout Av	6.8750
+Hausman St	5.6562
+Havemeyer Av	6.9010
+Havemeyer St	6.6302
+Haven Av	4.5156
+Haven Espl	5.2292
+Havens Pl	4.6667
+Havenwood Rd	6.9740
+Haviland Av	5.6667
+Hawkins St	5.2135
+Hawkstone St	6.4479
+Hawley Av	4.9740
+Hawthorn Av	6.1198
+Hawthorne Av	6.6771
+Hawthorne Dr	6.5312
+Hawthorne St	6.4062
+Hawtree Creek Rd	8.4531
+Hawtree St	5.2083
+Hay Rd	3.3698
+Hay St	3.1042
+Haynes St	4.7500
+Haywood Rd	5.8333
+Haywood St	5.5677
+Hazel Ct	3.9531
+Hazel Pl	3.8542
+Hazen St	4.2292
+Headquarters Rd	7.9427
+Healy Av	4.2240
+Heaney Av	5.0833
+Heath Av	4.3490
+Heath Pl	4.0052
+Heathcote Av	6.4062
+Heather Ct	5.0781
+Heberton Av	5.9115
+Hecker St	4.6094
+Heenan Av	5.1094
+Heffernan St	5.9844
+Hegeman Av	5.9740
+Hegney Pl	4.7604
+Heinz Av	4.2240
+Heinzelman Rd	7.0990
+Helena Rd	4.8021
+Helene Ct	4.5625
+Helios Pl	4.0990
+Hell Gate Cir	5.8906
+Hemlock Ct	5.4010
+Hemlock Ln	5.5312
+Hemlock St	5.3750
+Hempstead Av	6.8438
+Henderson Av	6.6094
+Henderson Pl	6.2656
+Hendricks Av	6.2708
+Hendrickson Pl	7.0885
+Hendrickson St	7.1615
+Hendrix Pl	4.9115
+Hendrix St	4.9844
+Henley Rd	4.8125
+Hennessy Pl	5.7656
+Henning St	5.1771
+Henry Hudson Pkwy	9.4271
+Henry Hudson Pkwy E	10.3021
+Henry Hudson Pkwy W	10.5260
+Henry Pl	4.0417
+Henry Rd	4.3802
+Henry St	4.1146
+Henshaw St	5.5260
+Henwood Pl	5.5208
+Herbert St	4.8958
+Hereford St	5.4375
+Hering Av	4.6771
+Herkimer Ct	5.6719
+Herkimer Pl	5.5729
+Herkimer St	5.6458
+Hermany Av	5.8229
+Hero Rd	3.7865
+Heron Ln	4.2708
+Herrick Av	5.0208
+Herschell St	5.7240
+Hervey St	4.6354
+Herzl St	3.7865
+Hessler Av	5.0625
+Hester St	4.3958
+Hett Av	3.5885
+Heusden St	5.3542
+Hewes St	4.3385
+Hewitt Av	4.6198
+Hewitt Pl	4.2760
+Hewlett St	4.9167
+Heyson Rd	5.0260
+Heyward St	5.4062
+Hiawatha Av	5.9375
+Hickory Av	5.1823
+Hickory Cir	5.2448
+Hickory Ct	4.9375
+Hicks Dr	3.9792
+Hicks St	3.8542
+Hicksville Rd	6.0990
+Higgins Av	5.0573
+Higgins St	4.7865
+High Point Rd	6.4219
+High St	3.4323
+Highland Av	5.7240
+Highland Blvd	6.5677
+Highland Ct	5.4792
+Highland Ln	5.6094
+Highland Pl	5.3802
+Highland Rd	5.7188
+Highlawn Av	5.8958
+Highmount Rd	6.7240
+Highview Av	5.8490
+Hilburn Av	5.0052
+Hill Av	3.1146
+Hill Ct	2.8698
+Hill St	2.8438
+Hillbrook Ct	5.5573
+Hillbrook Dr	5.6562
+Hillcrest Av	5.5156
+Hillcrest Ct	5.2708
+Hillcrest Rd	5.5104
+Hillcrest St	5.2448
+Hillcrest Ter	5.8125
+Hillcrest Walk	6.4948
+Hilldale Ct	4.8542
+Hillel Pl	3.6198
+Hillis St	3.6198
+Hillman Av	5.1458
+Hillmeyer Av	6.0938
+Hillmeyer Rd	6.0885
+Hillridge Ct	5.2812
+Hillside Av	5.0260
+Hillside Ter	5.3229
+Hilltop Pl	4.3073
+Hilltop Rd	4.6458
+Hilltop Ter	4.9479
+Hillview Ln	5.1458
+Hillview Pl	4.9167
+Hillwood Ct	5.3333
+Hillyer St	4.3854
+Himrod St	4.7031
+Hinckley Pl	5.2969
+Hinsdale St	5.3333
+Hinton St	4.4062
+Hirsch Ln	4.4635
+Hitchcock Av	6.2656
+Hobart Av	4.7604
+Hobart St	4.4896
+Hoda Pl	3.6094
+Hodges Pl	4.6823
+Hoe Av	3.3750
+Hoffman Dr	5.4323
+Hoffman St	5.3073
+Hogan Pl	4.2031
+Holbernt Ct	5.4010
+Holcomb Av	5.6771
+Holden Blvd	5.6823
+Holder Pl	4.3177
+Holdridge Av	6.0990
+Holgate St	4.9219
+Holiday Dr	4.9479
+Holiday Way	5.7917
+Holland Av	5.1302
+Hollers Av	4.8698
+Hollis Av	4.1771
+Hollis Ct Boulevard	8.9948
+Hollis Hills Ter	6.8073
+Holly Av	3.9688
+Holly Pl	3.6250
+Holly St	3.6979
+Hollywood Av	6.4323
+Hollywood Ct	6.1875
+Holmes Ln	4.9271
+Holsman Rd	5.6302
+Holt Pl	3.1562
+Holten Av	4.6510
+Home Av	4.2552
+Home Pl	3.9115
+Home St	3.9844
+Homecrest Av	6.6562
+Homecrest Ct	6.4115
+Homelawn St	6.1771
+Homer Av	4.6719
+Homer St	4.4010
+Homestead Av	6.8333
+Hone Av	3.9688
+Honey Ln	4.4219
+Honeywell Av	6.4271
+Honeywell St	6.1562
+Hook Creek Blvd	7.7656
+Hooker Pl	4.5729
+Hooper Av	4.9375
+Hooper St	4.6667
+Hoover Av	4.9167
+Hope Av	3.9531
+Hope Ln	3.8385
+Hope St	3.6823
+Hopkins Av	5.3229
+Hopkins St	5.0521
+Hopping Av	5.4271
+Horace Ct	4.6458
+Horace Harding Expy	9.9427
+Horatio Pkwy	6.2708
+Horatio St	4.7604
+Horizon Ct	4.9740
+Horizon Ln	5.1042
+Hornaday Pl	5.7448
+Hornell Loop	5.9740
+Horton Av	4.7865
+Horton St	4.5156
+Hosmer Av	5.1667
+Housman Av	5.9375
+Houston Ln	5.3438
+Houston St	5.1875
+Hovenden Rd	6.2500
+Howard Alley	6.2708
+Howard Av	5.1198
+Howard Cir	5.1823
+Howard Ct	4.8750
+Howard Ln	5.0052
+Howard Pl	4.7760
+Howard St	4.8490
+Howe Av	4.1250
+Howe St	3.8542
+Howton Av	5.1198
+Hoxie Dr	4.0885
+Hoxie St	3.9635
+Hoyt Av	3.7760
+Hoyt Av N	4.7448
+Hoyt Av S	4.6406
+Hoyt St	3.5052
+Hubbard Pl	5.2083
+Hubbard St	5.2812
+Hubbell St	4.8698
+Hubert St	4.5156
+Hudson Av	5.0781
+Hudson Blvd E	6.7969
+Hudson Blvd W	7.0208
+Hudson Manor Ter	8.5729
+Hudson Pl	4.7344
+Hudson Rd	5.0729
+Hudson River Rd	7.8281
+Hudson St	4.8073
+Hudson View Gdns	8.6719
+Hudson View Loop	8.6042
+Hudson Walk	6.0573
+Hugh J Grant Cir	7.7760
+Hugh L Carey Tunl	8.6250
+Hughes Av	5.0677
+Huguenot Av	6.1250
+Hull Av	3.4271
+Hull St	3.1562
+Humbert St	5.3958
+Humboldt St	5.8594
+Humphreys St	6.6615
+Hungry Harbor Rd	8.5052
+Hunt Av	3.8281
+Hunt Ln	3.7135
+Hunter Av	4.8021
+Hunter Pl	4.4583
+Hunter St	4.5312
+Hunterfly Pl	5.6823
+Hunters Point Av	8.0208
+Huntington Av	6.8333
+Huntington St	6.5625
+Hunton St	4.7188
+Hunts Ln	4.2083
+Hunts Point Av	7.0469
+Hurlbert St	5.2240
+Hurley Ct	4.4323
+Huron Pl	4.0781
+Huron St	4.1510
+Hurst St	3.8750
+Husson Av	4.9948
+Husson St	4.7240
+Hutchinson Av	6.9010
+Hutchinson Ct	6.6562
+Hutchinson River Pkwy	10.8958
+Hutchinson River Pkwy E	11.7708
+Huxley Av	4.8385
+Huxley St	4.5677
+Hyatt St	3.8854
+Hygeia Pl	4.4479
+Hylan Blvd	5.1042
+Hylan Pl	3.9167
+Hymen Ct	4.6042
+I Rd	1.8177
+I St	1.5521
+Ibsen Av	4.0469
+Icarus Rd	4.4219
+Ida Ct	2.7135
+Idaho Av	4.1198
+Idlease Pl	4.5156
+Idlewild Dr	5.0052
+Igros Ct	3.6354
+Ilion Av	3.5573
+Ilion Pl	3.2135
+Ilyse Ct	3.4896
+Ilyssa Way	4.9271
+Imlay St	3.8490
+Impala Ct	4.4427
+Imperial Ct	5.1406
+Ina St	2.7031
+Indale Av	4.4010
+Independence Av	8.1094
+India St	3.5625
+Indian Rd	4.4219
+Indian Trl	4.4583
+Indiana Av	4.9844
+Indiana Pl	4.6406
+Industrial Loop	7.0260
+Industry Rd	5.4531
+Inez St	3.2448
+Ingraham St	5.7292
+Ingram Av	4.8490
+Ingram St	4.5781
+Innis St	3.5156
+Innovation Way E	8.0990
+Inspiration Ln	6.4635
+Intervale Av	5.7448
+Inwood Av	4.8802
+Inwood Rd	4.8750
+Inwood St	4.6094
+Iona St	3.2708
+Ionia Av	3.8229
+Iowa Pl	3.3542
+Iowa Rd	3.6927
+Ira Ct	2.5521
+Ireland St	4.5469
+Irene Ct	3.7031
+Irene Ln	3.8333
+Iris Ct	2.7708
+Irma Pl	3.3333
+Iron Mine Dr	5.7500
+Ironwood St	5.5938
+Iroquois St	5.0521
+Irvine St	3.9583
+Irving Av	4.2500
+Irving Pl	3.9062
+Irving Walk	5.2292
+Irvington Pl	5.4583
+Irvington St	5.5312
+Irwin Av	3.8646
+Irwin Pl	3.5208
+Irwin St	3.5938
+Isabella Av	5.1510
+Iselin Av	4.0417
+Isernia Av	4.7240
+Isham St	4.0781
+Island Pt	4.0938
+Islington St	5.3438
+Ismay St	4.0521
+Isora Pl	3.5156
+Ithaca St	4.1927
+Ittner Pl	3.8281
+Ivan Ct	3.2865
+Ives Ct	3.1875
+Ivy Clos	3.6667
+Ivy Ct	2.7031
+Ivy Hill Rd	4.7812
+J Rd	2.0781
+J St	1.8125
+Jacinda Way	5.8906
+Jackie Robinson Pkwy	10.4375
+Jackson Av	5.3958
+Jackson Ct	5.1510
+Jackson Mill Rd	7.3177
+Jackson Pl	5.0521
+Jackson St	5.1250
+Jacob St	4.0573
+Jacobs Ln	4.7083
+Jacobus Pl	5.0729
+Jacobus St	5.1458
+Jacques Av	5.4062
+Jade Ct	3.5312
+Jaegers Ln	5.1302
+Jaffe St	3.6562
+Jaffray St	4.6406
+Jake Ct	3.5104
+Jamaica Av	5.4583
+Jamaica Walk	6.4375
+James Brown Pl	7.5000
+James Ct	4.3281
+James Pl	4.2292
+James St	4.3021
+Jamie Ct	4.1146
+Jamie Ln	4.2448
+Jane St	3.5208
+Janet Ln	4.0677
+Janet Pl	3.8385
+Jansen Ct	4.6354
+Jansen St	4.6094
+Jardine Av	5.0677
+Jardine Pl	4.7240
+Jarman Rd	5.0833
+Jarrett Pl	4.4688
+Jarvis Av	4.3906
+Jarvis Ct	4.1458
+Jasmine Av	5.4479
+Jason Ct	4.0521
+Jasper St	4.4167
+Java Pl	3.4115
+Java St	3.4844
+Jay Av	3.2083
+Jay Pl	2.8646
+Jay St	2.9375
+Jay Street Greenway	9.7917
+Jaydee Ct	4.6562
+Jayne Ln	4.2448
+Jeannette Av	6.2812
+Jefferson Av	6.0000
+Jefferson Blvd	6.8438
+Jefferson Pl	5.6562
+Jefferson St	5.7292
+Jeffrey Pl	4.5677
+Jenna Ln	4.2708
+Jennifer Ct	5.2031
+Jennifer Ln	5.3333
+Jennifer Pl	5.1042
+Jennings St	5.5052
+Jericho Tpke	6.0573
+Jerome Av	5.0625
+Jerome Rd	5.0573
+Jerome St	4.7917
+Jersey St	4.4062
+Jessica Ct	4.7656
+Jessica Ln	4.8958
+Jessie Ct	4.2240
+Jesup Av	4.3073
+Jesup Pl	3.9635
+Jewel Av	4.2396
+Jewel St	3.9688
+Jewell McKoy Ln	7.8646
+Jewett Av	4.7292
+Jillian Ct	4.1354
+Jj Byrne Memorial Bridge	11.8854
+Joan Pl	3.4583
+Joanne Ct	4.7083
+Jodie Ct	3.8229
+Joel Pl	3.1562
+Johanna Ln	5.4323
+John Berry Blvd	7.5833
+John F Kennedy Cir	9.1302
+John St	3.5677
+John Warren Av	7.4792
+Johnson Av	5.4948
+Johnson Ln	5.3802
+Johnson Pl	5.1510
+Johnson St	5.2240
+Johnston Ter	6.1823
+Jojo Ct	3.2552
+Joline Av	4.3750
+Joline Ln	4.2604
+Jones Alley	5.4479
+Jones Pl	3.9531
+Jones St	4.0260
+Joralemon St	6.2448
+Jordan Av	4.7969
+Jordan Ct	4.5521
+Jordan Dr	4.6510
+Jordan St	4.5260
+Joseph Av	4.8750
+Joseph Ct	4.6302
+Joseph Ln	4.7604
+Josephine St	6.0365
+Joshua Ct	4.6458
+Journeay St	5.6667
+Joval Ct	3.8125
+Joyce Ln	4.2031
+Joyce St	4.0469
+Judge St	4.1198
+Judith Ct	4.2760
+Jughandle	4.9010
+Jules Dr	3.8750
+Juliana Pl	4.6146
+Julie Ct	3.5625
+Julieann Ct	5.3073
+Julius Rd	4.3333
+Jumel Pl	4.0625
+Jumel St	4.1354
+Jumel Ter	4.7031
+Junction Blvd	6.4896
+Junction Ct	5.4010
+Jungle World Rd	7.6458
+Juni Ct	3.3073
+Juniper Av	5.1042
+Juniper Blvd N	6.9167
+Juniper Blvd S	6.8125
+Juniper Pl	4.7604
+Juniper Valley Rd	8.2969
+Junius St	4.3698
+Juno St	3.5677
+Jupiter Ln	4.7865
+Just Ct	3.3177
+Justice Av	4.9427
+Justin Av	4.4375
+K Rd	2.2292
+K St	1.9635
+Kalmia Av	4.8021
+Kaltenmeier Ln	7.2031
+Kalver Pl	4.2708
+Kaminsky Rd	6.1615
+Kane Pl	3.5990
+Kane St	3.6719
+Kansas Av	4.9323
+Kansas Pl	4.5885
+Kappock St	5.3438
+Karen Ct	4.1146
+Karweg Pl	4.7500
+Katan Av	4.3333
+Katan Loop	5.3385
+Kathleen Ct	5.5312
+Kathleen Pl	5.4323
+Kathy Ct	4.0990
+Kathy Pl	4.0000
+Katonah Av	5.4948
+Kaufman Pl	5.4375
+Kay Av	3.3594
+Kay Ct	3.1146
+Kay Pl	3.0156
+Kayla Ct	3.9635
+Keap St	3.6562
+Kearney Av	5.4844
+Kearney St	5.2135
+Keating Pl	4.8490
+Keating St	4.9219
+Keats St	3.9635
+Keegans Ln	5.4583
+Keel Ct	3.3958
+Keeley St	4.4948
+Keen Ct	3.6979
+Keeseville Av	6.3802
+Kehayas Ct	5.3177
+Keiber Ct	4.3802
+Kell Av	3.3750
+Kelly Blvd	4.7865
+Kelly St	3.6719
+Kelvin Av	4.5156
+Kemball Av	5.3906
+Kendrick Pl	5.4167
+Kenilworth Av	6.6771
+Kenilworth Dr	6.5312
+Kenilworth Pl	6.3333
+Kenmare St	5.5260
+Kenmore Ct	5.5625
+Kenmore Rd	5.8021
+Kenmore St	5.5365
+Kenmore Ter	6.1042
+Kennellworth Pl	7.4948
+Kenneth Pl	5.1771
+Kennington St	6.7135
+Kenny Rd	4.5417
+Keno Av	3.9531
+Kensico St	5.0000
+Kensington Av	6.8854
+Kensington St	6.6146
+Kent Av	3.7760
+Kent St	3.5052
+Kenwood Av	5.8490
+Kepler Av	4.6354
+Keppel Av	4.7969
+Kermit Av	4.7604
+Kermit Pl	4.4167
+Kerry Ln	4.0781
+Kessel St	4.3594
+Ketch Ct	4.0729
+Ketcham St	5.4844
+Keune Ct	4.2917
+Kew Forest Ln	6.6771
+Kew Gardens Rd	7.6667
+Kiely Pl	3.5885
+Kildare Rd	4.9115
+Kildare Walk	5.8958
+Killarney St	5.5208
+Kilroe St	4.0781
+Kimball Rd	5.1094
+Kimball St	4.8438
+Kimberly Ln	5.6927
+Kimberly Pl	5.4635
+Kimmel Rd	5.1198
+King Av	3.6875
+King James Ct	6.7396
+King Rd	3.6823
+King St	3.4167
+Kingdom Av	5.7135
+Kinghorn St	5.5885
+Kings College Pl	7.5729
+Kings Hwy	4.9479
+Kings Pl	3.8385
+Kingsbridge Av	7.1719
+Kingsbridge Ter	7.4688
+Kingsbury Av	6.3385
+Kingsland Av	6.2031
+Kingsland Pl	5.8594
+Kingsland St	5.9323
+Kingsley Av	5.5990
+Kingsley Pl	5.2552
+Kingston Av	5.7344
+Kingston Pl	5.3906
+Kingsway Pl	5.7135
+Kinnear Pl	4.8906
+Kinsella St	5.0312
+Kinsey Pl	4.3854
+Kion Way	4.3750
+Kipp Rd	3.6667
+Kirby Ct	3.8333
+Kirby St	3.8073
+Kirkland Ct	5.2656
+Kirshon Av	5.1823
+Kissam Av	4.9427
+Kissel Av	4.3542
+Kissena Blvd	6.0573
+Kiswick St	4.8698
+Kleupfel Ct	5.2240
+Klondike Av	5.6615
+Knapp St	4.2708
+Knauth Pl	4.6198
+Kneeland Av	5.9635
+Kneeland St	5.6927
+Knesel St	4.4583
+Knickerbocker Av	8.4010
+Knight Ct	4.4271
+Knight Loop	5.6771
+Knolls Cres	5.3073
+Knollwood Av	6.4427
+Knollwood Ct	6.1979
+Knox Pl	3.6302
+Knox St	3.7031
+Koch Blvd	4.7812
+Kosciuszko St	6.6042
+Kossuth Av	5.3698
+Kossuth Pl	5.0260
+Kramer Av	5.0625
+Kramer Pl	4.7188
+Kramer St	4.7917
+Kreischer St	5.8229
+Krier Pl	3.5625
+Krissa Ct	4.2344
+Kristen Ct	4.7240
+Kruger Rd	4.7917
+Kruser St	4.4427
+Kunath Av	4.9635
+Kyle Ct	3.4062
+L St	1.8229
+La Grange Pl	5.9427
+La Guardia Av	6.5677
+La Guardia Pl	6.2240
+La Salle Av	5.2135
+La Salle St	4.9427
+Labau Av	4.3802
+Laburnum Av	6.3073
+Lacombe Av	5.7760
+Lacon Ct	4.1094
+Laconia Av	5.1927
+Ladd Av	3.8073
+Ladd Rd	3.8021
+Lafayette Av	6.0365
+Lafayette St	5.7656
+Lafontaine Av	6.5573
+Laforge Av	5.1354
+Laforge Pl	4.7917
+Laguardia Cir	6.2760
+Laguna Ln	4.8594
+Lahn St	3.5677
+Laight St	4.2240
+Lake Av	3.7656
+Lake Mall	4.4427
+Lake Pl	3.4219
+Lake St	3.4948
+Lakeland Rd	5.7812
+Lakeside Pl	5.3333
+Lakeview Blvd E	7.6302
+Lakeview Ln	5.7969
+Lakeview Pl	5.5677
+Lakeview Ter	6.2083
+Lakeville Rd	5.7396
+Lakewood Av	6.2292
+Lakewood Pl	5.8854
+Lakewood Rd	6.2240
+Lama Ct	3.8438
+Lambert St	5.2031
+Lamberts Ln	5.8542
+Lamoka Av	5.2135
+Lamont Av	5.0833
+Lamont Ct	4.8385
+Lamped Loop	6.2500
+Lamport Blvd	6.3281
+Lamport Pl	5.1406
+Lanark Rd	4.7708
+Lancaster Av	6.2031
+Lander Av	4.7969
+Lander St	4.5260
+Landing Rd	5.2708
+Landing Way	5.9740
+Landis Av	4.5990
+Landis Ct	4.3542
+Lane Av	3.8021
+Lanett Av	4.5833
+Langdale St	5.5365
+Langere Pl	5.0104
+Langham St	5.5833
+Langston Av	5.8698
+Lansing Av	5.1927
+Lansing St	4.9219
+Larch Ct	3.9583
+Laredo Av	4.7708
+Larkin Av	4.5000
+Larkin St	4.2292
+Larrison Loop	6.4271
+Larue Av	4.2188
+Latham Ln	4.9583
+Latham Pl	4.7292
+Lathrop Av	5.1979
+Latimer Av	5.1771
+Latimer Pl	4.8333
+Latourette Ln	6.4010
+Latourette St	6.2448
+Latting St	4.6146
+Laurel Av	4.5104
+Laurel Dr	4.3646
+Laurel Hill Blvd	7.1927
+Laurel Hill Ter	6.6458
+Laurelton Pkwy	7.3021
+Lauren Ct	4.5677
+Laurie Av	4.5000
+Laurie Ct	4.2552
+Lava St	3.4948
+Law Pl	3.0573
+Lawn Av	3.9948
+Lawn Ct	3.7500
+Lawrence Av	6.0677
+Lawrence St	5.7969
+Lawton Av	4.9531
+Lawton St	4.6823
+Lax Av	3.2292
+Layton Av	4.7708
+Layton St	4.5000
+Leason Pl	4.5208
+Leavitt St	4.5573
+Lebanon St	5.2708
+Ledyard Pl	5.0052
+Lee Av	3.2083
+Lee St	2.9375
+Leeds Rd	4.2760
+Leeds St	4.0104
+Leeward Ln	5.3958
+Leewood Loop	6.6771
+Lefferts Av	5.2396
+Lefferts Blvd	6.0833
+Lefferts Pl	4.8958
+Legate Av	4.7344
+Leggett Av	5.1458
+Leggett Pl	4.8021
+Legion Pl	4.3281
+Legion St	4.4010
+Leigh Av	4.1042
+Leith Pl	3.5729
+Leith Rd	3.9115
+Leland Av	4.6719
+Lemondrop Ct	6.5885
+Lenevar Av	5.3333
+Lenhart St	4.9323
+Lennon Ct	4.7552
+Lenore Ct	4.5417
+Lenox Av	4.3906
+Lenox Rd	4.3854
+Lenox Ter Place	7.5260
+Lenzie St	4.3542
+Leo St	2.9479
+Leona St	4.0990
+Leonard Av	5.3646
+Leonard St	5.0938
+Leonello Ln	5.4062
+Lerer Ln	3.9271
+Leroy St	3.9323
+Leslie Av	4.2760
+Leslie Rd	4.2708
+Lester Ct	4.2656
+Lester St	4.2396
+Letty Ct	3.7552
+Leverett Av	5.5208
+Leverett Ct	5.2760
+Leverich St	5.3281
+Levit Av	3.8802
+Lewis Av	4.1771
+Lewis Pl	3.8333
+Lewis St	3.9062
+Lewiston Av	5.7292
+Lewiston St	5.4583
+Lewmay Rd	5.4010
+Lexa Pl	3.4427
+Lexington Av	6.2344
+Lexington Ln	6.1198
+Leyden Av	4.9479
+Libby Pl	3.7552
+Liberty Av	4.8854
+Liberty Ln	4.7708
+Liberty Pl	4.5417
+Liberty St	4.6146
+Liberty Way	5.5833
+Library Av	4.9115
+Library Ln	4.7969
+Liebig Av	4.3698
+Light St	3.6667
+Lighthouse Av	6.7448
+Lighthouse Dr	6.5990
+Lightner Av	5.5052
+Lilac Ct	3.5208
+Lillian Pl	4.0469
+Lillian Wald Dr	6.7708
+Lillie Ln	3.6823
+Lily Pond Av	5.8646
+Lincoln Av	4.9635
+Lincoln Pl	4.6198
+Lincoln Rd	4.9583
+Lincoln St	4.6927
+Lincoln Walk	5.9427
+Linda Av	4.1042
+Linda Ct	3.8594
+Linda Ln	3.9896
+Lindbergh Av	6.2708
+Linden Av	4.6979
+Linden Blvd	5.5417
+Linden Dr	4.5521
+Linden Pl	4.3542
+Linden St	4.4271
+Lindenwood Pl	6.8177
+Lindenwood Rd	7.1562
+Linneaus Pl	5.4219
+Linton Pl	4.1771
+Linwood Av	5.4323
+Linwood St	5.1615
+Lion St	3.2656
+Lippmann Plaza	7.4688
+Lipsett Av	4.7865
+Lisa Ln	3.3125
+Lisa Pl	3.0833
+Lisbon Pl	4.2656
+Lisk Av	3.4271
+Lispenard St	5.8802
+Liss St	3.0938
+Lithonia Av	5.3594
+Little Bay Rd	6.0677
+Little Clove Rd	6.8646
+Little League Pl	7.3229
+Little Nassau St	7.4010
+Little Neck Blvd	7.4740
+Little Neck Pkwy	7.8698
+Little Neck Rd	6.6250
+Little St	3.7344
+Little W 12 St	6.0938
+Little West St	6.2760
+Littlefield Av	6.0781
+Livermore Av	6.3281
+Liverpool St	5.6406
+Livingston Av	6.4323
+Livingston Ct	6.1875
+Livingston St	6.1615
+Livonia Av	4.9323
+Llewellyn Pl	5.6510
+Lloyd Ct	3.8542
+Lloyd Rd	4.0938
+Lloyd St	3.8281
+Locke Av	4.3177
+Locke St	4.0469
+Lockman Av	5.7917
+Lockman Loop	6.7969
+Lockman Pl	5.4479
+Lockwood Pl	5.8802
+Locust Av	4.6823
+Locust Ct	4.4375
+Locust Manor Ln	7.7656
+Locust Pl	4.3385
+Locust Point Dr	7.2604
+Locust St	4.4115
+Lodovick Av	5.7448
+Logan Av	4.3906
+Logan St	4.1198
+Lohengrin Pl	5.9323
+Lois Av	3.4375
+Lois Ln	3.3229
+Lois Pl	3.0938
+Lombard Ct	5.4271
+Lombardy St	5.9688
+London Rd	4.9896
+Long Island Expy	7.9688
+Long Pond Ln	6.3490
+Long St	3.5625
+Longdale St	5.5469
+Longfellow Av	6.6562
+Longstreet Av	6.6406
+Longview Pl	5.6354
+Longview Rd	5.9740
+Longwood Av	6.2969
+Loomis St	4.6146
+Loop Rd	3.8021
+Loretta Rd	4.9688
+Loretto St	4.7135
+Lori Dr	3.2135
+Lorillard Pl	5.1510
+Lorimer St	4.9427
+Loring Av	4.5312
+Loring Pl N	5.1562
+Loring Pl S	5.0521
+Lorraine Av	5.4844
+Lorraine Loop	6.4896
+Lorraine St	5.2135
+Lortel Av	4.3177
+Lott Av	3.4427
+Lott Ln	3.3281
+Lott Pl	3.0990
+Lott St	3.1719
+Lotts Ln	3.8229
+Loubet St	4.5104
+Louis Nine Blvd	7.2760
+Louis Pl	3.6875
+Louis St	3.7604
+Louisa St	4.3177
+Louise Ln	4.4740
+Louise St	4.3177
+Louise Ter	4.8854
+Louisiana Av	6.0208
+Love Ln	3.6615
+Lovelace Av	5.7240
+Lovell Av	4.3594
+Lovingham Pl	6.3594
+Lowe Ct	3.7240
+Lowell St	4.2812
+Lowerre Pl	5.0156
+Lucas St	4.0104
+Lucerne St	5.0833
+Lucille Av	4.6510
+Lucy Loop	4.8021
+Ludlam Pl	4.6510
+Ludlow St	4.6042
+Ludlum Av	5.0312
+Ludwig Ln	4.7604
+Ludwig St	4.6042
+Luigi Ct	3.5833
+Luigi Pl	3.4844
+Luke Ct	3.5573
+Luke Pl	3.4583
+Lulu Ct	3.3281
+Luna Cir	3.9010
+Lundi Ct	3.8958
+Lundsten Av	5.8958
+Luquer St	4.5625
+Lurting Av	4.9479
+Luten Av	4.2292
+Luther Rd	4.6406
+Lutheran Av	5.7969
+Lux Rd	3.2604
+Lyceum Ct	4.9896
+Lydig Av	4.0990
+Lyle Ct	3.2656
+Lyman Av	4.6927
+Lyman Pl	4.3490
+Lyman St	4.4219
+Lyme Av	4.0990
+Lynbrook Av	5.9427
+Lynbrook Ct	5.6979
+Lynch St	4.1198
+Lyndale Av	5.2396
+Lyndale Ln	5.1250
+Lynhurst Av	5.7448
+Lynn Ct	3.6042
+Lynn St	3.5781
+Lynnhaven Pl	6.3646
+Lyon Av	3.8229
+Lyon Pl	3.4792
+Lyvere St	4.4792
+Mac Cracken Av	7.5521
+Mac Donough St	7.6250
+Mac Dougal Alley	8.1406
+Mac Dougal St	6.7188
+Macdonough Pl	7.1667
+Mace Av	3.9948
+Mace St	3.7240
+Macfarland Av	6.7969
+Macgregor St	6.2812
+Mackay Pl	4.7760
+Mackenzie St	6.2552
+Mackintosh St	6.6458
+Maclay Av	4.8542
+Macnish St	5.1302
+Macombs Pl	5.6146
+Macombs Rd	5.9531
+Macon Av	4.5990
+Macon St	4.3281
+Macormac Pl	6.0573
+Macy Pl	3.6615
+Madan Ct	4.3802
+Madeline Ct	5.5104
+Madera St	4.7344
+Madigan Pl	5.1406
+Madison Av	5.4115
+Madison Av Bridge	8.7656
+Madison Pl	5.0677
+Madison St	5.1406
+Madoc Av	4.5833
+Mador Ct	4.2135
+Madsen Av	5.1198
+Magaw Pl	4.4375
+Magenta St	5.3021
+Magnolia Av	5.7656
+Magnolia Ct	5.5208
+Magnolia Pl	5.4219
+Maguire Av	5.3229
+Maguire Ct	5.0781
+Mahan Av	4.6406
+Maiden Ln	4.7917
+Main Av	3.7708
+Main St	3.5000
+Maine Av	4.3281
+Maitland Av	5.5885
+Major Av	4.1615
+Major Deegan Expy	9.0417
+Malba Dr	4.1771
+Malbone St	5.2135
+Malcolm X Blvd	7.2396
+Malcolm X Promenade	10.4688
+Malden Pl	4.5729
+Malibu Ct	4.3958
+Mallard Ln	4.9167
+Mallory Av	5.0312
+Mallow St	4.5260
+Malone Av	4.9062
+Maloney Dr	5.3281
+Malt Dr	3.4323
+Malta St	3.8646
+Malvine Av	5.1771
+Manchester Dr	6.8958
+Mandanici Rd	6.3177
+Mandy Ct	4.3906
+Manee Av	4.6042
+Mangin Av	4.9427
+Mangin St	4.6719
+Manhattan Av	6.5729
+Manhattan Beach Prom	10.9948
+Manhattan Bridge	8.4010
+Manhattan College Pkwy	11.5469
+Manhattan Ct	6.3281
+Manhattan St	6.3021
+Manida St	4.6354
+Manila Av	4.6198
+Manila Pl	4.2760
+Manilla St	4.6406
+Manley St	4.6354
+Mann Av	4.0833
+Manning St	5.2656
+Manor Av	4.4740
+Manor Ct	4.2292
+Manor Rd	4.4688
+Manorville Ct	6.2083
+Manse St	4.2708
+Mansion Av	5.4271
+Mansion St	5.1562
+Manton Pl	4.6979
+Manton St	4.7708
+Manville Ln	5.3542
+Mapes Av	4.5260
+Maple Av	4.3229
+Maple Ct	4.0781
+Maple Dr	4.1771
+Maple Pkwy	5.5625
+Maple St	4.0521
+Maple Ter	4.6198
+Mapleton Av	5.8750
+Maplewood Av	6.7865
+Maplewood Pl	6.4427
+Maran Pl	4.1198
+Marathon Pkwy	7.2552
+Marble Hill Av	6.5781
+Marble Loop	5.7448
+Marble St	4.4688
+Marc St	3.5833
+Marconi Pl	4.9531
+Marconi St	5.0260
+Marcus Garvey Blvd	9.3750
+Marcy Av	4.4219
+Marcy Pl	4.0781
+Marengo St	5.3385
+Maretzek Ct	5.6719
+Margaret Corbin Dr	8.9948
+Margaret Corbin Plaza	10.4531
+Margaret Ct	5.5677
+Margaret Pl	5.4688
+Margaret St	5.5417
+Margaretta Ct	6.5156
+Marginal St	5.3438
+Marginal St E	6.2188
+Marginal St W	6.4427
+Margo Loop	5.4635
+Maria Ln	4.0365
+Marianne St	5.6250
+Marie St	3.8802
+Marillac Hl	5.0156
+Marina Rd	4.7396
+Marine Av	4.7448
+Marine Dr	4.5990
+Marine Pkwy	5.9844
+Marine St	4.4740
+Marine Way	5.4427
+Mariners Ln	5.5417
+Marinette St	5.8125
+Marion Av	4.7552
+Marion St	4.4844
+Marion Walk	5.7344
+Marisa Cir	4.7083
+Marisa Ct	4.4010
+Marissa St	4.8698
+Marjorie St	5.1458
+Mark St	3.5990
+Market Slip	5.3073
+Market St	4.5469
+Marketfield St	6.6198
+Markham Ln	5.7865
+Markham Pl	5.5573
+Markwood Pl	5.9896
+Marlborough Ct	7.2552
+Marlborough Rd	7.4948
+Marmion Av	5.6354
+Marne Av	4.4635
+Marne Pl	4.1198
+Marolla Pl	4.6771
+Mars Pl	3.4635
+Marscher Pl	5.5729
+Marsden St	5.2656
+Marsh Av	4.4010
+Marshall Av	5.5417
+Marshall Dr	5.3958
+Marshall Dr N	6.3646
+Marshall Dr S	6.2604
+Marshall Rd	5.5365
+Marshall St	5.2708
+Martense Av	5.9062
+Martense Ct	5.6615
+Martense St	5.6354
+Martha Av	4.8542
+Martha St	4.5833
+Martin Av	4.5781
+Martin Ct	4.3333
+Martin Luther King Jr Pl	11.2396
+Martineau St	6.0156
+Martling Av	5.4479
+Marvin Pl	4.4010
+Marvin Rd	4.7396
+Marvin St	4.4740
+Marx St	3.6198
+Mary St	3.6094
+Maryland Av	5.9010
+Maryland Ln	5.7865
+Maryland Pl	5.5573
+Maryland Rd	5.8958
+Mason Av	4.5521
+Mason Blvd	5.3958
+Mason St	4.2812
+Maspeth Av	5.5104
+Massachusetts St	8.2292
+Massachusetts St S	9.0938
+Mathews Av	5.6823
+Mathewson Ct	6.5990
+Mathias Av	5.2135
+Matilda Av	4.9948
+Matthew Pl	5.2344
+Matthews Av	6.0729
+Matthews Ct	5.8281
+Matthews Pl	5.7292
+Matthewson Rd	7.2292
+Maujer St	4.4740
+Maurice Av	5.2865
+Maxie Ct	4.0677
+Maxwell Av	5.3646
+May Av	3.4635
+May Pl	3.1198
+Mayberry Prom	7.2292
+Maybury Av	5.6198
+Maybury Ct	5.3750
+Mayda Rd	4.5938
+Mayfair Dr N	5.9062
+Mayfair Dr S	5.8021
+Mayfair Rd	5.0781
+Mayfield Rd	5.5312
+Mayflower Av	6.4115
+Mayville St	5.1719
+Mazeau St	4.8750
+Mazza Ct	4.2917
+Mc Arthur Av	6.2604
+Mc Arthur Rd	6.2552
+Mc Baine Av	5.8125
+Mc Carron Dr	6.1771
+Mc Clean Av	5.7708
+Mc Cormick Pl	6.6719
+Mc Cully Av	5.5156
+Mc Dermott Av	7.0469
+Mc Divitt Av	5.7448
+Mc Donald St	6.1615
+Mc Ginty Cir	5.7083
+Mc Gowan St	6.0104
+Mc Kee Av	4.9531
+Mc Keever Pl	6.1406
+Mc Kenny St	5.8802
+Mc Kibbin Ct	5.9062
+Mc Kibbin St	5.8802
+Mc Kinley Av	6.1302
+Mc Laughlin Av	7.1875
+Mc Laughlin St	6.9167
+Mc Owen Av	5.7552
+Mc Veigh Av	5.8229
+McBride St	5.1354
+McClancy Pl	5.7292
+McClellan St	5.8333
+McDonald Av	6.1823
+McDonald St	5.9115
+McGraw Av	5.2865
+McGuinness Blvd	8.0156
+McGuinness Blvd S	8.8802
+McIntosh St	5.5469
+Mead St	3.7604
+Meade Loop	5.5938
+Meadow Av	5.3490
+Meadow Ct	5.1042
+Meadow Dr	5.2031
+Meadow Lake Dr	7.6927
+Meadow Lake Road East	11.2760
+Meadow Lk Promenade	10.7969
+Meadow Ln	5.2344
+Meadow Pl	5.0052
+Meadow Rd	5.3438
+Meadow St	5.0781
+Meagan Loop	6.1875
+Meagher Av	5.5990
+Mechanics Alley	7.6510
+Medford Rd	5.3958
+Medina St	4.6354
+Meehan Av	5.1979
+Meeker Av	4.9844
+Meeker St	4.7135
+Meisner Av	5.2396
+Melba Ct	4.0781
+Melba St	4.0521
+Melbourne Av	6.4948
+Melhorn Rd	5.3542
+Melissa Ct	4.7708
+Melissa St	4.7448
+Melrose Av	5.2240
+Melrose Ln	5.1094
+Melrose Pl	4.8802
+Melrose St	4.9531
+Melville Rd	5.1615
+Melville St	4.8958
+Melvin Av	4.6198
+Melvina Pl	4.8333
+Melyn Pl	4.0052
+Memo St	4.0729
+Memorial Cir	5.9531
+Memorial Dr	5.7448
+Memphis Av	5.7240
+Menahan St	5.5208
+Mendelsohn St	6.8958
+Mentone Av	5.5990
+Mercer Pl	4.4844
+Mercer St	4.5573
+Mercury Ln	5.3177
+Meredith Av	5.7135
+Meridian Blvd	6.4479
+Meridian Rd	5.5990
+Merit Ct	3.7396
+Merivale Ln	5.4427
+Merkel Pl	4.3750
+Merle Pl	3.8177
+Mermaid Av	5.6094
+Mermaid Ln	5.4948
+Merriam Av	5.4479
+Merrick Av	5.1094
+Merrick Blvd	5.9531
+Merrill Av	4.5938
+Merrill St	4.3229
+Merriman Av	6.0417
+Merritt Av	4.7917
+Merry Av	4.2969
+Merrymount St	7.0521
+Mersereau Av	6.4896
+Meserole Av	5.7812
+Meserole St	5.5104
+Metcalf Av	5.0417
+Metcalf Av Extension	9.9740
+Metcalfe St	5.3281
+Metropolitan Av	7.5312
+Metropolitan Avenue Bridge	13.1875
+Metropolitan Oval	8.3854
+Metrotech Rdwy	7.6667
+Mexico St	4.5938
+Meyer Av	4.4375
+Meyer Ln	4.3229
+Meyers St	4.6615
+Mia Dr	3.0312
+Michael Ct	4.9167
+Michael Loop	6.1667
+Michael Pl	4.8177
+Michelle Ct	5.2083
+Michelle Ln	5.3385
+Micieli Pl	4.2292
+Mickardan Ct	6.1771
+Mickle Av	4.5677
+Middagh St	5.2344
+Middle Loop Road	8.2760
+Middlemay Cir	6.6927
+Middlemay Pl	6.2865
+Middleton St	5.9062
+Middletown Rd	6.9219
+Midland Av	5.2188
+Midland Pkwy	6.4583
+Midland Rd	5.2135
+Midway Pl	4.7292
+Midwood St	5.3906
+Milbank Rd	5.1927
+Milburn St	4.8229
+Milden Av	4.6406
+Mildred Av	5.0417
+Miles Av	3.9635
+Milford Av	4.8385
+Milford Dr	4.6927
+Milford St	4.5677
+Mill Av	3.2031
+Mill Ln	3.0885
+Mill Rd	3.1979
+Mill River Rd	5.9531
+Mill St	2.9323
+Millennium Loop	7.7083
+Miller Av	4.1771
+Miller Pl	3.8333
+Miller St	3.9062
+Mills Av	3.6979
+Millstone Ct	5.5625
+Milton Av	4.4635
+Milton Pl	4.1198
+Milton St	4.1927
+Mimosa Ln	5.0052
+Minerva Av	5.3021
+Minerva Pl	4.9583
+Minetta Ln	4.9948
+Minetta St	4.8385
+Minford Pl	4.7969
+Minna St	4.0938
+Minnieford Av	6.5729
+Minthorne St	6.0625
+Minton St	4.4948
+Minturn Av	5.2083
+Miriam St	4.4844
+Mitchel Ln	4.8802
+Mitchell Pl	4.9427
+Mobile Av	4.6146
+Mobile Rd	4.6094
+Moffat St	4.3125
+Moffett St	4.7031
+Mohegan Av	5.7865
+Mohn Pl	3.7500
+Moline St	4.3594
+Mollenhauer Dr	7.2135
+Monaco Pl	4.8229
+Monahan Av	5.8021
+Monarch Ct	5.3646
+Monitor St	4.8854
+Monroe Av	5.0417
+Monroe Pl	4.6979
+Monroe St	4.7708
+Monsey Pl	4.7760
+Monsignor Halpin Pl	9.3646
+Monsignor Rd	6.4271
+Mont Sec Av	5.8542
+Montague St	5.9062
+Montague Ter	6.4740
+Montana Ct	5.3542
+Montana Pl	5.2552
+Montauk Av	5.5990
+Montauk Ct	5.3542
+Montauk Pl	5.2552
+Montauk St	5.3281
+Montell St	4.7604
+Monterey Av	5.9896
+Monterey St	5.7188
+Montgomery Av	7.4583
+Montgomery Pl	7.1146
+Montgomery St	7.1875
+Monticello Av	6.4219
+Monticello Ter	6.7188
+Montieth St	5.4427
+Montreal Av	5.7135
+Montrose Av	5.9271
+Montvale Pl	5.5104
+Monument Walk	7.4948
+Moody Pl	4.2760
+Moonlight Ct	5.9583
+Moore Pl	4.1042
+Moore St	4.1771
+Morani St	4.4844
+Moreland St	5.6302
+Morenci Ln	5.1823
+Moreno Ct	4.7969
+Morgan Av	5.0521
+Morgan Ln	4.9375
+Morgan St	4.7812
+Morley Av	4.7396
+Morningside Av	7.2812
+Morningside Dr	7.1354
+Morningstar Rd	7.2240
+Morris Av	4.5156
+Morris Park Av	6.9375
+Morris Pl	4.1719
+Morris St	4.2448
+Morrison Av	5.6771
+Morrow St	4.7865
+Morse Av	4.3750
+Morse Ct	4.1302
+Morton Pl	4.5312
+Morton St	4.6042
+Mosco St	4.2396
+Mosel Av	4.2500
+Mosel Loop	5.2552
+Mosely Av	4.8177
+Mosholu Av	5.4479
+Moss Pl	3.5521
+Mother Gaston Blvd	9.2448
+Motley Av	4.7135
+Mott Av	3.6875
+Mott St	3.4167
+Moultrie St	5.1667
+Mount Carmel Pl	7.7344
+Mount Eden Pkwy	8.3281
+Mount Hope Pl	6.8177
+Mount Loretto Service Rd	11.9635
+Mount Morris Park W	9.7188
+Mount Olivet Cres	8.3698
+Mountain View Av	8.4375
+Mountainside Rd	7.8229
+Mowbray Dr	5.6302
+Msgr Cahill Pl	6.3906
+Muhlebach Ct	6.4010
+Mulberry Av	5.7604
+Mulberry Cir	5.8229
+Mulberry St	5.4896
+Muldoon Av	5.5312
+Mulford Av	5.1510
+Muliner Av	5.0729
+Mullan Pl	4.3229
+Muller Av	4.4896
+Mulvey Av	4.9062
+Mundy Av	4.6719
+Mundy Ln	4.5573
+Murdock Av	5.5938
+Murdock Ct	5.3490
+Murdock Pl	5.2500
+Muriel Ct	4.2344
+Muriel St	4.2083
+Murray Av	4.8906
+Murray Hulbert Av	8.6927
+Murray Ln	4.7760
+Murray Pl	4.5469
+Murray Rd	4.8854
+Murray St	4.6198
+Musket St	4.6615
+Myrna Ln	4.3594
+Myrtle Av	4.5625
+N 1 St	2.6250
+N 10 St	3.2812
+N 11 St	3.0260
+N 12 St	3.2344
+N 13 St	3.2240
+N 14 St	3.2656
+N 15 St	3.2344
+N 3 St	2.8229
+N 4 Pl	2.7917
+N 4 St	2.8646
+N 5 St	2.8333
+N 6 Pl	2.7656
+N 6 St	2.8385
+N 7 St	2.7604
+N 8 St	2.8490
+N 9 St	2.8385
+N Boundary Rd	7.0573
+N Bridge St	5.3281
+N Burgher Av	6.3438
+N Conduit Av	6.1406
+N Edo Ct	4.0208
+N Elliott Pl	4.9896
+N Elliott Walk	6.3125
+N End Av	4.2917
+N Gannon Av	6.0833
+N Hangar Rd	5.9167
+N Henry St	5.0833
+N Loop Rd	4.7708
+N Mada Av	5.0000
+N Market St	5.5156
+N Moore St	5.1458
+N Oak Dr	4.1875
+N Oxford St	5.4531
+N Pine Ter	4.8646
+N Portland Av	6.5312
+N Railroad Av	6.4375
+N Railroad St	6.1667
+N Randall Av	6.0573
+N Rhett Av	5.1198
+N Service Ct	5.7760
+N Service Rd	6.0156
+N St	1.9740
+N St Austins Pl	6.9740
+Nadal Pl	3.8854
+Nadine St	4.5417
+Nagle Av	4.2292
+Nahant St	4.6667
+Nameoke Av	5.9219
+Nameoke St	5.6510
+Nancy Ct	4.2604
+Nancy Ln	4.3906
+Nansen St	4.7708
+Napier Av	4.6354
+Naples St	4.4531
+Naples Ter	5.0208
+Narragansett Av	7.7552
+Narrows Av	5.4479
+Narrows Rd N	6.4115
+Narrows Rd S	6.3073
+Nasby Pl	4.0990
+Nash Ct	3.6458
+Nashville Blvd	6.7135
+Nashville St	5.5990
+Naso Ct	3.6198
+Nassau Av	4.9427
+Nassau Blvd	5.7865
+Nassau Expy	6.0156
+Nassau Pl	4.5990
+Nassau St	4.6719
+Nat Ct	2.9479
+Natalie Ct	4.6354
+Nathan Ct	4.6927
+Nathan D Perlman Pl	9.7448
+Natick St	4.3021
+National Dr	5.3385
+National St	5.2135
+Naughton Av	6.1198
+Nautical Way	6.1562
+Nautilus Av	5.4479
+Nautilus St	5.1771
+Navesink Pl	5.5000
+Navigator Ct	5.9062
+Navy Pier Ct	5.8281
+Navy St	3.6562
+Neal Dow Av	5.9323
+Neckar Av	4.8750
+Nedra Ln	4.2396
+Needham Av	5.9688
+Negundo Av	5.7135
+Nehring Av	5.2656
+Neill Av	3.6667
+Neilson St	4.7604
+Nellis St	3.8906
+Nelson Av	4.7500
+Nelson St	4.4792
+Neponsit Av	5.7083
+Nepton St	4.6615
+Neptune Av	5.5156
+Neptune Ct	5.2708
+Neptune Ln	5.4010
+Neptune Pl	5.1719
+Neptune St	5.2448
+Neptune Walk	6.4948
+Nereid Av	4.6354
+Nero Av	3.7865
+Nesmythe Ter	6.5833
+Netherland Av	6.7812
+Neutral Av	5.0521
+Nevada Av	5.0521
+Nevins St	4.4583
+New Dock St	5.9115
+New Dorp Ln	5.9635
+New Dorp Plaza	7.3906
+New England Trwy	8.6771
+New Haven Av	6.7917
+New Jersey Av	6.9531
+New Ln	3.4375
+New Lots Av	5.8229
+New Montrose Av	8.2031
+New St	3.2812
+New Utrecht Av	7.4062
+New York Av	6.0260
+New York Pl	5.6823
+Newark Av	5.0833
+Newberry Av	6.0885
+Newbold Av	5.5677
+Newburg St	5.4479
+Newel St	4.1302
+Newfolden Pl	6.1615
+Newhall Av	5.2865
+Newkirk Av	5.3646
+Newman Av	5.5833
+Newport Av	5.5052
+Newport St	5.2344
+Newport Walk	6.4844
+Newton St	4.8333
+Newtown Av	5.8542
+Newtown Rd	5.8490
+Newvale Av	5.5156
+Niagara St	4.9219
+Nicholas Av	5.5729
+Nicholas St	5.3021
+Nichols Av	5.0156
+Nick Laporte Pl	7.1667
+Nicole Loop	5.4896
+Nicolls Av	4.7135
+Nicolosi Dr	5.1250
+Nicolosi Loop	6.2760
+Nielsen Av	5.0208
+Nightingale St	6.6771
+Niles Pl	3.5260
+Nina Av	3.6771
+Nino Ct	3.4427
+Nippon Av	4.8438
+Nixon Av	4.2656
+Nixon Ct	4.0208
+Noah Ct	3.7188
+Noble Av	4.2396
+Noble Pl	3.8958
+Noble St	3.9688
+Noel Av	3.6615
+Noel Rd	3.6562
+Noel St	3.3906
+Noell Av	3.9531
+Nolan Av	4.2552
+Nolans Ln	4.6354
+Noll St	3.1250
+Nome Av	4.2500
+Norden Rd	4.9531
+Norden St	4.6875
+Norfolk St	4.7396
+Norma Pl	4.3229
+Normal Rd	4.9531
+Normalee Rd	6.0677
+Norman Av	5.2604
+Norman Pl	4.9167
+Norman St	4.9896
+North Av	4.2135
+North Basin Rd	7.0781
+North Dr	4.0677
+North Loop	5.2188
+North Rd	4.2083
+North St	3.9427
+Northentry Rd	6.7344
+Northern Blvd	6.6250
+Northfield Av	6.2865
+Northfield Ct	6.0417
+Northport Ln	6.0521
+Northview Ct	6.1146
+Norton Av	4.7812
+Norton Dr	4.6354
+Norwalk Av	5.3854
+Norway Av	5.1042
+Norwich St	5.1250
+Norwood Av	5.6927
+Norwood Ct	5.4479
+Nostrand Av	5.8438
+Notre Dame Av	7.1354
+Notus Av	4.2917
+Nova Ct	3.6823
+Nugent Av	4.9583
+Nugent Ct	4.7135
+Nugent St	4.6875
+Nunley Ct	4.6042
+Nunzie Ct	4.5677
+Nurge Av	4.3906
+Nutly Pl	3.7448
+Nutwood Ct	5.4479
+Nuvern Av	4.9635
+O'Brien Av	5.0365
+O'Brien Pl	4.6927
+O'Connell Ct	5.7865
+O'Connor Av	5.8750
+O'Gorman Av	6.1927
+O'Neill Pl	4.2917
+Oak Av	3.3646
+Oak Ct	3.1198
+Oak Dr	3.2188
+Oak Ln	3.2500
+Oak Park Dr	5.6406
+Oak Point Av	6.0885
+Oak St	3.0938
+Oak Ter	3.6615
+Oak Tree Pl	5.4010
+Oakdale Av	5.3490
+Oakdale St	5.0781
+Oakland Av	5.3854
+Oakland Pl	5.0417
+Oakland Ter	5.6823
+Oakley Pl	4.4375
+Oakley St	4.5104
+Oakville St	5.0729
+Oakwood Av	5.8281
+Oban St	3.7083
+Oberlin St	4.6979
+Occident Av	5.7344
+Ocean Av	4.5000
+Ocean Av N	5.4688
+Ocean Av S	5.3646
+Ocean Crest Blvd	8.0938
+Ocean Ct	4.2552
+Ocean Dy	4.5052
+Ocean Ln	4.3854
+Ocean Pkwy	5.7396
+Ocean Prom	5.7292
+Ocean Rd	4.4948
+Ocean Ter	4.7969
+Ocean View Av	7.0208
+Oceana Dr E	5.7865
+Oceana Dr W	6.0104
+Oceana Ter	5.3542
+Oceania St	5.0677
+Oceanic Av	5.3229
+Oceanside Av	6.4115
+Oceanview Av	6.6458
+Oceanview Ln	6.5312
+Oceanview Pl	6.3021
+Odell Pl	3.6250
+Odell St	3.6979
+Oder Av	3.8021
+Odin St	3.4323
+Odonnell Rd	5.7188
+Officers Dr	5.1250
+Ogden Av	4.5573
+Ogden St	4.2865
+Ohio Pl	3.3490
+Ohm Av	3.7240
+Olcott St	4.1615
+Old Albany Post Rd	9.0156
+Old Amboy Rd	6.6771
+Old Beach 88 St	7.5417
+Old Broadway	6.5312
+Old Dock St	5.4792
+Old Elm Rd	5.1615
+Old Farmers Ln	7.1510
+Old Fulton St	6.1094
+Old Kingsbridge Rd	9.0104
+Old Ln	3.0052
+Old Mill Rd	5.0417
+Old New Utrecht Rd	9.2448
+Old Ridge Rd	6.0521
+Old Rockaway Blvd	9.0052
+Old Slip	3.6094
+Old South Rd	6.1250
+Old Town Rd	5.8750
+Oldfield St	4.9219
+Olean St	3.9792
+Olga Pl	3.3333
+Olinville Av	5.3958
+Olive Pl	3.5938
+Olive St	3.6667
+Olive Walk	4.9167
+Oliver Pl	4.0104
+Oliver St	4.0833
+Olivia Ct	3.9740
+Olmstead Av	6.0000
+Olmsted Dr	5.2969
+Olympia Blvd	6.2500
+Onderdonk Av	6.6927
+Oneida Av	4.8177
+Onslow Pl	4.6042
+Ontario Av	5.0573
+Opal Ct	3.4323
+Opal Ln	3.5625
+Openview Ln	6.0104
+Opp Ct	3.1615
+Opus Ct	3.6719
+Orange Av	4.9531
+Orange St	4.6823
+Orangeburg Av	7.1198
+Orbit Ln	3.8021
+Orchard Av	5.3542
+Orchard Beach Cir	8.6094
+Orchard Beach Mall	9.2240
+Orchard Beach Rd	8.5417
+Orchard Ln	5.2396
+Orchard Ln S	6.1042
+Orchard St	5.0833
+Ordell Av	4.3854
+Ordnance Av	6.0885
+Ordnance Rd	6.0833
+Oregon Rd	4.9583
+Orient Av	4.4896
+Oriental Blvd	6.1823
+Oriental Ct	5.0938
+Orinoco Pl	4.8750
+Orlando St	4.9844
+Orloff Av	4.2552
+Ormond Pl	4.9427
+Ormsby Av	5.1875
+Ornstein Ln	5.4635
+Osage Ln	4.3229
+Osborn St	4.6302
+Osborne Av	5.4583
+Osborne Pl	5.1146
+Osborne St	5.1875
+Oscar Micheaux St	8.7552
+Osgood Av	5.0365
+Osgood St	4.7656
+Osman Pl	4.4323
+Osprey Ct	4.6198
+Ostend Pl	4.5208
+Ostrich Ct	4.7240
+Oswald Pl	4.5781
+Oswego St	4.9271
+Otis Av	3.4167
+Otsego Av	4.8385
+Otsego St	4.5677
+Ottavio Prom	6.2240
+Otto Rd	3.5938
+Outerbridge Av	7.1979
+Outlook Av	5.2188
+Ovas Ct	3.6146
+Overbaugh Pl	6.3385
+Overbrook St	6.1979
+Overhill Rd	5.2344
+Overing St	4.9635
+Overlook Av	5.7656
+Overlook Dr	5.6198
+Overlook Rd	5.7604
+Overlook Ter	6.0625
+Ovid Pl	3.3229
+Ovington Av	5.8125
+Ovington Ct	5.5677
+Ovis Pl	3.2396
+Owasco Rd	5.1562
+Owls Head Ct	6.2083
+Oxford Av	4.7552
+Oxford Pl	4.4115
+Oxford St	4.4844
+Oxholm Av	5.1615
+P St	1.8958
+Pacific Av	4.7344
+Pacific St	4.4635
+Paerdegat 1 St	6.7396
+Paerdegat 10 St	7.3958
+Paerdegat 11 St	7.1406
+Paerdegat 12 St	7.3490
+Paerdegat 13 St	7.3385
+Paerdegat 14 St	7.3802
+Paerdegat 15 St	7.3490
+Paerdegat 2 St	6.9479
+Paerdegat 3 St	6.9375
+Paerdegat 4 St	6.9792
+Paerdegat 5 St	6.9479
+Paerdegat 6 St	6.9531
+Paerdegat 7 St	6.8750
+Paerdegat 8 St	6.9635
+Paerdegat 9 St	6.9531
+Paerdegat Av N	7.3281
+Paerdegat Av S	7.2240
+Page Av	3.8594
+Page Pl	3.5156
+Paidge Av	4.7188
+Paige Ct	3.8958
+Paine St	3.8854
+Palace Ct	4.4271
+Paladino Av	5.5938
+Palermo St	5.1667
+Palisade Av	5.4844
+Palisade Pl	5.1406
+Palisade St	5.2135
+Palma Dr	4.3073
+Palmer Av	4.8698
+Palmer Dr	4.7240
+Palmetto St	5.5312
+Palmieri Ln	5.3177
+Palo Alto Av	5.8021
+Palo Alto St	5.5312
+Pamela Ln	4.8958
+Pan Am Rd	5.1615
+Parade Pl	4.4896
+Paradise Pl	5.2656
+Paris Ct	3.6719
+Parish Av	4.5104
+Park Av	3.6979
+Park Av S	4.5625
+Park Av Viaduct	7.5729
+Park Cir	3.7604
+Park Cres	4.5312
+Park Ct	3.4531
+Park Dr	3.5521
+Park Dr E	4.4271
+Park Dr N	4.5208
+Park End Ter	6.0417
+Park Hill Av	5.5365
+Park Hill Cir	5.5990
+Park Hill Ct	5.2917
+Park Hill Ln	5.4219
+Park Ln	3.5833
+Park Ln S	4.4479
+Park Pl	3.3542
+Park Rd	3.6927
+Park Row	4.4323
+Park St	3.4271
+Park Ter	3.9948
+Park Ter E	4.8698
+Park Ter W	5.0938
+Park View Pl	5.8750
+Parkchester Rd	7.2448
+Parker St	4.4010
+Parkinson Av	6.2292
+Parkside Av	5.6094
+Parkside Ct	5.3646
+Parkside Pl	5.2656
+Parkview Av	5.8438
+Parkview Loop	6.8490
+Parkview Ter	6.1406
+Parkville Av	5.6771
+Parkway Ct	5.3281
+Parkwood Av	6.1615
+Parrott Pl	4.5625
+Parsifal Pl	4.7865
+Parsons Blvd	6.1354
+Parsons Pl	4.9479
+Paseo Pl	4.0000
+Patchen Av	5.4010
+Patchin Pl	4.7812
+Patricia Ct	4.9479
+Patricia Ln	5.0781
+Patten St	4.3854
+Patterson Av	6.1354
+Patterson St	5.8646
+Patty Ct	3.8281
+Paul Av	3.6094
+Paulding Av	5.6406
+Paulding St	5.3698
+Paulis Pl	4.0417
+Pauw St	3.7969
+Pavillion Hill Ter	7.7240
+Pawnee Pl	4.8385
+Paxton St	4.5833
+Payson Av	4.9479
+Peace St	4.1094
+Peachtree Ln	6.2240
+Peacock Loop	6.4948
+Peare Pl	3.9115
+Pearl Rd	3.9844
+Pearl St	3.7188
+Pearsall Av	5.3333
+Pearsall St	5.0625
+Pearson Pl	5.0104
+Pearson St	5.0833
+Peartree Av	5.6198
+Pebble Ln	4.6146
+Peck Av	3.8229
+Peck Ct	3.5781
+Peck Slip	4.3125
+Peconic St	4.9792
+Peel Pl	3.2292
+Peggy Ln	4.3333
+Pelham Bay Park W	9.1094
+Pelham Pkwy	6.2865
+Pelham Pkwy N	7.2552
+Pelham Pkwy S	7.1510
+Pelham Walk	6.0260
+Pelican Cir	5.0521
+Pell Av	3.3073
+Pell Pl	2.9635
+Pell St	3.0365
+Pelton Av	4.5677
+Pelton Pl	4.2240
+Pemberton Av	6.7083
+Pembroke Av	6.2812
+Pembroke St	6.0104
+Pembrook Loop	7.2969
+Penbroke Av	5.9948
+Pence St	4.1458
+Pendale St	5.0312
+Pendleton Pl	5.9531
+Penelope Av	5.8698
+Penfield St	5.1198
+Penn Av	3.9115
+Penn St	3.6406
+Pennsylvania Av	7.8125
+Pennyfield Av	6.5521
+Pennyfield Cp	6.4948
+Penrod St	4.6094
+Penton St	4.5990
+Percival Pl	5.0260
+Peri Ln	3.3073
+Perine Av	4.5729
+Perkiomen Av	6.5781
+Perona Ln	4.7448
+Perot St	3.8281
+Perry Av	4.1250
+Perry Pl	3.7812
+Perry St	3.8542
+Perry Ter	4.4219
+Pershing Cres	6.5156
+Pershing Loop N	7.6562
+Pershing Loop W	7.7865
+Pershing St	5.4115
+Persimmon Ln	6.7240
+Perth Amboy Pl	7.3438
+Perth Rd	4.1198
+Peru St	3.4635
+Peter Av	4.0885
+Peter Cooper Rd	7.6615
+Peter Ct	3.8438
+Peter Minuit Pl	6.9479
+Peter St	3.8177
+Peters Pl	4.2396
+Petersons Ln	6.1250
+Petracca Pl	5.3854
+Petrus Av	4.6198
+Pettit Av	4.1771
+Petunia Ct	4.8958
+Pheasant Ln	5.7969
+Phelan Pl	4.4167
+Phelps Pl	4.3385
+Philip Av	4.1927
+Phlox Pl	3.8542
+Phroane Av	5.4531
+Phyllis Ct	4.4427
+Piave Av	4.1198
+Picadilly Pl	5.2135
+Pickersgill Av	6.4583
+Pidgeon Meadow Rd	9.3906
+Piedmont Av	6.0156
+Pierce Av	4.5208
+Pierce St	4.2500
+Pierpont Pl	5.2083
+Pierrepont Pl	6.1823
+Pierrepont St	6.2552
+Pike Slip	4.0521
+Pike St	3.2917
+Pilcher St	4.5781
+Pilgrim Av	4.8958
+Pilling St	4.2135
+Pilot Ln	3.5833
+Pilot Rd	3.6927
+Pilot St	3.4271
+Pinchot Pl	4.7917
+Pine Dr	3.4531
+Pine Pl	3.2552
+Pine St	3.3281
+Pine Ter	3.8958
+Pineapple St	5.8906
+Pinegrove St	6.0052
+Pinehurst Av	6.0885
+Pineville Ln	5.4635
+Pinewood Av	6.0625
+Pinkney Av	5.3177
+Pinson St	4.4271
+Pinto St	3.7292
+Pioneer St	4.8698
+Pitkin Av	4.2708
+Pitman Av	4.8698
+Pitney Av	4.5573
+Pitt Av	3.2292
+Pitt St	2.9583
+Pittsville Av	5.7031
+Plainview Av	6.0365
+Plank Rd	4.1615
+Platinum Av	5.7552
+Platt St	3.5260
+Plattsburg St	6.1875
+Plattwood Av	6.2604
+Plaza Dr	3.9688
+Plaza Lafayette	7.3490
+Plaza Pl	3.7708
+Plaza St E	4.7188
+Plaza St W	4.9427
+Pleasant Av	5.6094
+Pleasant Ct	5.3646
+Pleasant Pl	5.2656
+Pleasant Plains Av	8.7188
+Pleasant St	5.3385
+Pleasant Valley Av	8.8073
+Pleasantview St	7.4844
+Plimpton Av	5.7500
+Ploughmans Bush	8.4167
+Plumb 1 St	4.8906
+Plumb 2 St	5.0990
+Plumb 3 St	5.0885
+Plumtree Ln	5.7396
+Plunkett Av	5.5417
+Plymouth Av	6.0521
+Plymouth Rd	6.0469
+Plymouth St	5.7812
+Poe Ct	3.0469
+Poe Pl	2.9479
+Poe St	3.0208
+Poets Cir	4.2396
+Poi Ct	2.7708
+Poillon Av	4.7604
+Point Breeze Av	7.5729
+Point Cres	4.8333
+Point St	3.7292
+Poland Pl	4.4115
+Polar St	3.7292
+Polhemus Av	6.1458
+Polhemus Pl	5.8021
+Polo Pl	3.2500
+Poly Pl	3.2500
+Poly Prep Dr	5.8906
+Pommer Av	5.4688
+Pompeii Av	5.3125
+Pompeii Rd	5.3073
+Pompey Av	5.3177
+Pond Pl	3.5625
+Pond St	3.6354
+Pond Way	4.6042
+Pontiac Pl	4.7552
+Pontiac St	4.8281
+Ponton Av	4.8802
+Popham Av	5.3438
+Poplar Av	4.5781
+Poplar Ln	4.4635
+Poplar St	4.3073
+Pople Av	4.1615
+Poppenhusen Av	7.8750
+Port Ln	3.4271
+Port Richmond Av	8.5208
+Portage Av	5.2344
+Portal St	4.1198
+Porter Av	4.5156
+Porter Rd	4.5104
+Portland Pl	5.2188
+Portsmouth Av	7.0625
+Posen St	4.1094
+Post Av	3.6198
+Post Ct	3.3750
+Post Ln	3.5052
+Post Rd	3.6146
+Postal Facility Rd	8.1979
+Potter Av	4.4896
+Pouch Ter	4.7604
+Poughkeepsie Ct	7.8385
+Poultney St	5.4583
+Powell Av	4.6250
+Powell Ln	4.5104
+Powell St	4.3542
+Powells Cove Blvd	8.5365
+Powells Cove Dr	7.5469
+Power Rd	4.4531
+Powers Av	4.9531
+Powers St	4.6823
+Poyer St	4.0052
+Prague Ct	4.6250
+Prall Av	3.7240
+Pratt Av	3.9219
+Pratt Ct	3.6771
+Prentiss Av	5.3958
+Prescott Av	5.5260
+Prescott Pl	5.1823
+Presentation Cir	7.6302
+President St	5.7656
+Presidents Plaza	7.8438
+Presley St	4.7812
+Preston Av	5.1875
+Preston Ct	4.9427
+Prices Ln	4.3438
+Primrose Pl	5.4375
+Prince Ln	4.4427
+Prince St	4.2865
+Princess Ln	5.4323
+Princess St	5.2760
+Princeton Av	6.1094
+Princeton Ln	5.9948
+Princeton St	5.8385
+Princewood Av	7.0208
+Priore Rd	4.4010
+Private Catanzaro Sq	9.9167
+Private Dr	4.7812
+Prol Pl	3.0990
+Promenade Av	6.8750
+Prospect Av	5.7135
+Prospect Ct	5.4688
+Prospect Park Sw	8.2240
+Prospect Park W	7.7083
+Prospect Pl	5.3698
+Prospect St	5.4427
+Providence St	6.5469
+Provost Av	5.1615
+Provost St	4.8906
+Pt Breeze Pl	5.7865
+Pugsley Av	5.2500
+Pulaski Av	4.9427
+Pulaski St	4.6719
+Pumone Ct	5.1146
+Purcell St	4.5885
+Purdue Ct	4.6615
+Purdue St	4.6354
+Purdy Av	4.3229
+Purdy Pl	3.9792
+Purdy St	4.0521
+Puritan Av	5.0000
+Purroy Pl	4.3854
+Purves St	4.5156
+Putnam Av	5.1823
+Putnam Av W	6.2812
+Putnam Pl	4.8385
+Putnam St	4.9115
+Putters Ct	4.7656
+Pyramid Ct	5.2031
+Pythian Cir	5.2135
+Q St	1.9792
+Quail Ln	3.8594
+Quarry Rd	4.7969
+Quay St	3.6979
+Queen St	4.2812
+Queens Blvd	5.8906
+Queens Midtown Expy	10.3438
+Queens Plaza	6.3594
+Queens Plaza E	7.2344
+Queens Plaza N	7.3281
+Queens Plaza S	7.2240
+Queens St	4.7760
+Queens Walk	6.0260
+Queensdale St	6.7604
+Quencer Rd	5.5052
+Quentin Rd	5.2552
+Quentin St	4.9896
+Quimby Av	5.1510
+Quince Av	4.8177
+Quincy Av	4.8281
+Quincy St	4.5573
+Quinlan Av	5.1615
+Quinn St	4.0417
+Quintard St	5.3906
+R F Wagner Service Rd Pl	11.7969
+R St	1.9479
+Racal Ct	3.9219
+Rachel Ct	4.5156
+Radar Rd	4.3229
+Radcliff Av	5.1979
+Radcliff Rd	5.1927
+Radde Pl	4.1458
+Radford St	5.0104
+Radigan Av	5.3646
+Radio Dr	4.0573
+Radnor Rd	4.9271
+Radnor St	4.6615
+Rae Av	3.3333
+Rae St	3.0625
+Ragazzi Ln	5.1615
+Railroad Av	5.4688
+Railroad Pl	5.1250
+Railroad Ter	5.7656
+Raily Ct	3.6719
+Rainbow Av	5.5469
+Raleigh Pl	4.7344
+Raleigh St	4.8073
+Ralph Av	4.2396
+Ralph Pl	3.8958
+Ramapo Av	5.3594
+Ramble Rd	5.0781
+Ramblewood Av	7.5469
+Ramona Av	5.3750
+Ramsey Ln	5.1615
+Ramsey Pl	4.9323
+Ranaqua Loop	6.6615
+Randall Av	5.0885
+Randalls Island Greenway	12.0521
+Randolph Pl	5.6354
+Randolph St	5.7083
+Range Rd	4.5000
+Range St	4.2344
+Ranger Rd	4.9167
+Rankin St	4.5312
+Ransom St	5.0417
+Rapelye St	5.0573
+Raritan Av	5.0156
+Rathbun Av	5.5260
+Rau Ct	3.1250
+Ravenhurst Av	6.9740
+Ravenna St	5.3646
+Rawlins Av	5.1875
+Rawson Pl	4.8385
+Ray St	3.0729
+Rayfield Ct	5.1719
+Raymond Av	5.9635
+Raymond Pl	5.6198
+Reade St	4.1979
+Reading Av	5.3646
+Reads Ln	4.2917
+Recovery Rd	5.9792
+Rector Pl	4.3490
+Rector St	4.4219
+Red Cedar Ln	6.2396
+Red Cross Ln	6.1042
+Red Cross Pl	5.8750
+Red Hook Ln	5.9062
+Red Oak Dr	5.2969
+Redding St	5.1146
+Redfern Av	5.2865
+Redfield St	5.1562
+Redgrave Av	6.0208
+Redwood Av	5.8177
+Redwood Loop	6.8229
+Reed Pl	3.5677
+Reed St	3.6406
+Reeder St	4.6146
+Reeds Mill Ln	6.2188
+Reeve Pl	4.1042
+Reeves Av	4.9427
+Regal Walk	5.1823
+Regan Av	4.5052
+Regatta Pl	4.9062
+Regent Cir	4.9583
+Regent Pl	4.5521
+Regina Av	4.7865
+Regina Ln	4.6719
+Regis Dr	3.9844
+Reid Av	3.6354
+Reilly Blvd	5.0521
+Reinhart Rd	5.6042
+Reiss Ln	3.9323
+Reiss Pl	3.7031
+Remington St	6.3906
+Remsen Av	5.3021
+Remsen Pl	4.9583
+Remsen St	5.0312
+Renaissance Ct	7.2031
+Rene Ct	3.6823
+Rene Dr	3.7812
+Renee Pl	4.1406
+Renfrew Pl	5.1146
+Reno Av	3.9375
+Rensselaer Av	6.7396
+Rental Car N	5.9167
+Rentar Plaza	6.0469
+Renwick Av	5.5000
+Renwick St	5.2292
+Reon Av	3.9375
+Research Av	5.9375
+Reservoir Av	6.0677
+Reservoir Oval E	7.7969
+Reservoir Oval W	8.0208
+Reservoir Pl	5.7240
+Retford Av	5.0938
+Retner St	4.4635
+Rev James A Polite Av	10.5781
+Revere Av	4.8646
+Revere Ln	4.7500
+Revere Pl	4.5208
+Revere St	4.5938
+Review Av	4.9219
+Review Pl	4.5781
+Reville St	4.4844
+Rewe St	3.8125
+Rex Rd	3.3490
+Reynolds Av	5.8698
+Reynolds Ct	5.6250
+Reynolds St	5.5990
+Rhett Av	4.1510
+Rhine Av	4.2448
+Rhinelander Av	7.2396
+Ricard St	4.3229
+Rice Av	3.5990
+Richard Av	5.1875
+Richard Ln	5.0729
+Richards St	5.4115
+Richardson Av	6.8438
+Richardson St	6.5729
+Riche Av	4.1927
+Richland Av	5.6562
+Richmond Av	6.2552
+Richmond Ct	6.0104
+Richmond Hill Rd	8.0885
+Richmond Pl	5.9115
+Richmond Rd	6.2500
+Richmond St	5.9844
+Richmond Ter	6.5521
+Richmond Valley Rd	9.4479
+Rico Pl	3.2656
+Rider Av	4.0521
+Ridge Av	4.2135
+Ridge Blvd	5.0573
+Ridge Crest Ter	7.2604
+Ridge Ct	3.9688
+Ridge Loop	5.2188
+Ridge Pl	3.8698
+Ridge Rd	4.2083
+Ridge St	3.9427
+Ridgecrest Av	6.6146
+Ridgedale St	5.9271
+Ridgefield Av	6.2865
+Ridgeway Av	6.0885
+Ridgewood Av	6.6771
+Ridgewood Pl	6.3333
+Riedel Av	4.4844
+Riegelmann St	6.8385
+Riga St	3.3646
+Rigby Av	4.2240
+Rigimar Ct	4.9688
+Rikers Is Interior Facility Rd	13.0677
+Riley Pl	3.5729
+Ring Pl	3.3281
+Ring Rd	3.6667
+Rio Dr	2.9219
+Risse St	3.7760
+Ritter Pl	3.9115
+River Av	4.0312
+River Dr	3.8854
+River Rd	4.0260
+River St	3.7604
+River Ter	4.3281
+Rivercrest Rd	6.4271
+Riverdale Av	6.0156
+Rivers Edge Rd	7.1094
+Riverside Blvd	6.7865
+Riverside Dr	5.7969
+Riverside Dr E	6.6719
+Riverside Dr W	6.8958
+Riverside Ln	5.8281
+Riverton St	5.3125
+Riverview Ter	6.4740
+Riviera Ct	4.6250
+Riviera Dr	4.7240
+Rivington Av	6.0625
+Rivington St	5.7917
+Roanoke St	5.3490
+Robard Ln	4.8021
+Robert Ln	4.6146
+Robert Rd	4.7240
+Robert St	4.4583
+Roberts Av	5.2240
+Roberts Dr	5.0781
+Robertson Pl	6.0417
+Robertson St	6.1146
+Robin Ct	3.9948
+Robin Ln	4.1250
+Robin Rd	4.2344
+Robinson Av	5.8958
+Robinson St	5.6250
+Rocco Ct	4.1927
+Rochambeau Av	7.6458
+Rochelle Pl	5.2760
+Rochelle St	5.3490
+Rochester Av	6.3385
+Rockaway Av	6.3177
+Rockaway Beach Blvd	10.3542
+Rockaway Beach Dr	9.3646
+Rockaway Blvd	7.1615
+Rockaway Breezy Blvd	10.7448
+Rockaway Fwy	6.9323
+Rockaway Pkwy	7.5573
+Rockaway Point Blvd	9.8854
+Rockaway St	6.0469
+Rockefeller Fountain Cir	11.3854
+Rockland Av	5.9062
+Rockne St	4.7656
+Rockrose Pl	5.5781
+Rockville Av	5.8646
+Rockwell Av	5.7760
+Rockwell Pl	5.4323
+Rockwood St	6.0781
+Rocky Hill Rd	6.2865
+Rodeo Ln	4.3750
+Roder Av	4.3385
+Roderick Av	5.7188
+Rodman Pl	5.0521
+Rodman St	5.1250
+Rodney St	4.8125
+Rodriguez Pl	5.9896
+Roe Rd	3.3385
+Roe St	3.0729
+Roebling Av	5.6667
+Roebling St	5.3958
+Roff St	3.2448
+Rogers Av	4.8333
+Rogers Pl	4.4896
+Rohr Pl	3.4531
+Rokeby Pl	4.7031
+Rolling Hill Green	8.1927
+Roma Av	4.2240
+Roman Av	4.8177
+Roman Ct	4.5729
+Rombouts Av	6.2917
+Rome Av	4.2240
+Rome Dr	4.0781
+Romeo Ct	4.5469
+Romer Rd	4.6354
+Ronald Av	4.8073
+Roosevelt Av	6.2031
+Roosevelt Ct	5.9583
+Roosevelt Is Bridge	9.0729
+Roosevelt Ln	6.0885
+Roosevelt Pl	5.8594
+Roosevelt St	5.9323
+Roosevelt Walk	7.1823
+Ropes Av	4.4167
+Rose Av	3.8385
+Rose Ct	3.5938
+Rose Ln	3.7240
+Rose St	3.5677
+Rosebank Pl	5.7812
+Rosecliff Rd	5.6771
+Rosedale Av	5.8229
+Roselle St	4.7083
+Rosewood Pl	5.9583
+Rosewood St	6.0312
+Rosita Rd	4.5052
+Ross Av	3.7760
+Ross Ln	3.6615
+Ross St	3.5052
+Rossville Av	5.7552
+Rost Pl	3.3281
+Roswell Av	5.1719
+Row Pl	3.1927
+Rowan Av	4.6875
+Rowe St	3.8229
+Rowland St	5.2865
+Roxbury Av	5.5208
+Roxbury Blvd	6.3646
+Roxbury St	5.2500
+Roxbury Ter	5.8177
+Royal Oak Rd	6.2865
+Royce Pl	4.1094
+Royce St	4.1823
+Rubenstein St	6.5885
+Ruby St	3.6875
+Rudyard St	5.2396
+Rugby Av	4.5365
+Rugby Rd	4.5312
+Ruggles St	5.0417
+Ruland Pl	4.4896
+Rumba Pl	4.4844
+Rumpler Ct	5.2917
+Rumson Rd	5.3438
+Runway Dr	5.1354
+Rupert Av	4.7552
+Ruscoe St	4.7031
+Rushmore Av	6.3229
+Rushmore Ter	6.6198
+Russek Dr	4.7708
+Russell Pl	4.5990
+Russell St	4.6719
+Rust St	3.4271
+Rustic Pl	4.1771
+Rutgers Slip	5.7396
+Rutgers St	4.9792
+Ruth Pl	3.4531
+Ruth St	3.5260
+Rutherford Ct	6.4531
+Rutherford Pl	6.3542
+Rutland Rd	5.2188
+Rutledge Av	5.7656
+Rutledge St	5.4948
+Ruxton Av	4.9427
+Ryan Pl	3.5938
+Ryan Rd	3.9323
+Ryan St	3.6667
+Ryawa Av	4.6510
+Ryder Av	4.3385
+Ryder St	4.0677
+Ryders Alley	5.9844
+Rye Av	3.3438
+Rye Pl	3.0000
+Ryer Av	3.7604
+Ryerson St	5.1458
+S 1 St	2.5208
+S 10 St	3.1771
+S 11 St	2.9219
+S 2 St	2.7292
+S 3 St	2.7188
+S 4 St	2.7604
+S 5 Pl	2.6562
+S 5 St	2.7292
+S 6 St	2.7344
+S 8 St	2.7448
+S 9 St	2.7344
+S Beach Av	5.3333
+S Bridge St	5.2240
+S Cargo Rd	5.1458
+S Conduit Av	6.0365
+S Drum St	4.7240
+S Edo Ct	3.9167
+S Elliott Pl	4.8854
+S End Av	4.1875
+S Gannon Av	5.9792
+S Goff Av	4.3698
+S Greenleaf Av	6.9688
+S Lake Dr	4.4844
+S Loop Rd	4.6667
+S Mann Av	4.9479
+S Market St	5.4115
+S Oak Dr	4.0833
+S Oxford St	5.3490
+S Pinehurst Av	6.9531
+S Portland Av	6.4271
+S Railroad Av	6.3333
+S Railroad St	6.0625
+S Service Ct	5.6719
+S Service Rd	5.9115
+S St	1.8698
+S St Austins Pl	6.8698
+S William St	5.5521
+Sable Av	4.1250
+Sable Loop	5.1302
+Sabre St	3.9792
+Sabrina Ln	5.0104
+Saccheri Ct	5.3854
+Sacket Av	4.7448
+Sackett St	4.8646
+Sackman St	5.5573
+Sagamore Av	6.2552
+Sagamore St	5.9844
+Sage Ct	3.5885
+Sage St	3.5625
+Sagona Ct	4.7500
+Salamander Ct	6.8854
+Salerno Av	5.1250
+Sally Ct	3.6042
+Saltaire Ln	5.0781
+Salzburg Ct	5.4531
+Samantha Dr	6.1250
+Samantha Ln	6.1562
+Samantha Way	6.9688
+Samos Ln	4.5260
+Sampson Av	5.8125
+Samuel Dickstein Plaza	10.9948
+Samuel Pl	4.6771
+Sanchez Dr	5.3802
+Sancho St	4.7240
+Sand Ln	3.7552
+Sandalwood Dr	7.0365
+Sandborn St	5.7552
+Sanders Pl	4.9948
+Sanders St	5.0677
+Sandford St	5.5260
+Sandgap St	5.3125
+Sandhill Rd	5.3229
+Sandra Ln	4.7292
+Sands Pl	4.0208
+Sands St	4.0938
+Sandy Dune Way	7.8438
+Sandy Ln	4.3229
+Sandywood Ln	6.7865
+Sanford Av	5.2188
+Sanford Pl	4.8750
+Sanford St	4.9479
+Sanilac St	4.6927
+Santa Monica Ln	7.7292
+Santiago St	5.3958
+Santina Dr	4.9688
+Santo Ct	4.0052
+Santo Donato Pl	7.5469
+Sapphire Ct	5.4583
+Sapphire St	5.4323
+Saratoga Av	5.7656
+Saratoga Way	6.4635
+Sarcona Ct	5.1302
+Satterlee St	5.5885
+Saturn Ln	4.5781
+Saull St	3.6042
+Saultell Av	5.1146
+Saunder St	5.1667
+Saunders St	5.6615
+Savin Ct	3.8854
+Savo Ln	3.7083
+Savo Loop	4.8281
+Savona Ct	4.7292
+Savoy St	4.1198
+Sawyer Av	4.9896
+Saxon Av	4.4375
+Saybrook St	5.6823
+Sayres Av	4.7344
+Scarboro Av	5.7865
+Scarsdale St	5.8646
+Scenic Ln	4.5417
+Scenic Pl	4.3125
+Schaefer St	5.4583
+Scheffelin Av	6.2865
+Schenck Av	5.5260
+Schenck Ct	5.2812
+Schenck Pl	5.1823
+Schenck St	5.2552
+Schenectady Av	7.6198
+Schermerhorn St	8.0052
+Schieffelin Av	6.5677
+Schieffelin Pl	6.2240
+Schindler Ct	5.7500
+Schley Av	4.6927
+Schmidts Ln	5.7865
+Schofield St	5.6458
+Schoharie St	5.9792
+Scholes St	4.9167
+School Ln	4.5885
+School Rd	4.6979
+School St	4.4323
+Schooner St	5.7083
+Schorr Dr	4.5312
+Schorr Pl	4.3333
+Schroeders Av	6.8646
+Schroeders Walk	7.8438
+Schubert St	5.5417
+Schum Av	4.7500
+Schurz Av	4.8281
+Schuyler Pl	5.3594
+Schuyler St	5.4323
+Scmick Ln	4.8281
+Scott A Gadell Pl	7.8646
+Scott Av	4.0312
+Scott Pl	3.6875
+Scranton Av	5.8021
+Scranton St	5.5312
+Screvin Av	5.0885
+Scribner Av	5.5260
+Scudder Av	5.4062
+Sea Breeze Av	6.8281
+Sea Breeze Ct	6.5833
+Sea Breeze Ln	6.7135
+Sea Breeze Walk	7.8073
+Sea Crest Ln	5.8906
+Sea Gate Av	5.6927
+Sea Gate Ct	5.4479
+Sea Gate Rd	5.6875
+Sea Grass Ln	6.0365
+Sea Pl	2.9115
+Seabring St	5.4323
+Seabury Av	5.4115
+Seabury Pl	5.0677
+Seabury St	5.1406
+Seacoast Ter	6.1042
+Seacrest Av	5.6562
+Seafoam St	5.3542
+Seagirt Av	4.9219
+Seagirt Blvd	5.7656
+Seaman Av	5.2865
+Search Ln	4.6927
+Sears St	3.8958
+Seaside Av	5.1667
+Seaside Ln	5.0521
+Seasongood Rd	7.1979
+Seaspray Av	5.8698
+Seaver Av	4.7865
+Seaver Way	5.4844
+Seaview Av	5.4010
+Seaview Ct	5.1562
+Seawall Av	5.1458
+Seba Av	3.8333
+Secor Av	4.2240
+Seddon St	4.7448
+Sedgwick Av	5.9844
+Sedgwick Pl	5.6406
+Seeley Ln	4.5573
+Seeley St	4.4010
+Seguine Av	5.3021
+Seguine Loop	6.3073
+Seguine Pl	4.9583
+Seidman Av	5.5885
+Seigel Ct	4.1615
+Seigel St	4.1354
+Seldin Av	4.4427
+Selfridge St	5.4948
+Selkirk St	4.5312
+Selmoff Ln	5.0521
+Selover Rd	5.0833
+Selvin Loop	5.4271
+Selwyn Av	4.9010
+Seminole Av	5.8698
+Seminole St	5.5990
+Senator St	4.9531
+Seneca Av	4.9479
+Seneca Loop	5.9531
+Seneca St	4.6771
+Senger Pl	4.5000
+Serena Ct	4.5781
+Serenity Way	6.2031
+Sergeant Beers Av	8.7604
+Sergeant Beers Ln	8.6458
+Sergeant Beers Loop	9.7656
+Serrell Av	4.6719
+Service Rd	5.0469
+Seth Ct	3.4375
+Seth Loop	4.6875
+Seton Av	4.2500
+Seton Pl	3.9062
+Seven Gables Rd	7.8125
+Seward Av	5.0000
+Seward Pl	4.6562
+Sexton Pl	4.4844
+Seymour Av	5.7240
+Shad Creek Rd	6.8438
+Shadow Ln	5.0729
+Shady Rd	4.4323
+Shadyside Av	6.3490
+Shafter Av	5.0208
+Shaina Ct	4.4792
+Shakespeare Av	7.5677
+Shale St	3.8698
+Shaler Av	4.5573
+Sharon Av	4.8698
+Sharon Ln	4.7552
+Sharon St	4.5990
+Sharpe Av	4.8438
+Sharrett Pl	5.1198
+Sharrott Av	5.4740
+Sharrotts Ln	5.8542
+Sharrotts Rd	5.9635
+Shaughnessy Ln	7.6510
+Shaw Pl	3.6979
+Shawnee St	5.4792
+Shea Rd	3.8438
+Sheepshead Bay Rd	9.2708
+Sheffield Av	5.7292
+Sheffield St	5.4583
+Sheldon Av	5.3229
+Shell Rd	3.8698
+Shelley Av	5.0000
+Shelterview Dr	6.9479
+Shenandoah Av	7.3333
+Shepard Av	5.4219
+Shepherd Av	6.0156
+Sheraden Av	5.9948
+Sheridan Av	5.7188
+Sheridan Ct	5.4740
+Sheridan Loop	6.7240
+Sheridan Pl	5.3750
+Sheriff St	4.4479
+Sherlock Pl	5.3229
+Sherman Av	5.7396
+Sherman St	5.4688
+Sherwood Av	6.1719
+Sherwood Pl	5.8281
+Shiel Av	3.8646
+Shields Pl	4.5938
+Shift Pl	3.4271
+Shiloh Av	4.4688
+Shiloh St	4.1979
+Shinbone Alley	7.0573
+Shipways Av	5.9635
+Shirley Av	4.8490
+Shirra Av	4.4062
+Shore Acres Rd	7.2500
+Shore Av	4.2760
+Shore Blvd	5.1198
+Shore Ct	4.0312
+Shore Dr	4.1302
+Shore Front Pkwy	8.3073
+Shore Pkwy	5.5156
+Shore Rd	4.2708
+Shore Rd Drive	7.0469
+Shore Rd Lane	6.7969
+Short Av	4.1094
+Short Pl	3.7656
+Shorthill Rd	5.5625
+Shotwell Av	5.5833
+Shrady Pl	4.5104
+Sickles St	4.5938
+Sideview Av	5.7031
+Sidney Pl	4.3750
+Sidway Pl	4.5312
+Siegfried Pl	5.4115
+Sierra Ct	4.1250
+Sigma Pl	4.0938
+Signal Hill Rd	6.2760
+Signs Rd	4.0833
+Sigourney St	6.0260
+Silver Beech Rd	7.4323
+Silver Ct	4.0000
+Silver Lake Park Rd	9.1510
+Silver Lake Rd	6.7292
+Silver Rd	4.2396
+Silver St	3.9740
+Simmons Ln	5.7240
+Simmons Loop	6.8438
+Simon Ct	4.2188
+Simonson Av	6.1198
+Simonson Pl	5.7760
+Simonson St	5.8490
+Simpson St	5.2656
+Sinclair Av	5.1042
+Singleton St	5.7240
+Sioux St	3.8906
+Sitka St	3.6562
+Skidmore Av	5.9792
+Skidmore Ln	5.8646
+Skidmore Pl	5.6354
+Skillman Av	5.5938
+Skillman St	5.3229
+Skinner Ln	5.0260
+Sky Ln	3.1510
+Skyline Dr	4.8438
+Slaight St	4.5625
+Slater Blvd	5.1979
+Slayton Av	5.1094
+Sleepy Hollow Rd	8.1302
+Sleight Av	4.8333
+Sloan Pl	3.8073
+Sloan St	3.8802
+Sloane Av	4.7083
+Slocum Cres	5.8490
+Slocum Pl	4.6719
+Slosson Av	5.1510
+Slosson Ter	5.4479
+Smart St	4.1146
+Smedley St	5.3021
+Smith Av	4.2865
+Smith Ct	4.0417
+Smith Pl	3.9427
+Smith St	4.0156
+Smith Ter	4.5833
+Smiths Ln	4.6667
+Smyrna Av	5.1562
+Sneden Av	5.0208
+Snediker Av	5.6823
+Snug Harbor Rd	7.4115
+Snyder Av	4.8542
+Sobel Ct	3.8906
+Soho Dr	3.7240
+Somers St	4.7865
+Somerset St	5.7344
+Sommer Av	5.4427
+Sommer Pl	5.0990
+Sommers Ln	5.8229
+Sonia Ct	3.8958
+Sophia Ln	4.6042
+Soren St	4.0052
+Sound St	4.2031
+Sound View Rd	6.9896
+Soundview Av	6.6198
+Soundview Ln	6.5052
+Soundview Rd	6.6146
+Soundview Ter	6.9167
+South Av	4.2865
+South Dr	4.1406
+South Rd	4.2812
+South St	4.0156
+Southern Blvd	6.6979
+Southgate Ct	6.1250
+Southgate Plaza	7.6823
+Southgate St	6.0990
+Spa Pl	2.9323
+Spark Pl	3.9062
+Sparkill Av	5.1146
+Spartan Av	5.2344
+Spaulding Ln	6.0781
+Speedwell Av	6.3021
+Spencer Av	5.3854
+Spencer Ct	5.1406
+Spencer Dr	5.2396
+Spencer Pl	5.0417
+Spencer St	5.1146
+Spencer Ter	5.6823
+Sperry Pl	4.3333
+Spinnaker Dr	6.1302
+Spirit Ln	3.9740
+Split Rock Rd	6.2865
+Spofford Av	5.5781
+Sprague Av	5.4219
+Sprague Ct	5.1771
+Spratt Av	4.4740
+Sprayview Av	6.4062
+Spring St	4.3177
+Springfield Av	6.6615
+Springfield Blvd	7.5052
+Springfield Ln	6.5469
+Springhill Av	6.0469
+Spritz Rd	4.3438
+Spruce Av	4.8281
+Spruce Ct	4.5833
+Spruce Ln	4.7135
+Spruce St	4.5573
+St Adalbert Pl	6.5260
+St Albans Pl	5.6719
+St Andrews Pl	6.5469
+St Andrews Rd	6.8854
+St Anns Av	5.1823
+St Anns Pl	4.8385
+St Anthony Pl	6.4635
+St Austins Pl	6.0052
+St Charles Pl	5.9896
+St Clair Pl	4.6250
+St Edward Ln	6.1719
+St Edwards St	6.5104
+St Felix Av	5.0625
+St Felix St	4.7917
+St Francis Pl	5.8958
+St George Dr	5.9948
+St George Rd	6.1354
+St Georges Cres	7.4688
+St James Av	5.8281
+St James Pl	5.4844
+St John Av	5.0938
+St Johns Av	5.5885
+St Johns Ln	5.4740
+St Johns Pl	5.2448
+St Johns Rd	5.5833
+St Josephs Av	6.6250
+St Josephs Way	7.3229
+St Jude Pl	4.7240
+St Julian Pl	5.3125
+St Lawrence Av	7.3229
+St Lukes Av	5.5521
+St Lukes Pl	5.2083
+St Marks Av	5.6198
+St Marks Pl	5.2760
+St Marys Av	5.6302
+St Marys St	5.3594
+St Nicholas Av	6.8281
+St Nicholas Pl	6.4844
+St Nicholas Ter	7.1250
+St Ouen St	4.9792
+St Patricks Pl	6.3177
+St Paul Av	4.8646
+St Pauls Av	5.3594
+St Pauls Ct	5.1146
+St Pauls Pl	5.0156
+St Peters Av	5.8385
+St Peters Pl	5.4948
+St Raymond Av	7.2188
+St Stephens Pl	6.8177
+St Theresa Av	6.5573
+Stacey Ln	4.6406
+Stack Dr	4.0417
+Stadium Av	5.4219
+Stadium Pl N	6.0469
+Stadium Pl S	5.9427
+Stadium Rd	5.4167
+Staff St	3.5469
+Stafford Av	5.3802
+Stage Ln	4.1094
+Stagg St	3.9740
+Stalie Ct	3.9740
+Standard Ln	5.6979
+Standish Rd	5.6250
+Stanhope St	5.7083
+Stanley Av	5.0990
+Stanley Cir	5.1615
+Stanton Ct	4.9896
+Stanton St	4.9635
+Stanwich St	5.5781
+Stanwix St	5.0208
+Staple St	4.2448
+Star Ct	3.2604
+Starboard Ct	5.9583
+Starbuck St	5.5052
+Starlight Rd	5.6354
+Starling Av	5.2500
+Starr Av	3.9219
+Starr St	3.6510
+State Rd	4.0312
+State St	3.7656
+Staten Is Mall Dr	7.7292
+Staten Island Blvd	8.5365
+Staten Island Expy	8.7656
+Station Av	4.9219
+Station Rd	4.9167
+Station Sq	4.8385
+Stearns St	4.8802
+Stebbins Av	5.6146
+Stecher St	4.9271
+Stedman Pl	5.3542
+Steele Av	4.4948
+Steele Rd	4.4896
+Steenwick Av	6.3698
+Steers St	4.2865
+Steiner St	4.6667
+Steinway Av	5.8385
+Steinway Pl	5.4948
+Steinway St	5.5677
+Stell Pl	3.3281
+Stephanie Dr	6.1042
+Stephen Loop	6.4167
+Stephen St	5.1406
+Stephens Av	5.9062
+Stephens Ct	5.6615
+Stepney St	5.1146
+Sterling Av	5.2500
+Sterling Dr	5.1042
+Sterling Pl	4.9062
+Sterling St	4.9792
+Stern Ct	3.8542
+Steuben Av	5.4115
+Steuben St	5.1406
+Stevens Pl	4.9479
+Stevenson Pl	6.1094
+Stewart Av	5.2031
+Stewart Rd	5.1979
+Stewart St	4.9323
+Stickball Blvd	6.4740
+Stickney Pl	5.2865
+Stieg Av	3.9479
+Stier Pl	3.4427
+Stillwell Av	5.2865
+Stillwells Pl	5.4375
+Stobe Av	4.2344
+Stockholm St	6.2604
+Stockton St	5.4792
+Stoddard Pl	5.4635
+Stone Ln	4.1354
+Stone St	3.9792
+Stonecrest Ct	6.4062
+Stonegate Dr	6.1875
+Stoneham St	6.0104
+Stonewall Jackson Dr	10.1146
+Storer Av	4.4896
+Story Av	4.0833
+Story Ct	3.8385
+Story St	3.8125
+Strang Av	4.6771
+Stratford Av	5.8229
+Stratford Ct	5.5781
+Stratford Rd	5.8177
+Stratton St	5.1771
+Strauss St	4.8177
+Strawberry Ln	6.6771
+Strickland Av	6.3490
+Strong Av	4.6875
+Strong Pl	4.3438
+Strong St	4.4167
+Stronghurst Av	7.1771
+Stroud Av	4.6875
+Stryker Ct	4.8021
+Stryker St	4.7760
+Stuart Ln	4.3750
+Stuart St	4.2188
+Studio Ln	4.4375
+Sturges St	4.9010
+Stuyvesant Av	6.8438
+Stuyvesant Pl	6.5000
+Stuyvesant St	6.5729
+Suburban Pl	5.7083
+Suffolk Av	4.8802
+Suffolk Dr	4.7344
+Suffolk St	4.6094
+Suffolk Walk	5.8594
+Sullivan Dr	5.1615
+Sullivan Pl	4.9635
+Sullivan Rd	5.3021
+Sullivan St	5.0365
+Summer St	5.1979
+Summerfield Pl	7.1979
+Summerfield St	7.2708
+Summit Av	5.1667
+Summit Ct	4.9219
+Summit Pl	4.8229
+Summit Rd	5.1615
+Summit St	4.8958
+Summit St Pedestrian Opas	12.8177
+Sumner Av	5.1823
+Sumner Pl	4.8385
+Sumpter St	5.2865
+Sunbury Rd	5.4792
+Sunfield Av	5.4010
+Sunken Garden Loop	9.6771
+Sunken Meadow Loop	10.1146
+Sunnymeade Village	9.5833
+Sunnyside Av	6.4010
+Sunnyside Ct	6.1562
+Sunnyside St	6.1302
+Sunnyside Ter	6.6979
+Sunrise Ct	4.8333
+Sunrise Hwy	5.8438
+Sunrise Ter	5.3750
+Sunset Av	4.7708
+Sunset Blvd	5.6146
+Sunset Cir	4.8333
+Sunset Ct	4.5260
+Sunset Hill Dr	6.4635
+Sunset Ln	4.6562
+Sunset Trl	4.8021
+Surf Av	3.5156
+Surf Cir	3.5781
+Surf Dr	3.3698
+Surf Rd	3.5104
+Surfside Plaza	6.7396
+Surrey Pl	4.3490
+Susan Ct	4.1354
+Susanna Ln	5.4167
+Sussex Av	4.8594
+Sussex Green	6.3906
+Sutherland St	6.4427
+Sutphin Blvd	6.0156
+Sutro St	3.8385
+Sutter Av	4.4896
+Sutter Pl	4.1458
+Sutton Pl	4.3333
+Sutton Pl S	5.1979
+Sutton Sq	4.5938
+Sutton St	4.4062
+Suydam Pl	4.9740
+Suydam St	5.0469
+Swaim Av	4.6094
+Swan St	3.7708
+Sweetbrook Rd	7.0781
+Sweetgum Ln	6.3333
+Sweetwater Av	7.0677
+Swinnerton St	6.6146
+Swinton Av	5.3177
+Sybilla St	4.4375
+Sycamore Av	6.2292
+Sycamore Dr	6.0833
+Sycamore St	5.9583
+Sydney Pl	4.6615
+Sylva Ln	4.0000
+Sylvan Av	4.7083
+Sylvan Ct	4.4635
+Sylvan Pl	4.3646
+Sylvan Ter	5.0052
+Sylvaton Ter	5.9635
+Sylvester Ln	5.8594
+Sylvia St	4.1250
+Syringa Pl	4.7917
+Szold Pl	3.7760
+T St	1.8542
+Taaffe Pl	4.1823
+Tabb Pl	3.4948
+Tabor Ct	4.0000
+Tacoma St	4.9583
+Taft Av	3.4375
+Taft Ct	3.1927
+Tahoe St	4.1302
+Taipei Ct	4.1354
+Talarico Ct	5.0938
+Talbot Pl	4.1667
+Talbot St	4.2396
+Tallman St	5.0260
+Tammy Dr	4.8646
+Tampa Rd	4.6927
+Tanglewood Dr	7.0208
+Tappen Ct	4.7448
+Tapscott St	5.3750
+Taras Shevchenko Pl	9.7917
+Targee St	4.5208
+Tarlee Pl	4.1615
+Tarlton St	4.6719
+Tarring St	4.6979
+Tarrytown Av	6.3854
+Tate St	3.3594
+Tatro St	3.7865
+Taunton St	5.1510
+Taxter Pl	4.2812
+Taylor Av	4.5260
+Taylor Ct	4.2812
+Taylor St	4.2552
+Teakwood Ct	6.0156
+Tech Pl	3.4740
+Ted Pl	2.9167
+Teddy Pl	4.0625
+Tehama St	5.0000
+Teleport Dr	5.3385
+Teller Av	4.2396
+Temple Ct	4.7448
+Ten Eyck St	5.5469
+Tenafly Pl	4.7135
+Tenbroeck Av	6.4948
+Tenney Pl	4.6510
+Tennis Ct	4.4010
+Tennis Pl	4.3021
+Tennyson Dr	5.9479
+Tepper Av	4.8125
+Teresa Ln	4.5938
+Teri Ct	3.1354
+Terrace Av	5.1719
+Terrace Ct	4.9271
+Terrace Dr	5.0260
+Terrace Pl	4.8281
+Terrace St	4.9010
+Terrace View Av	7.6927
+Tessa Ct	3.9844
+Teunissen Pl	5.9479
+Thames Av	5.2083
+Thames St	4.9375
+Thatford Av	5.5938
+Thayer Pl	4.4740
+Thayer St	4.5469
+The Blvd	4.1198
+The Live End	6.0104
+The Mall	3.9531
+The Oval	4.1302
+The Plaza	4.5885
+Theater Alley	6.3490
+Theater Ln	5.0833
+Theater Rd	5.1927
+Thebes Av	4.9062
+Thelma Ct	4.7604
+Theresa Pl	4.9583
+Thetford Ln	5.4792
+Thieriot Av	5.2135
+Thistle Ct	4.4896
+Thollen St	4.7500
+Thomas Pl	4.8750
+Thomas S Boyland St	9.9115
+Thomas St	4.9479
+Thompson Pl	6.0573
+Thompson St	6.1302
+Thomson Av	5.8229
+Thornhill Av	5.7552
+Thorns Ln	4.6771
+Thornton Pl	5.5052
+Thornton St	5.5781
+Thornycroft Av	7.1458
+Throgmorton Av	7.6979
+Throgs Neck Blvd	8.2448
+Throgs Neck Bridge	9.2292
+Throgs Neck Expy	8.4740
+Throop Av	4.8490
+Thursby Av	5.3698
+Thurston St	5.5052
+Thwaites Pl	5.4062
+Tibbett Av	4.9010
+Tiber Pl	3.6146
+Tides Ln	3.9219
+Tides Rd	4.0312
+Tiebout Av	5.0938
+Tiemann Av	5.5885
+Tiemann Pl	5.2448
+Tiemanns Ln	5.9688
+Tier St	3.1094
+Tierney Pl	4.7552
+Tiff Ct	2.8906
+Tiffany Ct	4.6094
+Tiffany Pl	4.5104
+Tiffany St	4.5833
+Tiger Ct	3.7135
+Tilden Av	4.4271
+Tilden St	4.1562
+Tillary St	4.2604
+Tiller Ct	3.7188
+Tillman St	4.7500
+Tillotson Av	5.6042
+Tilson Pl	4.0104
+Timber Ridge Dr	7.6302
+Timothy Ct	5.1615
+Timpson Pl	5.1771
+Tinton Av	4.5521
+Tioga Dr	3.9635
+Tioga St	3.8385
+Titus Av	3.8854
+Toddy Av	4.4167
+Todt Hill Ct	5.2552
+Todt Hill Rd	5.4948
+Token St	4.1302
+Tom Ct	3.3281
+Tomlinson Av	6.3958
+Tompkins Av	6.0781
+Tompkins Cir	6.1406
+Tompkins Ct	5.8333
+Tompkins Pl	5.7344
+Tompkins St	5.8073
+Tone Ln	3.7292
+Tonking Rd	5.2917
+Tonsor St	4.4948
+Tony Ct	3.6094
+Topping Av	5.3021
+Topping St	5.0312
+Topside Ln	5.0677
+Torrice Loop	5.9115
+Torry Av	4.0938
+Totten Av	4.6250
+Totten St	4.3542
+Tottenville Pl	6.2604
+Towers Ln	4.7969
+Townley Av	5.4531
+Townsend Av	6.2604
+Townsend St	5.9896
+Tracy Av	4.2083
+Trafalgar Pl	5.5208
+Traffic Av	4.6510
+Trantor Pl	4.7240
+Tratman Av	5.5208
+Travis Av	4.4323
+Treadwell Av	6.1250
+Treetz Pl	4.2448
+Tremont Av	5.5312
+Trent St	3.8125
+Trenton Ct	5.0000
+Tribeca Bridge	6.8854
+Tricia Way	4.9010
+Trimble Pl	4.7865
+Trimble Rd	5.1250
+Trina Ln	3.8594
+Trinity Av	4.6562
+Trinity Pl	4.3125
+Trioka Way	5.2031
+Trist Pl	3.3646
+Troon Rd	4.2656
+Trossach Rd	5.7865
+Trotting Course Ln	8.7500
+Troutman St	5.8542
+Troutville Rd	6.0677
+Troy Av	3.6771
+Troy St	3.4062
+Trucklemans Ln	7.4948
+Truman St	4.8958
+Trumbull Pl	5.4271
+Truxton St	4.9948
+Tryon Av	4.2708
+Tryon Pl	3.9271
+Tucci Ct	3.8385
+Tuckahoe Av	6.0938
+Tuckerton St	6.0729
+Tudor City Pl	6.0677
+Tudor Pl	3.9375
+Tudor Rd	4.2760
+Tudor St	4.0104
+Tulfan Ter	4.8229
+Tulip Cir	3.9323
+Tupelo Ct	4.4688
+Turf Ct	3.2552
+Turf Rd	3.4948
+Turin Dr	3.8646
+Turnbull Av	5.4844
+Turner Pl	4.3594
+Turner St	4.4323
+Turneur Av	5.2969
+Tuskegee Airmen Way	10.4167
+Tuttle St	4.0781
+Twin Oak Dr	5.6927
+Twin Pines Dr	6.4219
+Twombly Av	5.7604
+Tyler Av	3.9583
+Tynan St	4.1667
+Tyndale St	5.0000
+Tyndall Av	5.0052
+Tyrellan Av	5.4010
+Tyrrell St	4.3958
+Tysen St	4.0677
+Tysens Ln	4.7188
+U St	1.9688
+USS Arizona Ln	7.2812
+USS Connecticut Ct	9.1667
+USS Florida Ct	6.7396
+USS Iowa Cir	5.9531
+USS Missouri Ln	7.5469
+USS New Mexico Ct	9.0885
+USS North Carolina Rd	10.5573
+USS Tennessee Rd	8.7188
+Ulmer St	4.1146
+Uncas Av	4.4271
+Undercliff Av	6.2292
+Underhill Av	5.8438
+Underhill Rd	5.8385
+Underwood Rd	6.8438
+Union Av	4.2760
+Union Ct	4.0312
+Union Hall St	6.1198
+Union Pl	3.9323
+Union Sq E	5.0677
+Union Sq W	5.2917
+Union St	4.0052
+Union Tpke	5.2917
+Unionport Bridge	8.0573
+Unionport Rd	6.2240
+United Nations Av N	9.4635
+United Nations Plaza	9.8073
+University Av	6.3802
+University Pl	6.0365
+University Rd	6.3750
+Upland Pkwy	6.0781
+Upland Rd	4.8333
+Upshaw Rd	5.2083
+Upton St	4.0990
+Urbana St	4.6719
+Ursina Rd	4.5781
+Ursula Pl	4.2500
+Utah St	3.5104
+Utah Walk	4.7604
+Utica Av	4.0104
+Utica St	3.7396
+Utica Walk	4.9896
+Utopia Ct	4.3698
+Utopia Pkwy	5.8542
+Utter Av	3.9948
+Uxbridge St	5.5365
+Vail Av	3.3385
+Valdemar Av	6.0469
+Valencia Av	5.5885
+Valentine Av	6.0312
+Valentine Pl	5.6875
+Valhalla Dr	5.2031
+Valles Av	4.4010
+Valley Rd	4.4688
+Valleyview Pl	6.2760
+Van Allen Av	6.0625
+Van Brunt Rd	6.2917
+Van Brunt St	6.0260
+Van Buren St	6.1927
+Van Cleef St	5.7500
+Van Corlear Pl	6.7135
+Van Cortlandt Av	8.0365
+Van Cortlandt Av E	8.9115
+Van Cortlandt Av W	9.1354
+Van Cortlandt Park E	9.8073
+Van Cortlandt Park S	9.7969
+Van Dam St	5.4896
+Van Doren St	6.1875
+Van Duzer St	6.1615
+Van Duzer St Extension	11.0938
+Van Dyke St	5.7344
+Van Hoesen Av	7.1042
+Van Horn St	5.6406
+Van Kleeck St	6.5521
+Van Loon St	5.6354
+Van Name Av	6.3229
+Van Nest Av	5.7708
+Van Nostrand Ct	7.6823
+Van Pelt Av	5.4896
+Van Riper St	5.8646
+Van Sicklen St	6.7760
+Van Siclen Av	6.4896
+Van Siclen Ct	6.2448
+Van Siclen St	6.2188
+Van Sinderen Av	7.8021
+Van St	3.0885
+Van Tuyl St	5.3906
+Van Wicklen Rd	7.2760
+Van Wyck Av	6.1250
+Van Wyck Expy	7.1979
+Van Wyck Expy Unp	9.3333
+Van Zandt Av	6.3698
+Vance St	4.1875
+Vandalia Av	5.6250
+Vandam St	5.1042
+Vanderbilt Av	6.4531
+Vanderbilt St	6.1823
+Vanderveer Pl	6.6562
+Vanderveer St	6.7292
+Vandervoort Av	7.4115
+Vandervoort Pl	7.0677
+Vanessa Ln	5.3490
+Varet St	3.8594
+Varian Av	4.6146
+Varick Av	4.5625
+Varick St	4.2917
+Varkens Hook Rd	8.0469
+Vassar St	4.4583
+Vaswani Av	5.4427
+Vaughan St	5.4115
+Vaux Rd	3.9323
+Vedder Av	4.8958
+Veith Pl	3.6875
+Veltman Av	5.4792
+Venice Av	4.7396
+Venus Ln	4.3333
+Venus Pl	4.1042
+Vera St	3.4688
+Verandah Pl	5.7188
+Vermilyea Av	6.3177
+Vermont Av	5.6146
+Vermont Ct	5.3698
+Vermont Pl	5.2708
+Vermont St	5.3438
+Vernon Av	4.9375
+Vernon Blvd	5.7812
+Verona Pl	4.5573
+Verona St	4.6302
+Veronica Pl	5.3802
+Verrazzano Bridge	8.7865
+Verrazzano Bridge Bus Slip	12.8333
+Verveelen Pl	5.9531
+Vesey St	4.1146
+Vespa Av	4.3958
+Vestry St	4.3646
+Veterans Av	5.7760
+Veterans Mem Dr	8.1302
+Veterans Rd E	6.6458
+Veterans Rd W	6.8698
+Victor Rd	4.4010
+Victor St	4.1354
+Victoria Dr	5.0990
+Victoria Rd	5.2396
+Victory Blvd	5.8177
+Viele Av	3.8958
+Vienna Ct	4.5469
+Vietor Av	4.4219
+Villa Av	3.6302
+Villa Nova St	6.0104
+Village Ct	4.5208
+Village Ln	4.6510
+Village Rd	4.7604
+Village Rd E	5.6354
+Village Rd N	5.7292
+Village Rd S	5.6250
+Vincent Av	5.1667
+Vine St	3.3698
+Vineland Av	5.6615
+Vinmont Rd	5.5104
+Vireo Av	4.0312
+Virgil Pl	3.7135
+Virginia Av	5.1979
+Virginia Pl	4.8542
+Virginia St	4.9271
+Visitation Pl	5.7031
+Vista Av	3.9323
+Vista Pl	3.5885
+Vital Av	3.7292
+Vleigh Pl	4.1667
+Vogel Av	4.2031
+Vogel Ln	4.0885
+Vogel Loop	5.2083
+Vogel Pl	3.8594
+Von Braun Av	6.4740
+Voorhies Av	5.6875
+Vreeland Av	5.7604
+Vreeland St	5.4896
+Vulcan St	4.5156
+Vyse Av	3.8281
+W 1 St	2.7552
+W 10 Rd	3.6771
+W 10 St	3.4115
+W 100 St	4.0677
+W 101 St	3.8125
+W 102 St	4.0208
+W 103 St	4.0104
+W 104 St	4.0521
+W 105 St	4.0208
+W 106 St	4.0260
+W 107 St	3.9479
+W 108 St	4.0365
+W 109 St	4.0260
+W 11 Rd	3.4219
+W 11 St	3.1562
+W 111 St	3.5573
+W 112 St	3.7656
+W 113 St	3.7552
+W 114 St	3.7969
+W 115 St	3.7656
+W 116 St	3.7708
+W 117 St	3.6927
+W 118 St	3.7812
+W 119 St	3.7708
+W 12 Rd	3.6302
+W 12 St	3.3646
+W 120 St	4.0208
+W 121 St	3.7656
+W 122 St	3.9740
+W 123 St	3.9635
+W 124 St	4.0052
+W 125 St	3.9740
+W 126 St	3.9792
+W 127 St	3.9010
+W 128 St	3.9896
+W 129 St	3.9792
+W 13 Rd	3.6198
+W 13 St	3.3542
+W 130 St	4.0104
+W 131 St	3.7552
+W 132 St	3.9635
+W 133 St	3.9531
+W 134 St	3.9948
+W 135 St	3.9635
+W 136 St	3.9688
+W 137 St	3.8906
+W 138 St	3.9792
+W 139 St	3.9688
+W 14 Rd	3.6615
+W 14 St	3.3958
+W 140 St	4.0521
+W 141 St	3.7969
+W 142 St	4.0052
+W 143 St	3.9948
+W 144 St	4.0365
+W 145 St	4.0052
+W 146 St	4.0104
+W 147 St	3.9323
+W 148 St	4.0208
+W 149 St	4.0104
+W 15 Pl	3.2917
+W 15 Rd	3.6302
+W 15 St	3.3646
+W 150 St	4.0208
+W 151 St	3.7656
+W 152 St	3.9740
+W 153 St	3.9635
+W 154 St	4.0052
+W 155 St	3.9740
+W 156 St	3.9792
+W 157 St	3.9010
+W 158 St	3.9896
+W 159 St	3.9792
+W 16 Rd	3.6354
+W 16 St	3.3698
+W 160 St	4.0260
+W 161 St	3.7708
+W 162 St	3.9792
+W 163 St	3.9688
+W 164 St	4.0104
+W 165 St	3.9792
+W 166 St	3.9844
+W 167 St	3.9062
+W 168 St	3.9948
+W 169 St	3.9844
+W 17 Rd	3.5573
+W 17 St	3.2917
+W 170 St	3.9479
+W 171 St	3.6927
+W 172 St	3.9010
+W 173 St	3.8906
+W 174 St	3.9323
+W 175 St	3.9010
+W 176 St	3.9062
+W 177 St	3.8281
+W 178 St	3.9167
+W 179 St	3.9062
+W 18 Rd	3.6458
+W 18 St	3.3802
+W 180 St	4.0365
+W 181 St	3.7812
+W 182 St	3.9896
+W 183 St	3.9792
+W 184 St	4.0208
+W 185 St	3.9896
+W 186 St	3.9948
+W 187 St	3.9167
+W 188 St	4.0052
+W 189 St	3.9948
+W 19 Rd	3.6354
+W 19 St	3.3698
+W 190 St	4.0260
+W 191 St	3.7708
+W 192 St	3.9792
+W 193 St	3.9688
+W 195 St	3.9792
+W 196 St	3.9844
+W 197 St	3.9062
+W 2 Pl	2.8906
+W 2 St	2.9635
+W 20 Rd	3.8854
+W 20 St	3.6198
+W 201 St	4.0208
+W 202 St	4.2292
+W 203 St	4.2188
+W 204 St	4.2604
+W 205 St	4.2292
+W 206 St	4.2344
+W 207 St	4.1562
+W 21 St	3.3646
+W 211 St	3.7656
+W 212 St	3.9740
+W 213 St	3.9635
+W 214 St	4.0052
+W 215 St	3.9740
+W 216 St	3.9792
+W 217 St	3.9010
+W 218 St	3.9896
+W 219 St	3.9792
+W 22 St	3.5729
+W 220 St	4.2292
+W 225 St	4.1823
+W 227 St	4.1094
+W 228 St	4.1979
+W 229 St	4.1875
+W 23 St	3.5625
+W 230 St	4.2188
+W 231 St	3.9635
+W 232 St	4.1719
+W 233 St	4.1615
+W 234 St	4.2031
+W 235 St	4.1719
+W 236 St	4.1771
+W 237 St	4.0990
+W 238 St	4.1875
+W 239 St	4.1771
+W 24 St	3.6042
+W 240 St	4.2604
+W 242 St	4.2135
+W 244 St	4.2448
+W 245 St	4.2135
+W 246 St	4.2188
+W 247 St	4.1406
+W 249 St	4.2188
+W 25 St	3.5729
+W 250 St	4.2292
+W 251 St	3.9740
+W 252 St	4.1823
+W 253 St	4.1719
+W 254 St	4.2135
+W 255 St	4.1823
+W 256 St	4.1875
+W 258 St	4.1979
+W 259 St	4.1875
+W 26 St	3.5781
+W 260 St	4.2344
+W 261 St	3.9792
+W 262 St	4.1875
+W 263 St	4.1771
+W 27 Dr	3.6250
+W 27 St	3.5000
+W 28 St	3.5885
+W 29 St	3.5781
+W 3 Rd	3.2188
+W 3 St	2.9531
+W 30 St	3.6094
+W 31 St	3.3542
+W 32 St	3.5625
+W 33 St	3.5521
+W 34 St	3.5938
+W 35 St	3.5625
+W 36 St	3.5677
+W 37 St	3.4896
+W 38 St	3.5781
+W 39 St	3.5677
+W 4 St	2.9948
+W 40 St	3.6510
+W 41 St	3.3958
+W 42 St	3.6042
+W 43 St	3.5938
+W 44 St	3.6354
+W 45 St	3.6042
+W 46 St	3.6094
+W 47 St	3.5312
+W 48 St	3.6198
+W 49 St	3.6094
+W 5 Rd	3.2292
+W 5 St	2.9635
+W 50 St	3.6198
+W 51 St	3.3646
+W 52 St	3.5729
+W 53 St	3.5625
+W 54 St	3.6042
+W 55 St	3.5729
+W 56 St	3.5781
+W 57 St	3.5000
+W 58 St	3.5885
+W 59 St	3.5781
+W 6 St	2.9688
+W 60 St	3.6250
+W 61 St	3.3698
+W 62 St	3.5781
+W 63 St	3.5677
+W 64 St	3.6094
+W 65 St	3.5781
+W 66 St	3.5833
+W 67 St	3.5052
+W 68 St	3.5938
+W 69 St	3.5833
+W 7 St	2.8906
+W 70 St	3.5469
+W 71 St	3.2917
+W 72 St	3.5000
+W 73 St	3.4896
+W 74 St	3.5312
+W 75 St	3.5000
+W 76 St	3.5052
+W 77 St	3.4271
+W 78 St	3.5156
+W 79 St	3.5052
+W 8 Rd	3.2448
+W 8 St	2.9792
+W 80 St	3.6354
+W 81 St	3.3802
+W 82 St	3.5885
+W 83 St	3.5781
+W 84 St	3.6198
+W 85 St	3.5885
+W 86 St	3.5938
+W 87 St	3.5156
+W 88 St	3.6042
+W 89 St	3.5938
+W 9 Rd	3.2344
+W 9 St	2.9688
+W 90 St	3.6250
+W 91 St	3.3698
+W 92 St	3.5781
+W 93 St	3.5677
+W 94 St	3.6094
+W 95 St	3.5781
+W 96 St	3.5833
+W 97 St	3.5052
+W 98 St	3.5938
+W 99 St	3.5833
+W Alley Rd	5.0469
+W Brighton Av	6.7396
+W Broadway	5.7865
+W Buchanan St	7.0781
+W Burnside Av	6.8333
+W Castor Pl	5.3490
+W Caswell Av	6.2083
+W Cedarview Av	7.5208
+W Clarke Pl	5.3021
+W End Av	4.4219
+W End Dr	4.2760
+W Farms Rd	5.5417
+W Fingerboard Rd	8.3177
+W Fordham Rd	6.7865
+W Gun Hill Rd	6.3281
+W Hangar Rd	6.0469
+W Houston St	6.2865
+W Kingsbridge Rd	8.2656
+W Loop Rd	4.9010
+W Main St	4.5990
+W Market St	5.6458
+W Mosholu Pkwy N	8.7552
+W Mosholu Pkwy S	8.6510
+W Mount Eden Av	8.1875
+W Raleigh Av	6.1771
+W Service Rd	6.1458
+W Thames St	6.0365
+W Tremont Av	6.6302
+Wade Sq	3.9844
+Wade St	3.7969
+Wadhams St	5.7656
+Wadsworth Av	6.7240
+Wadsworth Rd	6.7188
+Wadsworth Ter	7.0208
+Wagner St	4.8073
+Wahler Pl	4.4479
+Waimer Pl	4.7240
+Wainwright Av	6.8177
+Wainwright Dr	6.6719
+Wakefield Av	6.1198
+Wakefield Rd	6.1146
+Wakeman Pl	5.7344
+Walbrooke Av	6.4688
+Walch Pl	4.0156
+Walcott Av	5.1146
+Walden Av	4.9531
+Waldo Av	4.3698
+Waldo Pl	4.0260
+Waldo Walk	5.3490
+Waldorf Ct	4.9062
+Waldron Av	5.3802
+Waldron St	5.1094
+Wales Av	4.2760
+Wales Pl	3.9323
+Walke Av	4.3385
+Walker Ct	4.5104
+Walker Dr	4.6094
+Walker Pl	4.4115
+Walker St	4.4844
+Wall St	3.2448
+Wallabout Rd	6.1979
+Wallabout St	5.9323
+Wallace Av	5.1719
+Wallaston Ct	5.8750
+Walloon St	4.9740
+Walnut Av	4.8021
+Walnut Pl	4.4583
+Walnut St	4.5312
+Walsh Ct	4.0677
+Walter Reed Rd	7.2188
+Walters Av	5.0833
+Waltham St	5.3750
+Walton Av	4.7760
+Walton Rd	4.7708
+Walton St	4.5052
+Walworth St	5.6719
+Wanamaker Pl	6.7083
+Wandel Av	4.9531
+Ward Av	3.9271
+Wards Meadow Loop	9.5000
+Wards Point Av	7.1458
+Wardwell Av	5.8177
+Wareham Pl	5.5938
+Waring Av	4.8021
+Warren Pl	4.5729
+Warren St	4.6458
+Warrington Av	6.7708
+Warsoff Pl	4.7969
+Warwick Av	5.4792
+Warwick Cres	6.3125
+Warwick St	5.2083
+Washington Av	7.0260
+Washington Mews	8.3646
+Washington Park	7.9219
+Washington Pl	6.6823
+Washington Rd	7.0208
+Washington Sq E	7.8177
+Washington Sq N	7.9115
+Washington Sq S	7.8073
+Washington Sq W	8.0417
+Washington St	6.7552
+Washington Ter	7.3229
+Watchogue Rd	6.7500
+Water St	4.0260
+Water Way	4.9948
+Waterbury Av	6.4531
+Waterbury St	6.1823
+Waterford Ct	5.9792
+Waterhouse Av	7.1042
+Waterloo Pl	5.3802
+Waters Av	4.7917
+Waters Edge Dr	7.2344
+Waters Pl	4.4479
+Waterside Ct	5.9635
+Waterside Pkwy	7.4479
+Waterside St	5.9375
+Waterstone Dr	6.7552
+Waterview Ct	6.1979
+Waterview St	6.1719
+Watjean Ct	5.0677
+Watkins Av	5.2500
+Watkins St	4.9792
+Watson Av	4.9792
+Watson Dr	4.8333
+Watson Pl	4.6354
+Watt Av	3.7135
+Watts St	3.9375
+Wave St	3.7760
+Wavecrest St	6.1771
+Waverly Av	5.3229
+Waverly Pl	4.9792
+Wayne Av	4.6510
+Wayne Ct	4.4062
+Wayne Pl	4.3073
+Wayne St	4.3802
+Wayne Ter	4.9479
+Weatherly Pl	5.9635
+Weaver Av	5.0208
+Weaver St	4.7500
+Webb Av	4.0885
+Webster Av	5.3698
+Webster Pl	5.0260
+Weed Av	4.0677
+Weed Rd	4.0625
+Weehawken St	6.8281
+Weeks Av	4.5417
+Weeks Ln	4.4271
+Weiher Ct	4.5365
+Weiner St	4.5104
+Weir Ln	3.5156
+Weirfield St	5.4323
+Welding Rd	5.2500
+Weldon St	4.6927
+Wellbrook Av	6.2031
+Weller Av	4.4896
+Weller Ln	4.3750
+Welles Ct	4.3229
+Wellhouse Dr	6.1771
+Welling Ct	4.7240
+Wellington Ct	6.2760
+Wellman Av	5.5469
+Wells Av	4.0104
+Wells St	3.7396
+Wemple St	4.9688
+Wendover Rd	6.1979
+Wendy Dr	4.5260
+Wenlock St	5.2135
+Wenner Pl	4.7500
+Wentworth Av	6.6354
+Weser Av	4.4010
+West Av	3.8177
+West Dr	3.6719
+West Rd	3.8125
+West Shore Expy	7.8906
+West Shore Pkwy	8.0573
+West St	3.5469
+West Ter	4.1146
+Westaway Rd	6.2448
+Westbourne Av	7.1250
+Westbrook Av	6.5052
+Westbury Av	5.9740
+Westbury Ct	5.7292
+Westchester Av	7.3698
+Westchester Av Bridge	10.7240
+Westcott Blvd	6.5521
+Westentry Rd	6.3385
+Westerly Ln	5.5365
+Western Av	5.3854
+Westervelt Av	6.5885
+Westfield Av	5.8906
+Westgate St	5.6302
+Westminster Ct	7.1875
+Westminster Rd	7.4271
+Westmoreland Pl	7.9167
+Westmoreland St	7.9896
+Westport Ln	5.6562
+Westport St	5.5000
+Westside Av	5.7292
+Westway	4.1667
+Westwood Av	6.2812
+Wetherole St	6.0365
+Wetmore Rd	5.7396
+Wexford Ter	5.7344
+Whalen St	4.6979
+Whalley Av	5.2344
+Wharf Dr	4.1615
+Wharton Pl	5.1510
+Wheatley St	5.6198
+Wheeler Av	5.3490
+Wheeling Av	5.8281
+Whipple St	4.9844
+Whistler Av	5.4010
+Whitaker Pl	5.3854
+White Av	4.1979
+White Oak Ct	6.0417
+White Oak Ln	6.1719
+White Pl	3.8542
+White Plains Av	7.3073
+White Plains Rd	7.3021
+White Sands Way	7.9844
+White St	3.9271
+Whitehall Pl	5.5885
+Whitehall St	5.6615
+Whitehall Ter	6.2292
+Whitelaw St	5.5260
+Whitestone Bridge	8.6302
+Whitestone Expy	7.8750
+Whitewood Av	6.6615
+Whitlock Av	5.5990
+Whitman Av	5.6719
+Whitman Dr	5.5260
+Whitney Av	5.3594
+Whitney Pl	5.0156
+Whitson St	5.0260
+Whittemore Av	7.0104
+Whittier St	5.0156
+Whitty Ln	4.4844
+Whitwell Pl	5.1875
+Wickham Av	5.7865
+Wicklow Pl	5.0208
+Wiederer Pl	5.3958
+Wieland Av	5.2344
+Wilbur Pl	4.1927
+Wilbur St	4.2656
+Wilcox Av	4.6354
+Wilcox St	4.3646
+Wild Av	3.5260
+Wilder Av	4.5000
+Wildwood Ln	5.8750
+Wiley Pl	3.7292
+Wilkins Av	4.8750
+Wilkinson Av	6.0365
+Will Pl	2.8958
+Willard Av	4.7917
+Willard Pl	4.4479
+Willets Point Blvd	8.2500
+Willets St	4.4115
+Willett Av	4.5781
+William Av	4.9583
+William Ct	4.7135
+William Pl	4.6146
+William St	4.6875
+Williams Av	5.4531
+Williams Ct	5.2083
+Williams Pl	5.1094
+Williamsbridge Rd	8.4375
+Williamsburg Bridge	9.4479
+Williamsburg St E	8.2240
+Williamsburg St W	8.4479
+Williamson Av	6.6146
+Willis Av	4.0156
+Willis Av Bridge	7.3698
+Willmohr St	5.4271
+Willoughby Av	6.7188
+Willoughby St	6.4479
+Willow Av	4.5573
+Willow Ct	4.3125
+Willow Ln	4.4427
+Willow Pl	4.2135
+Willow Pond Rd	7.1823
+Willow Rd E	5.4271
+Willow Rd W	5.6510
+Willow St	4.2865
+Willowbrook Ct	7.0000
+Willowbrook Rd	7.2396
+Willowwood Ln	6.9062
+Wilson Av	4.6042
+Wilson St	4.3333
+Wilson Ter	4.9010
+Wilson View Pl	6.7812
+Wilton Ct	4.2552
+Wiltshire Ln	5.5677
+Wiman Av	4.6875
+Wiman Pl	4.3438
+Winant Av	4.7917
+Winant Ln	4.6771
+Winant Pl	4.4479
+Winant St	4.5208
+Winchester Av	6.8021
+Winchester Blvd	7.6458
+Windemere Av	6.7969
+Windermere Rd	7.2083
+Windham Loop	6.8646
+Winding Woods Loop	9.5938
+Windmill Ct	5.3281
+Windom Av	5.2760
+Windsor Ct	5.0625
+Windsor Pl	4.9635
+Windsor Rd	5.3021
+Windward Ct	5.8854
+Windward Ln	6.0156
+Windy Hollow Way	8.5365
+Winegar Ln	5.2448
+Winfield Av	5.3229
+Winfield St	5.0521
+Wingham St	5.5885
+Winham Av	5.2812
+Winslow Pl	5.0104
+Winston St	5.0260
+Winter Av	4.6146
+Winter St	4.3438
+Winters St	4.8385
+Winthrop Pl	5.4531
+Winthrop St	5.5260
+Wirt Av	3.4635
+Wirt Ln	3.3490
+Wissman Av	5.6771
+Withers St	4.8385
+Witteman Pl	5.6823
+Witthoff St	5.0573
+Woehrle Av	5.3594
+Wogan Ter	4.9688
+Wolcott Av	5.1250
+Wolcott St	4.8542
+Wolf Pl	3.2552
+Wolkoff Ln	4.9740
+Wolverine St	5.9271
+Wood Av	4.0885
+Wood Ct	3.8438
+Wood Ln	3.9740
+Wood Rd	4.0833
+Wood St	3.8177
+Woodbine Av	6.0990
+Woodbine St	5.8281
+Woodbridge Pl	6.7344
+Woodcliff Av	5.9323
+Woodcrest Rd	6.4844
+Woodcutters Ln	7.3594
+Wooddale Av	6.0729
+Woodhaven Av	6.9479
+Woodhaven Blvd	7.7917
+Woodhaven Ct	6.7031
+Woodhull Av	5.8594
+Woodhull St	5.5885
+Woodland Av	6.1094
+Woodlawn Av	6.2812
+Woodmansten Pl	7.8125
+Woodpoint Rd	6.4948
+Woodrose Ln	6.0104
+Woodrow Ct	5.5781
+Woodrow Rd	5.8177
+Woodruff Av	5.8281
+Woodruff Ln	5.7135
+Woods Pl	4.2396
+Woods of Arden Rd	8.8750
+Woodside Av	6.0000
+Woodstock Av	6.6406
+Woodvale Av	6.0521
+Woodvale Loop	7.0573
+Woodward Av	6.3906
+Woodycrest Av	7.0573
+Woolley Av	5.2188
+Wooster St	5.0990
+Worth St	4.0729
+Worthen St	5.2240
+Wortman Av	5.7812
+Wounded Warriors Way	10.7917
+Wren Pl	3.5990
+Wrenn St	4.2656
+Wright Av	4.6354
+Wright St	4.3646
+Wyatt St	4.0104
+Wyckoff Av	5.3385
+Wyckoff St	5.0677
+Wycliff Ln	4.6719
+Wygant Pl	4.7188
+Wyona Av	4.6615
+Wyona St	4.3906
+Wythe Av	4.4844
+Wythe Pl	4.1406
+X St	1.9323
+Xavier Way	5.2708
+Xenia St	3.9219
+Yacht Club Cv	6.5677
+Yafa Ct	3.4427
+Yale St	3.3438
+Yankee Mall	5.7083
+Yates Av	4.2083
+Yates Rd	4.2031
+Yeaton Rd	4.8698
+Yellowstone Blvd	8.1146
+Yeomalt Av	5.4531
+Yeshiva Ln	5.1354
+Yetman Av	5.1875
+Yona Av	3.9271
+York Av	3.7500
+York St	3.4792
+York Ter	4.0469
+Young Av	4.5417
+Young St	4.2708
+Yucca Dr	4.2969
+Yukon Av	4.5208
+Yznaga Pl	4.6927
+Zachary Ct	5.1562
+Zarelli Ct	4.3177
+Zebra Pl	3.9323
+Zeck Ct	3.5781
+Zephyr Av	4.8802
+Zerega Av	4.8333
+Zion St	3.3385
+Zoe St	3.0208
+Zoller Rd	4.2865
+Zulette Av	4.9479
+Zwicky Av	4.8646
