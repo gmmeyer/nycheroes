@@ -10,6 +10,31 @@ const CALM_DOWN_TIME := 9.0
 ## Step aside when a hero comes this close.
 const DODGE_DISTANCE := 2.5
 const MAX_SIDE_STEP := 2.5
+## Running from danger, it keeps to its lane while the lane leads away (at
+## least LEAVE_GAIN m further from the danger over the next LOOK_ALONG m of
+## it). Where it doesn't (it ends, or turns back), it runs on off the lane:
+## every STEER_INTERVAL s it looks FLEE_LOOK m ahead for walls and benches
+## (a ray at KNEE height) and for a curb or step (ground more than
+## STEP_HEIGHT higher or lower), and takes the first clear way of: straight
+## away from the danger give or take its own FAN_OUT (so a crowd spreads),
+## then FLEE_TURNS to either side of straight away (its own side first), up
+## to square to it, but never doubling back on the way it's going: in a
+## corner it would go back and forth. Where none is clear it stops, until the
+## danger moves. It drops a crumb every TRAIL_SPACING m, and once calm walks
+## back along them onto its lane. (Kept to its lane, it turned around at the
+## end and back again every frame and sprinted in place: whole crowds of
+## them at the ends of Times Square's plaza lanes.)
+const LOOK_ALONG := 2.0
+const LEAVE_GAIN := 0.5
+const STEER_INTERVAL := 0.15
+const FLEE_LOOK := 1.2
+const KNEE := 0.3
+const STEP_HEIGHT := 0.12
+const FLEE_TURNS: Array[float] = [0.4, 0.8, 1.2, PI / 2.0]
+const FAN_OUT := 0.25
+const TRAIL_SPACING := 0.5
+## Danger this far from the last is somewhere else (a cornered one looks again).
+const THREAT_MOVED := 2.0
 ## Further from the camera than this, pose only MID_POSE_RATE times a second,
 ## and past SLOW_POSE_DISTANCE only FAR_POSE_RATE times (each new pose costs a
 ## skinning pass, see SkinWarmup; busy streets have dozens in view), at times
@@ -41,6 +66,14 @@ var _walk_speed := 1.4
 var _panic := 0.0
 var _threat := Vector3.ZERO
 var _pause := 0.0
+var _off_lane := false
+## Where it's been since leaving its lane (world space, from the spot it left).
+var _trail := PackedVector3Array()
+## The way it's going off its lane (level, unit; zero while cornered).
+var _run := Vector3.ZERO
+var _steer_wait := 0.0
+var _cornered := false
+var _fan := randf_range(-FAN_OUT, FAN_OUT)
 var _facing := 0.0
 var _player: AnimationPlayer
 var _detail_check := randf() * DETAIL_CHECK
@@ -92,30 +125,17 @@ func scare(from_world: Vector3) -> void:
 	if _panic <= 0.0 and visible and randf() < 0.3:
 		GameAudio.play(&"scream", global_position + Vector3.UP * 1.6)  # (one in a few seconds, at most)
 	_panic = CALM_DOWN_TIME + randf() * 3.0
+	if from_world.distance_to(_threat) > THREAT_MOVED:
+		_cornered = false
 	_threat = from_world
 	_pause = 0.0
 
 
 func _process(delta: float) -> void:
-	var speed := 0.0
-	if _panic > 0.0:
-		_panic -= delta
-		speed = RUN_SPEED
-		if _tangent().dot(world_position - _threat) * _heading < 0.0:
-			_heading = -_heading
-	elif _pause > 0.0:
-		_pause -= delta
-	else:
-		speed = _walk_speed
-		if randf() < delta * 0.02:
-			_pause = randf_range(2.0, 6.0)  # stop for a moment now and then
-	if is_instance_valid(_warmup) and _warmup.holding:
-		speed = 0.0  # stand still while the pose is held (see SkinWarmup)
-	_move(speed * delta)
-
+	var speed := _walk(delta)
 	var from_hero := world_position - hero.world_position()
 	from_hero.y = 0.0
-	if from_hero.length() < DODGE_DISTANCE:
+	if from_hero.length() < DODGE_DISTANCE and not _off_lane:
 		var across := _across()
 		_side = clampf(_side + signf(from_hero.dot(across) + 0.01) * 3.0 * delta, -MAX_SIDE_STEP, MAX_SIDE_STEP)
 
@@ -132,6 +152,124 @@ func _process(delta: float) -> void:
 				_player.advance(_pose_time)
 			_pose_time = 0.0
 	_update_detail(delta)
+
+
+## Walks, or runs from danger, for `delta` s. Returns the speed (m/s).
+func _walk(delta: float) -> float:
+	var speed := 0.0
+	if _panic > 0.0:
+		_panic -= delta
+		speed = RUN_SPEED
+		if not _off_lane and not _flee_along_lane():
+			_off_lane = true
+			_trail = PackedVector3Array([world_position])
+			_run = Vector3.ZERO
+			_steer_wait = 0.0
+			_cornered = false
+	elif _pause > 0.0:
+		_pause -= delta
+	else:
+		speed = _walk_speed
+		if randf() < delta * 0.02:
+			_pause = randf_range(2.0, 6.0)  # stop for a moment now and then
+	if is_instance_valid(_warmup) and _warmup.holding:
+		speed = 0.0  # stand still while the pose is held (see SkinWarmup)
+	if _off_lane:
+		return _walk_off_lane(speed, delta)
+	_move(speed * delta)
+	return speed
+
+
+## Running from danger on its lane: turns whichever way along it leads
+## further away, and returns whether that way leads away enough to take.
+func _flee_along_lane() -> bool:
+	var here := _from_threat(_along)
+	var ahead := _from_threat(_along + LOOK_ALONG * _heading)
+	var behind := _from_threat(_along - LOOK_ALONG * _heading)
+	if behind > ahead:
+		_heading = -_heading
+		ahead = behind
+	return ahead > here + LEAVE_GAIN
+
+
+## Off its lane, for `delta` s at `speed`: running from danger, or once calm
+## walking back the way it came and onto its lane. Returns the speed (m/s).
+func _walk_off_lane(speed: float, delta: float) -> float:
+	if speed <= 0.0:
+		return 0.0
+	if _panic > 0.0:
+		_steer_wait -= delta
+		if _steer_wait <= 0.0:
+			_steer_wait = STEER_INTERVAL
+			_steer()
+		if _run == Vector3.ZERO:
+			return 0.0  # cornered
+		world_position += _run * speed * delta
+		if world_position.distance_to(_trail[_trail.size() - 1]) >= TRAIL_SPACING:
+			_trail.append(world_position)
+	else:
+		var step := speed * delta
+		while step > 0.0 and not _trail.is_empty():
+			var to := _trail[_trail.size() - 1] - world_position
+			var length := to.length()
+			if length > step:
+				world_position += to * (step / length)
+				_run = Vector3(to.x, 0.0, to.z).normalized()
+				break
+			world_position = _trail[_trail.size() - 1]
+			_trail.remove_at(_trail.size() - 1)
+			step -= length
+		if _trail.is_empty():
+			_off_lane = false  # back where it left the lane
+			_move(0.0)
+			return speed
+	position = WorldOrigin.to_local(world_position)
+	return speed
+
+
+## Picks the way to run off the lane (see FLEE_TURNS), and stands it on the ground.
+func _steer() -> void:
+	if _cornered:
+		return
+	var space := get_world_3d().direct_space_state
+	var ground := _ground_at(space, world_position)
+	if not is_nan(ground):
+		world_position.y = ground
+	var away := world_position - _threat
+	away.y = 0.0
+	if away.length() < 0.01:
+		away = Vector3(-sin(_facing), 0.0, -cos(_facing))
+	away = away.normalized()
+	var side := 1.0 if away.cross(_run).y >= 0.0 else -1.0  # keep turning the way it has been
+	var ways: Array[Vector3] = [away.rotated(Vector3.UP, _fan)]
+	for turn in FLEE_TURNS:
+		ways.append(away.rotated(Vector3.UP, turn * side))
+		ways.append(away.rotated(Vector3.UP, -turn * side))
+	for way in ways:
+		if way.dot(_run) > -0.01 and _clear(space, way):
+			_run = way
+			return
+	_run = Vector3.ZERO
+	_cornered = true
+
+
+## Whether it can run FLEE_LOOK m `way` from where it is.
+func _clear(space: PhysicsDirectSpaceState3D, way: Vector3) -> bool:
+	var from := WorldOrigin.to_local(world_position) + Vector3.UP * KNEE
+	var query := PhysicsRayQueryParameters3D.create(from, from + way * FLEE_LOOK, CityStreamer.COLLISION_LAYER)
+	if not space.intersect_ray(query).is_empty():
+		return false
+	var ground := _ground_at(space, world_position + way * FLEE_LOOK)
+	return not is_nan(ground) and absf(ground - world_position.y) <= STEP_HEIGHT
+
+
+## Height of whatever's underfoot at a world position (within a meter of its
+## height), or NAN.
+static func _ground_at(space: PhysicsDirectSpaceState3D, at: Vector3) -> float:
+	var top := WorldOrigin.to_local(at) + Vector3.UP
+	var query := PhysicsRayQueryParameters3D.create(top, top + Vector3.DOWN * 2.0, CityStreamer.COLLISION_LAYER)
+	var hit := space.intersect_ray(query)
+	return NAN if hit.is_empty() else WorldOrigin.to_world(hit.position).y
 
 
 func _update_detail(delta: float) -> void:
@@ -182,6 +320,15 @@ func _tangent() -> Vector3:
 	return (_lane[_segment + 1] - _lane[_segment]).normalized()
 
 
+## How far (level) the point `along` m along the lane is from the danger.
+func _from_threat(along: float) -> float:
+	along = clampf(along, 0.0, _lengths[_lengths.size() - 1])
+	var k := clampi(_lengths.bsearch(along) - 1, 0, _lane.size() - 2)
+	var segment_length := maxf(_lengths[k + 1] - _lengths[k], 0.001)
+	var point := _lane[k].lerp(_lane[k + 1], (along - _lengths[k]) / segment_length)
+	return Vector2(point.x - _threat.x, point.z - _threat.z).length()
+
+
 ## Level and a meter long, so the step to the side stays the same on steep
 ## bits of lane: the TKTS steps' risers (18 cm up over 10 cm) shrank it by
 ## half, and people walking up or down jumped sideways at every step.
@@ -191,7 +338,7 @@ func _across() -> Vector3:
 
 
 func _travel_yaw() -> float:
-	var direction := _tangent() * _heading
+	var direction := _run if _off_lane else _tangent() * _heading
 	return atan2(-direction.x, -direction.z)
 
 
