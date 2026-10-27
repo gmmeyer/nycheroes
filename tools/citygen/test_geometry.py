@@ -136,5 +136,45 @@ class StatueOfLiberty(unittest.TestCase):
         np.testing.assert_allclose(bounds[0], bounds[2], atol=0.8)
 
 
+class ColumbusCircleAndBars(unittest.TestCase):
+    def _built(self, name, footprint):
+        lm = next(lm for lm in landmarks.LANDMARKS if lm.name == name)
+        out = []
+        for detail in range(3):
+            model, frame = landmarks.build(lm, footprint, None, detail)
+            pos = np.concatenate(model.pos)
+            self.assertTrue(np.isfinite(pos).all(), name)
+            self.assertTrue(np.isfinite(np.concatenate(model.normals)).all(), name)
+            surfaces = [MeshBuilder() for _ in range(4)]
+            landmarks.place(model, *surfaces[:1], frame, 5.0, *surfaces[1:])
+            out.append((model, pos, [sum(len(p) for p in s.pos) for s in surfaces]))
+        return out
+
+    def test_circle_and_maine_at_every_lod(self):
+        for name, top in (("Columbus Circle", 23.0), ("USS Maine National Monument", 18.4)):
+            lm = next(lm for lm in landmarks.LANDMARKS if lm.name == name)
+            built = self._built(name, shapely.Point(*lm.at).buffer(2.0))
+            for detail, (model, pos, (buildings, own, waterfront, places)) in enumerate(built):
+                self.assertLess(model.triangles(), (9000, 4500, 1600)[detail], name)
+                self.assertEqual(places, 0, name)
+                self.assertGreater(buildings, 0, name)
+                self.assertAlmostEqual(pos[..., 2].max(), top, delta=0.6, msg=name)
+            # Every level of detail covers the same ground (the island, the basin).
+            spans = [np.ptp(pos[..., :2].reshape(-1, 2), axis=0) for _, pos, _ in built]
+            np.testing.assert_allclose(spans[0], spans[2], atol=0.8, err_msg=name)
+
+    def test_bars_go_to_the_places_surface(self):
+        for name, footprint in (("Eagle NYC", shapely.box(-3.7, -15.3, 3.7, 15.3)),
+                                ("The Cock", shapely.box(-3.65, -9.5, 3.65, 9.5))):
+            for model, pos, (buildings, own, waterfront, places) in self._built(name, footprint):
+                self.assertGreater(places, 0, name)
+                self.assertEqual(buildings + own, 0, name)
+                codes = np.concatenate(model.code).astype(int)
+                flags = codes // landmarks.FLAG_SCALE
+                place = (flags & landmarks.PLACE) != 0
+                self.assertTrue(np.isin(codes[place] % landmarks.FLAG_SCALE, range(5)).all(), name)
+                self.assertTrue(np.isin(codes[~place] % landmarks.FLAG_SCALE, [landmarks.TIMBER]).all(), name)
+
+
 if __name__ == "__main__":
     unittest.main()

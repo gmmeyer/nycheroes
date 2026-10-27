@@ -63,7 +63,7 @@ WTC_GLASS = 27       # One WTC's curtain wall
 WTC_SPIRE = 28       # the spire, white, with a beacon
 FLATIRON = 29        # limestone and terracotta; variant 1 the cornice
 WOOLWORTH = 30       # cream gothic terracotta
-COPPER = 31          # green copper roofs
+COPPER = 31          # green copper roofs; variant 1 dark bronze (statuary)
 LIBERTY = 32         # the statue's copper; 1 the tablet's face, 2 the diadem's band (uv = (m around from
                      # her right, m up it))
 GOLD = 33            # the torch's flame
@@ -125,6 +125,19 @@ MIDTOWN = 63        # 0 Seagram bronze, 1 Lever teal glass, 2 MetLife precast gr
 # 62/63 return to the landmarks surface. The six-bit material slot is full.
 OWN_SHADER = GUGGENHEIM
 WATERFRONT_SHADER = PIERSIDE
+# Materials from PLACES on (the bars' fronts) are painted by
+# shaders/places.gdshader, in the tiles' places surface: their faces carry the
+# PLACE flag and the material less PLACES in its slot (Model.add).
+PLACES = 64
+PL_BRICK = 64        # brick walls: 0 the Eagle's front (uv as walls'), 1 red brick, 2 the Cock's
+                     # whitewashed front, 3 whitewashed brick
+PL_SHOPFRONT = 65    # ground floor openings, uv = (m from the left, m up), param's width theirs: 0 a
+                     # roll-down gate, 1 a black door, 2 the Cock's "I love NY" doors, 3 its window
+PL_PAINT = 66        # 0 black paint, 1 brown paint, 2 gray stone and roofing, 3 black ironwork, seen
+                     # through (the fire escape's railings and gratings)
+PL_NEON = 67         # red neon tube
+PL_FENCE = 68        # the Eagle's roof deck fence: black mesh windscreen
+PLACE = 2            # flag (landmark faces only use ROOF otherwise)
 
 ROOF = facades.ROOF
 FLAG_SCALE = facades.FLAG_SCALE
@@ -158,6 +171,8 @@ class Model:
             return
         self.pos.append(pos)
         self.uv.append(np.asarray(uv, np.float64).reshape(count, 3, 2))
+        if material >= PLACES:
+            material, flags = material - PLACES, flags | PLACE
         self.code.append(np.full(count, float(material + FLAG_SCALE * flags)))
         self.param.append(np.broadcast_to(np.asarray(param, np.float64), (count,)).copy())
         front = np.broadcast_to(np.asarray(front, np.float64), (count, 3)).copy()
@@ -454,12 +469,15 @@ def footprint_frame(footprint, nominal_degrees: float) -> Frame:
     return Frame(centroid, best)
 
 
-def place(model: Model, builder, frame: Frame, ground: float, own_builder=None, waterfront_builder=None) -> None:
+def place(model: Model, builder, frame: Frame, ground: float, own_builder=None, waterfront_builder=None,
+          places_builder=None) -> None:
     """Adds a model to a tile's MeshBuilders (Godot space), standing at
     `ground`: faces in the materials from OWN_SHADER on to `own_builder` (the
     landmarks surface, shaders/landmark.gdshader), PIERSIDE and TIMBER to
     `waterfront_builder` (the waterfront surface, shaders/waterfront.gdshader),
-    the rest to `builder` (the buildings surface)."""
+    those from PLACES on to `places_builder` (the places surface,
+    shaders/places.gdshader; without it they're left out), the rest to
+    `builder` (the buildings surface)."""
     c, s = math.cos(frame.angle), math.sin(frame.angle)
 
     def rotate(v):
@@ -469,12 +487,17 @@ def place(model: Model, builder, frame: Frame, ground: float, own_builder=None, 
                                                     model.normals):
         en = frame.to_world(pos[..., :2])
         world = np.stack([en[..., 0], pos[..., 2] + ground, -en[..., 1]], axis=-1)
-        uv2 = np.repeat(np.column_stack([code, param + SEED])[:, None, :], 3, axis=1)
         material = np.mod(code, FLAG_SCALE)
-        own = (material >= OWN_SHADER) if own_builder is not None else np.zeros(len(code), bool)
+        places = (np.floor_divide(code, FLAG_SCALE).astype(np.int64) & PLACE) != 0
+        code = np.where(places, code - FLAG_SCALE * PLACE, code)
+        uv2 = np.repeat(np.column_stack([code, param + SEED])[:, None, :], 3, axis=1)
+        own = (material >= OWN_SHADER) & ~places if own_builder is not None else np.zeros(len(code), bool)
         waterfront = own & np.isin(material, [PIERSIDE, TIMBER]) if waterfront_builder is not None else np.zeros(len(code), bool)
         own &= ~waterfront
-        for target, keep in ((builder, ~own & ~waterfront), (own_builder, own), (waterfront_builder, waterfront)):
+        for target, keep in ((builder, ~own & ~waterfront & ~places), (own_builder, own),
+                             (waterfront_builder, waterfront), (places_builder, places)):
+            if target is None:
+                continue
             if keep.any():
                 target.add(world[keep], uv[keep], uv2[keep], rotate(front[keep]), rotate(normals[keep]))
 
@@ -1044,7 +1067,7 @@ def _limb(m, a, b, ra, rb, n, material):
     m.loft([a + ra * circle_, b + rb * circle_], material, along=True, close_bottom=True, close_top=True)
 
 
-def _spike(m, root, tip, width, material):
+def _spike(m, root, tip, width, material, variant=0):
     """A four-sided spike from a square base `width` across at root to a
     point at tip (the base left open)."""
     axis = tip - root
@@ -1060,7 +1083,7 @@ def _spike(m, root, tip, width, material):
         normal /= np.linalg.norm(normal)
         if normal @ ((p + q) / 2 - root) < 0:
             tri, normal = tri[[1, 0, 2]], -normal
-        m.add(tri[None], tri[None][..., [0, 2]], material, 0.0, normal)
+        m.add(tri[None], tri[None][..., [0, 2]], material, float(variant), normal)
 
 
 def _tablet(m, center, d):
@@ -2902,6 +2925,547 @@ def _metlife(m: Model, ctx: Context) -> None:
     add_terraces(m, terraces, lambda _a, _b: (MIDTOWN, 2))
 
 
+# --- Columbus Circle, and two bars ---
+#
+# Columbus Circle's island (the 2005 plaza, Olin Partnership with WET's
+# fountain) and its monument (Gaetano Russo, 1892), the USS Maine National
+# Monument at Merchants' Gate (H. Van Buren Magonigle and Attilio Piccirilli,
+# 1913), and two bars: the Eagle (554 West 28th Street) and the Cock (93
+# Second Avenue). The bars' fronts are painted by shaders/places.gdshader
+# (materials PLACES and up); the circle and the monuments use the
+# landmarks' stone, bronze, gold and water.
+
+CC_CENTER = (304.61, 1118.08)  # the island's middle: the roadbed's ring around it (east/north)
+CC_ISLAND = 32.3               # m: the island's curb (the roadbed's ring is 32.47 m out)
+CC_FRONT = 234.0               # bearing (degrees from north) the monument's angel faces: the southwest path
+CC_PATHS = (-6.0, 114.0, 234.0)  # bearings of the three paths in from the street (aerial photos)
+MAINE_AT = (382.2, 1137.5)     # the Maine monument's pylon (east/north, aerial photos)
+MAINE_FRONT = 251.0            # its fountain and prow face the circle
+
+
+def _toward(ctx, bearing):
+    """The local unit vector toward a compass bearing (degrees from north)."""
+    b, a = math.radians(bearing), ctx.frame.angle
+    east, north = math.sin(b), math.cos(b)
+    return np.array([east * math.cos(a) + north * math.sin(a), -east * math.sin(a) + north * math.cos(a)])
+
+
+def _disc(r, q):
+    return shapely.Point(0.0, 0.0).buffer(r, quad_segs=q)
+
+
+def _octagon(apothem, cx=0.0, cy=0.0):
+    r = apothem / math.cos(math.pi / 8)
+    t = np.pi / 8 + np.arange(8) * (np.pi / 4)
+    return Polygon(np.column_stack([cx + r * np.cos(t), cy + r * np.sin(t)]))
+
+
+def _ball(m, c, r, n, material, squash=(1.0, 1.0, 1.0)):
+    """A sphere (n segments round) around c, its radii r * squash."""
+    c = np.asarray(c, np.float64)
+    rows = max(3, n // 2)
+    phi = np.linspace(-np.pi / 2, np.pi / 2, rows + 1)[1:-1]
+    t = np.arange(n) * (2 * np.pi / n)
+    rings = [c + np.column_stack([np.cos(t) * math.cos(f) * r * squash[0], np.sin(t) * math.cos(f) * r * squash[1],
+                                  np.full(n, math.sin(f) * r * squash[2])]) for f in phi]
+    m.loft(rings, material, close_bottom=True, close_top=True)
+
+
+def _figure(m, foot, height, material, d, facing=(0.0, -1.0), arm=None, girth=1.0):
+    """A robed figure standing at `foot`, `height` m tall, facing `facing`
+    (local xy): the robe from the feet to the shoulders, the head, and
+    optionally one arm raised toward `arm` (a point)."""
+    foot = np.asarray(foot, np.float64)
+    f = np.asarray(facing, np.float64) / np.linalg.norm(facing)
+    side = np.array([-f[1], f[0]])
+    n = (12, 8, 6)[d]
+    t = np.arange(n) * (2 * np.pi / n)
+    h, g = height, girth
+    rings = []
+    for z, hw, hd in ((0.0, 0.26, 0.2), (0.45, 0.24, 0.18), (0.62, 0.17, 0.12), (0.78, 0.2, 0.12), (0.83, 0.07, 0.07)):
+        # Counter-clockwise from her front round to her left.
+        xy = foot[:2] + (np.cos(t) * hd * h * g)[:, None] * f + (np.sin(t) * hw * h * g)[:, None] * side
+        rings.append(np.column_stack([xy, np.full(n, foot[2] + z * h)]))
+    m.loft(rings, material)
+    _ball(m, foot + [0.0, 0.0, 0.9 * h], 0.075 * h, n, material)
+    for s in (1.0, -1.0):
+        raised = s > 0 and arm is not None
+        if d == 2 and not raised:
+            continue  # far off, only a raised arm (it's the silhouette's top)
+        shoulder = foot + np.array([*(side * (s * 0.2 * h * g)), 0.79 * h])
+        hand = np.asarray(arm, np.float64) if raised else foot + np.array([*(side * (s * 0.23 * h * g) + f * 0.04 * h), 0.47 * h])
+        _limb(m, shoulder, hand, 0.045 * h, 0.035 * h, (6, 5, 4)[d], material)
+
+
+def _cc_path(ctx, bearing):
+    """One of the island's three paths: a strip from the inner plaza out to
+    the curb, flaring toward the street."""
+    a = _toward(ctx, bearing)
+    s = np.array([-a[1], a[0]])
+    near, far = 9.0, CC_ISLAND + 2.0
+    w0, w1 = 2.3, 5.0
+    return Polygon([a * near + s * w0, a * far + s * w1, a * far - s * w1, a * near - s * w0])
+
+
+def _columbus_circle(m: Model, ctx: Context) -> None:
+    """Columbus Circle's island as rebuilt in 2005 (Olin Partnership and
+    Vollmer Associates; the fountain by WET): the Columbus Monument on its
+    steps in a paved inner plaza, ringed by the fountain's ledges (water in a
+    ring, jets arching in toward the monument; the outer ledge a seat); a
+    paved ring with ipe benches along raised planting beds; and three paths
+    in from the street at 120 degrees (to Central Park West, Central Park
+    South and Broadway). Radii from the city's 2024 aerial photos; the island
+    is the roadbed's ring. Local -y is the monument's front."""
+    d = m.detail
+    q = (16, 8, 4)[d]
+    # The plaza is level, at the highest ground under it (the island slopes
+    # a few centimeters), just above the park's lawn it covers.
+    t = np.linspace(0.0, 2 * np.pi, 16, endpoint=False)
+    probe = np.concatenate([np.column_stack([r * np.cos(t), r * np.sin(t)]) for r in (0.0, 10.0, 20.0, CC_ISLAND)])
+    top = float(np.max(ctx.ground(probe))) + 0.06
+    paths = shapely.union_all([_cc_path(ctx, b) for b in CC_PATHS])
+    # The fountain: water between a low inner lip and the outer ledge, open where the paths cross.
+    basin = shapely.difference(shapely.difference(_disc(12.6, q), _disc(11.3, q)), paths)
+    m.prism(shapely.difference(_disc(CC_ISLAND, q), basin), -0.6, top, PLAIN_STONE, roof=PAVING)
+    m.cap(basin, top - 0.22, PLAYFIELD, variant=2)
+    lip = shapely.difference(shapely.difference(_disc(11.3, q), _disc(11.05, q)), paths)
+    ledge = shapely.difference(shapely.difference(_disc(13.15, q), _disc(12.6, q)), paths)
+    m.prism(lip, top - 0.3, top + 0.12, FORT, roof=FORT)
+    m.prism(ledge, top - 0.3, top + 0.45, FORT, roof=FORT)
+    # Jets from the outer ledge, arching in over the water.
+    if d < 2:
+        count = (72, 36)[d]
+        for k in range(count):
+            a = (k + 0.5) * 2 * np.pi / count
+            u = np.array([math.cos(a), math.sin(a)])
+            if paths.buffer(0.3).contains(shapely.Point(*(u * 12.0))):
+                continue
+            s = np.linspace(0.0, 1.0, (6, 3)[d] + 1)
+            r = 12.55 - 1.25 * s
+            z = top + 0.42 + (1.55 * 4.0 * s * (1.0 - s)) - 0.62 * s
+            pts = np.column_stack([u[0] * r, u[1] * r, z])
+            for p0, p1 in zip(pts[:-1], pts[1:]):
+                _beam(m, p0, p1, 0.07, 0.07, WHITE_STEEL)
+    # Planting beds behind granite curbs, ipe benches along their inside.
+    beds = shapely.difference(shapely.difference(_disc(27.5, q), _disc(20.6, q)), paths)
+    m.prism(beds, top - 0.3, top + 0.45, FORT, roof=PLAYFIELD, roof_variant=3)
+    if d < 2:
+        bench_ring = shapely.difference(_disc(20.55, q), _disc(20.0, q))
+        span = np.radians(13.0)
+        for k in range(24):
+            a0 = k * 2 * np.pi / 24 + 0.12
+            wedge = Polygon([(0.0, 0.0)] + [(30.0 * math.cos(a), 30.0 * math.sin(a))
+                                            for a in np.linspace(a0, a0 + span, 5)])
+            seat = shapely.difference(shapely.intersection(bench_ring, wedge), paths.buffer(0.6))
+            m.prism(seat, top, top + 0.45, TIMBER, roof=TIMBER, variant=1, roof_variant=1)
+    _columbus_monument(m, top, d)
+
+
+def _columbus_monument(m, z, d):
+    """The Columbus Monument (Gaetano Russo, 1892), 23 m (76 ft) to the top
+    of the statue's hat: four octagonal granite steps; a pedestal with bronze
+    reliefs of the voyage and, on the front, an angel bending over a globe;
+    the rostral column, 8.4 m of granite with bronze prows of the Nina, Pinta
+    and Santa Maria in three tiers and anchors between them; the capital,
+    a drum, and the marble Columbus, 4.3 m (14 ft). Heights from photos scaled
+    to the published total (Wikipedia, "Columbus Monument (New York City)").
+    Front -y."""
+    n = (16, 12, 8)[d]
+    for k, a in enumerate((5.45, 5.05, 4.65, 4.25)):
+        m.prism(_octagon(a), z - 0.4 if k == 0 else z + 0.36 * k, z + 0.36 * (k + 1), FORT, roof=FORT)
+    s = z + 1.44
+    m.prism(chamfered(0, 0, 3.0, 3.0, 0.5), s, s + 0.35, FORT, roof=FORT)
+    m.prism(chamfered(0, 0, 2.75, 2.75, 0.45), s + 0.35, s + 1.95, FORT, roof=FORT)
+    m.prism(chamfered(0, 0, 3.0, 3.0, 0.5), s + 1.95, s + 2.3, FORT, roof=FORT)
+    # The bronze reliefs, front and back, and plaques on the sides.
+    m.box((0.0, -2.78, s + 1.15), (3.3, 0.08, 1.05), COPPER, roof=FORT, variant=1)
+    m.box((0.0, 2.78, s + 1.15), (3.3, 0.08, 1.05), COPPER, roof=FORT, variant=1)
+    m.box((2.78, 0.0, s + 1.15), (0.08, 1.4, 0.8), COPPER, roof=FORT, variant=1)
+    m.box((-2.78, 0.0, s + 1.15), (0.08, 1.4, 0.8), COPPER, roof=FORT, variant=1)
+    s += 2.3
+    m.prism(chamfered(0, 0, 1.65, 1.65, 0.25), s, s + 3.2, FORT, roof=FORT)
+    m.prism(chamfered(0, 0, 1.85, 1.85, 0.3), s + 3.2, s + 3.5, FORT, roof=FORT)
+    m.prism(chamfered(0, 0, 1.72, 1.72, 0.28), s + 3.5, s + 3.72, COPPER, roof=FORT, variant=1)  # the band of bronze leaves
+    m.prism(chamfered(0, 0, 1.3, 1.3, 0.2), s + 3.72, s + 4.15, FORT, roof=FORT)
+    _genius(m, s, d)
+    s += 4.15
+    # The column: its base, the shaft, the capital and the statue's drum.
+    tower(m, 0, 0, [(s, 0.98), (s + 0.25, 0.98), (s + 0.3, 0.84), (s + 0.5, 0.8), (s + 0.52, 0.68)], n, FORT,
+          close_top=False, smooth=False)
+    shaft = s + 0.52
+    top = shaft + 7.4
+    tower(m, 0, 0, [(shaft, 0.68), (top, 0.6)], n, FORT, close_top=False)
+    tower(m, 0, 0, [(top, 0.62), (top + 0.18, 0.7), (top + 0.6, 0.95)], n, FORT, close_top=False, smooth=False)
+    m.prism(chamfered(0, 0, 1.15, 1.15, 0.12), top + 0.6, top + 1.0, FORT, roof=FORT)
+    drum = top + 1.0
+    tower(m, 0, 0, [(drum, 0.55), (drum + 1.3, 0.5), (drum + 1.32, 0.62), (drum + 1.7, 0.62)], n, FORT,
+          smooth=False)
+    if d < 2:
+        # Two prows a tier on either side, the anchors front and back on the
+        # lowest and highest tiers.
+        for k, h in enumerate((shaft + 2.4, shaft + 4.3, shaft + 6.15)):
+            for a in np.radians((-35.0, 35.0, 145.0, 215.0)):
+                u = np.array([math.cos(a), math.sin(a), 0.0])
+                root = np.array([0.0, 0.0, h]) + u * 0.5
+                _beam(m, root, root + u * 0.85, 0.3, 0.42, COPPER, 1, capped=True)
+                _spike(m, root + u * 0.8 + [0.0, 0.0, 0.1], root + u * 1.2 + [0.0, 0.0, 0.42], 0.22, COPPER, 1)
+            if k != 1 and d == 0:
+                for y in (-0.66, 0.66):
+                    _anchor(m, y, h - 0.55)
+    _columbus_statue(m, drum + 1.7, d)
+
+
+def _anchor(m, y, z):
+    """A bronze anchor on the column's face at y (local), its ring at z + 1.2."""
+    _beam(m, (0.0, y, z), (0.0, y, z + 1.15), 0.08, 0.06, COPPER, 1)
+    _beam(m, (-0.3, y, z + 0.95), (0.3, y, z + 0.95), 0.06, 0.06, COPPER, 1)
+    for sx in (-1.0, 1.0):
+        _beam(m, (0.0, y, z), (0.28 * sx, y, z + 0.1), 0.07, 0.06, COPPER, 1)
+        _beam(m, (0.28 * sx, y, z + 0.1), (0.36 * sx, y, z + 0.32), 0.07, 0.06, COPPER, 1)
+
+
+def _genius(m, s, d):
+    """The winged Genius on the pedestal's front, bending over a globe."""
+    n = (12, 8, 6)[d]
+    foot = np.array([-0.35, -2.05, s])
+    _figure(m, foot, 2.7, GC_SCULPTURE, d, facing=(0.35, -1.0), arm=(0.45, -2.35, s + 1.55), girth=1.1)
+    m.box((0.6, -2.2, s + 0.45), (0.7, 0.6, 0.9), GC_SCULPTURE)  # the globe's stand
+    _ball(m, (0.6, -2.25, s + 1.35), 0.5, n, GC_SCULPTURE)
+    if d < 2:
+        shoulder = foot + [0.0, 0.25, 2.1]
+        for tip, elbow, low in (((-1.4, -1.8, s + 3.1), (-1.0, -1.8, s + 2.6), (-0.9, -1.78, s + 1.2)),
+                                ((0.45, -1.78, s + 3.15), (0.25, -1.78, s + 2.7), (0.55, -1.76, s + 1.6))):
+            tip, elbow, low = (np.array(v, np.float64) for v in (tip, elbow, low))
+            m.tri_plate(shoulder, elbow, tip, 0.12, GC_SCULPTURE)
+            m.tri_plate(shoulder, low, elbow, 0.1, GC_SCULPTURE)
+
+
+def _columbus_statue(m, z, d):
+    """Columbus in marble, 4.3 m to his hat, facing -y: a tunic to the knees
+    under a cloak hung from his shoulders to the ground behind, his left hand
+    on his hip, his right down at his side holding the cloak."""
+    n = (14, 10, 6)[d]
+    t = np.arange(n) * (2 * np.pi / n)
+    tower(m, 0, 0, [(z, 0.6), (z + 0.15, 0.6)], n, GC_SCULPTURE)
+    z += 0.15
+
+    def ring(h, hw, hd, cy=0.0):
+        return np.column_stack([hw * np.cos(t), cy + hd * np.sin(t), np.full(n, z + h)])
+    # The cloak, worn open over the tunic: it falls behind him to his heels.
+    m.loft([ring(0.0, 0.5, 0.28, 0.2), ring(1.4, 0.52, 0.27, 0.12), ring(2.4, 0.46, 0.27, 0.04)], GC_SCULPTURE)
+    # His legs, and the tunic and body above them.
+    for x, y in ((-0.16, -0.08), (0.17, -0.12)):
+        _limb(m, np.array([x, y, z]), np.array([x * 0.9, -0.02, z + 1.5]), 0.13, 0.17, (6, 5, 4)[d], GC_SCULPTURE)
+    m.loft([ring(1.35, 0.45, 0.3), ring(1.9, 0.36, 0.26), ring(2.4, 0.34, 0.24), ring(2.95, 0.45, 0.27),
+            ring(3.25, 0.52, 0.27), ring(3.42, 0.16, 0.15)], GC_SCULPTURE, close_bottom=True, close_top=True)
+    _ball(m, (0.0, -0.02, z + 3.65), 0.2, n, GC_SCULPTURE, squash=(0.9, 1.0, 1.15))
+    tower(m, 0, -0.02, [(z + 3.8, 0.23), (z + 3.92, 0.22), (z + 4.05, 0.16)], n, GC_SCULPTURE)
+    # Arms: his right (-x) hangs at his side, his left is on his hip.
+    k = (6, 5, 4)[d]
+    _limb(m, np.array([-0.46, 0.0, z + 3.2]), np.array([-0.56, -0.02, z + 2.6]), 0.12, 0.1, k, GC_SCULPTURE)
+    _limb(m, np.array([-0.56, -0.02, z + 2.6]), np.array([-0.5, -0.1, z + 2.1]), 0.1, 0.08, k, GC_SCULPTURE)
+    _limb(m, np.array([0.46, 0.0, z + 3.2]), np.array([0.78, 0.1, z + 2.7]), 0.12, 0.1, k, GC_SCULPTURE)
+    _limb(m, np.array([0.78, 0.1, z + 2.7]), np.array([0.38, 0.02, z + 2.35]), 0.1, 0.08, k, GC_SCULPTURE)
+
+
+def _maine(m: Model, ctx: Context) -> None:
+    """The USS Maine National Monument (1913) at Merchants' Gate: a marble
+    pylon 13.4 m (44 ft) tall, tapering, under a cornice; in front a ship's
+    prow in a fountain's basin facing the circle, with figures on and beside
+    it and Justice before the pylon; on top the gilded Columbia Triumphant in
+    her seashell chariot drawn by three hippocampi (5 m). Wikipedia, "USS
+    Maine National Monument"; its place from the city's aerial photos.
+    Front -y."""
+    d = m.detail
+    n = (12, 8, 6)[d]
+    m.prism(rect(-4.6, -3.2, 4.6, 3.4), -0.6, 0.25, FORT, roof=PAVING)
+    m.prism(rect(-3.6, -2.9, 3.6, 3.0), 0.25, 1.6, UN_MARBLE, roof=UN_MARBLE)
+    # The pylon, tapering from 6.4 by 5 m to 5.4 by 4 m.
+    rings = [np.array([[x, y, z] for x, y in ((-hx, -hy), (hx, -hy), (hx, hy), (-hx, hy))], np.float64) + [0.0, 0.2, 0.0]
+             for z, hx, hy in ((1.6, 3.2, 2.5), (12.0, 2.7, 2.0))]
+    m.loft(rings, UN_MARBLE, smooth=False)
+    m.prism(rect(-3.05, -2.15, 3.05, 2.55), 12.0, 12.9, UN_MARBLE, roof=UN_MARBLE)
+    m.prism(rect(-2.6, -1.7, 2.6, 2.1), 12.9, 13.4, UN_MARBLE, roof=UN_MARBLE)
+    # The fountain's basin before it, and the prow standing out into it.
+    q = (8, 4, 2)[d]
+    half = shapely.intersection(shapely.Point(0.0, -2.9).buffer(5.3, quad_segs=q), rect(-6.0, -9.0, 6.0, -2.9))
+    pool = shapely.intersection(shapely.Point(0.0, -2.9).buffer(4.8, quad_segs=q), rect(-6.0, -9.0, 6.0, -2.9))
+    m.prism(shapely.difference(half, pool), -0.6, 0.75, FORT, roof=FORT)
+    m.prism(pool, -0.6, 0.3, FORT, roof=PLAYFIELD, roof_variant=2)
+    m.prism(Polygon([(-1.5, -2.9), (1.5, -2.9), (0.9, -5.0), (0.0, -6.5), (-0.9, -5.0)]), 0.3, 3.2, UN_MARBLE,
+            roof=UN_MARBLE)
+    m.prism(rect(-2.4, -3.6, 2.4, -2.9), 0.3, 3.2, UN_MARBLE, roof=UN_MARBLE)
+    m.prism(rect(-1.1, -3.5, 1.1, -2.9), 3.2, 4.3, UN_MARBLE, roof=UN_MARBLE)
+    # The figures: a youth on the prow, Courage and Fortitude seated, Justice standing.
+    _figure(m, (0.0, -5.6, 3.2), 1.9, UN_MARBLE, d, arm=(0.55, -6.2, 5.3))
+    for x in (-1.7, 1.7):
+        _figure(m, (x, -3.25, 3.2), 1.45, UN_MARBLE, d, girth=1.35)
+    _figure(m, (0.0, -3.15, 4.3), 2.6, UN_MARBLE, d, arm=(1.2, -3.8, 6.4))
+    # Columbia Triumphant, gilded: the shell, Columbia, three sea horses.
+    z = 13.4
+    shell = [circle(0.0, 0.4, r, n, z + h) for h, r in ((0.0, 0.5), (0.5, 1.2), (1.2, 1.45))]
+    m.loft(shell, GOLD, variant=1, close_bottom=True)
+    _figure(m, (0.0, 0.3, z + 0.7), 3.2, GOLD, d, arm=(0.45, 0.0, z + 4.9))
+    k = (8, 6, 4)[d]
+    for x in (-1.7, 0.0, 1.7):
+        # A sea horse plunging ahead: barrel, neck and head, forelegs reaching
+        # out over the cornice, and a fish's tail curling up behind.
+        rear = np.array([x * 0.75, -0.2, z + 0.7])
+        chest = np.array([x, -1.9, z + 0.95])
+        poll = chest + [x * 0.06, -0.55, 0.6]
+        muzzle = poll + [x * 0.04, -0.55, -0.2]
+        _limb(m, rear, chest, 0.34, 0.4, k, GOLD)
+        _limb(m, chest, poll, 0.28, 0.18, k, GOLD)
+        _limb(m, poll, muzzle, 0.18, 0.1, k, GOLD)
+        if d < 2:
+            for side in (-0.2, 0.2):
+                knee = chest + [side, -0.65, 0.1]
+                _limb(m, chest + [side, -0.1, -0.2], knee, 0.1, 0.08, 4, GOLD)
+                _limb(m, knee, knee + [0.0, -0.35, -0.3], 0.08, 0.06, 4, GOLD)
+            curl = rear + [0.0, 0.8, 0.35]
+            _limb(m, rear, curl, 0.28, 0.15, k, GOLD)
+            _limb(m, curl, curl + [0.0, 0.05, 0.6], 0.15, 0.04, k, GOLD)
+
+
+# The Eagle: (u from the front's left, z) of its openings, from photos
+# (2017-2025), the front 7.4 m wide.
+EAGLE_DOORS = ((0.43, 1.72, 2.66, 0), (2.44, 5.68, 3.45, 0), (5.9, 6.9, 2.66, 1))  # u0, u1, top, variant
+EAGLE_TOP = 8.05      # the coping
+EAGLE_DECK = 11.0     # m back from the front: the roof deck's fence
+
+
+def _front(ctx, outward=(0.0, -1.0)):
+    """The footprint's street front: its left and right corners (local, seen
+    from the street) and the outward direction; local -y faces the street."""
+    foot = _local_footprint(ctx)
+    ring = np.asarray(shapely.orient_polygons(foot).exterior.coords)[:-1]
+    best = None
+    for a, b in zip(ring, np.roll(ring, -1, axis=0)):
+        e = b - a
+        length = float(np.hypot(*e))
+        if length < 2.0:
+            continue
+        out = np.array([e[1], -e[0]]) / length
+        score = out @ np.asarray(outward) * length
+        if best is None or score > best[0]:
+            best = (score, a, b, out)
+    return foot, best[1], best[2], best[3]
+
+
+def _on_front(a, b, out, u, z, off=0.0):
+    """The point u m from corner a toward b, z up, `off` m out from the front."""
+    e = (b - a) / np.linalg.norm(b - a)
+    xy = a + e * u + out * off
+    return np.array([xy[0], xy[1], z])
+
+
+def _panel(m, a, b, out, u0, u1, z0, z1, off, material, variant, both=False):
+    """A flat panel on the front from u0 to u1, z0 to z1, `off` out from it;
+    uv = (m from its left, m up from its foot), param's width its width."""
+    corners = np.array([_on_front(a, b, out, u, z, off) for u, z in ((u0, z0), (u1, z0), (u1, z1), (u0, z1))])
+    w, h = u1 - u0, z1 - z0
+    uv = np.array([(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)])
+    param = round(w * 10.0) * 4 + variant
+    _quads(m, corners[None], uv[None], material, param)
+    if both:
+        _quads(m, corners[None, ::-1], uv[None, ::-1], material, param)
+
+
+def _front_box(m, a, b, out, u0, u1, z0, z1, depth, material, variant=0, off=0.0):
+    """A box against the front: u0..u1 along it, z0..z1, `depth` out from `off`."""
+    e = (b - a) / np.linalg.norm(b - a)
+    p = [a + e * u + out * o for u, o in ((u0, off), (u1, off), (u1, off + depth), (u0, off + depth))]
+    poly = shapely.orient_polygons(Polygon(p))
+    m.prism(poly, z0, z1, material, roof=material, variant=variant, roof_variant=variant, bottom=True)
+
+
+def _front_plate(m, a, b, out, outline, off, thickness, material, variant=0):
+    """A cut-out plate (outline: (u, z) points) standing `off` out from the
+    front, `thickness` thick: its face, back and edges."""
+    poly = shapely.orient_polygons(max(polygons_of(shapely.make_valid(Polygon(outline)), 0.01), key=lambda p: p.area))
+    tris = triangles_of(poly)
+    if tris is None:
+        return
+    e = (b - a) / np.linalg.norm(b - a)
+    cw = (tris[:, 1, 0] - tris[:, 0, 0]) * (tris[:, 2, 1] - tris[:, 0, 1]) - (tris[:, 1, 1] - tris[:, 0, 1]) * (
+        tris[:, 2, 0] - tris[:, 0, 0]) < 0
+    tris[cw] = tris[cw][:, ::-1]  # counter-clockwise seen from the street
+    for o, facing in ((off + thickness, 1.0), (off, -1.0)):
+        flat = tris if facing > 0 else tris[:, ::-1]
+        pts = np.array([[_on_front(a, b, out, u, z, o) for u, z in tri] for tri in flat])
+        m.add(pts, flat, material, float(variant), np.array([*(out * facing), 0.0]))
+    ring = np.asarray(poly.exterior.coords)
+    for (u0, z0), (u1, z1) in zip(ring[:-1], ring[1:]):
+        length = math.hypot(u1 - u0, z1 - z0)
+        if length < 1e-4:
+            continue
+        outward = np.array([*(e * ((z1 - z0) / length)), -(u1 - u0) / length])  # right of travel round the outline
+        quad = np.array([_on_front(a, b, out, u0, z0, off), _on_front(a, b, out, u1, z1, off),
+                         _on_front(a, b, out, u1, z1, off + thickness), _on_front(a, b, out, u0, z0, off + thickness)])
+        if np.cross(quad[2] - quad[0], quad[3] - quad[1]) @ outward < 0:
+            quad = quad[::-1]
+        _quads(m, quad[None], np.array([[(0, 0), (length, 0), (length, 1), (0, 1)]], np.float64), material, variant)
+
+
+# The Eagle's eagle: one wing and half the body (u right of the middle, z
+# above its foot), mirrored for the other; the head looks to its right.
+EAGLE_WING = ((0.0, -0.02), (0.12, 0.05), (0.16, 0.22), (0.3, 0.32), (0.5, 0.33), (0.62, 0.45), (0.78, 0.55),
+              (0.95, 0.78), (0.9, 0.86), (0.72, 0.9), (0.55, 1.0), (0.36, 1.02), (0.22, 0.92), (0.14, 0.78),
+              (0.1, 0.84))
+EAGLE_HEAD = ((0.1, 0.84), (0.02, 0.98), (-0.12, 1.02), (-0.22, 0.97), (-0.12, 0.93), (-0.1, 0.84))
+
+
+def _eagle_outline(width):
+    right = [(u * width / 1.9, z) for u, z in EAGLE_WING]
+    left = [(-u * width / 1.9, z) for u, z in EAGLE_WING[::-1] if u > 0.0]
+    head = [(u * width / 1.9, z) for u, z in EAGLE_HEAD[1:-1]]
+    return right + head + left
+
+
+def _eagle(m: Model, ctx: Context) -> None:
+    """The Eagle (554 West 28th Street; the bar here since 2001): a two-story
+    red brick building of 1885 between pilasters, three windows upstairs
+    between stone belt courses and corbelled brick bands, a big black eagle
+    with wings spread on the frieze, a roll-down gate between two doors under
+    black canopies, and the roof deck's fence (its famous roof). From photos
+    of the front (2017-2025) and the city's aerial photos."""
+    d = m.detail
+    foot, a, b, out = _front(ctx)
+    width = float(np.linalg.norm(b - a))
+    k = width / 7.4
+
+    def walls(mid, outward):
+        return 0 if outward @ out > 0.9 else 1
+    for poly in polygons_of(foot, 0.5):
+        poly = shapely.orient_polygons(poly)
+        m.walls(np.asarray(poly.exterior.coords), -1.0, EAGLE_TOP, PL_BRICK, walls)
+    deck = shapely.intersection(foot, shapely.buffer(shapely.LineString([a, b]), EAGLE_DECK, cap_style="flat"))
+    m.cap(shapely.difference(foot, deck), EAGLE_TOP - 0.25, PL_PAINT, variant=2)
+    m.cap(deck, EAGLE_TOP - 0.25, TIMBER, variant=1)
+    if d == 2:
+        return
+    for u0, u1, top, variant in EAGLE_DOORS:
+        _panel(m, a, b, out, u0 * k, u1 * k, 0.0, top, 0.03, PL_SHOPFRONT, variant)
+        _front_box(m, a, b, out, u0 * k - 0.1, u1 * k + 0.1, top, top + (0.4 if variant == 0 and u1 - u0 > 2 else 0.34),
+                   0.5, PL_PAINT, 0)
+    _front_plate(m, a, b, out, [(width / 2 + u, 6.88 + z * 1.05) for u, z in _eagle_outline(1.9)], 0.04, 0.08,
+                 PL_PAINT, 0)
+    # The roof deck's fence: black mesh between posts along its front and sides.
+    e = (b - a) / width
+    corners = [a + e * 0.25 + out * -0.3, b - e * 0.25 + out * -0.3]
+    back = [c - out * EAGLE_DECK for c in corners]
+    runs = [(back[0], corners[0]), (corners[0], corners[1]), (corners[1], back[1])]
+    z0, z1 = EAGLE_TOP - 0.25, EAGLE_TOP + 2.3
+    for p, q in runs:
+        length = float(np.linalg.norm(q - p))
+        quad = np.array([[*p, z0], [*q, z0], [*q, z1], [*p, z1]])
+        uv = np.array([(0.0, 0.0), (length, 0.0), (length, z1 - z0), (0.0, z1 - z0)])
+        _quads(m, quad[None], uv[None], PL_FENCE, round(length * 10) * 4)
+        _quads(m, quad[None, ::-1], uv[None, ::-1], PL_FENCE, round(length * 10) * 4)
+        posts = max(1, int(round(length / 2.0)))
+        for t in np.linspace(0.0, 1.0, posts + 1):
+            c = p + (q - p) * t
+            _beam(m, (*c, z0), (*c, z1 + 0.05), 0.08, 0.08, PL_PAINT, capped=True)
+        _beam(m, (*p, z1), (*q, z1), 0.06, 0.06, PL_PAINT)
+
+
+# The Cock: its front 7.3 m wide on Second Avenue, the storefront 4 m tall,
+# four floors above (whitewashed brick, three windows each) and a cornice.
+COCK_SHOP = 4.0
+COCK_FLOOR = 3.3
+COCK_TOP = 18.2
+COCK_STORE = (  # u0, u1, z0, z1, material, variant: the storefront's parts, from photos (2021)
+    (0.36, 2.16, 0.05, 3.25, PL_SHOPFRONT, 2),   # the "I love NY" doors
+    (2.16, 3.9, 0.0, 3.25, PL_SHOPFRONT, 1),     # the entrance
+    (3.9, 5.75, 0.62, 3.25, PL_SHOPFRONT, 3),    # the window, with the neon rooster
+    (3.9, 5.75, 0.0, 0.62, PL_PAINT, 1),         # its bulkhead
+    (5.8, 6.45, 0.05, 3.25, PL_SHOPFRONT, 2),    # the other door
+    (6.55, 7.2, 0.0, 3.25, PL_SHOPFRONT, 1),     # the door to the apartments
+)
+# The neon rooster in the window, facing right: (u, z) points along its tube
+# from the tail round to the feet, within a 1 x 1 m square.
+COCK_ROOSTER = ((0.05, 0.55), (0.12, 0.85), (0.22, 0.95), (0.25, 0.75), (0.32, 0.9), (0.38, 0.7), (0.42, 0.5),
+                (0.55, 0.42), (0.68, 0.5), (0.72, 0.68), (0.7, 0.82), (0.76, 0.9), (0.8, 0.98), (0.86, 0.92),
+                (0.9, 0.95), (0.88, 0.86), (0.96, 0.82), (0.86, 0.78), (0.86, 0.7), (0.8, 0.62), (0.78, 0.45),
+                (0.65, 0.25), (0.48, 0.2), (0.3, 0.3), (0.12, 0.42), (0.05, 0.55))
+COCK_LEGS = (((0.5, 0.21), (0.48, 0.02), (0.4, 0.0)), ((0.6, 0.23), (0.62, 0.02), (0.7, 0.0)))
+
+
+def _the_cock(m: Model, ctx: Context) -> None:
+    """The Cock (93 Second Avenue, since 2015): a five-story tenement of
+    1845, its brick front whitewashed and peeling, brown hoods over the
+    windows, a black fire escape across most of it; the bar's dark brown
+    storefront with black doors painted "I (heart) NY" in white with a rooster in the
+    heart, and the red neon rooster in its window. From a photo of the front
+    (EV Grieve, 2021)."""
+    d = m.detail
+    foot, a, b, out = _front(ctx)
+    width = float(np.linalg.norm(b - a))
+    k = width / 7.3
+
+    def walls(mid, outward):
+        return 2 if outward @ out > 0.9 else 3
+    for poly in polygons_of(foot, 0.5):
+        poly = shapely.orient_polygons(poly)
+        m.walls(np.asarray(poly.exterior.coords), -1.0, COCK_TOP, PL_BRICK, walls)
+        m.cap(poly, COCK_TOP, PL_PAINT, variant=2)
+    _front_box(m, a, b, out, -0.05, width + 0.05, COCK_TOP - 0.75, COCK_TOP + 0.05, 0.45, PL_PAINT, 1)  # the cornice
+    _front_box(m, a, b, out, -0.05, width + 0.05, 3.25, COCK_SHOP, 0.15, PL_PAINT, 1)  # the storefront's fascia
+    if d == 2:
+        return
+    for u, w in ((0.0, 0.36), (width - 0.12, 0.17)):
+        _front_box(m, a, b, out, u, u + w, 0.0, 3.25, 0.1, PL_PAINT, 1)
+    for u0, u1, z0, z1, material, variant in COCK_STORE:
+        _panel(m, a, b, out, u0 * k, u1 * k, z0, z1, 0.05, material, variant)
+    if d == 0:
+        _front_box(m, a, b, out, 5.48 * k, 5.82 * k, 0.0, 1.65, 0.38, PL_PAINT, 2, off=0.05)  # the ATM
+        # The neon rooster, 0.95 m tall, behind the glass.
+        size, u0, z0 = 0.95, 4.35 * k, 1.35
+
+        def tube(points):
+            pts = [_on_front(a, b, out, u0 + u * size, z0 + z * size, 0.09) for u, z in points]
+            for p, q in zip(pts[:-1], pts[1:]):
+                _beam(m, p, q, 0.035, 0.035, PL_NEON)
+        tube(COCK_ROOSTER)
+        for leg in COCK_LEGS:
+            tube(leg)
+        # The fire escape: a balcony at each floor before the middle and
+        # right windows, ladders between them, the drop ladder below.
+        u0, u1, depth = 2.9 * k, width - 0.15, 0.85
+        e = (b - a) / width
+        for floor in range(4):
+            z = COCK_SHOP + floor * COCK_FLOOR + 0.1
+            near = [a + e * u0 + out * 0.02, a + e * u1 + out * 0.02]
+            far = [p + out * depth for p in near]
+            slab = np.array([[*near[0], z], [*near[1], z], [*far[1], z], [*far[0], z]])
+            uv = slab[:, :2] - slab[0, :2]
+            _quads(m, slab[None, [0, 3, 2, 1]], uv[None, [0, 3, 2, 1]], PL_PAINT, 3.0, flags=ROOF)
+            _quads(m, slab[None], uv[None], PL_PAINT, 3.0)
+            for p, q in ((far[0], far[1]), (near[0], far[0]), (far[1], near[1])):
+                length = float(np.linalg.norm(q - p))
+                quad = np.array([[*p, z], [*q, z], [*q, z + 0.95], [*p, z + 0.95]])
+                uv = np.array([(0.0, 0.0), (length, 0.0), (length, 0.95), (0.0, 0.95)])
+                _quads(m, quad[None], uv[None], PL_PAINT, round(length * 10) * 4 + 3)
+                _quads(m, quad[None, ::-1], uv[None, ::-1], PL_PAINT, round(length * 10) * 4 + 3)
+                _beam(m, (*p, z + 0.95), (*q, z + 0.95), 0.05, 0.05, PL_PAINT)
+            _beam(m, (*near[0], z), (*near[1], z), 0.06, 0.08, PL_PAINT)
+            _beam(m, (*far[0], z), (*far[1], z), 0.06, 0.08, PL_PAINT)
+            lo = a + e * (u1 - 1.0) + out * (depth * 0.5)
+            hi = a + e * (u0 + 0.8) + out * (depth * 0.5)
+            if floor < 3:
+                for s in (-0.25, 0.25):
+                    _beam(m, (*(lo + out * s), z), (*(hi + out * s), z + COCK_FLOOR), 0.05, 0.12, PL_PAINT)
+            else:
+                # The gooseneck ladder up to the roof.
+                for s in (-0.22, 0.22):
+                    p = a + e * (u1 - 0.6 + s) + out * (depth - 0.05)
+                    _beam(m, (*p, z), (*p, COCK_TOP + 0.9), 0.05, 0.05, PL_PAINT)
+        drop = a + e * (u0 + 0.6) + out * (depth - 0.1)
+        for s in (-0.22, 0.22):
+            p = drop + e * s
+            _beam(m, (*p, COCK_SHOP + 0.1), (*p, COCK_SHOP - 1.6), 0.05, 0.05, PL_PAINT)
+
+
 LANDMARKS = [
     Landmark("New York Times Building", (1087186,), 151.0, _new_york_times),
     Landmark("Seagram Building", (1036465,), 151.0, _seagram),
@@ -2940,6 +3504,11 @@ LANDMARKS = [
     Landmark("Brooklyn Bridge Park, Pier 2", (3423335,), 0.0, _bbp_pier2, exact=True),
     Landmark("Brooklyn Bridge Park berm", (), 0.0, _bbp_berm, at=(-1046.0, -6720.0), exact=True),
     Landmark("ONE15 Brooklyn Marina", (), 0.0, _bbp_marina, at=(-1300.0, -6900.0), exact=True),
+    # Columbus Circle, and two bars. Angles put local -y at their fronts.
+    Landmark("Columbus Circle", (), 180.0 - CC_FRONT, _columbus_circle, at=CC_CENTER, exact=True),
+    Landmark("USS Maine National Monument", (), 180.0 - MAINE_FRONT, _maine, at=MAINE_AT, exact=True),
+    Landmark("Eagle NYC", (1012417,), 151.7, _eagle),
+    Landmark("The Cock", (1006627,), 61.3, _the_cock, exact=True),
 ]
 REPLACED = np.array(sorted({b for landmark in LANDMARKS for b in landmark.bins}), dtype=np.int64)
 
@@ -2973,13 +3542,14 @@ def build(landmark: Landmark, footprint, shape, detail: int, height=None, base: 
 
 
 def add_to_tile(builder, level: str, size: float, i: int, j: int, buildings: dict, shapes: dict,
-                ground_of, terrain=None, own_builder=None, waterfront_builder=None) -> int:
+                ground_of, terrain=None, own_builder=None, waterfront_builder=None, places_builder=None) -> int:
     """Adds the landmarks whose main building (or `at`) is anchored in tile
     (i, j) of `level` (tiles `size` m) to its buildings MeshBuilder;
     ground_of(footprint) is where a building stands, terrain(east/north (N, 2))
-    the ground's height; own_builder and waterfront_builder take the faces
-    shaders/landmark.gdshader and shaders/waterfront.gdshader paint (see
-    place()). Returns how many triangles it added."""
+    the ground's height; own_builder, waterfront_builder and places_builder
+    take the faces shaders/landmark.gdshader, shaders/waterfront.gdshader and
+    shaders/places.gdshader paint (see place()). Returns how many triangles
+    it added."""
     key = id(buildings)
     if key not in _index:
         found = np.flatnonzero(np.isin(buildings["bin"], [lm.bins[0] for lm in LANDMARKS if lm.bins]))
@@ -3002,6 +3572,6 @@ def add_to_tile(builder, level: str, size: float, i: int, j: int, buildings: dic
         base = ground_of(footprint)
         height = None if terrain is None else (lambda en, base=base: terrain(en) - base)
         model, frame = build(landmark, footprint, shape, DETAIL[level], height, base)
-        place(model, builder, frame, base, own_builder, waterfront_builder)
+        place(model, builder, frame, base, own_builder, waterfront_builder, places_builder)
         added += model.triangles()
     return added

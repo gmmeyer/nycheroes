@@ -2374,6 +2374,7 @@ const vec3 PAVING_STONE = vec3(0.70, 0.69, 0.66);
 // Copper gone green, the statue's paler, bluer patina (photos: green 1.4 times
 // red, blue nearly as much as green), the torch's gold leaf.
 const vec3 VERDIGRIS = vec3(0.40, 0.68, 0.58);
+const vec3 BRONZE_PATINA = vec3(0.24, 0.32, 0.29);
 const vec3 LIBERTY_GREEN = vec3(0.55, 0.72, 0.69);
 const vec3 GOLD_LEAF = vec3(1.00, 0.78, 0.30);
 // Grand Central's Tiffany clock: opalescent face, colored ring.
@@ -2682,7 +2683,9 @@ Surface landmark_wall(int material, int variant, vec2 p, vec2 fp, float width, v
 		s.emission = vec3(1.0) * beacon * (2.0 + 6.0 * city_lights) * (0.6 + 0.4 * sin(TIME * 2.0));
 	} else if (material == LM_COPPER) {
 		float seams = stripes(p.x / 0.6, 0.12, fp.x / 0.6) * visible(0.6, pixel);
-		color = srgb(VERDIGRIS) * (0.9 + 0.18 * value_noise(vec2(p.x * 0.8, p.y * 0.15))) * (1.0 - 0.15 * seams);
+		// Variant 1: statuary bronze, dark under its patina (Columbus's prows).
+		color = srgb(variant == 1 ? BRONZE_PATINA : VERDIGRIS) * (0.9 + 0.18 * value_noise(vec2(p.x * 0.8, p.y * 0.15)))
+				* (1.0 - 0.15 * seams);
 		s.glass = 0.1;
 	} else if (material == LM_LIBERTY) {
 		// Streaked darker where rain runs down the folds.
@@ -2702,8 +2705,12 @@ Surface landmark_wall(int material, int variant, vec2 p, vec2 fp, float width, v
 	} else if (material == LM_GOLD) {
 		color = srgb(GOLD_LEAF) * (0.85 + 0.3 * value_noise(p * vec2(2.0, 1.2)));
 		s.glass = 0.6;
+		// Liberty's flame (high up) burns at night; lower gilding (the Maine
+		// monument's Columbia) is only floodlit.
+		float flame = step(40.0, p.y);
 		float flicker = 0.9 + 0.1 * sin(TIME * 7.0 + p.y * 3.0);
-		s.emission = color * 0.35 + srgb(vec3(1.0, 0.62, 0.18)) * (torch_glow * city_lights * flicker);
+		s.emission = color * 0.35 + srgb(vec3(1.0, 0.62, 0.18)) * (torch_glow * city_lights * flicker * flame)
+				+ color * (0.6 * landmark_flood * city_lights * (1.0 - flame));
 	} else if (material == LM_PEDESTAL || material == LM_FORT) {
 		color = stone * (0.93 + 0.1 * value_noise(p * 0.3));
 		if (variant == 1) {

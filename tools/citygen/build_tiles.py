@@ -68,7 +68,7 @@ from common import (CACHE_DIR, CURB_HEIGHT, FORMAT_VERSION, GROUND_MARSH, GROUND
                     ORIGIN_LAT, ORIGIN_LON, PROJECTION, PROP_BIKE_DOCK, PROP_BUS_SHELTER, PROP_HYDRANT, PROP_PARKED_CAR,
                     PROP_PARKING_METER, PROP_STREET_SIGN, PROP_SUBWAY_ENTRANCE, PROP_TRAFFIC_SIGNAL, PROP_WATER_TOWER, PROP_WIRE,
                     SEAWALL_BOTTOM_Y, SIGNAL_ON_COLUMN, STREET_SIGN_OVERHEAD,
-                    STRUCTURE_CONCRETE, SURFACE_CHURCHES, SURFACE_FRONTS, SURFACE_LANDMARKS, SURFACE_WATERFRONT,
+                    STRUCTURE_CONCRETE, SURFACE_CHURCHES, SURFACE_FRONTS, SURFACE_LANDMARKS, SURFACE_WATERFRONT, SURFACE_PLACES,
                     SURFACE_BUILDINGS, SURFACE_GROUND, SURFACE_LANES, SURFACE_MARKINGS, SURFACE_PROPS,
                     SURFACE_STRUCTURES, SURFACE_TRAFFIC, SURFACE_TRAINS, SURFACE_WATER, TILES_DIR, MeshBuilder, encode_tile, lines_of,
                     polygon_normal, polygons_of, tile_box, tile_range, to_godot, triangles_of,
@@ -556,7 +556,7 @@ def _build_tile(task):
     bounds = tile_box(i, j, size)
 
     building_mesh, ground_mesh, structure_mesh, water_mesh = MeshBuilder(), MeshBuilder(), MeshBuilder(), MeshBuilder()
-    landmark_mesh, waterfront_mesh = MeshBuilder(), MeshBuilder()
+    landmark_mesh, waterfront_mesh, places_mesh = MeshBuilder(), MeshBuilder(), MeshBuilder()
     # Churches' faces, which their own shader paints (churches.py), and the
     # small parts of rowhouse fronts (fronts.py: railings, fences, shrubs).
     _W["church_mesh"] = church_mesh = MeshBuilder()
@@ -573,7 +573,8 @@ def _build_tile(task):
         for index in indices:
             _add_building(building_mesh, index, settings)
     landmarks.add_to_tile(building_mesh, level, size, i, j, _W["b"], _W["shapes"], _footprint_ground,
-                          overpasses.bare(_W["ground"][level]).height, landmark_mesh, waterfront_mesh)
+                          overpasses.bare(_W["ground"][level]).height, landmark_mesh, waterfront_mesh,
+                          places_mesh)
     times_square.add_to_tile(building_mesh, level, size, i, j, _W, _footprint_ground)
     _add_ground(ground_mesh, bounds, settings)
     _add_raised_water(water_mesh, ground_mesh, bounds, settings)
@@ -592,7 +593,8 @@ def _build_tile(task):
     for kind, mesh in ((SURFACE_BUILDINGS, building_mesh), (SURFACE_GROUND, ground_mesh),
                        (SURFACE_STRUCTURES, structure_mesh), (SURFACE_WATER, water_mesh),
                        (SURFACE_LANDMARKS, landmark_mesh), (SURFACE_CHURCHES, church_mesh),
-                       (SURFACE_FRONTS, front_mesh), (SURFACE_WATERFRONT, waterfront_mesh)):
+                       (SURFACE_FRONTS, front_mesh), (SURFACE_WATERFRONT, waterfront_mesh),
+                       (SURFACE_PLACES, places_mesh)):
         built = mesh.build(origin, decimals=2 if kind == SURFACE_FRONTS else 3)  # small parts: to the cm
         if built is not None:
             surfaces.append((kind, built))
