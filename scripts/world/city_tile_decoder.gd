@@ -103,6 +103,10 @@ const SURFACE_FRONTS := 11
 ## the materials shaders/waterfront.gdshader paints, laid out like the
 ## landmarks surface. With collision up close.
 const SURFACE_WATERFRONT := 12
+## Two bars' faces (tools/citygen/landmarks.py, materials 64 and up: the
+## Eagle's and the Cock's fronts) in the materials shaders/places.gdshader
+## paints, laid out like the landmarks surface. With collision up close.
+const SURFACE_PLACES := 13
 ## Floats per lane in a decoded traffic surface's info: from node, to node,
 ## speed, lane, lanes, signal phase, how it ends (0, 1, 2 as above).
 const TRAFFIC_INFO_STRIDE := 7

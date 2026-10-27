@@ -184,6 +184,8 @@ var church_material := _new_material(preload("res://shaders/church.gdshader"))
 var fronts_material := _new_material(preload("res://shaders/fronts.gdshader"))
 ## The waterfront landmarks' materials (the waterfront surface).
 var waterfront_material := _new_material(preload("res://shaders/waterfront.gdshader"))
+## The bars' materials (the places surface).
+var places_material := _new_material(preload("res://shaders/places.gdshader"))
 var _props: CityProps
 var _light_map: StreetLightMap
 var _in_flight := 0
@@ -956,6 +958,8 @@ func _add_tile_surface(tile: Tile, node: Node3D, surface: Dictionary) -> void:
 		instance.material_override = church_material
 	elif surface.kind == CityTileDecoder.SURFACE_WATERFRONT:
 		instance.material_override = waterfront_material
+	elif surface.kind == CityTileDecoder.SURFACE_PLACES:
+		instance.material_override = places_material
 	var casts_shadow: bool = near and surface.kind != CityTileDecoder.SURFACE_GROUND
 	if not casts_shadow:
 		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

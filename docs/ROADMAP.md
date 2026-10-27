@@ -1671,6 +1671,61 @@ and 29):**
   / +4 kB; no new draw calls. building.gdshader gains the diadem's windows
   (six lines in the statue's branch).
 
+**Columbus Circle, the Eagle and the Cock (done, 2026-10-26; at the user's request):**
+- Columbus Circle's island was Central Park's lawn (the parks layer counts
+  it in the park) with canopy trees and nothing in the middle. Now
+  (`landmarks._columbus_circle`, anchored at the middle of the roadbed's
+  ring, 32.5 m round) the 2005 plaza (Olin Partnership, WET's fountain),
+  its radii from the city's 2024 aerial photos: paving over the island;
+  the fountain's ring of water round the inner plaza (11.3-12.6 m out) with
+  a low inner lip, the outer ledge a seat, and 72 jets arching in toward
+  the monument; ipe benches along raised planting beds (20.6-27.5 m) behind
+  granite curbs; the three paths in from the street at 120 degrees
+  (bearings -6, 114 and 234), flaring toward the curb. The existing canopy
+  trees stand in the beds.
+- The Columbus Monument (Gaetano Russo, 1892), 23 m to the statue's hat
+  (Wikipedia), proportions from photos: four octagonal granite steps, the
+  pedestal with bronze reliefs and plaques, the winged Genius bending over
+  a globe on its front (toward the southwest path), the band of bronze
+  leaves, the rostral column (8.4 m) with two dark bronze prows a tier on
+  either side in three tiers and anchors front and back, the capital, the
+  drum, and Columbus (4.3 m): tunic and a cloak to his heels, his left
+  hand on his hip. Granite is the fort's gray (`FORT`); statuary bronze is
+  `COPPER` variant 1 (dark patina, building.gdshader).
+- The USS Maine National Monument at Merchants' Gate (`landmarks._maine`;
+  not in the building data, placed from the aerial photos): the tapering
+  marble pylon (13.4 m), the prow standing out into a half-round basin
+  toward the circle with a youth on it, two seated figures and Justice, and
+  the gilded Columbia Triumphant in her shell with three sea horses on top
+  (to 18.4 m). Gilding below 40 m is floodlit at night instead of
+  flickering like Liberty's flame.
+- The Eagle (554 West 28th Street, BIN 1012417) and the Cock (93 Second
+  Avenue, BIN 1006627) were the data buildings' random fronts ("HARDWARE";
+  "SE RENTA" under a bus shelter). Now hand-made from street photos
+  (2017-2025 for the Eagle; EV Grieve, 2021, for the Cock): the Eagle's two
+  stories of red brick between pilasters, three windows between stone belt
+  courses and corbelled bands, the black eagle with wings spread on the
+  frieze, the roll-down gate between two doors under black canopies, and
+  the roof deck (decking, a black mesh fence on posts); the Cock's
+  whitewashed tenement front, peeling here and there, brown hoods and sills
+  on three windows a floor, a brown cornice, the black fire escape
+  (balconies with see-through railings and gratings, stairs, the drop
+  ladder, the gooseneck to the roof), and the bar's storefront: brown
+  fascia, the "I (heart) NY" doors (white letters, red heart, drawn in the
+  shader), the entrance, the window with its red neon rooster (lit day and
+  night), the ATM.
+- The bars' faces are a new surface, `SURFACE_PLACES` (13), painted by
+  `shaders/places.gdshader` (its own, compiled only once one is in view).
+  The six-bit material slot was full, so materials from `PLACES` (64) on
+  carry a `PLACE` flag and their number less 64 (`Model.add`); `place()`
+  routes them (`places_builder`).
+- Checked in the desktop game by day and night (`build/` scripts rebuilt
+  the eight tiles holding them in a copy of the city build).
+  `test_geometry.ColumbusCircleAndBars` checks every level of detail.
+- Cost: Columbus Circle 6,896 / 3,462 / 1,390 triangles, the Maine
+  monument 2,282 / 1,510 / 704, the Eagle 511 / 511 / 17, the Cock 606 /
+  58 / 46 (near / mid / far); one more draw call where a bar is in view.
+
 **Waterfront landmarks (done; reference round 3's 28):**
 - Piers: the city's pier outlines (Planimetric hydrography structures,
   feature 2800) were never drawn out over the water, because

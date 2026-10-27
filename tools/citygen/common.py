@@ -109,6 +109,10 @@ SURFACE_FRONTS = 11
 # paints (landmarks.py, 60 and up: ferry terminals, pier sheds, racks, docks
 # and boats), laid out like the landmarks surface. With collision up close.
 SURFACE_WATERFRONT = 12
+# Two bars' faces (the Eagle's and the Cock's) in the materials
+# shaders/places.gdshader paints (landmarks.py, PLACES and up, less PLACES),
+# laid out like the landmarks surface. With collision up close.
+SURFACE_PLACES = 13
 
 # Props (uv2.x of the props surface).
 PROP_TREE = 0         # broadleaf tree, round crown
