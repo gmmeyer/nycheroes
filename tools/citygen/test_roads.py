@@ -10,7 +10,9 @@ import shapely
 from shapely.geometry import LineString, box, mapping
 
 import markings
+import overpasses
 import traffic
+import trenches
 
 
 def _feature(line, trafdir, lanes, width_ft):
@@ -60,6 +62,93 @@ class LaneBends(unittest.TestCase):
     def test_points_on_the_grid_are_not_doubled(self):
         line = np.array([[0.0, 0.0], [40.0, 0.0]])
         np.testing.assert_allclose(traffic._grid_cuts(line, 20.0), [[0, 0], [20, 0], [40, 0]])
+
+
+def _slab(x0, x1, y0, y1, half=6.0):
+    """Deck top triangles (Godot space) over x0..x1 east, -half..half north,
+    rising from y0 to y1."""
+    a, b = [x0, y0, half], [x1, y1, half]
+    c, d = [x1, y1, -half], [x0, y0, -half]
+    return np.array([[a, b, c], [a, c, d]], dtype=np.float64)
+
+
+class _Network:
+    """Just what road_height and _tracked ask of an overpasses.Network: one
+    segment, at its own height `own` everywhere."""
+    def __init__(self, own, raised, rw=overpasses.BRIDGE):
+        self.own, self.raised = own, np.array([raised])
+        self.under = np.array([False])
+        self.data = {"rw": np.array([rw])}
+
+    def along(self, k, en):
+        return np.full(len(en), self.own)
+
+
+class DeckHeights(unittest.TestCase):
+    # Land west of x = 100, water east of it.
+    land = box(-1000.0, -100.0, 100.0, 100.0)
+
+    def surface(self, *slabs):
+        return overpasses.DeckSurface({}, 0, 0, tris=[np.concatenate(slabs)])
+
+    def test_street_level_bridge_keeps_off_a_deck_overhead_and_follows_its_own(self):
+        # Another road's deck 30 m up over x 20..60; the bridge's own deck
+        # climbs from the street at x 70 to 6 m at the water and holds over it.
+        surface = self.surface(_slab(20, 60, 30, 30), _slab(70, 100, 2, 6), _slab(100, 200, 6, 6))
+        en = np.column_stack([np.arange(0.0, 201.0, 5.0), np.zeros(41)])
+        y = overpasses._tracked(_Network(2.0, raised=False), surface, 0, en, self.land)
+        self.assertTrue(np.all(y[(en[:, 0] >= 20) & (en[:, 0] <= 60)] < 3.0))
+        np.testing.assert_allclose(y[en[:, 0] == 85.0], 4.0, atol=0.1)
+        np.testing.assert_allclose(y[en[:, 0] >= 100], 6.0, atol=0.1)
+        self.assertLess(np.abs(np.diff(y)).max(), 2.0)
+
+    def test_raised_road_on_land_keeps_off_another_deck(self):
+        en = np.column_stack([np.arange(10.0, 60.0, 5.0), np.zeros(10)])
+        network = _Network(10.0, raised=True, rw=overpasses.RAMP)
+        y, found = overpasses.road_height(network, self.surface(_slab(0, 80, 25, 25)), 0, en, self.land)
+        np.testing.assert_allclose(y, 10.0)
+        self.assertFalse(found.any())
+        y, found = overpasses.road_height(network, self.surface(_slab(0, 80, 11, 11)), 0, en, self.land)
+        np.testing.assert_allclose(y, 11.0)
+        self.assertTrue(found.all())
+
+    def test_raised_road_over_the_water_takes_the_deck(self):
+        en = np.column_stack([np.arange(120.0, 180.0, 5.0), np.zeros(12)])
+        network = _Network(10.0, raised=True)
+        y, found = overpasses.road_height(network, self.surface(_slab(100, 200, 25, 25)), 0, en, self.land)
+        np.testing.assert_allclose(y, 25.0)
+        self.assertTrue(found.all())
+
+
+class _Ground:
+    """A terrain: flat at 5 m, but for `bump(x)` over it."""
+    def __init__(self, bump):
+        self.bump = bump
+
+    def height(self, en):
+        en = np.asarray(en, np.float64).reshape(-1, 2)
+        return 5.0 + self.bump(en[:, 0])
+
+
+class Mounds(unittest.TestCase):
+    # A highway along x from 0 to 600; a street on an overpass crossing it at x 300.
+    streets = {"lines": np.array([LineString([(0, 0), (600, 0)])], dtype=object),
+               "rw": np.array([markings.HIGHWAY]), "width": np.array([20.0])}
+    overpass = [box(280, -40, 320, 40)]
+
+    def test_an_overpass_the_model_takes_for_ground_is_cut_through(self):
+        mound = _Ground(lambda x: np.clip(20.0 - np.abs(x - 300.0) * 0.5, 0.0, 20.0))  # 80 m across, 20 m up
+        found = trenches.Mounds(self.streets, mound, self.overpass)
+        self.assertEqual(len(found.lines), 1)
+        y, inside = found.height(np.array([[300.0, 0.0], [300.0, 5.0], [100.0, 0.0]]))
+        np.testing.assert_allclose(y[:2], 5.0 - trenches.CURB_HEIGHT, atol=0.05)
+        self.assertFalse(inside[2])
+
+    def test_a_step_or_a_mound_nothing_crosses_stays(self):
+        step = _Ground(lambda x: np.where(x > 300.0, 10.0, 0.0))  # (no foot on the far side)
+        self.assertEqual(len(trenches.Mounds(self.streets, step, self.overpass).lines), 0)
+        mound = _Ground(lambda x: np.clip(20.0 - np.abs(x - 300.0) * 0.5, 0.0, 20.0))
+        self.assertEqual(len(trenches.Mounds(self.streets, mound, []).lines), 0)
 
 
 if __name__ == "__main__":

@@ -156,6 +156,23 @@ NEAR = ("lod0",)    # parapets and portals only up close
 ROAD_TOP = (GROUND_ROAD, 0.0)
 SIDEWALK_TOP = (GROUND_PAVEMENT, 0.0)
 WALL = (STRUCTURE_CONCRETE, 0.0)
+# Highways at street level in the data, in a cut that the elevation model
+# fills where wide overpasses cross it (bare earth without bridges, it takes
+# them for ground): mounds over the highway (Mounds), over the most the road
+# could climb (MOUND_GRADE), rising at least MOUND_RISE over the road from
+# foot to foot and over both feet, with sides
+# steeper than MOUND_SIDE somewhere, at most MOUND_WIDTH across, with an
+# overpass over them (a bridge outline, or a raised road crossing), are cut
+# through like the sunken roads' cuts, the road level from foot to foot.
+MOUND_GRADE = 0.08
+MOUND_RISE = 3.0
+MOUND_SIDE = 0.3
+MOUND_WIDTH = 300.0
+MOUND_CORE = 1.0    # (a mound: this far over the climbable profile, out to its feet,
+MOUND_FOOT = 0.3    # back down within this of it)
+MOUND_STEP = 5.0
+MOUND_MARGIN = 5.0
+MOUND_GAP = 100.0   # (mounds closer than this along the road are one)
 # The smoothed fit (as overpasses.Network._fit's).
 MEASURE = 1.0
 PRIOR = 0.01
@@ -278,8 +295,9 @@ def fit(network, survey: dict) -> dict:
     """The heights of the roads below street level (network: an
     overpasses.Network, its segments, levels, nodes and end heights so far),
     from the survey along them (prepare()'s "survey"): {segment: (distances
-    along, heights, states)}: OPEN_STATE where nothing is over the road,
-    BRIDGE_STATE under something short, TUNNEL_STATE in a tunnel. Ends where
+    along, heights, states, lids)}: OPEN_STATE where nothing is over the road,
+    BRIDGE_STATE under something short, TUNNEL_STATE in a tunnel; lids, in a
+    tunnel, the top of what the survey sees over it (NaN elsewhere). Ends where
     other roads meet get the heights too (network.ends)."""
     levels = network.levels
     lines = network.lines
@@ -418,9 +436,12 @@ def fit(network, survey: dict) -> dict:
     state = np.where(tunnel, TUNNEL_STATE, np.where(covered, BRIDGE_STATE, OPEN_STATE)).astype(np.int8)
 
     out = {}
+    # (No higher than the street around: over a tunnel under buildings the
+    # survey sees their roofs.)
+    lid = np.where(tunnel, np.minimum(np.where(np.isfinite(above), above, lowest), around), np.nan)
     for k in members:
         h = x[index[k]]
-        out[int(k)] = (stations[k], h, state[index[k]])
+        out[int(k)] = (stations[k], h, state[index[k]], lid[index[k]])
     # Every end at these nodes gets their height (ramps climbing out of a cut
     # onto a viaduct start from it).
     var_height = {node: x[v] for node, v in node_var.items()}
@@ -450,13 +471,18 @@ class Trenches:
         self.network = network
         lines = network.lines
         self.members = np.array(sorted(network.sunken), dtype=np.int64)
-        self.member_tree = shapely.STRtree(lines[self.members]) if len(self.members) else None
+        # The roads in the cuts: the sunken roads, and the street-level
+        # highways through the mounds (Mounds).
+        self.mounds = network.mounds
+        self.road_lines = np.concatenate([lines[self.members], self.mounds.lines]) if self.mounds is not None \
+            else lines[self.members]
+        self.member_tree = shapely.STRtree(self.road_lines) if len(self.road_lines) else None
         # Each road's strip out to the cut's walls, but for its tunnels (and
         # their portals: segment, distance along, which way in, half width).
         strips, self.portals = [], []
         survey = data["survey"]
         for k in self.members:
-            s, h, state = network.sunken[int(k)]
+            s, h, state = network.sunken[int(k)][:3]
             half = float(network.width[k]) / 2.0 + SHOULDER
             found = survey.get(lidar._key(lines[k]))
             if found is not None and len(found[0]) == len(s):
@@ -470,6 +496,8 @@ class Trenches:
                 for at, ahead in ((a, -1.0), (b, 1.0)):
                     if 0.5 < at < lines[k].length - 0.5:
                         self.portals.append((int(k), at, ahead, half))
+        if self.mounds is not None:
+            strips += list(self.mounds.strips)
         cut = shapely.union_all(strips) if strips else shapely.Polygon()
         cut = shapely.buffer(shapely.buffer(cut, MEDIAN, join_style="mitre"), -MEDIAN, join_style="mitre")
         buildings = data["buildings"]
@@ -489,14 +517,25 @@ class Trenches:
                                       network.width[at_grade] / 2.0])
         crossings, along = [], []
         shapely.prepare(cut)
-        for k in shapely.STRtree(street_lines).query(cut, predicate="intersects"):
-            for piece in lines_of(shapely.intersection(street_lines[k], cut)):
-                if piece.length < CROSSING_MIN:
-                    continue
-                if self._crossing_sine(piece) >= CROSSING_SINE:
-                    crossings.append(k)
-                else:
-                    along.append(shapely.buffer(piece, float(street_half[k]) + STREET_GAP, cap_style="flat"))
+        # (The streets' pieces in the cut as one line through their nodes: a
+        # street crossing on a bridge that ramps meet is in short segments.)
+        street_tree = shapely.STRtree(street_lines)
+        over = street_tree.query(cut, predicate="intersects")
+        inside = shapely.line_merge(shapely.intersection(shapely.union_all(street_lines[over]), cut)) \
+            if len(over) else shapely.LineString()
+        for piece in lines_of(inside):
+            if piece.length < CROSSING_MIN:
+                continue
+            mine = over[shapely.dwithin(street_lines[over], piece, 0.1)]
+            mine = mine[shapely.length(shapely.intersection(street_lines[mine], shapely.buffer(piece, 0.1))) > 0.05]
+            if not len(mine):
+                continue
+            if self._crossing_sine(piece) >= CROSSING_SINE:
+                crossings += mine.tolist()
+            elif self.mounds is not None and shapely.covers(shapely.buffer(self.mounds.area, 1.0), piece):
+                continue  # (a highway through a mound: the cut is its)
+            else:
+                along.append(shapely.buffer(piece, float(street_half[mine].max()) + STREET_GAP, cap_style="flat"))
         if along:
             cut = shapely.difference(cut, shapely.union_all(along))
         cut = shapely.union_all(polygons_of(cut, 5.0))
@@ -509,12 +548,15 @@ class Trenches:
 
         # The bridges: each crossing street across the cut, with the outlines
         # over the cut.
-        spans = {}
-        for k in sorted(set(crossings)):
-            for span in lines_of(shapely.intersection(street_lines[k], self.cut)):
-                if span.length >= CROSSING_MIN:
-                    spans[_ends_key(span)] = (span, float(street_half[k]))
-        spans = list(spans.values())
+        spans = []
+        crossing = np.array(sorted(set(crossings)), dtype=np.int64)
+        if len(crossing):
+            merged_spans = shapely.line_merge(shapely.intersection(shapely.union_all(street_lines[crossing]), self.cut))
+            for span in lines_of(merged_spans):
+                if span.length < CROSSING_MIN:
+                    continue
+                mine = crossing[shapely.dwithin(street_lines[crossing], span, 0.1)]
+                spans.append((span, float(street_half[mine].max()) if len(mine) else DEFAULT_HALF))
         self.claimed = self._claim(network)
         areas = [shapely.buffer(span, half + SIDEWALK, cap_style="flat") for span, half in spans] + self.claimed
         decks = polygons_of(shapely.intersection(shapely.union_all(areas), self.cut), 1.0) if areas else []
@@ -553,8 +595,7 @@ class Trenches:
         """The sine of the angle between a line inside the cut and the
         sunken road nearest its middle."""
         middle = shapely.line_interpolate_point(piece, 0.5, normalized=True)
-        k = int(self.members[self.member_tree.query_nearest(middle)[0]])
-        road = self.network.lines[k]
+        road = self.road_lines[int(self.member_tree.query_nearest(middle)[0])]
         at = road.project(middle)
         a = np.asarray(road.interpolate(max(at - 2.0, 0.0)).coords[0])
         b = np.asarray(road.interpolate(min(at + 2.0, road.length)).coords[0])
@@ -621,10 +662,14 @@ class Trenches:
         near = self.member_tree.query(points, predicate="dwithin", distance=FIELD_BLEND)
         point, j = np.unique(np.concatenate([nearest, near], axis=1), axis=1)
         heights = np.empty(len(point))
+        count = len(self.members)
         for one in np.unique(j):
             mask = j == one
-            heights[mask] = network.along(int(self.members[one]), en[point[mask]])
-        weight = 1.0 / (shapely.distance(network.lines[self.members[j]], points[point]) + 1.0) ** 2
+            if one < count:
+                heights[mask] = network.along(int(self.members[one]), en[point[mask]])
+            else:
+                heights[mask] = self.mounds.along(int(one - count), en[point[mask]])
+        weight = 1.0 / (shapely.distance(self.road_lines[j], points[point]) + 1.0) ** 2
         total = np.bincount(point, weights=weight, minlength=len(en))
         return np.bincount(point, weights=weight * heights, minlength=len(en)) / total
 
@@ -662,6 +707,10 @@ class Trenches:
                     continue
                 level = self.network.terrain.height(_right_of(coords, FILL_REACH))
                 deep = level - self.road(coords) >= FILL_DEPTH
+                if self.mounds is not None and self.mounds.tree is not None:
+                    # (Not along the mounds' cuts: the model has them right,
+                    # and the road goes on past their ends.)
+                    deep &= ~shapely.dwithin(self.mounds.area, shapely.points(coords), MEDIAN + 1.0)
                 points.append(coords[deep])
                 levels.append(level[deep])
         points = np.concatenate(points) if points else np.zeros((0, 2))
@@ -683,6 +732,12 @@ class Trenches:
         return out, found
 
     def ground(self, lattice) -> "Ground":
+        network = self.network
+        if not isinstance(lattice, (_Lidded, _Cut)):
+            if network.mounds is not None:
+                lattice = network.mounds.lattice(lattice)
+            if network.lids is not None:
+                lattice = network.lids.lattice(lattice)
         return Ground(lattice, self)
 
     def shaded(self, pos: np.ndarray, uv2: np.ndarray) -> np.ndarray:
@@ -771,6 +826,242 @@ def _open_runs(s: np.ndarray, keep: np.ndarray, length: float) -> list:
             out.append((float(start), float(bounds[i])))
             start = None
     return out
+
+
+class Mounds:
+    """Mounds the elevation model has over street-level highways (the
+    overpasses it takes for ground) and the road through them: lines and
+    their heights (s, h along each), half widths, and the strips they're cut
+    along. lattice() wraps a ground lattice with the road's level through
+    them (the street level the network's roads count from)."""
+
+    def __init__(self, streets: dict, terrain, outlines=(), raised=()):
+        highway = np.flatnonzero(streets["rw"] == markings.HIGHWAY)
+        lines = streets["lines"][highway]
+        half = np.where(streets["width"][highway] > 0, streets["width"][highway] / 2.0, DEFAULT_HALF)
+        tree = shapely.STRtree(lines) if len(lines) else None
+        overpasses_over = list(outlines) + list(raised)
+        over_tree = shapely.STRtree(overpasses_over) if overpasses_over else None
+        self.lines, self.profiles, self.half, strips = [], [], [], []
+        chains = lines_of(shapely.line_merge(shapely.union_all(lines))) if len(lines) else []
+        for chain in chains:
+            length = chain.length
+            if length < 2 * MOUND_STEP:
+                continue
+            at = np.append(np.arange(0.0, length, MOUND_STEP), length)
+            h = terrain.height(shapely.get_coordinates(shapely.line_interpolate_point(chain, at)))
+            step = np.diff(at)
+            # The most the road could be at: h, climbing no faster than MOUND_GRADE.
+            low = h.copy()
+            for i in range(1, len(at)):
+                low[i] = min(low[i], low[i - 1] + MOUND_GRADE * step[i - 1])
+            for i in range(len(at) - 2, -1, -1):
+                low[i] = min(low[i], low[i + 1] + MOUND_GRADE * step[i])
+            excess = h - low
+            humps = []
+            for a, b in _true_runs(excess > MOUND_CORE):
+                # Out to its feet.
+                while a > 0 and excess[a - 1] > MOUND_FOOT:
+                    a -= 1
+                while b < len(at) and excess[b] > MOUND_FOOT:
+                    b += 1
+                a0, b0 = a - 1, b
+                if a0 < 0 or b0 > len(at) - 1:
+                    continue  # (the chain ends on it: no foot on that side)
+                side = np.abs(np.diff(h[a0:b0 + 1]) / step[a0:b0]).max()
+                rise = (h[a0:b0 + 1] - np.interp(at[a0:b0 + 1], [at[a0], at[b0]], [h[a0], h[b0]])).max()
+                top = h[a0:b0 + 1].max()
+                if rise < MOUND_RISE or top - max(h[a0], h[b0]) < MOUND_RISE or side < MOUND_SIDE \
+                        or at[b0] - at[a0] > MOUND_WIDTH:
+                    continue
+                piece = shapely.ops.substring(chain, at[a0], at[b0])
+                if over_tree is None or not len(over_tree.query(piece, predicate="intersects")):
+                    continue  # (nothing crosses over it: a hillside the model blurs, not an overpass)
+                if humps and at[a0] - at[humps[-1][1]] < MOUND_GAP:
+                    humps[-1] = (humps[-1][0], b0)
+                else:
+                    humps.append((a0, b0))
+            for a0, b0 in humps:
+                s0, s1 = max(at[a0] - MOUND_MARGIN, 0.0), min(at[b0] + MOUND_MARGIN, length)
+                piece = shapely.ops.substring(chain, s0, s1)
+                ps = np.append(np.arange(0.0, piece.length, MOUND_STEP), piece.length)
+                road = np.interp(ps + s0, [at[a0], at[b0]], [h[a0], h[b0]])
+                ground = terrain.height(shapely.get_coordinates(shapely.line_interpolate_point(piece, ps)))
+                mine = tree.query(piece, predicate="dwithin", distance=1.0)
+                w = float(half[mine].max()) if len(mine) else DEFAULT_HALF
+                self.lines.append(piece)
+                self.profiles.append((ps, np.minimum(road, ground) - CURB_HEIGHT))  # (the road's surface)
+                self.half.append(w)
+                strips.append(_strip(piece, ps, np.full(len(ps), w + SHOULDER), np.full(len(ps), w + SHOULDER),
+                                     0.0, piece.length))
+        self.lines = np.array(self.lines, dtype=object)
+        self.strips = np.array(strips, dtype=object)
+        self.tree = shapely.STRtree(self.strips) if len(strips) else None
+        # (Out to where the cut can reach past them, its gaps closed: the lanes.)
+        self.reach = shapely.buffer(self.strips, 2 * MEDIAN + SHOULDER, join_style="mitre") if len(strips) \
+            else self.strips
+        self.reach_tree = shapely.STRtree(self.reach) if len(strips) else None
+        self.area = shapely.union_all(self.strips) if len(strips) else shapely.Polygon()
+        shapely.prepare(self.area)
+        if len(strips):
+            print(f"  trenches: {len(strips)} mounds over street-level highways cut through "
+                  f"({sum(line.length for line in self.lines) / 1000:.1f} km)", flush=True)
+
+    def carries(self, lines: np.ndarray, rw: np.ndarray, width: np.ndarray) -> np.ndarray:
+        """Which street segments (lines, roadway types, widths) are highways
+        through the mounds (any of their roadway in a strip: a twin
+        carriageway the model has a lower mound over too): their lanes and
+        paint are on the road's surface there (street()), not on the ground or
+        a bridge over it."""
+        out = np.zeros(len(lines), dtype=bool)
+        if self.tree is None or not len(lines):
+            return out
+        half = np.where(width > 0, width / 2.0, DEFAULT_HALF)
+        near = np.flatnonzero(rw == markings.HIGHWAY)
+        near = near[shapely.dwithin(self.area, lines[near], half[near])]
+        if len(near):
+            road = shapely.buffer(lines[near], half[near], cap_style="flat")
+            out[near] = shapely.area(shapely.intersection(road, self.area)) >= CROSSING_MIN * half[near]
+        return out
+
+    def street(self, ground):
+        """A street height function (N, 2) -> heights: the road's surface
+        through the mounds, else `ground` (a lattice) less the curb."""
+        def height(en):
+            en = np.asarray(en, np.float64).reshape(-1, 2)
+            h = ground.height(en) - CURB_HEIGHT
+            y, found = self.height(en, self.reach_tree)
+            h[found] = y[found]
+            return h
+        return height
+
+    def along(self, j: int, en: np.ndarray) -> np.ndarray:
+        """Mound j's road surface at the points nearest (N, 2) points."""
+        s, h = self.profiles[j]
+        return np.interp(shapely.line_locate_point(self.lines[j], shapely.points(en)), s, h)
+
+    def height(self, en: np.ndarray, tree=None) -> tuple[np.ndarray, np.ndarray]:
+        """(the road's surface, found) at (N, 2) points in the strips (or
+        the polygons of `tree`, one per strip)."""
+        en = np.asarray(en, np.float64).reshape(-1, 2)
+        out = np.full(len(en), np.inf)
+        tree = tree if tree is not None else self.tree
+        if tree is None or len(en) == 0:
+            return out, np.zeros(len(en), dtype=bool)
+        point, j = tree.query(shapely.points(en), predicate="intersects")
+        for one in np.unique(j):
+            mask = point[j == one]
+            out[mask] = np.minimum(out[mask], self.along(int(one), en[mask]))
+        return out, np.isfinite(out)
+
+    def lattice(self, lattice) -> "_Cut":
+        return _Cut(lattice, self) if self.tree is not None else lattice
+
+
+class _Cut:
+    """A ground lattice with the street level through the mounds (Mounds)."""
+
+    def __init__(self, lattice, mounds: Mounds):
+        self.inner = lattice
+        self.mounds = mounds
+        self.cell = lattice.cell
+
+    def height(self, en: np.ndarray) -> np.ndarray:
+        en = np.asarray(en, np.float64).reshape(-1, 2)
+        h = self.inner.height(en)
+        y, found = self.mounds.height(en)
+        h[found] = np.minimum(h[found], y[found] + CURB_HEIGHT)
+        return h
+
+    def normal(self, en: np.ndarray) -> np.ndarray:
+        return self.inner.normal(en)
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+
+def _true_runs(mask: np.ndarray) -> list:
+    """(start, end) of each run of True in a boolean array, end exclusive."""
+    edges = np.diff(np.concatenate([[0], mask.astype(np.int8), [0]]))
+    return list(zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)))
+
+
+class Lids:
+    """The ground over the sunken roads' tunnels: at least the lid the survey
+    sees over the road. The elevation model is bare earth with the bridges
+    taken out, so where a tunnel is a wide bridge the data has no outline for
+    (streets and ramps crossing a cut side by side), it has a hole down to
+    the road there; the streets crossing it would dip into it."""
+
+    def __init__(self, network):
+        self.network = network
+        polys, owners = [], []
+        for k, (s, h, state, lid) in network.sunken.items():
+            half = float(network.width[k]) / 2.0 + SHOULDER
+            seen = np.isfinite(lid)
+            if not seen.any():
+                continue
+            for a, b in _open_runs(s, state == TUNNEL_STATE, network.lines[k].length):
+                if b - a < 1.0:
+                    continue
+                inside = (s >= a - STATION_STEP) & (s <= b + STATION_STEP) & seen
+                if not inside.any():
+                    continue
+                polys.append(_strip(network.lines[k], s, np.full(len(s), half), np.full(len(s), half), a, b))
+                owners.append((int(k), s[inside], lid[inside]))
+        self.polys = np.array(polys, dtype=object)
+        self.owners = owners
+        self.tree = shapely.STRtree(self.polys) if len(polys) else None
+
+    def height(self, en: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """(the lid's height, found) at (N, 2) points."""
+        en = np.asarray(en, np.float64).reshape(-1, 2)
+        out = np.full(len(en), -np.inf)
+        if self.tree is None or len(en) == 0:
+            return out, np.zeros(len(en), dtype=bool)
+        points = shapely.points(en)
+        point, j = self.tree.query(points, predicate="intersects")
+        for one in np.unique(j):
+            mask = point[j == one]
+            k, s, lid = self.owners[one]
+            at = shapely.line_locate_point(self.network.lines[k], points[mask])
+            out[mask] = np.maximum(out[mask], np.interp(at, s, lid))
+        return out, np.isfinite(out)
+
+    def lattice(self, lattice) -> "_Lidded":
+        return _Lidded(lattice, self)
+
+
+class _Lidded:
+    """A ground lattice with the ground over the tunnels brought up to their
+    lids (Lids)."""
+
+    def __init__(self, lattice, lids: Lids):
+        self.inner = lattice
+        self.lids = lids
+        self.cell = lattice.cell
+
+    def height(self, en: np.ndarray) -> np.ndarray:
+        en = np.asarray(en, np.float64).reshape(-1, 2)
+        h = self.inner.height(en)
+        y, found = self.lids.height(en)
+        h[found] = np.maximum(h[found], y[found])
+        return h
+
+    def normal(self, en: np.ndarray) -> np.ndarray:
+        en = np.asarray(en, np.float64).reshape(-1, 2)
+        normal = self.inner.normal(en)
+        found = self.lids.height(en)[1]
+        if found.any():
+            normal[found] = _normal(self.height, en[found], self.cell)
+        return normal
+
+    def regions(self, polys: list) -> list:
+        inner = self.inner.regions(polys) if hasattr(self.inner, "regions") else [(self.inner, polys)]
+        return [(_Lidded(terrain, self.lids), parts) for terrain, parts in inner]
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
 
 
 class Ground:
@@ -1098,6 +1389,12 @@ class Sunken:
 
     def fit(self, network) -> dict:
         return fit(network, self.data["survey"])
+
+    def lids(self, network) -> Lids:
+        return Lids(network)
+
+    def mounds(self, streets: dict, terrain, outlines=(), raised=()) -> Mounds:
+        return Mounds(streets, terrain, outlines, raised)
 
     def trenches(self, network, streets: dict) -> "Trenches":
         return Trenches(self.data, network, streets)

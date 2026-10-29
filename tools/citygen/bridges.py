@@ -11,6 +11,12 @@ major bridges are rounded public figures; their towers stand where
 OpenStreetMap's mappers put them (TOWERS). The most famous ones are built by
 hand over their main spans (bridge_landmarks.py: the Brooklyn, Manhattan,
 Hell Gate and High Bridges), the generic deck only on their approaches.
+Where raised roads run on a bridge (overpasses.Network, at the heights the
+lidar survey has them), its deck follows them over land, and over the water
+where the survey saw them, so the roads leaving it meet it (the RFK's
+viaduct comes down across Wards and Randalls Islands from its suspension
+span to the toll plaza and its ramps); towers and trusses stand on the deck
+where it is.
 
 build(land, terrain, sizes) returns, per LOD level, the bridge triangles bucketed by tile:
 {level: {(i, j): (pos, uv, uv2, front)}} in Godot world space; "lamps" and
@@ -51,7 +57,9 @@ MAJOR_BRIDGES = {
     # Queens bank, 27 m over Newtown Creek: main span 190 m across the creek,
     # back span 115 m into Queens (NYSDOT; Roads & Bridges).
     "Kosciuszko Bridge": ("cable_stayed", 30.0, 90.0, 190.0),
-    "HENRY HUDSON BRIDGE": ("girder", 43.0, 0.0, 0.0),
+    # A double-decker over its arch (43 m clear over Spuyten Duyvil): the upper
+    # roadway 55 m up, as the lidar survey has it.
+    "HENRY HUDSON BRIDGE": ("girder", 55.0, 0.0, 0.0),
     "Washington Bridge": ("girder", 46.0, 0.0, 0.0),
     "ALEXANDER HAMILTON BRIDGE": ("girder", 31.0, 0.0, 0.0),
     "Gil Hodges Memorial Bridge": ("girder", 17.0, 0.0, 0.0),
@@ -87,6 +95,10 @@ TOWERS = {
                                   (40.7564098, -73.9534525), (40.7550719, -73.9503566)),
     "Kosciuszko Bridge": ((40.72802, -73.92858),),
 }
+# Bridges built since the lidar survey (May 2017; overpasses.Network takes
+# their roads' heights from MAJOR_BRIDGES instead): the Kosciuszko's second
+# span (2019) stands where the survey saw the old bridge, 38 m over the creek.
+NEWER_THAN_SURVEY = {"Kosciuszko Bridge"}
 # The Kosciuszko's back span (m), on the far side of its tower from the main span.
 BACK_SPAN = {"Kosciuszko Bridge": 115.0}
 
@@ -108,14 +120,20 @@ SUSPENDER_SPACING = 12.0
 MAX_SPAN_OF_WATER = 0.9
 WATER_FOOTING_Y = -8.0
 ALL_LEVELS = ("lod0", "lod1", "lod2")
+# Over the water, where the survey didn't see the roads on a bridge, its deck
+# comes round from their heights at the shore to the profile above (published
+# heights, clearances) within this (meters).
+ROAD_BLEND = 150.0
 
 
-def build(land, terrain, level_sizes: dict, approach=None) -> dict:
+def build(land, terrain, level_sizes: dict, approach=None, roads=None) -> dict:
     """Bridge triangles for every level, bucketed by tile of that level's size.
     `terrain` is a terrain.Terrain (ground and water heights). approach(en)
     gives the height a bridge's approach comes down to at (N, 2) points on
     land: the street by default, or a raised road it goes on as
-    (overpasses.Network.approach)."""
+    (overpasses.Network.approach). roads(poly) gives the heights of the raised
+    roads running on an outline, as a function of (N, 2) points, or None
+    (overpasses.Network.on_bridge)."""
     shapely.prepare(land)
     features = [f for f in load_features("transport_structures")
                 if (str(f["properties"].get("feat_code")) == BRIDGE_CODE and f["properties"].get("name") not in EXCLUDED)
@@ -134,7 +152,7 @@ def build(land, terrain, level_sizes: dict, approach=None) -> dict:
     for feat, geom in zip(features, geoms):
         for poly in polygons_of(geom, min_area=50.0):
             name = outline_name(poly, feat["properties"].get("name"))
-            if _build_bridge(shapely.orient_polygons(poly), name, land, terrain, builders, approach):
+            if _build_bridge(shapely.orient_polygons(poly), name, land, terrain, builders, approach, roads):
                 built.append(name)
     named = sorted({n for n in built if n != "NO NAME"})
     print(f"  bridges: {len(built)} decks ({len(named)} named: {', '.join(named)})", flush=True)
@@ -146,6 +164,36 @@ def build(land, terrain, level_sizes: dict, approach=None) -> dict:
     buckets["post_lamps"] = _bucket_lamps(builders["post_lamps"], level_sizes["lod0"])
     buckets["hand_made"] = builders["hand_made"]
     return buckets
+
+
+def over_water(land, terrain) -> tuple:
+    """The bridges' parts over the water, for the raised roads on them
+    (overpasses.Network): (the major bridges' (MAJOR_BRIDGES) published deck
+    heights there, [(part, height, the whole outline, built since the
+    survey)], where the survey doesn't see their roads; and every bridge's
+    parts, as one shape)."""
+    published, wet = [], []
+    for feat in load_features("transport_structures"):
+        name = feat["properties"].get("name")
+        if str(feat["properties"].get("feat_code")) != BRIDGE_CODE or name in EXCLUDED:
+            continue
+        geom = shapely.make_valid(project(shape(feat["geometry"])))
+        for poly in polygons_of(geom, min_area=50.0):
+            named = outline_name(poly, name)
+            water = shapely.difference(poly, local_land(land, poly))
+            if is_overpass(poly, water.area, named):
+                continue
+            wet.append(water)
+            if named not in MAJOR_BRIDGES:
+                continue
+            main_span = max(polygons_of(water, MIN_WATER_AREA) or [water], key=lambda p: p.area)
+            level = max(0.0, float(terrain.raw(shapely.get_coordinates(shapely.point_on_surface(main_span)))[0]))
+            shapely.prepare(water)
+            shapely.prepare(poly)
+            published.append((water, level + MAJOR_BRIDGES[named][1], poly, named in NEWER_THAN_SURVEY))
+    wet = shapely.union_all(wet) if wet else shapely.Polygon()
+    shapely.prepare(wet)
+    return published, wet
 
 
 def outline_name(poly, name) -> str:
@@ -202,7 +250,7 @@ def _bucket(builder: MeshBuilder, size: float) -> dict:
     return out
 
 
-def _build_bridge(poly, name: str, land, terrain, builders: dict, approach) -> bool:
+def _build_bridge(poly, name: str, land, terrain, builders: dict, approach, roads=None) -> bool:
     land = local_land(land, poly)
     water = shapely.difference(poly, land)
     if is_overpass(poly, water.area, name):
@@ -286,6 +334,10 @@ def _build_bridge(poly, name: str, land, terrain, builders: dict, approach) -> b
                 y[inside] = street + (np.maximum(deck_top, street + 1.0) - street) * (1.0 - t * t * (3.0 - 2.0 * t))
         return y
 
+    on_roads = roads(poly) if roads is not None else None
+    if on_roads is not None:
+        deck_y = _following(deck_y, on_roads, land)
+
     # A hand-made bridge takes over its section; the generic deck stays on
     # the rest, its sides only along the outline (it just ends at the section).
     hand_made = None
@@ -321,23 +373,46 @@ def _build_bridge(poly, name: str, land, terrain, builders: dict, approach) -> b
         held = _span_box(middle, tower_u, span, tower_width)
         if name not in builders["towers"]:
             builders["towers"].add(name)
-            _add_suspension(poly, middle, tower_u, tower_width, span, deck_y, deck_top, tower_top,
-                            style.startswith("stone"), builders)
+            _add_suspension(poly, middle, tower_u, tower_width, span, deck_y, float(deck_y(middle[None])[0]),
+                            tower_top, style.startswith("stone"), builders)
     elif style.endswith("suspension") and span_length > 100.0:
         main_span_length = min(main_span_length, span_length * MAX_SPAN_OF_WATER)
         held = main_span
-        _add_suspension(poly, span_center, span_u, span_width, main_span_length, deck_y, deck_top, tower_top,
-                        style.startswith("stone"), builders)
+        _add_suspension(poly, span_center, span_u, span_width, main_span_length, deck_y,
+                        float(deck_y(span_center[None])[0]), tower_top, style.startswith("stone"), builders)
     elif style == "cantilever" and len(towers) >= 2:
         if name not in builders["towers"]:
             builders["towers"].add(name)
-            _add_cantilever(poly, towers, span_width, deck_y, deck_top, tower_top, builders)
+            _add_cantilever(poly, towers, span_width, deck_y, float(deck_y(towers).mean()), tower_top, builders)
     elif style == "cable_stayed" and len(towers):
         held = _add_cable_stayed(poly, towers[0], main_span, main_span_length, BACK_SPAN.get(name, 0.5 * main_span_length),
                                  deck_y, tower_top, name not in builders["towers"], builders)
         builders["towers"].add(name)
     _add_columns(poly, center, u, v, width, s_range, held, deck_y, land, terrain, builders, masonry)
     return True
+
+
+def _following(profile, on_roads, land):
+    """A deck profile that follows the raised roads on the bridge (on_roads)
+    over land, so the roads leaving it meet it, and over the water near them
+    where the survey saw them; elsewhere over the water `profile` holds,
+    coming round to it within ROAD_BLEND of the shore."""
+    shapely.prepare(land)
+
+    def deck_y(points: np.ndarray) -> np.ndarray:
+        points = np.asarray(points, np.float64).reshape(-1, 2)
+        y, seen = on_roads(points)
+        if len(points) == 0:
+            return y
+        geoms = shapely.points(points)
+        away = np.where(shapely.contains(land, geoms), 0.0, shapely.distance(land, geoms))
+        t = np.clip(away / ROAD_BLEND, 0.0, 1.0)
+        k = (1.0 - seen) * t * t * (3.0 - 2.0 * t)
+        wet = k > 0.0
+        if wet.any():
+            y[wet] += (profile(points[wet]) - y[wet]) * k[wet]
+        return y
+    return deck_y
 
 
 def _shore_ends(poly, land, ramps: list) -> list:
@@ -468,8 +543,8 @@ def _true_runs(mask: np.ndarray) -> list:
 
 def _add_suspension(poly, center, u, width, span, deck_y, deck_top, tower_top, stone, builders) -> None:
     """Two towers `span` apart along `u`, centered on `center`, main cables
-    between them, side cables down to anchors on the approaches, and
-    suspenders up close."""
+    between them (down to just over `deck_top`, the deck mid-span), side
+    cables down to anchors on the approaches, and suspenders up close."""
     v = np.array([-u[1], u[0]])
     t2 = span * 0.5
     t1 = -t2

@@ -983,6 +983,7 @@ def _add_top(poly, deck_y, uv2, builders: dict):
     grid (so it follows the heights); returns its lod0 triangles (T, 3, 3),
     or None."""
     built = None
+    poly = shapely.union_all(polygons_of(poly, 0.01))  # (a difference can leave slivers and lines)
     for level, spacing in DECK_SPACING.items():
         if level not in builders or poly.is_empty:
             continue
